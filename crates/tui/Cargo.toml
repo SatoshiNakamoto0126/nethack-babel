@@ -1,0 +1,11 @@
+[package]
+name = "nethack-babel-tui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unicode-width = { workspace = true }
+ratatui = "0.29"
+crossterm = "0.28"
+nethack-babel-engine = { path = "../engine" }
+nethack-babel-data = { path = "../data" }

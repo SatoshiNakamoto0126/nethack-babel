@@ -1,0 +1,8 @@
+[package]
+name = "nethack-babel-audio"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rodio = "0.20"
+nethack-babel-engine = { path = "../engine" }

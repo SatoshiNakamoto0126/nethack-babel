@@ -1,0 +1,15 @@
+[package]
+name = "nethack-babel-engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+tracing = { workspace = true }
+hecs = { version = "0.10", features = ["serde"] }
+rand = "0.9"
+rand_pcg = "0.9"
+thiserror = "2"
+bitflags = "2"
+arrayvec = { version = "0.7", features = ["serde"] }
+nethack-babel-data = { path = "../data" }
