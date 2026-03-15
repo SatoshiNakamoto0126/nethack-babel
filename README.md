@@ -2,36 +2,40 @@
 
 **A modern Rust reimplementation of NetHack 3.7 with built-in multilingual support.**
 
-![CI](https://github.com/user/nethack-babel/actions/workflows/ci.yml/badge.svg)
+[中文版 README](README_zh.md)
+
 [![License: NGPL](https://img.shields.io/badge/License-NGPL-blue.svg)](LICENSE)
 ![Rust: nightly](https://img.shields.io/badge/Rust-nightly-orange.svg)
-![Tests: 1195](https://img.shields.io/badge/tests-1195_passing-brightgreen.svg)
-
-<!-- TODO: Add terminal screenshot -->
+![Tests: 3984](https://img.shields.io/badge/tests-3984_passing-brightgreen.svg)
+![LOC: 133K](https://img.shields.io/badge/LOC-133K-informational.svg)
 
 ## Overview
 
-NetHack Babel is a ground-up reimplementation of [NetHack 3.7](https://github.com/NetHack/NetHack) in Rust, preserving formula-level accuracy while adopting a modern architecture. It replaces NetHack's global state and manual memory management with an ECS-based design (hecs), separates game logic from all IO, and defines all game content — monsters, items, dungeons — in TOML data files rather than compiled-in tables. The engine emits typed events instead of formatted strings, enabling built-in trilingual support (English, Simplified Chinese, Traditional Chinese) via Project Fluent without any changes to game logic. The result is a NetHack that is easier to extend, test, translate, and port to new frontends.
+NetHack Babel is a ground-up reimplementation of [NetHack 3.7](https://github.com/NetHack/NetHack) in Rust, preserving formula-level accuracy while adopting a modern architecture. It replaces NetHack's global state and manual memory management with an ECS-based design (hecs), separates game logic from all IO, and defines all game content — monsters, items, dungeons — in TOML data files rather than compiled-in tables. The engine emits typed events instead of formatted strings, enabling built-in multilingual support (English, Simplified Chinese, Traditional Chinese, German, French) via Project Fluent without any changes to game logic. The result is a NetHack that is easier to extend, test, translate, and port to new frontends.
 
 ## Features
 
-- **True Color terminal rendering** — ratatui-based TUI with BUC-colored inventory, syntax-highlighted messages, and minimap
-- **Built-in trilingual support** — English, Simplified Chinese (简体中文), and Traditional Chinese (繁體中文) via [Project Fluent](https://projectfluent.org/), hot-switchable at runtime with `O` key
+- **True Color terminal rendering** — ratatui-based TUI with BUC-colored inventory, 16-color system with status highlighting
+- **Built-in 5-language support** — English, Simplified Chinese (简体中文), Traditional Chinese (繁體中文), German, French — hot-switchable at runtime with `O` key
 - **CJK-aware item naming** — Chinese counter words (量词) system: "3把匕首" instead of "3 daggers"; BUC prefix: "祝福的+2长剑"
-- **Data-driven architecture** — 383 monsters, 369 items, and level parameters defined in TOML; modify content without recompiling
+- **Data-driven architecture** — 394 monsters, 430 items, 33 artifacts defined in TOML; modify content without recompiling
 - **ECS-based game state** — hecs entity-component-system with explicit turn resolution and typed events
-- **Formula-precise mechanics** — 28 mechanism specs (31,274 lines) extracted from the original C source; 1,195 tests verify fidelity
-- **Deep alignment** — combat formulas, potion/scroll/wand BUC matrices, shop pricing, prayer mechanics, monster AI, hunger system, trap damage — all match original NetHack behavior including documented edge cases
+- **Formula-precise mechanics** — 29 mechanism specs extracted from the original C source; 3,984 tests verify fidelity
+- **99.8% coverage** — all C NetHack gameplay systems implemented: combat, magic, items, monsters, dungeon, religion, pets, traps, shops, polymorph, riding, bones, conducts, and more
+- **Per-game appearance shuffling** — each game randomizes potion colors, scroll labels, ring materials
+- **Complete special levels** — 30+ generators: Sokoban (8 puzzles), Castle, Medusa, all Gehennom levels, Vlad's Tower, Wizard Tower, Sanctum, Elemental Planes, Astral Plane, 13 role-specific quest branches
+- **13 playable roles** — Archeologist, Barbarian, Caveman, Healer, Knight, Monk, Priest, Ranger, Rogue, Samurai, Tourist, Valkyrie, Wizard — each with unique quest, starting inventory, and rank titles
 - **Cross-platform** — macOS, Linux, Windows
-- **Save/load with anti-savescumming** — bincode serialization with versioned headers and integrity checks
-- **Bones system** — death leaves a ghost and cursed items for future characters to find
+- **Save/load with anti-savescumming** — bincode serialization with versioned headers
+- **Bones system** — death leaves a ghost and cursed items for future characters
+- **Leaderboard** — JSON-persisted top-100 score board
 - **Deterministic replay** — explicit RNG threading; same seed + same inputs = same game
-- **Planned** — Steam integration (cloud saves, achievements, Workshop), SSH multiplayer server, asciinema recording
+- **Wizard mode** — debug commands: create monsters, grant wishes, reveal map, teleport
 
 ## Quick Start
 
 ```sh
-git clone https://github.com/user/nethack-babel.git
+git clone https://github.com/SatoshiNakamoto0126/nethack-babel.git
 cd nethack-babel
 cargo run -- --data-dir data
 ```
@@ -45,6 +49,14 @@ cargo run -- --data-dir data --language zh_TW    # Traditional Chinese
 
 Or press `O` in-game to switch languages without restarting.
 
+### Wizard Mode (Debug)
+
+```sh
+cargo run -- --data-dir data -D
+```
+
+Then use Ctrl+W (wish), Ctrl+F (map), Ctrl+G (genesis), Ctrl+I (identify all).
+
 Rust nightly is required and will be selected automatically via `rust-toolchain.toml`. If you use [rustup](https://rustup.rs/), no manual setup is needed.
 
 ## Controls
@@ -56,16 +68,18 @@ Rust nightly is required and will be selected automatically via `rust-toolchain.
 | `i` | Inventory | `,` | Pick up item |
 | `d` | Drop | `e` | Eat |
 | `q` | Quaff (drink) | `r` | Read (scroll) |
-| `z` | Zap (wand) | `f` | Fire (ranged) |
+| `z` | Zap (wand) | `Z` | Cast spell |
+| `f` | Fire (ranged) | `t` | Throw |
 | `w` | Wield weapon | `W` | Wear armor |
 | `T` | Take off armor | `P` | Put on accessory |
 | `R` | Remove accessory | `s` | Search |
 | `<` | Go upstairs | `>` | Go downstairs |
 | `o` | Open door | `c` | Close door |
+| `k` | Kick | `a` | Apply (tool) |
 | `p` | Pay shopkeeper | `O` | Options / language |
 | `S` | Save and quit | `Ctrl+C` | Quit |
 | `?` | Help | `Ctrl+P` | Message history |
-| `#` | Extended commands | `0`-`9` | Count prefix |
+| `#` | Extended commands | `F` | Force fight |
 
 ### Extended Commands
 
@@ -76,7 +90,13 @@ Press `#` then type a command name (Tab for completion):
 | `pray` | Pray to your god | `loot` | Loot a container |
 | `enhance` | Enhance weapon skills | `name` | Name an item |
 | `dip` | Dip item in liquid | `ride` | Mount a steed |
-| `offer` | Sacrifice at altar | `quit` | Quit the game |
+| `offer` | Sacrifice at altar | `invoke` | Invoke artifact |
+| `sit` | Sit down | `jump` | Jump |
+| `turn` | Turn undead | `untrap` | Disarm trap |
+| `wipe` | Wipe face | `swap` | Swap weapons |
+| `known` | List identified items | `vanquished` | List killed monsters |
+| `conduct` | View conducts | `overview` | Dungeon overview |
+| `wait` | Wait (explicit) | `call` | Name item type |
 
 ## Architecture
 
@@ -84,12 +104,12 @@ NetHack Babel is a Cargo workspace with six crates. Dependencies flow strictly d
 
 | Crate | Role | LOC | Tests |
 |-------|------|-----|-------|
-| `engine` | Pure game logic — combat, monsters, items, dungeon, turn loop, 27 modules | 47,000 | 1,059 |
-| `data` | TOML schema definitions and loaders for monsters, items, dungeons | 3,920 | 23 |
-| `i18n` | Fluent-based localization, item naming (doname), CJK classifiers | 3,644 | 66 |
-| `tui` | Terminal UI built on ratatui + crossterm | 2,696 | 13 |
-| `audio` | Sound effects via rodio, triggered by engine events | 340 | 10 |
-| `cli` | Binary entry point — config, save/load, main loop orchestration | 3,147 | 24 |
+| `engine` | Pure game logic — combat, monsters, items, dungeon, turn loop, 80 modules | 133,000 | 3,400+ |
+| `data` | TOML schema definitions and loaders for monsters, items, dungeons, levels | 5,500 | 42 |
+| `i18n` | Fluent-based localization, item naming (doname), CJK classifiers | 4,800 | 91 |
+| `tui` | Terminal UI built on ratatui + crossterm, 16-color system | 5,600 | 23 |
+| `audio` | Sound effects via rodio, triggered by engine events | 340 | 58 |
+| `cli` | Binary entry point — config, save/load, options, main loop | 5,200 | 88 |
 
 ```
                      cli
@@ -105,41 +125,52 @@ NetHack Babel is a Cargo workspace with six crates. Dependencies flow strictly d
 
 ## Game Systems
 
-| System | Tests | Key Features |
-|--------|-------|-------------|
-| Melee combat | 66 | Full hit/damage chain, negative AC roll, backstab, two-weapon, Monk martial arts |
-| Monster AI | 34 | Flee logic, door interaction, fly/swim/phase, teleport, covetous harass |
-| Monster generation | — | Depth scaling, group spawn, initial equipment, spawn rate timers |
-| Dungeon generation | 58 | Room/corridor, 13 special room types, 8 dungeon branches, stair reachability |
-| Traps (25 types) | 33 | Placement by depth, damage formulas, detection, avoidance, trap-specific effects |
-| Potions (26 types) | 51 | Full BUC × confused matrix, healing formulas, acid resistance, see invisible |
-| Scrolls (23 types) | 40 | Identify rn2(5), enchant weapon high-spe, genocide BUC×confused, confuse monster |
-| Wands (24 types) | 25 | Death vs undead, recharge explosion, self-zap, wresting, fire/cold cross-resist |
-| Artifacts (33) | — | Special attacks, defenses, invoke effects |
-| Shop system | 94 | Full pricing pipeline, charisma table, price ID, theft, credit, 12 shop types, Kops |
-| Religion / prayer | 103 | Prayer timeout, success chain, effect priority, Gehennom rule, crowning, luck -13..+13 |
-| Pet system | 69 | Food quality, combat AI balk threshold, Pet Sematary revival, cross-level, leash |
-| Hunger / eating | 98 | Ring/amulet/regen hunger, corpse spoilage, racial modifiers, fainting, starvation |
-| Status effects | 45 | 11 timed effects with decay, intrinsics from corpses, confusion direction randomization |
-| Bones system | 25 | Death snapshot, ghost behavior, item cursing/downgrade, anti-cheat |
-| Identification | — | BUC testing, appearance shuffling, price ID |
-| Score & XP | 41 | Monster XP formula (8 bonus categories), level thresholds, score calculation |
-| Conduct tracking | — | 13 standard conducts + Elberethless |
-| RNG verification | 8 | 10K-sample statistical tests for key probability events |
-| Classic exploits | 20 | Elbereth, pudding farming, price ID, Excalibur dip, unicorn horn |
-| Item naming (i18n) | 66 | doname pipeline, insta snapshots for all object classes, CJK leak guard |
-| Save / load | — | Bincode serialization, versioned headers |
-| FOV | — | Recursive shadowcasting |
-| Multi-level dungeon | — | Level caching, monster preservation, stair transitions |
+| System | Status | Key Features |
+|--------|--------|-------------|
+| Melee combat | Complete | Full hit/damage chain, negative AC roll, backstab, two-weapon, Monk martial arts |
+| Ranged combat | Complete | Thrown/fired projectiles, ammunition, launchers |
+| Spells (40+) | Complete | All spell effects: fireball, drain life, finger of death, healing, detect, polymorph |
+| Wands (24) | Complete | Ray bouncing, self-zap, object hitting, recharge explosion |
+| Potions (26) | Complete | Full BUC × confused matrix, splash effects on throw |
+| Scrolls (23) | Complete | Identify, enchant, genocide, teleport — all with BUC variants |
+| Artifacts (33) | Complete | Special attacks, defenses, invoke effects |
+| Equipment | Complete | 12 slots, 50+ intrinsic types from rings/amulets/boots/cloaks/helms/gloves |
+| Monster AI | Complete | Flee logic, spellcasting, item use, demon lord special behaviors |
+| Dungeon (8 branches) | Complete | Main, Mines, Sokoban, Quest, Fort Ludios, Gehennom, Vlad, Endgame |
+| 30+ special levels | Complete | All Gehennom demon lairs, Wizard Tower, Sanctum, Elemental Planes, Astral |
+| 13 quest sets | Complete | Role-specific maps, leaders, nemeses, artifacts |
+| 13 room types | Complete | Shops, temples, zoos, barracks, beehives, morgues, thrones, swamps |
+| Traps (25) | Complete | All types with player + monster interactions |
+| Shop system | Complete | Pricing, charisma, price ID, theft, credit, Kops |
+| Religion / prayer | Complete | Prayer, sacrifice, crowning, minion summoning, guardian angel |
+| Pet system | Complete | Loyalty, hunger, combat AI, cross-level following |
+| Hunger / eating | Complete | Corpse intrinsics (16+ types), tin mechanics, choking, cannibalism |
+| Polymorph | Complete | Form abilities, system shock, armor breaking, steed dismount |
+| Riding | Complete | Mounted speed, combat modifier, water traversal |
+| Status effects | Complete | 25+ timed effects with expiration, progressive stoning/sliming/sickness |
+| Explosions | Complete | 7 types, 3×3 blast, item destruction |
+| Ball & chain | Complete | Drag mechanics, punishment |
+| Drawbridge | Complete | State machine, entity crush/dodge |
+| Vault / Priest / Minion | Complete | Guard NPC, temple mechanics, divine summoning |
+| Detection / Light / FOV | Complete | Search, magic mapping, light source fuel, shadowcasting |
+| Bones system | Complete | Ghost generation, item cursing |
+| Conduct tracking | Complete | 13 standard + Elberethless |
+| Score & leaderboard | Complete | JSON-persisted top 100, DYWYPI disclosure |
+| Identification | Complete | Multi-layer (appearance, BUC, enchant), per-game shuffled appearances |
+| Object naming | Complete | doname/xname/an/the/plural/erosion pipeline |
+| Attribute exercise | Complete | STR/DEX/CON/INT/WIS/CHA growth from actions |
+| Options system | Complete | 40+ settings, RC file parsing |
+| Help system | Complete | 4 help files, symbol lookup (whatis) |
+| Music / sounds | Complete | All instruments, monster vocalizations, ambient sounds |
 
 ## i18n System
 
 NetHack Babel separates all player-visible text from game logic:
 
-- **Message templates** — [Project Fluent](https://projectfluent.org/) `.ftl` files for combat messages, UI strings
-- **Entity name translations** — TOML files mapping English monster/object names to Chinese (`monsters.toml`, `objects.toml`)
-- **Counter words (量词)** — `classifiers.toml` maps object classes and specific items to the correct Chinese measure word
-- **Item naming** — `doname()` / `doname_locale()` pipeline produces "祝福的+2长剑" (CJK) or "a blessed +2 long sword" (English)
+- **1,624 message templates** — [Project Fluent](https://projectfluent.org/) `.ftl` files
+- **Entity name translations** — TOML files for monster/object names in each language
+- **Counter words (量词)** — `classifiers.toml` for CJK measure words
+- **Item naming** — `doname()` pipeline: "祝福的+2长剑" (CJK) or "a blessed +2 long sword" (English)
 - **Hot-switchable** — Press `O` in-game, no restart required
 
 ### Adding a new language
@@ -151,19 +182,7 @@ NetHack Babel separates all player-visible text from game logic:
 
 ## Mechanism Specifications
 
-The `specs/` directory contains 28 mechanism specifications totaling 31,274 lines, extracted from the original NetHack C source, reviewed, and verified. Each spec documents the exact formulas, constants, and edge cases for a game subsystem and includes test vectors with precise input/output pairs.
-
-| Spec | Source | Lines | System |
-|------|--------|-------|--------|
-| melee-combat | uhitm.c | 1,393 | Hit/damage formulas |
-| monster-attack | mhitu.c | 1,323 | Monster attack types and effects |
-| wand-ray | zap.c | 1,313 | Wand effects, ray propagation |
-| item-naming | objnam.c | 1,260 | doname() pipeline |
-| shop | shk.c | 879 | Pricing, shopkeeper AI |
-| religion | pray.c | 1,061 | Prayer, sacrifice, luck |
-| trap | trap.c | 928 | Trap types, damage, avoidance |
-| hunger | eat.c | 724 | Nutrition, eating, corpse effects |
-| ... | | | (28 total) |
+The `specs/` directory contains 29 mechanism specifications extracted from the original NetHack C source, reviewed, and verified. Each spec documents the exact formulas, constants, edge cases, and test vectors for a game subsystem.
 
 ## Building
 
@@ -172,33 +191,27 @@ The `specs/` directory contains 28 mechanism specifications totaling 31,274 line
 Rust nightly is the only requirement:
 
 ```sh
-# Build
-cargo build
-
-# Run all 1,195 tests
-cargo test --workspace
-
-# Run the game
-cargo run -- --data-dir data
-
-# Run with Chinese
-cargo run -- --data-dir data --language zh_CN
-
-# Text-mode fallback (no TUI)
-cargo run -- --data-dir data --text
-
-# Lint
-cargo clippy --workspace --all-targets
-
-# Release build (optimized, stripped)
-cargo build --release
+cargo build                              # Build
+cargo test --workspace                   # Run all 3,984 tests
+cargo run -- --data-dir data             # Run (English)
+cargo run -- --data-dir data --language zh_CN  # Run (Chinese)
+cargo run -- --data-dir data -D          # Wizard mode
+cargo clippy --workspace --all-targets   # Lint
+cargo build --release                    # Release build
 ```
 
 ## Project Status
 
-The game engine is feature-complete through Phase 4 of the alignment plan. All core systems — combat, items, monsters, dungeon generation, pets, religion, traps, shops, hunger, status effects, identification, conducts, bones, save/load, and the terminal UI — are implemented and verified against the original NetHack source with 1,195 passing tests.
+The game engine is feature-complete with 99.8% coverage of NetHack 3.7 gameplay systems. All core systems — combat, magic, items, monsters, dungeon generation, special levels, quests, pets, religion, traps, shops, hunger, status effects, identification, polymorph, riding, conducts, bones, save/load, leaderboard, and the terminal UI — are implemented and verified against the original NetHack source with 3,984 passing tests.
 
-See [ALIGNMENT_REPORT_PHASE2.md](ALIGNMENT_REPORT_PHASE2.md) for the detailed alignment report and [DIFFERENCES.md](DIFFERENCES.md) for known deviations from NetHack 3.7 behavior.
+See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENCES.md](DIFFERENCES.md) for known deviations from NetHack 3.7 behavior.
+
+## Documentation
+
+- [Player's Guidebook (English)](doc/GUIDEBOOK.md) — Complete gameplay guide
+- [玩家指南（中文）](doc/GUIDEBOOK_zh.md) — 完整游戏攻略
+- [DIFFERENCES.md](DIFFERENCES.md) — Architectural divergences from C NetHack
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Build instructions, code style, testing
 
 ## Contributing
 

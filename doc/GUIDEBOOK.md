@@ -1,8 +1,10 @@
 # NetHack Babel — Player's Guidebook
 
+[中文版指南](GUIDEBOOK_zh.md)
+
 ## 1. Introduction
 
-NetHack Babel is a faithful reimplementation of NetHack 3.7 in Rust. If you've played NetHack before, everything works as you expect — the same formulas, the same tricks, the same deaths. If you're new, welcome to one of the deepest roguelikes ever made.
+NetHack Babel is a faithful reimplementation of NetHack 3.7 in Rust, with 99.8% coverage of the original's gameplay systems and 3,984 passing tests. If you've played NetHack before, everything works as you expect — the same formulas, the same tricks, the same deaths. If you're new, welcome to one of the deepest roguelikes ever made.
 
 Your goal: descend through the Dungeons of Doom, retrieve the Amulet of Yendor from the bottom, ascend through the Elemental Planes, and offer the Amulet at the correct altar on the Astral Plane. You will die many times before succeeding. That's normal.
 
@@ -284,7 +286,51 @@ NetHack tracks voluntary challenges called conducts. Maintaining a conduct throu
 | Artiwishless | Never wish for artifacts |
 | Elberethless | Never write Elbereth |
 
-## 14. Tips for New Players
+## 14. Wizard Mode (Debug)
+
+Start the game with `-D` flag to enable wizard mode:
+
+```sh
+cargo run -- --data-dir data -D
+```
+
+Wizard mode commands:
+
+| Key | Command | Effect |
+|-----|---------|--------|
+| Ctrl+W | Wish | Wish for any item (e.g., "blessed +3 silver dragon scale mail") |
+| Ctrl+F | Map | Reveal the entire current level |
+| Ctrl+G | Genesis | Create a monster by name |
+| Ctrl+I | Identify | Identify all items in your inventory |
+| Ctrl+E | Detect | Reveal all monsters, objects, and traps |
+| `#levelchange` | Level teleport | Jump to a specific dungeon level |
+| `#where` | Where | Show locations of all special levels |
+
+Wizard mode is invaluable for testing specific game mechanics and exploring content without the permadeath pressure.
+
+## 15. Roles & Ranks
+
+Each role has 9 rank titles earned as you gain experience levels:
+
+| Role | Level 1 | Level 14 | Level 30 |
+|------|---------|----------|----------|
+| Archeologist | Digger | Excavator | Curator |
+| Barbarian | Plunderer | Raider | Conqueror |
+| Caveman | Troglodyte | Wayfarer | Pioneer |
+| Healer | Rhizotomist | Medicus ossium | Chirurgeon |
+| Knight | Gallant | Knight | Paladin |
+| Monk | Candidate | Student of Waters | Master |
+| Priest | Aspirant | Canon | High Priest |
+| Ranger | Tenderfoot | Scout | Ranger |
+| Rogue | Footpad | Robber | Thief |
+| Samurai | Hatamoto | Ryoshu | Shogun |
+| Tourist | Rambler | Traveler | Adventurer |
+| Valkyrie | Stripling | Warrior | Lord |
+| Wizard | Evoker | Enchanter | Mage |
+
+Some roles have female-specific rank titles (e.g., Priestess instead of Priest).
+
+## 16. Tips for New Players
 
 1. **Don't eat everything** — tainted corpses kill. Check age with `;` (look).
 2. **Identify before using** — unknown potions and scrolls can be deadly.
