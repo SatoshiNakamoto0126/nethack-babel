@@ -1,0 +1,9 @@
+code = "en"
+name = "English"
+name_en = "English"
+author = "NetHack Babel Team"
+version = "0.1.0"
+is_cjk = false
+has_articles = true
+has_plural = true
+has_verb_conj = true

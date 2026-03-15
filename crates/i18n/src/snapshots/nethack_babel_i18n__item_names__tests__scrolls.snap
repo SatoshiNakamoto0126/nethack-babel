@@ -1,0 +1,30 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== scroll of identify ===
+qty=1 identified buc=blessed -> a blessed scroll of identify
+qty=1 identified buc=uncursed -> an uncursed scroll of identify
+qty=1 identified buc=cursed -> a cursed scroll of identify
+qty=1 identified buc=buc_unknown -> a scroll of identify
+qty=1 unidentified -> a scroll labeled ZELGO MER
+qty=1 called=id? -> a scroll called id?
+qty=3 identified buc=blessed -> 3 blessed scroll of identifies
+qty=3 identified buc=uncursed -> 3 uncursed scroll of identifies
+qty=3 identified buc=cursed -> 3 cursed scroll of identifies
+qty=3 identified buc=buc_unknown -> 3 scroll of identifies
+qty=3 unidentified -> 3 scroll labeled ZELGO MERs
+qty=3 called=id? -> 3 scroll called id?s
+=== scroll of enchant weapon ===
+qty=1 identified buc=blessed -> a blessed scroll of enchant weapon
+qty=1 identified buc=uncursed -> an uncursed scroll of enchant weapon
+qty=1 identified buc=cursed -> a cursed scroll of enchant weapon
+qty=1 identified buc=buc_unknown -> a scroll of enchant weapon
+qty=1 unidentified -> a scroll labeled DAIYEN FANSEN
+qty=1 called=id? -> a scroll called id?
+qty=3 identified buc=blessed -> 3 blessed scroll of enchant weapons
+qty=3 identified buc=uncursed -> 3 uncursed scroll of enchant weapons
+qty=3 identified buc=cursed -> 3 cursed scroll of enchant weapons
+qty=3 identified buc=buc_unknown -> 3 scroll of enchant weapons
+qty=3 unidentified -> 3 scroll labeled DAIYEN FANSENs
+qty=3 called=id? -> 3 scroll called id?s

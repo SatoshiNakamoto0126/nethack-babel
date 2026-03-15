@@ -1,0 +1,280 @@
+# Quest text for the Healer role
+# Converted from NetHack 3.7 dat/quest.lua (Hea section)
+# Variable substitutions: %p=player, %c=class, %r=rank, %l=leader,
+# %n=nemesis, %o=artifact, %i=intermediate, %d=deity, %H=homebase
+
+role = "healer"
+abbreviation = "Hea"
+quest_leader = "Hippocrates"
+quest_nemesis = "Cyclops"
+quest_artifact = "The Staff of Aesculapius"
+quest_guardian = "attendant"
+quest_goal_terrain = "dark_lab"
+
+[assignquest]
+synopsis = "[Travel to %i on your way to recover %o from %n.]"
+text = """
+For the first time, you sense a smile on %ls face.
+
+    "You have indeed learned as much as we can teach you in preparation
+    for this task.  Let me tell you what I know of the symptoms and hope
+    that you can provide a cure.
+
+    "A short while ago, the dreaded %nt was fooled by the gods
+    into thinking that %nh could use %o to find a
+    cure for old age.  Think of it, eternal youth!  But %nj good
+    health is accomplished by drawing the health from those around %ni.
+
+    "He has exhausted %nj own supply of healthy people and now %nh seeks to
+    extend %nj influence into our world.  You must recover from %ni
+    %o and break the spell.
+
+    "You must travel into the swamps to %i, and from there
+follow the trail to %ns island lair.  Be careful."
+"""
+
+[badalign]
+synopsis = "[Return when you are more %a.]"
+text = """
+"You have learned much of the remedies that benefit, but you must also
+know which physic for which ail.  That is why %ds teachings are a
+part of your training.
+
+"Return to us when you have healed thyself."
+"""
+
+[badlevel]
+synopsis = "[You are too inexperienced.  Return when you are %Ra.]"
+text = """
+"Alas, %p, you are yet too inexperienced to deal with the rigors
+of such a task.  You must be able to draw on the knowledge of botany,
+alchemy and veterinary practices before I can send you on this quest
+with good conscience.
+
+"Return when you wear %Ra's caduceus."
+"""
+
+[discourage]
+lines = [
+  "\\\"They might as well give scalpels to wizards as to let you try to use %o!\\\"",
+  "\\\"If I could strike %l, surrounded by %lj %gP, imagine what I can do to you here by yourself.\\\"",
+  "\\\"I will put my %Rp to work making a physic out of your ashes.\\\"",
+  "\\\"As we speak, Hades gathers your patients to join you.\\\"",
+  "\\\"After I'm done with you, I'll destroy %l as well.\\\"",
+  "\\\"You will have to kill me if you ever hope to leave this place.\\\"",
+  "\\\"I will impale your head on my caduceus for all to see.\\\"",
+  "\\\"There is no materia medica in your sack which will cure you of me!\\\"",
+  "\\\"Do not fight too hard, I want your soul strong, not weakened!\\\"",
+  "\\\"You should have stopped studying at veterinary.\\\"",
+]
+
+[encourage]
+lines = [
+  "\\\"Remember, %p, to always wash your hands before operating.\\\"",
+  "\\\"%nC has no real magic of %nj own.  To this %nh is vulnerable.\\\"",
+  "\\\"If you have been true to %d, you can draw on the power of %o.\\\"",
+  "\\\"Bring with you antidotes for poisons.\\\"",
+  "\\\"Remember this, %n can twist the powers of %o to hurt instead of heal.\\\"",
+  "\\\"I have sent for Chiron, but I am afraid he will come too late.\\\"",
+  "\\\"Maybe when you return the snakes will once again begin to shed.\\\"",
+  "\\\"The plague grows worse as we speak.  Hurry, %p!\\\"",
+  "\\\"Many times %n has caused trouble in these lands.  It is time that %nh was eradicated like the diseases %nh has caused.\\\"",
+  "\\\"With but one eye, %n should be easy to blind.  Remember this.\\\"",
+]
+
+[firsttime]
+synopsis = "[You arrive back at %H and must find %l.]"
+text = """
+What sorcery has brought you back to %H?  The smell
+of fresh funeral pyres tells you that something is amiss with the healing
+powers that used to practice here.
+
+No rhizotomists are tending the materia medica gardens, and where are the
+common folk who used to come for the cures?
+
+You know that you must quickly make your way to the collegium, and
+%ls iatreion, and find out what has happened in your absence.
+"""
+
+[goal_first]
+synopsis = "[You have reached the lair of %n.  Take %o away from %ni.]"
+text = """
+You stand within sight of the infamous Isle of %n.  Even
+the words of %l had not prepared you for this.
+
+Steeling yourself against the wails of the ill that pierce your ears,
+you hurry on your task.  Maybe with %o you can
+heal them on your return, but not now.
+"""
+
+[goal_next]
+text = "Once again, you %x the Isle of %n in the distance."
+
+[gotit]
+synopsis = "[You feel the healing power of %o and should return it to %l.]"
+text = """
+As you pick up %o, you feel its healing begin to
+warm your soul.  You curse Zeus for taking it from its rightful owner,
+but at least you hope that %l can put it to good use once
+again.
+"""
+
+[guardtalk_after]
+lines = [
+  "\\\"Did you read that new treatise on the therapeutic use of leeches?\\\"",
+  "\\\"Paint a red caduceus on your shield and monsters won't hit you.\\\"",
+  "\\\"How are you feeling?  Perhaps a good bleeding will improve your spirits.\\\"",
+  "\\\"Have you heard the absurd new theory that diseases are caused by microscopic organisms, and not ill humors?\\\"",
+  "\\\"I see that you bring %o, now you can cure this plague!\\\"",
+]
+
+[guardtalk_before]
+lines = [
+  "\\\"Did you read that new treatise on the therapeutic use of leeches?\\\"",
+  "\\\"Paint a red caduceus on your shield and monsters won't hit you.\\\"",
+  "\\\"I passed handwriting so they are demoting me a rank.\\\"",
+  "\\\"I've heard that even %l has not been able to cure Chiron.\\\"",
+  "\\\"We think %n has used %nj alchemists, and %o, to unleash a new disease we call 'the cold' on Gehennom.\\\"",
+]
+
+[hasamulet]
+synopsis = "[\"You have recovered the Amulet.  Travel to the Astral Plane and return it to %d.\"]"
+text = """
+"Ah, you have recovered the Amulet, %p.  Well done!
+
+"Now, you should know that you must travel through the Elemental Planes
+to the Astral, and there return the Amulet to %d.  Go forth and
+may our prayers be as a wind upon your back."
+"""
+
+[killed_nemesis]
+synopsis = "[%nC curses you as %nh dies.]"
+text = """
+The battered body of %n slumps to the ground and gasps
+out one last curse:
+
+    "You have defeated me, %p, but I shall have my revenge.
+    How, I shall not say, but this curse shall be like a cancer
+    on you."
+
+With that %n dies.
+"""
+
+[leader_first]
+synopsis = "[%l is weak from the struggle with %n.  %lH wants to examine you.]"
+text = """
+Feebly, %l raises %lj head to look at you.
+
+"It is good to see you again, %p.  I see the concern in your
+eyes, but do not worry for me.  I am not ready for Hades yet.  We have
+exhausted much of our healing powers holding off %n.
+I need your fresh strength to carry on our work.
+
+"Come closer and let me lay hands on you, and determine if you have
+the skills necessary to accomplish this mission."
+"""
+
+[leader_last]
+synopsis = "[You are a failure as a healer.]"
+text = """
+"You have failed us, %p.  You are a quack!  A charlatan!
+
+"Hades will be happy to hear that you are once again practicing your
+arts on the unsuspecting."
+"""
+
+[leader_next]
+text = """
+"Again you return to me, %p.  I sense that each trip back
+the pleurisy and maladies of our land begin to infect you.  Let us
+hope and pray to %d that you become ready for your task before
+you fall victim to the bad humors."
+"""
+
+[leader_other]
+text = """
+"Chiron has fallen, Hermes has fallen, what else must I tell you to
+impress upon you the importance of your mission!  I hope that you
+have come prepared this time."
+"""
+
+[locate_first]
+synopsis = "[You have reached %i but all is not well.]"
+text = """
+You stand before the entrance to %i.  Strange
+scratching noises come from within the building.
+
+The swampy ground around you seems to stink with disease.
+"""
+
+[locate_next]
+text = "Once again you stand at the entrance to %i."
+
+[nemesis_first]
+synopsis = "[\"I will take your life, then defeat %l.\"]"
+text = """
+"They have made a mistake in sending you, %p.
+
+"When I add your youth to mine, it will just make it easier for me
+to defeat %l."
+"""
+
+[nemesis_next]
+text = "\\\"Unlike your patients, you seem to keep coming back, %p!\\\""
+
+[nemesis_other]
+text = "\\\"Which would you like, %p?  Boils, pleurisy, convulsions?\\\""
+
+[nemesis_wantsit]
+text = """
+"I'll have %o back from you, %r.  You are
+not going to live to escape this place."
+"""
+
+[nexttime]
+text = """
+After your last experience you expected to be here, but you certainly
+did not expect to see things so much worse.  This time you must succeed.
+"""
+
+[offeredit]
+synopsis = "[%l touches %o and tells %lj %gP to do so too, then tells you to take it with you.]"
+text = """
+As soon as %l sees %o %lh summons %lj
+%gP.
+
+Gently, %l reaches out and touches %o.
+He instructs each of the assembled to do the same.  When everyone
+has finished %lh speaks to you.
+
+    "Now that we have been replenished we can defeat this plague.  You must
+    take %o with you and replenish the worlds you have
+    been called upon to travel next.  I wish you could ride Chiron to the
+    end of your journey, but I need him to help me spread the cure.  Go
+now and continue your journey."
+"""
+
+[offeredit2]
+synopsis = "[%l tells you to keep %o and return to %Z to search for the Amulet.]"
+text = """
+%l cautiously handles %o while watching you.
+
+"You are its keeper now, and the time has come to resume your search
+for the Amulet.  %Z await your return through the
+magic portal which brought you here."
+"""
+
+[othertime]
+text = """
+Again, you %x %H in the distance.
+
+The smell of death and disease permeates the air.  You do not have
+to be %Ra to know that %n is on the verge of victory.
+"""
+
+[posthanks]
+text = """
+"You have again returned to us, %p.  We have done well in your
+absence, yes?  How fare you upon your quest for the Amulet?"
+"""
+

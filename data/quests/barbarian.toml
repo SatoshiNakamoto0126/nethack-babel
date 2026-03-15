@@ -1,0 +1,277 @@
+# Quest text for the Barbarian role
+# Converted from NetHack 3.7 dat/quest.lua (Bar section)
+# Variable substitutions: %p=player, %c=class, %r=rank, %l=leader,
+# %n=nemesis, %o=artifact, %i=intermediate, %d=deity, %H=homebase
+
+role = "barbarian"
+abbreviation = "Bar"
+quest_leader = "Pelias"
+quest_nemesis = "Thoth Amon"
+quest_artifact = "The Heart of Ahriman"
+quest_guardian = "chieftain"
+quest_goal_terrain = "desert_ruins"
+
+[assignquest]
+synopsis = "[\"Find %n, defeat %ni, and return %o to us.\"]"
+text = """
+"The world is in great need of your assistance, %p.
+
+"About six months ago, I learned that a mysterious sorcerer, known
+as %n, had begun to gather a large group of cutthroats and brigands
+about %ni.
+
+"At about the same time, these people you once rode with `liberated' a
+potent magical talisman, %o, from a Turanian caravan.
+
+"%nC and %nj Black Horde swept down upon %i and defeated
+the people there, driving them out into the desert.  He has taken
+%o, and seeks to bend it to %nj will.  I detected the
+subtle changes in the currents of fate, and joined these people.
+Then I sent forth a summons for you.
+
+"If %n can bend %o to %nj will, he will become
+almost indestructible.  He will then be able to enslave the minds of
+men across the world.  You are the only hope.  The gods smile upon you,
+and with %d behind you, you alone can defeat %n.
+
+"You must go to %i.  From there, you can track down
+%n, defeat %ni, and return %o to us.  Only
+then will the world be safe."
+"""
+
+[badalign]
+synopsis = "[\"You have wandered from the path of the %a.  Come back when you have atoned.\"]"
+text = """
+"%pC!  You have wandered from the path of the %a!
+If you attempt to overcome %n in this state, he will surely
+enslave your soul.  Your only hope, and ours, lies in your purification.
+Go forth, and return when you feel ready."
+"""
+
+[badlevel]
+synopsis = "[\"You are too inexperienced.  Come back when you are %Ra.\"]"
+text = """
+"%p, I fear that you are as yet too inexperienced to face
+%n.  Only %Ra with the help of %d could ever hope to
+defeat %ni."
+"""
+
+[discourage]
+lines = [
+  "\\\"My pets will dine on your carcass tonight!\\\"",
+  "\\\"You are a sorry excuse for %ra.\\\"",
+  "\\\"Run while you can, %c.  My next spell will be your last.\\\"",
+  "\\\"I shall use your very skin to bind my next grimoire.\\\"",
+  "\\\"%d cannot protect you now.  Here, you die.\\\"",
+  "\\\"Your %a nature makes you weak.  You cannot defeat me.\\\"",
+  "\\\"Come, %c.  I shall kill you, then unleash the horde on your tribe.\\\"",
+  "\\\"Once you are dead, my horde shall finish off %l, and your tribe.\\\"",
+  "\\\"Fight, %c, or are you afraid of the mighty %n?\\\"",
+  "\\\"You have failed, %c.  Now, my victory is complete.\\\"",
+]
+
+[encourage]
+lines = [
+  "\\\"%nC is strong in the dark arts, but not immune to cold steel.\\\"",
+  "\\\"Remember that %n is a great sorcerer.  He lived in the time of Atlantis.\\\"",
+  "\\\"If you fail, %p, I will not be able to protect these people long.\\\"",
+  "\\\"To enter %i, you must be very stealthy.  The horde will be on guard.\\\"",
+  "\\\"Call upon %d in your time of need.\\\"",
+  "\\\"May %d protect you, and guide your steps.\\\"",
+  "\\\"If you can lay hands upon %o, carry it for good fortune.\\\"",
+  "\\\"I cannot stand against %ns sorcery.  But %d will help you.\\\"",
+  "\\\"Do not fear %n.  I know you can defeat %ni.\\\"",
+  "\\\"You have a great road to travel, %p, but only after you defeat %n.\\\"",
+]
+
+[firsttime]
+synopsis = "[You reach the vicinity of %H, but sense evil magic nearby.]"
+text = """
+Warily you scan your surroundings, all of your senses alert for signs
+of possible danger.  Off in the distance, you can %x the familiar shapes
+of %H.
+
+But why, you think, should %l be there?
+
+Suddenly, the hairs on your neck stand on end as you detect the aura of
+evil magic in the air.
+
+Without thought, you ready your weapon, and mutter under your breath:
+
+"By %d, there will be blood spilt today."
+"""
+
+[goal_first]
+synopsis = "[This is surely the lair of %n.]"
+text = """
+The hairs on the nape of your neck lift as you sense an energy in the
+very air around you.  You fight down a primordial panic that seeks to
+make you turn and run.  This is surely the lair of %n.
+"""
+
+[goal_next]
+text = "Yet again you feel the air around you heavy with malevolent magical energy."
+
+[gotit]
+synopsis = "[You feel the power of %o flowing through your hands.]"
+text = """
+As you pick up %o, you feel the power of it
+flowing through your hands.  It seems to be in two or more places
+at once, even though you are holding it.
+"""
+
+[guardtalk_after]
+lines = [
+  "\\\"The battles here have been good -- our enemies' blood soaks the soil!\\\"",
+  "\\\"Remember that glory is crushing your enemies beneath your feet!\\\"",
+  "\\\"Times will be good again, now that the horde is vanquished.\\\"",
+  "\\\"You have brought our clan much honor in defeating %n.\\\"",
+  "\\\"You will be a worthy successor to %l.\\\"",
+]
+
+[guardtalk_before]
+lines = [
+  "\\\"The battles here have been good -- our enemies' blood soaks the soil!\\\"",
+  "\\\"Remember that glory is crushing your enemies beneath your feet!\\\"",
+  "\\\"There has been little treasure to loot, since the horde arrived.\\\"",
+  "\\\"The horde is mighty in numbers, but they have little courage.\\\"",
+  "\\\"%lC is a strange one, but he has helped defend us.\\\"",
+]
+
+[hasamulet]
+synopsis = "[\"Take the Amulet to the altar of %d on the Astral Plane and offer it.\"]"
+text = """
+"This is wondrous, %p.  I feared that you could not possibly
+succeed in your quest, but here you are in possession of the Amulet
+of Yendor!
+
+"I have studied the texts of the magi constantly since you left.  In
+the Book of Skelos, I found this:
+
+    %d will cause a child to be sent into the world.  This child is to
+    be made strong by trial of battle and magic, for %d has willed it so.
+    It is said that the child of %d will recover the Amulet of Yendor
+    that was stolen from the Creator at the beginning of time.
+
+"As you now possess the amulet, %p, I suspect that the Book
+speaks of you.
+
+    The child of %d will take the Amulet, and travel to the Astral
+    Plane, where the Great Temple of %d is to be found.  The Amulet
+    will be sacrificed to %d, there on %dJ altar.  Then the child will
+    stand by %d as champion of all %cP for eternity.
+
+"This is all I know, %p.  I hope it will help you."
+"""
+
+[killed_nemesis]
+synopsis = "[%nC curses you, but you feel the overpowering aura of magic fading.]"
+text = """
+%nC falls to the ground, and utters a last curse at you.  Then %nj
+body fades slowly, seemingly dispersing into the air around you.  You
+slowly become aware that the overpowering aura of magic in the air has
+begun to fade.
+"""
+
+[leader_first]
+synopsis = "[\"At last you have returned.  There is a great quest you must undertake.\"]"
+text = """
+"Ah, %p.  You have returned at last.  The world is in dire
+need of your help.  There is a great quest you must undertake.
+
+"But first, I must see if you are ready to take on such a challenge."
+"""
+
+[leader_last]
+synopsis = "[\"You have betrayed %d; soon %n will destroy us.  Begone!\"]"
+text = """
+"Pah!  You have betrayed the gods, %p.  You will never attain
+the glory which you aspire to.  Your failure to follow the true path has
+closed this future to you.
+
+"I will protect these people as best I can, but soon %n will overcome
+me and destroy all who once called you %s.  Now begone!"
+"""
+
+[leader_next]
+text = "\\\"%p, you are back.  Are you ready now for the challenge?\\\""
+
+[leader_other]
+text = "\\\"Again, you stand before me, %p.  Surely you have prepared yourself.\\\""
+
+[locate_first]
+synopsis = "[You have located %i.]"
+text = """
+The scent of water comes to you in the desert breeze.  You know that
+you have located %i.
+"""
+
+[locate_next]
+text = "Yet again you have a chance to infiltrate %i."
+
+[nemesis_first]
+synopsis = "[%nC boasts that %nh has slain many.  \"Prepare to die, %c.\"]"
+text = """
+"So.  This is what that second rate sorcerer %l sends to do %lj bidding.
+I have slain many before you.  You shall give me little sport.
+
+"Prepare to die, %c."
+"""
+
+[nemesis_next]
+text = "\\\"I have wasted too much time on you already.  Now, you shall die.\\\""
+
+[nemesis_other]
+text = "\\\"You return yet again, %c!  Are you prepared for death now?\\\""
+
+[nemesis_wantsit]
+text = """
+"I shall have %o back, you pitiful excuse for %ca.
+And your life as well."
+"""
+
+[nexttime]
+text = """
+Once again, you near %H.  You know that %l
+will be waiting.
+"""
+
+[offeredit]
+synopsis = "[%lC tells you to guard %o, and to return when you have triumphed.]"
+text = """
+When %l sees %o, he smiles, and says:
+
+    Well done, %p.  You have saved the world from certain doom.
+    What, now, should be done with %o?
+
+    These people, brave as they are, cannot hope to guard it from
+    other sorcerers who will detect it, as surely as %n did.
+
+    Take %o with you, %p.  It will guard you in
+    your adventures, and you can best guard it.  You embark on a
+    quest far greater than you realize.
+
+    Remember me, %p, and return when you have triumphed.  I
+    will tell you then of what you must do.  You will understand when the
+time comes.
+"""
+
+[offeredit2]
+synopsis = "[\"You keep %o.  Return to %Z to search for the Amulet.\"]"
+text = """
+%l gazes reverently at %o, then back at you.
+
+"You are its keeper now, and the time has come to resume your search
+for the Amulet.  %Z await your return through the
+magic portal which brought you here."
+"""
+
+[othertime]
+text = """
+Again, and you think possibly for the last time, you approach
+%H.
+"""
+
+[posthanks]
+text = "\\\"Tell us, %p, have you fared well on your great quest?\\\""
+

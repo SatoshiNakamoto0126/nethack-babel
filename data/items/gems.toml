@@ -1,0 +1,478 @@
+# NetHack Babel — Gem/Stone definitions
+# Values sourced from NetHack 3.7 include/objects.h
+# GEM(name, desc, prob, wt, gval, nutr, mohs, glass, color, sn)
+# ROCK(name, desc, kn, prob, wt, gval, sdam, ldam, mgc, nutr, mohs, glass, color, sn)
+
+# --- Precious gems ---
+
+[[object]]
+id = 0
+name = "dilithium crystal"
+class = "Gem"
+color = "White"
+material = "Gemstone"
+weight = 1
+cost = 4500
+prob = 2
+is_magic = false
+is_mergeable = true
+description = "white"
+
+[[object]]
+id = 1
+name = "diamond"
+class = "Gem"
+color = "White"
+material = "Gemstone"
+weight = 1
+cost = 4000
+prob = 3
+is_magic = false
+is_mergeable = true
+description = "white"
+
+[[object]]
+id = 2
+name = "ruby"
+class = "Gem"
+color = "Red"
+material = "Gemstone"
+weight = 1
+cost = 3500
+prob = 4
+is_magic = false
+is_mergeable = true
+description = "red"
+
+[[object]]
+id = 3
+name = "jacinth"
+class = "Gem"
+color = "Orange"
+material = "Gemstone"
+weight = 1
+cost = 3250
+prob = 3
+is_magic = false
+is_mergeable = true
+description = "orange"
+
+[[object]]
+id = 4
+name = "sapphire"
+class = "Gem"
+color = "Blue"
+material = "Gemstone"
+weight = 1
+cost = 3000
+prob = 4
+is_magic = false
+is_mergeable = true
+description = "blue"
+
+[[object]]
+id = 5
+name = "black opal"
+class = "Gem"
+color = "Black"
+material = "Gemstone"
+weight = 1
+cost = 2500
+prob = 3
+is_magic = false
+is_mergeable = true
+description = "black"
+
+[[object]]
+id = 6
+name = "emerald"
+class = "Gem"
+color = "Green"
+material = "Gemstone"
+weight = 1
+cost = 2500
+prob = 5
+is_magic = false
+is_mergeable = true
+description = "green"
+
+[[object]]
+id = 7
+name = "turquoise"
+class = "Gem"
+color = "Green"
+material = "Gemstone"
+weight = 1
+cost = 2000
+prob = 6
+is_magic = false
+is_mergeable = true
+description = "green"
+
+[[object]]
+id = 8
+name = "citrine"
+class = "Gem"
+color = "Yellow"
+material = "Gemstone"
+weight = 1
+cost = 1500
+prob = 4
+is_magic = false
+is_mergeable = true
+description = "yellow"
+
+[[object]]
+id = 9
+name = "aquamarine"
+class = "Gem"
+color = "Green"
+material = "Gemstone"
+weight = 1
+cost = 1500
+prob = 6
+is_magic = false
+is_mergeable = true
+description = "green"
+
+[[object]]
+id = 10
+name = "amber"
+class = "Gem"
+color = "Brown"
+material = "Gemstone"
+weight = 1
+cost = 1000
+prob = 8
+is_magic = false
+is_mergeable = true
+description = "yellowish brown"
+
+[[object]]
+id = 11
+name = "topaz"
+class = "Gem"
+color = "Brown"
+material = "Gemstone"
+weight = 1
+cost = 900
+prob = 10
+is_magic = false
+is_mergeable = true
+description = "yellowish brown"
+
+[[object]]
+id = 12
+name = "jet"
+class = "Gem"
+color = "Black"
+material = "Gemstone"
+weight = 1
+cost = 850
+prob = 6
+is_magic = false
+is_mergeable = true
+description = "black"
+
+[[object]]
+id = 13
+name = "opal"
+class = "Gem"
+color = "White"
+material = "Gemstone"
+weight = 1
+cost = 800
+prob = 12
+is_magic = false
+is_mergeable = true
+description = "white"
+
+[[object]]
+id = 14
+name = "chrysoberyl"
+class = "Gem"
+color = "Yellow"
+material = "Gemstone"
+weight = 1
+cost = 700
+prob = 8
+is_magic = false
+is_mergeable = true
+description = "yellow"
+
+[[object]]
+id = 15
+name = "garnet"
+class = "Gem"
+color = "Red"
+material = "Gemstone"
+weight = 1
+cost = 700
+prob = 12
+is_magic = false
+is_mergeable = true
+description = "red"
+
+[[object]]
+id = 16
+name = "amethyst"
+class = "Gem"
+color = "Magenta"
+material = "Gemstone"
+weight = 1
+cost = 600
+prob = 14
+is_magic = false
+is_mergeable = true
+description = "violet"
+
+[[object]]
+id = 17
+name = "jasper"
+class = "Gem"
+color = "Red"
+material = "Gemstone"
+weight = 1
+cost = 500
+prob = 15
+is_magic = false
+is_mergeable = true
+description = "red"
+
+[[object]]
+id = 18
+name = "fluorite"
+class = "Gem"
+color = "Magenta"
+material = "Gemstone"
+weight = 1
+cost = 400
+prob = 15
+is_magic = false
+is_mergeable = true
+description = "violet"
+
+[[object]]
+id = 19
+name = "obsidian"
+class = "Gem"
+color = "Black"
+material = "Gemstone"
+weight = 1
+cost = 200
+prob = 9
+is_magic = false
+is_mergeable = true
+description = "black"
+
+[[object]]
+id = 20
+name = "agate"
+class = "Gem"
+color = "Orange"
+material = "Gemstone"
+weight = 1
+cost = 200
+prob = 12
+is_magic = false
+is_mergeable = true
+description = "orange"
+
+[[object]]
+id = 21
+name = "jade"
+class = "Gem"
+color = "Green"
+material = "Gemstone"
+weight = 1
+cost = 300
+prob = 10
+is_magic = false
+is_mergeable = true
+description = "green"
+
+# --- Worthless glass gems ---
+
+[[object]]
+id = 22
+name = "worthless piece of white glass"
+class = "Gem"
+color = "White"
+material = "Glass"
+weight = 1
+cost = 0
+prob = 77
+is_magic = false
+is_mergeable = true
+description = "white"
+
+[[object]]
+id = 23
+name = "worthless piece of blue glass"
+class = "Gem"
+color = "Blue"
+material = "Glass"
+weight = 1
+cost = 0
+prob = 77
+is_magic = false
+is_mergeable = true
+description = "blue"
+
+[[object]]
+id = 24
+name = "worthless piece of red glass"
+class = "Gem"
+color = "Red"
+material = "Glass"
+weight = 1
+cost = 0
+prob = 77
+is_magic = false
+is_mergeable = true
+description = "red"
+
+[[object]]
+id = 25
+name = "worthless piece of yellowish brown glass"
+class = "Gem"
+color = "Brown"
+material = "Glass"
+weight = 1
+cost = 0
+prob = 77
+is_magic = false
+is_mergeable = true
+description = "yellowish brown"
+
+[[object]]
+id = 26
+name = "worthless piece of orange glass"
+class = "Gem"
+color = "Orange"
+material = "Glass"
+weight = 1
+cost = 0
+prob = 76
+is_magic = false
+is_mergeable = true
+description = "orange"
+
+[[object]]
+id = 27
+name = "worthless piece of yellow glass"
+class = "Gem"
+color = "Yellow"
+material = "Glass"
+weight = 1
+cost = 0
+prob = 77
+is_magic = false
+is_mergeable = true
+description = "yellow"
+
+[[object]]
+id = 28
+name = "worthless piece of black glass"
+class = "Gem"
+color = "Black"
+material = "Glass"
+weight = 1
+cost = 0
+prob = 76
+is_magic = false
+is_mergeable = true
+description = "black"
+
+[[object]]
+id = 29
+name = "worthless piece of green glass"
+class = "Gem"
+color = "Green"
+material = "Glass"
+weight = 1
+cost = 0
+prob = 77
+is_magic = false
+is_mergeable = true
+description = "green"
+
+[[object]]
+id = 30
+name = "worthless piece of violet glass"
+class = "Gem"
+color = "Magenta"
+material = "Glass"
+weight = 1
+cost = 0
+prob = 77
+is_magic = false
+is_mergeable = true
+description = "violet"
+
+# --- Stones (ROCK macro) ---
+
+[[object]]
+id = 31
+name = "luckstone"
+class = "Gem"
+color = "Gray"
+material = "Mineral"
+weight = 10
+cost = 60
+prob = 10
+is_magic = true
+is_mergeable = true
+description = "gray"
+
+[[object]]
+id = 32
+name = "loadstone"
+class = "Gem"
+color = "Gray"
+material = "Mineral"
+weight = 500
+cost = 1
+prob = 10
+is_magic = true
+is_mergeable = true
+description = "gray"
+
+[[object]]
+id = 33
+name = "touchstone"
+class = "Gem"
+color = "Gray"
+material = "Mineral"
+weight = 10
+cost = 45
+prob = 8
+is_magic = true
+is_mergeable = true
+description = "gray"
+
+[[object]]
+id = 34
+name = "flint"
+class = "Gem"
+color = "Gray"
+material = "Mineral"
+weight = 10
+cost = 1
+prob = 10
+is_magic = false
+is_mergeable = true
+description = "gray"
+
+[[object]]
+id = 35
+name = "rock"
+class = "Gem"
+color = "Gray"
+material = "Mineral"
+weight = 10
+cost = 0
+prob = 100
+is_magic = false
+is_mergeable = true
+description = ""

@@ -1,0 +1,303 @@
+# NetHack Babel — Scroll definitions
+# Values sourced from NetHack 3.7 include/objects.h
+# SCROLL(name, text, mgc, prob, cost, sn)
+# All scrolls: weight = 5, material = Paper, color = White (HI_PAPER), mergeable = true
+
+[[object]]
+id = 0
+name = "enchant armor"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 80
+prob = 63
+is_magic = true
+is_mergeable = true
+description = "ZELGO MER"
+
+[[object]]
+id = 1
+name = "destroy armor"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 100
+prob = 45
+is_magic = true
+is_mergeable = true
+description = "JUYED AWK YACC"
+
+[[object]]
+id = 2
+name = "confuse monster"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 100
+prob = 53
+is_magic = true
+is_mergeable = true
+description = "NR 9"
+
+[[object]]
+id = 3
+name = "scare monster"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 100
+prob = 35
+is_magic = true
+is_mergeable = true
+description = "XIXAXA XOXAXA XUXAXA"
+
+[[object]]
+id = 4
+name = "remove curse"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 80
+prob = 65
+is_magic = true
+is_mergeable = true
+description = "PRATYAVAYAH"
+
+[[object]]
+id = 5
+name = "enchant weapon"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 60
+prob = 80
+is_magic = true
+is_mergeable = true
+description = "DAIYEN FOOELS"
+
+[[object]]
+id = 6
+name = "create monster"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 200
+prob = 45
+is_magic = true
+is_mergeable = true
+description = "LEP GEX VEN ZEA"
+
+[[object]]
+id = 7
+name = "taming"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 200
+prob = 15
+is_magic = true
+is_mergeable = true
+description = "PRIRUTSENIE"
+
+[[object]]
+id = 8
+name = "genocide"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 300
+prob = 15
+is_magic = true
+is_mergeable = true
+description = "ELBIB YLOH"
+
+[[object]]
+id = 9
+name = "light"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 50
+prob = 90
+is_magic = true
+is_mergeable = true
+description = "VERR YED HORRE"
+
+[[object]]
+id = 10
+name = "teleportation"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 100
+prob = 55
+is_magic = true
+is_mergeable = true
+description = "VENZAR BORGAVVE"
+
+[[object]]
+id = 11
+name = "gold detection"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 100
+prob = 33
+is_magic = true
+is_mergeable = true
+description = "THARR"
+
+[[object]]
+id = 12
+name = "food detection"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 100
+prob = 25
+is_magic = true
+is_mergeable = true
+description = "YUM YUM"
+
+[[object]]
+id = 13
+name = "identify"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 20
+prob = 180
+is_magic = true
+is_mergeable = true
+description = "KERNOD WEL"
+
+[[object]]
+id = 14
+name = "magic mapping"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 100
+prob = 45
+is_magic = true
+is_mergeable = true
+description = "ELAM EBOW"
+
+[[object]]
+id = 15
+name = "amnesia"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 200
+prob = 35
+is_magic = true
+is_mergeable = true
+description = "DUAM XNAHT"
+
+[[object]]
+id = 16
+name = "fire"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 100
+prob = 30
+is_magic = true
+is_mergeable = true
+description = "ANDOVA BEGARIN"
+
+[[object]]
+id = 17
+name = "earth"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 200
+prob = 18
+is_magic = true
+is_mergeable = true
+description = "KIRJE"
+
+[[object]]
+id = 18
+name = "punishment"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 300
+prob = 15
+is_magic = true
+is_mergeable = true
+description = "VE FORBRYDERNE"
+
+[[object]]
+id = 19
+name = "charging"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 300
+prob = 15
+is_magic = true
+is_mergeable = true
+description = "HACKEM MUCHE"
+
+[[object]]
+id = 20
+name = "stinking cloud"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 300
+prob = 15
+is_magic = true
+is_mergeable = true
+description = "VELOX NEB"
+
+[[object]]
+id = 21
+name = "mail"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 0
+prob = 0
+is_magic = false
+is_mergeable = true
+description = "stamped"
+
+[[object]]
+id = 22
+name = "blank paper"
+class = "Scroll"
+color = "White"
+material = "Paper"
+weight = 5
+cost = 60
+prob = 28
+is_magic = false
+is_mergeable = true
+description = "unlabeled"

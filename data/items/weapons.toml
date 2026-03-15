@@ -1,0 +1,1361 @@
+# NetHack Babel — Weapon definitions (71 weapons)
+# Values sourced from NetHack 3.7 include/objects.h
+# Base damage dice only; extra damage is handled in engine code.
+
+# ============================================================================
+# PROJECTILES (id 0-5) — ammunition for launchers
+# ============================================================================
+
+[[object]]
+id = 0
+name = "arrow"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 1
+cost = 2
+prob = 55
+damage_small = "1d6"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Bow"
+description = ""
+
+[[object]]
+id = 1
+name = "elven arrow"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 1
+cost = 2
+prob = 20
+damage_small = "1d7"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Bow"
+description = "runed arrow"
+
+[[object]]
+id = 2
+name = "orcish arrow"
+class = "Weapon"
+color = "Black"
+material = "Iron"
+weight = 1
+cost = 2
+prob = 20
+damage_small = "1d5"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Bow"
+description = "crude arrow"
+
+[[object]]
+id = 3
+name = "silver arrow"
+class = "Weapon"
+color = "Gray"
+material = "Silver"
+weight = 1
+cost = 5
+prob = 12
+damage_small = "1d6"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Bow"
+description = ""
+
+[[object]]
+id = 4
+name = "ya"
+class = "Weapon"
+color = "Cyan"
+material = "Metal"
+weight = 1
+cost = 4
+prob = 15
+damage_small = "1d7"
+damage_large = "1d7"
+to_hit_bonus = 1
+is_magic = false
+is_mergeable = true
+skill = "Bow"
+description = "bamboo arrow"
+
+[[object]]
+id = 5
+name = "crossbow bolt"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 1
+cost = 2
+prob = 55
+damage_small = "1d4"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Crossbow"
+description = ""
+
+# ============================================================================
+# THROWN WEAPONS (id 6-8)
+# ============================================================================
+
+[[object]]
+id = 6
+name = "dart"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 1
+cost = 2
+prob = 60
+damage_small = "1d3"
+damage_large = "1d2"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Dart"
+strike_mode = "Pierce"
+description = ""
+
+[[object]]
+id = 7
+name = "shuriken"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 1
+cost = 5
+prob = 35
+damage_small = "1d8"
+damage_large = "1d6"
+to_hit_bonus = 2
+is_magic = false
+is_mergeable = true
+skill = "Shuriken"
+strike_mode = "Pierce"
+description = "throwing star"
+
+[[object]]
+id = 8
+name = "boomerang"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 5
+cost = 20
+prob = 15
+damage_small = "1d9"
+damage_large = "1d9"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Boomerang"
+description = ""
+
+# ============================================================================
+# SPEARS (id 9-14)
+# ============================================================================
+
+[[object]]
+id = 9
+name = "spear"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 30
+cost = 3
+prob = 50
+damage_small = "1d6"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Spear"
+strike_mode = "Pierce"
+description = ""
+
+[[object]]
+id = 10
+name = "elven spear"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 30
+cost = 3
+prob = 10
+damage_small = "1d7"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Spear"
+strike_mode = "Pierce"
+description = "runed spear"
+
+[[object]]
+id = 11
+name = "orcish spear"
+class = "Weapon"
+color = "Black"
+material = "Iron"
+weight = 30
+cost = 3
+prob = 13
+damage_small = "1d5"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Spear"
+strike_mode = "Pierce"
+description = "crude spear"
+
+[[object]]
+id = 12
+name = "dwarvish spear"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 35
+cost = 3
+prob = 12
+damage_small = "1d8"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Spear"
+strike_mode = "Pierce"
+description = "stout spear"
+
+[[object]]
+id = 13
+name = "silver spear"
+class = "Weapon"
+color = "Gray"
+material = "Silver"
+weight = 36
+cost = 40
+prob = 2
+damage_small = "1d6"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Spear"
+strike_mode = "Pierce"
+description = ""
+
+[[object]]
+id = 14
+name = "javelin"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 3
+prob = 10
+damage_small = "1d6"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Spear"
+strike_mode = "Pierce"
+description = "throwing spear"
+
+# ============================================================================
+# TRIDENT (id 15)
+# ============================================================================
+
+[[object]]
+id = 15
+name = "trident"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 25
+cost = 5
+prob = 8
+damage_small = "1d6"
+damage_large = "1d4"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Trident"
+strike_mode = "Pierce"
+description = ""
+
+# ============================================================================
+# DAGGERS (id 16-21)
+# ============================================================================
+
+[[object]]
+id = 16
+name = "dagger"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 10
+cost = 4
+prob = 30
+damage_small = "1d4"
+damage_large = "1d3"
+to_hit_bonus = 2
+is_magic = false
+is_mergeable = true
+skill = "Dagger"
+strike_mode = "Pierce"
+description = ""
+
+[[object]]
+id = 17
+name = "elven dagger"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 10
+cost = 4
+prob = 10
+damage_small = "1d5"
+damage_large = "1d3"
+to_hit_bonus = 2
+is_magic = false
+is_mergeable = true
+skill = "Dagger"
+strike_mode = "Pierce"
+description = "runed dagger"
+
+[[object]]
+id = 18
+name = "orcish dagger"
+class = "Weapon"
+color = "Black"
+material = "Iron"
+weight = 10
+cost = 4
+prob = 12
+damage_small = "1d3"
+damage_large = "1d3"
+to_hit_bonus = 2
+is_magic = false
+is_mergeable = true
+skill = "Dagger"
+strike_mode = "Pierce"
+description = "crude dagger"
+
+[[object]]
+id = 19
+name = "silver dagger"
+class = "Weapon"
+color = "Gray"
+material = "Silver"
+weight = 12
+cost = 40
+prob = 3
+damage_small = "1d4"
+damage_large = "1d3"
+to_hit_bonus = 2
+is_magic = false
+is_mergeable = true
+skill = "Dagger"
+strike_mode = "Pierce"
+description = ""
+
+[[object]]
+id = 20
+name = "athame"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 10
+cost = 4
+prob = 0
+damage_small = "1d4"
+damage_large = "1d3"
+to_hit_bonus = 2
+is_magic = false
+is_mergeable = true
+skill = "Dagger"
+strike_mode = "Slash"
+description = ""
+
+[[object]]
+id = 21
+name = "scalpel"
+class = "Weapon"
+color = "Cyan"
+material = "Metal"
+weight = 5
+cost = 6
+prob = 0
+damage_small = "1d3"
+damage_large = "1d3"
+to_hit_bonus = 2
+is_magic = false
+is_mergeable = true
+skill = "Knife"
+strike_mode = "Slash"
+description = ""
+
+# ============================================================================
+# KNIVES (id 22-25)
+# ============================================================================
+
+[[object]]
+id = 22
+name = "knife"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 5
+cost = 4
+prob = 20
+damage_small = "1d3"
+damage_large = "1d2"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Knife"
+strike_mode = "Pierce|Slash"
+description = ""
+
+[[object]]
+id = 23
+name = "stiletto"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 5
+cost = 4
+prob = 5
+damage_small = "1d3"
+damage_large = "1d2"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Knife"
+strike_mode = "Pierce|Slash"
+description = ""
+
+[[object]]
+id = 24
+name = "worm tooth"
+class = "Weapon"
+color = "White"
+material = "Bone"
+weight = 20
+cost = 2
+prob = 0
+damage_small = "1d2"
+damage_large = "1d2"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = true
+skill = "Knife"
+description = ""
+
+[[object]]
+id = 25
+name = "crysknife"
+class = "Weapon"
+color = "White"
+material = "Bone"
+weight = 20
+cost = 100
+prob = 0
+damage_small = "1d10"
+damage_large = "1d10"
+to_hit_bonus = 3
+is_magic = false
+is_mergeable = true
+skill = "Knife"
+strike_mode = "Pierce"
+description = ""
+
+# ============================================================================
+# AXES (id 26-27)
+# ============================================================================
+
+[[object]]
+id = 26
+name = "axe"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 60
+cost = 8
+prob = 40
+damage_small = "1d6"
+damage_large = "1d4"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Axe"
+strike_mode = "Slash"
+description = ""
+
+[[object]]
+id = 27
+name = "battle-axe"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 120
+cost = 40
+prob = 10
+damage_small = "1d8"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Axe"
+strike_mode = "Slash"
+two_handed = true
+description = "double-headed axe"
+
+# ============================================================================
+# SHORT SWORDS (id 28-31)
+# ============================================================================
+
+[[object]]
+id = 28
+name = "short sword"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 30
+cost = 10
+prob = 8
+damage_small = "1d6"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "ShortSword"
+strike_mode = "Pierce"
+description = ""
+
+[[object]]
+id = 29
+name = "elven short sword"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 30
+cost = 10
+prob = 2
+damage_small = "1d8"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "ShortSword"
+strike_mode = "Pierce"
+description = "runed short sword"
+
+[[object]]
+id = 30
+name = "orcish short sword"
+class = "Weapon"
+color = "Black"
+material = "Iron"
+weight = 30
+cost = 10
+prob = 3
+damage_small = "1d5"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "ShortSword"
+strike_mode = "Pierce"
+description = "crude short sword"
+
+[[object]]
+id = 31
+name = "dwarvish short sword"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 30
+cost = 10
+prob = 2
+damage_small = "1d7"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "ShortSword"
+strike_mode = "Pierce"
+description = "broad short sword"
+
+# ============================================================================
+# SABERS (id 32-33)
+# ============================================================================
+
+[[object]]
+id = 32
+name = "scimitar"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 40
+cost = 15
+prob = 15
+damage_small = "1d8"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Saber"
+strike_mode = "Slash"
+description = "curved sword"
+
+[[object]]
+id = 33
+name = "silver saber"
+class = "Weapon"
+color = "Gray"
+material = "Silver"
+weight = 40
+cost = 75
+prob = 6
+damage_small = "1d8"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Saber"
+strike_mode = "Slash"
+description = ""
+
+# ============================================================================
+# BROADSWORDS (id 34-35)
+# ============================================================================
+
+[[object]]
+id = 34
+name = "broadsword"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 70
+cost = 10
+prob = 8
+damage_small = "1d4"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "BroadSword"
+strike_mode = "Slash"
+description = ""
+
+[[object]]
+id = 35
+name = "elven broadsword"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 70
+cost = 10
+prob = 4
+damage_small = "1d6"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "BroadSword"
+strike_mode = "Slash"
+description = "runed broadsword"
+
+# ============================================================================
+# LONG SWORDS (id 36-38)
+# ============================================================================
+
+[[object]]
+id = 36
+name = "long sword"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 40
+cost = 15
+prob = 50
+damage_small = "1d8"
+damage_large = "1d12"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "LongSword"
+strike_mode = "Slash"
+description = ""
+
+[[object]]
+id = 37
+name = "two-handed sword"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 150
+cost = 50
+prob = 22
+damage_small = "1d12"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "TwoHandedSword"
+strike_mode = "Slash"
+two_handed = true
+description = ""
+
+[[object]]
+id = 38
+name = "katana"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 40
+cost = 80
+prob = 4
+damage_small = "1d10"
+damage_large = "1d12"
+to_hit_bonus = 1
+is_magic = false
+is_mergeable = false
+skill = "LongSword"
+strike_mode = "Slash"
+description = "samurai sword"
+
+# ============================================================================
+# SPECIAL SWORDS (id 39-40)
+# ============================================================================
+
+[[object]]
+id = 39
+name = "tsurugi"
+class = "Weapon"
+color = "Cyan"
+material = "Metal"
+weight = 60
+cost = 500
+prob = 0
+damage_small = "1d16"
+damage_large = "1d8"
+to_hit_bonus = 2
+is_magic = false
+is_mergeable = false
+skill = "TwoHandedSword"
+strike_mode = "Slash"
+two_handed = true
+description = "long samurai sword"
+
+[[object]]
+id = 40
+name = "runesword"
+class = "Weapon"
+color = "Black"
+material = "Iron"
+weight = 40
+cost = 300
+prob = 0
+damage_small = "1d4"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "BroadSword"
+strike_mode = "Slash"
+description = "runed broadsword"
+
+# ============================================================================
+# POLEARMS (id 41-52) — all two-handed, skill=Polearms
+# ============================================================================
+
+[[object]]
+id = 41
+name = "partisan"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 80
+cost = 10
+prob = 5
+damage_small = "1d6"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Pierce"
+two_handed = true
+description = "vulgar polearm"
+
+[[object]]
+id = 42
+name = "ranseur"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 50
+cost = 6
+prob = 5
+damage_small = "1d4"
+damage_large = "1d4"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Pierce"
+two_handed = true
+description = "hilted polearm"
+
+[[object]]
+id = 43
+name = "spetum"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 50
+cost = 5
+prob = 5
+damage_small = "1d6"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Pierce"
+two_handed = true
+description = "forked polearm"
+
+[[object]]
+id = 44
+name = "glaive"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 75
+cost = 6
+prob = 8
+damage_small = "1d6"
+damage_large = "1d10"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Slash"
+two_handed = true
+description = "single-edged polearm"
+
+[[object]]
+id = 45
+name = "halberd"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 150
+cost = 10
+prob = 8
+damage_small = "1d10"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Pierce|Slash"
+two_handed = true
+description = "angled poleaxe"
+
+[[object]]
+id = 46
+name = "bardiche"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 120
+cost = 7
+prob = 4
+damage_small = "1d4"
+damage_large = "1d4"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Slash"
+two_handed = true
+description = "long poleaxe"
+
+[[object]]
+id = 47
+name = "voulge"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 125
+cost = 5
+prob = 4
+damage_small = "1d4"
+damage_large = "1d4"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Slash"
+two_handed = true
+description = "pole cleaver"
+
+[[object]]
+id = 48
+name = "fauchard"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 60
+cost = 5
+prob = 6
+damage_small = "1d6"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Pierce|Slash"
+two_handed = true
+description = "pole sickle"
+
+[[object]]
+id = 49
+name = "guisarme"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 80
+cost = 5
+prob = 6
+damage_small = "1d4"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Slash"
+two_handed = true
+description = "pruning hook"
+
+[[object]]
+id = 50
+name = "bill-guisarme"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 120
+cost = 7
+prob = 4
+damage_small = "1d4"
+damage_large = "1d10"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Pierce|Slash"
+two_handed = true
+description = "hooked polearm"
+
+[[object]]
+id = 51
+name = "lucern hammer"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 150
+cost = 7
+prob = 5
+damage_small = "1d4"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Whack|Pierce"
+two_handed = true
+description = "pronged polearm"
+
+[[object]]
+id = 52
+name = "bec de corbin"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 100
+cost = 8
+prob = 4
+damage_small = "1d8"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Polearms"
+strike_mode = "Whack|Pierce"
+two_handed = true
+description = "beaked polearm"
+
+# ============================================================================
+# SPECIAL POLEARMS (id 53-54)
+# ============================================================================
+
+[[object]]
+id = 53
+name = "dwarvish mattock"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 120
+cost = 50
+prob = 13
+damage_small = "1d12"
+damage_large = "1d8"
+to_hit_bonus = -1
+is_magic = false
+is_mergeable = false
+skill = "PickAxe"
+strike_mode = "Whack"
+two_handed = true
+description = "broad pick"
+
+[[object]]
+id = 54
+name = "lance"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 180
+cost = 10
+prob = 4
+damage_small = "1d6"
+damage_large = "1d8"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Lance"
+strike_mode = "Pierce"
+description = ""
+
+# ============================================================================
+# BLUDGEONS (id 55-61)
+# ============================================================================
+
+[[object]]
+id = 55
+name = "mace"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 30
+cost = 5
+prob = 40
+damage_small = "1d6"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Mace"
+strike_mode = "Whack"
+description = ""
+
+[[object]]
+id = 56
+name = "silver mace"
+class = "Weapon"
+color = "Gray"
+material = "Silver"
+weight = 36
+cost = 60
+prob = 2
+damage_small = "1d6"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Mace"
+strike_mode = "Whack"
+description = ""
+
+[[object]]
+id = 57
+name = "morning star"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 120
+cost = 10
+prob = 12
+damage_small = "1d4"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "MorningStar"
+strike_mode = "Whack"
+description = ""
+
+[[object]]
+id = 58
+name = "war hammer"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 50
+cost = 5
+prob = 15
+damage_small = "1d4"
+damage_large = "1d4"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Hammer"
+strike_mode = "Whack"
+description = ""
+
+[[object]]
+id = 59
+name = "club"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 30
+cost = 3
+prob = 12
+damage_small = "1d6"
+damage_large = "1d3"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Club"
+strike_mode = "Whack"
+description = ""
+
+[[object]]
+id = 60
+name = "rubber hose"
+class = "Weapon"
+color = "Brown"
+material = "Plastic"
+weight = 20
+cost = 3
+prob = 0
+damage_small = "1d4"
+damage_large = "1d3"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Whip"
+strike_mode = "Whack"
+description = ""
+
+[[object]]
+id = 61
+name = "quarterstaff"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 40
+cost = 5
+prob = 11
+damage_small = "1d6"
+damage_large = "1d6"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Quarterstaff"
+strike_mode = "Whack"
+two_handed = true
+description = "staff"
+
+# ============================================================================
+# CHAIN WEAPONS (id 62-63)
+# ============================================================================
+
+[[object]]
+id = 62
+name = "aklys"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 15
+cost = 4
+prob = 8
+damage_small = "1d6"
+damage_large = "1d3"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Club"
+strike_mode = "Whack"
+description = "thonged club"
+
+[[object]]
+id = 63
+name = "flail"
+class = "Weapon"
+color = "Cyan"
+material = "Iron"
+weight = 15
+cost = 4
+prob = 40
+damage_small = "1d6"
+damage_large = "1d4"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Flail"
+strike_mode = "Whack"
+description = ""
+
+# ============================================================================
+# WHIP (id 64)
+# ============================================================================
+
+[[object]]
+id = 64
+name = "bullwhip"
+class = "Weapon"
+color = "Brown"
+material = "Leather"
+weight = 20
+cost = 4
+prob = 2
+damage_small = "1d2"
+damage_large = "1d1"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Whip"
+description = ""
+
+# ============================================================================
+# BOWS / LAUNCHERS (id 65-70)
+# ============================================================================
+
+[[object]]
+id = 65
+name = "bow"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 30
+cost = 60
+prob = 24
+damage_small = "1d2"
+damage_large = "1d2"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Bow"
+is_launcher = true
+description = ""
+
+[[object]]
+id = 66
+name = "elven bow"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 30
+cost = 60
+prob = 12
+damage_small = "1d2"
+damage_large = "1d2"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Bow"
+is_launcher = true
+description = "runed bow"
+
+[[object]]
+id = 67
+name = "orcish bow"
+class = "Weapon"
+color = "Black"
+material = "Wood"
+weight = 30
+cost = 60
+prob = 12
+damage_small = "1d2"
+damage_large = "1d2"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Bow"
+is_launcher = true
+description = "crude bow"
+
+[[object]]
+id = 68
+name = "yumi"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 30
+cost = 60
+prob = 0
+damage_small = "1d2"
+damage_large = "1d2"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Bow"
+is_launcher = true
+description = "long bow"
+
+[[object]]
+id = 69
+name = "sling"
+class = "Weapon"
+color = "Brown"
+material = "Leather"
+weight = 3
+cost = 20
+prob = 40
+damage_small = "1d2"
+damage_large = "1d2"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Sling"
+is_launcher = true
+description = ""
+
+[[object]]
+id = 70
+name = "crossbow"
+class = "Weapon"
+color = "Brown"
+material = "Wood"
+weight = 50
+cost = 40
+prob = 45
+damage_small = "1d2"
+damage_large = "1d2"
+to_hit_bonus = 0
+is_magic = false
+is_mergeable = false
+skill = "Crossbow"
+is_launcher = true
+description = ""

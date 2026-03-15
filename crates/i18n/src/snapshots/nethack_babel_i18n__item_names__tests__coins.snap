@@ -1,0 +1,7 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+qty=1 -> a gold piece
+qty=3 -> 3 gold pieces
+qty=100 -> 100 gold pieces

@@ -1,0 +1,4 @@
+[translations]
+"staff" = { name = "staff", plural = "staves" }
+"quarterstaff" = { name = "quarterstaff", plural = "quarterstaves" }
+"knife" = { name = "knife", plural = "knives" }

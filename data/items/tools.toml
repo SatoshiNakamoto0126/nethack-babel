@@ -1,0 +1,818 @@
+# NetHack Babel — Tool definitions
+# Values sourced from NetHack 3.7 include/objects.h
+#
+# TOOL macro:      TOOL(name, desc, kn, mrg, mgc, chg, prob, wt, cost, mat, color, sn)
+# CONTAINER macro: CONTAINER(name, desc, kn, mgc, chg, prob, wt, cost, mat, color, sn)
+# EYEWEAR macro:   EYEWEAR(name, desc, kn, prop, prob, wt, cost, mat, color, sn)
+# WEPTOOL macro:   WEPTOOL(name, desc, kn, mgc, bi, prob, wt, cost, sdam, ldam,
+#                          hitbon, sub, mat, clr, sn)
+
+# ============================================================================
+# Containers
+# ============================================================================
+
+[[object]]
+id = 0
+name = "large box"
+class = "Tool"
+sub = "Container"
+color = "Brown"
+material = "Wood"
+weight = 350
+cost = 8
+prob = 40
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 1
+name = "chest"
+class = "Tool"
+sub = "Container"
+color = "Brown"
+material = "Wood"
+weight = 600
+cost = 16
+prob = 35
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 2
+name = "ice box"
+class = "Tool"
+sub = "Container"
+color = "White"
+material = "Plastic"
+weight = 900
+cost = 42
+prob = 5
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 3
+name = "sack"
+class = "Tool"
+sub = "Container"
+color = "Brown"
+material = "Cloth"
+weight = 15
+cost = 2
+prob = 35
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = "bag"
+
+[[object]]
+id = 4
+name = "oilskin sack"
+class = "Tool"
+sub = "Container"
+color = "Brown"
+material = "Cloth"
+weight = 15
+cost = 100
+prob = 5
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = "bag"
+
+[[object]]
+id = 5
+name = "bag of holding"
+class = "Tool"
+sub = "Container"
+color = "Brown"
+material = "Cloth"
+weight = 15
+cost = 100
+prob = 20
+is_magic = true
+is_mergeable = false
+is_charged = false
+description = "bag"
+
+[[object]]
+id = 6
+name = "bag of tricks"
+class = "Tool"
+sub = "Container"
+color = "Brown"
+material = "Cloth"
+weight = 15
+cost = 100
+prob = 20
+is_magic = true
+is_mergeable = false
+is_charged = true
+description = "bag"
+
+# ============================================================================
+# Lock-opening tools
+# ============================================================================
+
+[[object]]
+id = 7
+name = "skeleton key"
+class = "Tool"
+sub = "LockTool"
+color = "Cyan"
+material = "Iron"
+weight = 3
+cost = 10
+prob = 80
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = "key"
+
+[[object]]
+id = 8
+name = "lock pick"
+class = "Tool"
+sub = "LockTool"
+color = "Cyan"
+material = "Iron"
+weight = 4
+cost = 20
+prob = 60
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 9
+name = "credit card"
+class = "Tool"
+sub = "LockTool"
+color = "White"
+material = "Plastic"
+weight = 1
+cost = 10
+prob = 15
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+# ============================================================================
+# Light sources
+# ============================================================================
+
+[[object]]
+id = 10
+name = "tallow candle"
+class = "Tool"
+sub = "LightSource"
+color = "White"
+material = "Wax"
+weight = 2
+cost = 10
+prob = 20
+is_magic = false
+is_mergeable = true
+is_charged = false
+description = "candle"
+
+[[object]]
+id = 11
+name = "wax candle"
+class = "Tool"
+sub = "LightSource"
+color = "White"
+material = "Wax"
+weight = 2
+cost = 20
+prob = 5
+is_magic = false
+is_mergeable = true
+is_charged = false
+description = "candle"
+
+[[object]]
+id = 12
+name = "brass lantern"
+class = "Tool"
+sub = "LightSource"
+color = "Yellow"
+material = "Copper"
+weight = 30
+cost = 12
+prob = 30
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 13
+name = "oil lamp"
+class = "Tool"
+sub = "LightSource"
+color = "Yellow"
+material = "Copper"
+weight = 20
+cost = 10
+prob = 45
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = "lamp"
+
+[[object]]
+id = 14
+name = "magic lamp"
+class = "Tool"
+sub = "LightSource"
+color = "Yellow"
+material = "Copper"
+weight = 20
+cost = 50
+prob = 15
+is_magic = true
+is_mergeable = false
+is_charged = false
+description = "lamp"
+
+# ============================================================================
+# Other tools
+# ============================================================================
+
+[[object]]
+id = 15
+name = "expensive camera"
+class = "Tool"
+sub = "Misc"
+color = "Black"
+material = "Plastic"
+weight = 12
+cost = 200
+prob = 15
+is_magic = false
+is_mergeable = false
+is_charged = true
+description = ""
+
+[[object]]
+id = 16
+name = "mirror"
+class = "Tool"
+sub = "Misc"
+color = "Gray"
+material = "Glass"
+weight = 13
+cost = 10
+prob = 45
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = "looking glass"
+
+[[object]]
+id = 17
+name = "crystal ball"
+class = "Tool"
+sub = "Misc"
+color = "BrightCyan"
+material = "Glass"
+weight = 150
+cost = 60
+prob = 15
+is_magic = true
+is_mergeable = false
+is_charged = true
+description = "glass orb"
+
+# ============================================================================
+# Eyewear (worn on face)
+# ============================================================================
+
+[[object]]
+id = 18
+name = "lenses"
+class = "Tool"
+sub = "Eyewear"
+color = "BrightCyan"
+material = "Glass"
+weight = 3
+cost = 80
+prob = 5
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+conferred_property = ""
+
+[[object]]
+id = 19
+name = "blindfold"
+class = "Tool"
+sub = "Eyewear"
+color = "Black"
+material = "Cloth"
+weight = 2
+cost = 20
+prob = 50
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+conferred_property = "Blinded"
+
+[[object]]
+id = 20
+name = "towel"
+class = "Tool"
+sub = "Eyewear"
+color = "Magenta"
+material = "Cloth"
+weight = 5
+cost = 50
+prob = 50
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+conferred_property = "Blinded"
+
+# ============================================================================
+# Still other tools
+# ============================================================================
+
+[[object]]
+id = 21
+name = "saddle"
+class = "Tool"
+sub = "Misc"
+color = "Brown"
+material = "Leather"
+weight = 200
+cost = 150
+prob = 5
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 22
+name = "leash"
+class = "Tool"
+sub = "Misc"
+color = "Brown"
+material = "Leather"
+weight = 12
+cost = 20
+prob = 65
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 23
+name = "stethoscope"
+class = "Tool"
+sub = "Misc"
+color = "Cyan"
+material = "Iron"
+weight = 4
+cost = 75
+prob = 25
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 24
+name = "tinning kit"
+class = "Tool"
+sub = "Misc"
+color = "Cyan"
+material = "Iron"
+weight = 100
+cost = 30
+prob = 15
+is_magic = false
+is_mergeable = false
+is_charged = true
+description = ""
+
+[[object]]
+id = 25
+name = "tin opener"
+class = "Tool"
+sub = "Misc"
+color = "Cyan"
+material = "Iron"
+weight = 4
+cost = 30
+prob = 35
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 26
+name = "can of grease"
+class = "Tool"
+sub = "Misc"
+color = "Cyan"
+material = "Iron"
+weight = 15
+cost = 20
+prob = 15
+is_magic = false
+is_mergeable = false
+is_charged = true
+description = ""
+
+[[object]]
+id = 27
+name = "figurine"
+class = "Tool"
+sub = "Misc"
+color = "Gray"
+material = "Mineral"
+weight = 50
+cost = 80
+prob = 25
+is_magic = true
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 28
+name = "magic marker"
+class = "Tool"
+sub = "Misc"
+color = "Red"
+material = "Plastic"
+weight = 2
+cost = 50
+prob = 15
+is_magic = true
+is_mergeable = false
+is_charged = true
+description = ""
+
+# ============================================================================
+# Traps (deployed tools)
+# ============================================================================
+
+[[object]]
+id = 29
+name = "land mine"
+class = "Tool"
+sub = "Trap"
+color = "Red"
+material = "Iron"
+weight = 200
+cost = 180
+prob = 0
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 30
+name = "beartrap"
+class = "Tool"
+sub = "Trap"
+color = "Cyan"
+material = "Iron"
+weight = 200
+cost = 60
+prob = 0
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+# ============================================================================
+# Musical instruments
+# ============================================================================
+
+[[object]]
+id = 31
+name = "tin whistle"
+class = "Tool"
+sub = "Instrument"
+color = "Cyan"
+material = "Metal"
+weight = 3
+cost = 10
+prob = 100
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = "whistle"
+
+[[object]]
+id = 32
+name = "magic whistle"
+class = "Tool"
+sub = "Instrument"
+color = "Cyan"
+material = "Metal"
+weight = 3
+cost = 10
+prob = 30
+is_magic = true
+is_mergeable = false
+is_charged = false
+description = "whistle"
+
+[[object]]
+id = 33
+name = "wooden flute"
+class = "Tool"
+sub = "Instrument"
+color = "Brown"
+material = "Wood"
+weight = 5
+cost = 12
+prob = 4
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = "flute"
+
+[[object]]
+id = 34
+name = "magic flute"
+class = "Tool"
+sub = "Instrument"
+color = "Brown"
+material = "Wood"
+weight = 5
+cost = 36
+prob = 2
+is_magic = true
+is_mergeable = false
+is_charged = true
+description = "flute"
+
+[[object]]
+id = 35
+name = "tooled horn"
+class = "Tool"
+sub = "Instrument"
+color = "White"
+material = "Bone"
+weight = 18
+cost = 15
+prob = 5
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = "horn"
+
+[[object]]
+id = 36
+name = "frost horn"
+class = "Tool"
+sub = "Instrument"
+color = "White"
+material = "Bone"
+weight = 18
+cost = 50
+prob = 2
+is_magic = true
+is_mergeable = false
+is_charged = true
+description = "horn"
+
+[[object]]
+id = 37
+name = "fire horn"
+class = "Tool"
+sub = "Instrument"
+color = "White"
+material = "Bone"
+weight = 18
+cost = 50
+prob = 2
+is_magic = true
+is_mergeable = false
+is_charged = true
+description = "horn"
+
+[[object]]
+id = 38
+name = "horn of plenty"
+class = "Tool"
+sub = "Instrument"
+color = "White"
+material = "Bone"
+weight = 18
+cost = 50
+prob = 2
+is_magic = true
+is_mergeable = false
+is_charged = true
+description = "horn"
+
+[[object]]
+id = 39
+name = "wooden harp"
+class = "Tool"
+sub = "Instrument"
+color = "Brown"
+material = "Wood"
+weight = 30
+cost = 50
+prob = 4
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = "harp"
+
+[[object]]
+id = 40
+name = "magic harp"
+class = "Tool"
+sub = "Instrument"
+color = "Brown"
+material = "Wood"
+weight = 30
+cost = 50
+prob = 2
+is_magic = true
+is_mergeable = false
+is_charged = true
+description = "harp"
+
+[[object]]
+id = 41
+name = "bell"
+class = "Tool"
+sub = "Instrument"
+color = "Yellow"
+material = "Copper"
+weight = 30
+cost = 50
+prob = 2
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 42
+name = "bugle"
+class = "Tool"
+sub = "Instrument"
+color = "Yellow"
+material = "Copper"
+weight = 10
+cost = 15
+prob = 4
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = ""
+
+[[object]]
+id = 43
+name = "leather drum"
+class = "Tool"
+sub = "Instrument"
+color = "Brown"
+material = "Leather"
+weight = 25
+cost = 25
+prob = 4
+is_magic = false
+is_mergeable = false
+is_charged = false
+description = "drum"
+
+[[object]]
+id = 44
+name = "drum of earthquake"
+class = "Tool"
+sub = "Instrument"
+color = "Brown"
+material = "Leather"
+weight = 25
+cost = 25
+prob = 2
+is_magic = true
+is_mergeable = false
+is_charged = true
+description = "drum"
+
+# ============================================================================
+# Weapon-tools (WEPTOOL: tools usable as weapons)
+# WEPTOOL(name, desc, kn, mgc, bi, prob, wt, cost, sdam, ldam, hitbon, sub,
+#         mat, clr, sn)
+# ============================================================================
+
+[[object]]
+id = 45
+name = "pick-axe"
+class = "Tool"
+sub = "Weptool"
+color = "Cyan"
+material = "Iron"
+weight = 100
+cost = 50
+prob = 20
+is_magic = false
+is_mergeable = false
+is_charged = false
+damage_small = "1d6"
+damage_large = "1d3"
+strike_mode = "Whack"
+skill = "PickAxe"
+description = ""
+
+[[object]]
+id = 46
+name = "grappling hook"
+class = "Tool"
+sub = "Weptool"
+color = "Cyan"
+material = "Iron"
+weight = 30
+cost = 50
+prob = 5
+is_magic = false
+is_mergeable = false
+is_charged = false
+damage_small = "1d2"
+damage_large = "1d6"
+strike_mode = "Whack"
+skill = "Flail"
+description = ""
+
+[[object]]
+id = 47
+name = "unicorn horn"
+class = "Tool"
+sub = "Weptool"
+color = "White"
+material = "Bone"
+weight = 20
+cost = 100
+prob = 0
+is_magic = true
+is_mergeable = false
+is_charged = false
+damage_small = "1d12"
+damage_large = "1d12"
+strike_mode = "Pierce"
+skill = "UnicornHorn"
+is_bimanual = true
+description = ""
+
+# ============================================================================
+# Unique tools (not artifacts)
+# ============================================================================
+
+[[object]]
+id = 48
+name = "Candelabrum of Invocation"
+class = "Tool"
+sub = "Unique"
+color = "Yellow"
+material = "Gold"
+weight = 10
+cost = 5000
+prob = 0
+is_magic = true
+is_mergeable = false
+is_charged = true
+is_unique = true
+description = "candelabrum"
+
+[[object]]
+id = 49
+name = "Bell of Opening"
+class = "Tool"
+sub = "Unique"
+color = "Gray"
+material = "Silver"
+weight = 10
+cost = 5000
+prob = 0
+is_magic = true
+is_mergeable = false
+is_charged = true
+is_unique = true
+description = "silver bell"

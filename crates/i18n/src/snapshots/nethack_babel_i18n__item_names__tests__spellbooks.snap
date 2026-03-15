@@ -1,0 +1,30 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== spellbook of force bolt ===
+qty=1 identified buc=blessed -> a blessed spellbook of force bolt
+qty=1 identified buc=uncursed -> an uncursed spellbook of force bolt
+qty=1 identified buc=cursed -> a cursed spellbook of force bolt
+qty=1 identified buc=buc_unknown -> a spellbook of force bolt
+qty=1 unidentified -> a vellum spellbook
+qty=1 called=attack? -> a spellbook called attack?
+qty=3 identified buc=blessed -> 3 blessed spellbook of force bolts
+qty=3 identified buc=uncursed -> 3 uncursed spellbook of force bolts
+qty=3 identified buc=cursed -> 3 cursed spellbook of force bolts
+qty=3 identified buc=buc_unknown -> 3 spellbook of force bolts
+qty=3 unidentified -> 3 vellum spellbooks
+qty=3 called=attack? -> 3 spellbook called attack?s
+=== spellbook of healing ===
+qty=1 identified buc=blessed -> a blessed spellbook of healing
+qty=1 identified buc=uncursed -> an uncursed spellbook of healing
+qty=1 identified buc=cursed -> a cursed spellbook of healing
+qty=1 identified buc=buc_unknown -> a spellbook of healing
+qty=1 unidentified -> a parchment spellbook
+qty=1 called=attack? -> a spellbook called attack?
+qty=3 identified buc=blessed -> 3 blessed spellbook of healings
+qty=3 identified buc=uncursed -> 3 uncursed spellbook of healings
+qty=3 identified buc=cursed -> 3 cursed spellbook of healings
+qty=3 identified buc=buc_unknown -> 3 spellbook of healings
+qty=3 unidentified -> 3 parchment spellbooks
+qty=3 called=attack? -> 3 spellbook called attack?s

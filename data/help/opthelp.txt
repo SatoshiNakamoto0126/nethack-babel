@@ -1,0 +1,94 @@
+NetHack Babel Options Reference
+
+Boolean options (with default values in []):
+
+acoustics      can your character hear anything                    [True]
+autodescribe   describe the terrain under cursor                  [False]
+autodig        dig if moving and wielding digging tool            [False]
+autoopen       walking into a door attempts to open it             [True]
+autopickup     automatically pick up objects you move over         [True]
+autoquiver     when firing with an empty quiver, select some      [False]
+               suitable inventory weapon to fill the quiver
+blind          your character is permanently blind                [False]
+bones          allow loading bones files                           [True]
+cmdassist      give help for errors on direction & other commands  [True]
+color          use different colors for objects on screen          [True]
+confirm        ask before hitting tame or peaceful monsters        [True]
+dark_room      show floor not in sight in different color          [True]
+fixinv         try to retain the same letter for the same object   [True]
+force_invmenu  commands asking for inventory item show a menu     [False]
+help           print all available info when using the / command   [True]
+hilite_pet     display pets in a highlighted manner               [False]
+hilite_pile    display item piles in a highlighted manner         [False]
+implicit_uncursed  omit "uncursed" from inventory, if possible     [True]
+legacy         print introductory message                          [True]
+lit_corridor   show a dark corridor as lit if in sight            [False]
+lootabc        use a/b/c rather than o/i/b when looting           [False]
+mention_walls  give feedback when walking against a wall          [False]
+perm_invent    keep inventory in a permanent window               [False]
+pushweapon     when wielding a new weapon, put your previously    [False]
+               wielded weapon into the secondary weapon slot
+rest_on_space  count the space bar as a rest character            [False]
+safe_pet       prevent you from (knowingly) attacking your pet(s)  [True]
+showexp        display your accumulated experience points         [False]
+silent         don't use your terminal's bell sound                [True]
+sortpack       group similar kinds of objects in inventory         [True]
+sparkle        display sparkly effect for resisted magical         [True]
+               attacks
+time           display elapsed game time, in moves                [False]
+tombstone      print tombstone when you die                        [True]
+verbose        print more commentary during the game               [True]
+
+Any Boolean option can be set to True by including it among options being
+set, or negated (set to False) by prefixing its name with a '!' or 'no'.
+
+ - - - - -
+
+Compound options are written as option_name:option_value.
+
+Compound options which can be set during the game are:
+
+disclose      the types of information you want         [ni na nv ng nc no]
+              offered at the end of the game
+fruit         the name of a fruit you enjoy eating             [slime mold]
+menustyle     user interface for selection of multiple objects:      [Full]
+              Traditional, Combination, Full, or Partial
+msg_window    behavior of ^P message recall:                          [s]
+              single, full, reverse, or combination
+number_pad    alphabetic versus numeric control over movement:          [0]
+               0 -- traditional hjkl + yubn movement (default)
+               1 -- digits control movement
+packorder     a list of default symbols for kinds of       [")[%?+!=/(*`0_]
+              objects that gives the order in which your inventory
+              gets shown if the 'sortpack' option is on
+paranoid_confirmation  space separated list of situations where
+              alternate prompting is desired
+pickup_burden when you pick up an item that exceeds this encumbrance    [S]
+              level, you will be asked if you want to continue
+pickup_types  a list of default symbols for kinds of objects to          []
+              autopickup when that option is on
+pile_limit    threshold for "there are objects here" vs listing them   [5]
+runmode       controls how often the map updates for multi-step      [run]
+              movement: teleport, run, walk, or crawl
+scores        the parts of the score list you wish to see
+sortloot      preferred order when examining objects                   [n]
+              none, loot, or full
+statushilites whether to display status highlights                     [0]
+statuslines   expanded (3) or condensed (2) status                     [2]
+
+Compound options which may be set only on startup are:
+
+align      Your starting alignment (lawful, neutral, chaotic)    [random]
+catname    name of your starting pet if it is a kitten               [none]
+dogname    name of your starting pet if it is a little dog           [none]
+gender     Your starting gender (male, female, or random)         [random]
+horsename  name of your starting pet if it is a pony                 [none]
+name       the name of your character
+pettype    your preferred type of pet (cat, dog, horse, random,    [random]
+           or none)
+race       Your starting race (e.g., race:Human, race:Elf)        [random]
+role       Your starting role (e.g., role:Barbarian, role:Valk)   [random]
+
+Some sample options lists are:
+!autopickup,!tombstone,name:Gandalf,scores:own/3 top/2 around
+female,dogname:Rover,rest_on_space,!verbose,menustyle:traditional

@@ -1,0 +1,263 @@
+# Quest text for the Caveman role
+# Converted from NetHack 3.7 dat/quest.lua (Cav section)
+# Variable substitutions: %p=player, %c=class, %r=rank, %l=leader,
+# %n=nemesis, %o=artifact, %i=intermediate, %d=deity, %H=homebase
+
+role = "caveman"
+abbreviation = "Cav"
+quest_leader = "Shaman Karnov"
+quest_nemesis = "Chromatic Dragon"
+quest_artifact = "The Sceptre of Might"
+quest_guardian = "caveman"
+quest_goal_terrain = "underground_lake"
+
+[assignquest]
+synopsis = "[Find and defeat %n, recover %o, and return with it.]"
+text = """
+"You are indeed ready now, %p.  I shall tell you a tale of
+great suffering among your people:
+
+"Shortly after you left on your vision quest, the caves were invaded by
+the creatures sent against us by %n.
+
+"She, herself, could not attack us due to her great size, but her minions
+have harassed us ever since.  In the first attacks, many died, and the
+minions of %n managed to steal %o.
+They took it to %i and there, none of our
+%g warriors have been able to go.
+
+"You must find %i, and within it wrest
+%o from %n.  She guards it as
+jealously as she guards all treasures she attains.  But with it,
+we can make our caves safe once more.
+
+"Please, %p, recover %o for us, and return it here."
+"""
+
+[badalign]
+synopsis = "[\"You no longer follow the path of the %a.  Go, and purify yourself.\"]"
+text = """
+"%pC!  You have deviated from my teachings.  You no longer follow
+the path of the %a as you should.  I banish you from these caves, to
+go forth and purify yourself.  Then, you might be able to accomplish this
+quest."
+"""
+
+[badlevel]
+synopsis = "[\"%rA is too inexperienced.  Come back when you have progressed.\"]"
+text = """
+"Alas, %p, you are as yet too inexperienced to embark upon such
+a difficult quest as that I propose to give you.
+
+"%rA could not possibly survive the rigors demanded to find
+%i, never mind to confront %n herself.
+
+"Adventure some more, and you will learn the skills you will require.
+%d decrees it."
+"""
+
+[discourage]
+lines = [
+  "\\\"You are weak, %c.  No challenge for the Mother of all Dragons.\\\"",
+  "\\\"I grow hungry, %r.  You look like a nice appetizer!\\\"",
+  "\\\"Join me for lunch?  You're the main course, %c.\\\"",
+  "\\\"With %o, I am invincible!  You cannot succeed.\\\"",
+  "\\\"Your mentor, %l has failed.  You are nothing to fear.\\\"",
+  "\\\"You shall die here, %c.  %rA cannot hope to defeat me.\\\"",
+  "\\\"You, a mere %r challenge the might of %n?  Hah!\\\"",
+  "\\\"I am the Mother of all Dragons!  You cannot hope to defeat me.\\\"",
+  "\\\"My claws are sharp now.  I shall rip you to shreds!\\\"",
+  "\\\"%d has deserted you, %c.  This is my domain.\\\"",
+]
+
+[encourage]
+lines = [
+  "\\\"%nC is immune to her own breath weapons. You should use magic upon her that she does not use herself.\\\"",
+  "\\\"When you encounter %n, call upon %d for assistance.\\\"",
+  "\\\"There will be nowhere to hide inside %ns inner sanctum.\\\"",
+  "\\\"Your best chance with %n will be to keep moving.\\\"",
+  "\\\"Do not be distracted by the great treasures in %ns lair. Concentrate on %o.\\\"",
+  "\\\"%oC is the only object that %n truly fears.\\\"",
+  "\\\"Do not be fooled by %ns size.  She is fast, and it is rumored that she uses magic.\\\"",
+  "\\\"I would send a party of %gP with you, but we will need all of our strength to defend ourselves.\\\"",
+  "\\\"Remember, be %a at all times.  This is your strength.\\\"",
+  "\\\"If only we had an amulet of reflection, this would not have happened.\\\"",
+]
+
+[firsttime]
+synopsis = "[You arrive back at %H, but something is wrong here.]"
+text = """
+You descend through a barely familiar stairwell that you remember
+%l showing you when you embarked upon your vision quest.
+
+You arrive back at %H, but something seems
+wrong here.  The usual smoke and glowing light of the fires of the
+outer caves are absent, and an uneasy quiet fills the damp air.
+"""
+
+[goal_first]
+synopsis = "[You enter a large cavern.  %nC is present.]"
+text = """
+You find yourself in a large cavern, with neatly polished walls, that
+nevertheless show signs of being scorched by fire.
+
+Bones litter the floor, and there are objects scattered everywhere.
+The air is close with the stench of sulphurous fumes.
+
+%nC is clearly visible, but %nh seems to be asleep.
+"""
+
+[goal_next]
+text = "Once again, you find yourself in the lair of %n."
+
+[gotit]
+synopsis = "[%oC fills you with a feeling of power.]"
+text = """
+As you pick up %o it seems heavy at first, but as you
+hold it strength flows into your arms.
+
+You suddenly feel full of power, as if nothing could possibly stand
+in your path.
+"""
+
+[guardtalk_after]
+lines = [
+  "\\\"The rains have returned and the land grows lush again.\\\"",
+  "\\\"Peace has returned, give thanks to %d!\\\"",
+  "\\\"Welcome back!  Did you find %o?\\\"",
+  "\\\"So, %p, tell us the story of your fight with %n.\\\"",
+  "\\\"%lC grows old.  Perhaps you will guide us after he ascends.\\\"",
+]
+
+[guardtalk_before]
+lines = [
+  "\\\"We have not been able to gather as much food since the Giants sealed off our access to the outer world.\\\"",
+  "\\\"Since %n sent her minions, we have been constantly fighting.\\\"",
+  "\\\"I have heard your vision quest was successful.  Is this so?\\\"",
+  "\\\"So, tell me, %p, how have you fared?\\\"",
+  "\\\"%lC grows old.  We know not who will guide us after he ascends.\\\"",
+]
+
+[hasamulet]
+synopsis = "[\"Take the Amulet to the altar of %d on the Astral Plane and offer it.\"]"
+text = """
+"You have been successful, I see, %p.
+
+"Now that the Amulet of Yendor is yours, here is what you must do:
+
+"Journey upwards to the open air.  The Amulet you carry will then
+take you into the Astral Planes, where the Great Temple of %d
+casts its influence throughout our world.
+
+"Sacrifice the Amulet on the altar.  Thus shall %d become supreme!"
+"""
+
+[killed_nemesis]
+text = """
+%nC sinks to the ground, her heads flailing about.
+As she dies, a cloud of noxious fumes billows about her.
+"""
+
+[leader_first]
+synopsis = "[\"You have returned.  We are in dire need of your help.\"]"
+text = """
+"You have returned from your vision quest, %p.  Thank %d.
+
+"We are in dire need of your help, my %S.
+
+"But first, I must see if you are yet capable of the quest I would
+ask you to undertake."
+"""
+
+[leader_last]
+synopsis = "[\"You have betrayed the %L.  Begone!\"]"
+text = """
+"%pC!  You have sealed our fate.  You seem unable to reform yourself,
+so I must select another to take your place.
+
+"Begone from %H!  You have betrayed us by choosing
+the path of the %C over the true path of the %L.
+
+"You no longer live in our eyes."
+"""
+
+[leader_next]
+text = "\\\"Again, you return to us, %p.  Let me see if you are ready now.\\\""
+
+[leader_other]
+text = "\\\"Ah, %p.  Are you finally ready?\\\""
+
+[locate_first]
+synopsis = "[You %x many large claw marks, smell carrion, and notice bones.]"
+text = """
+You %x many large claw marks on the ground.  The tunnels ahead
+of you are larger than most of those in any cave complex you have
+ever been in before.
+
+Your nose detects the smell of carrion from within, and bones litter
+the sides of the tunnels.
+"""
+
+[locate_next]
+text = "Once again, you approach %i."
+
+[nemesis_first]
+synopsis = "[%nC threatens to eat you.]"
+text = """
+"So, follower of %l, you seek to invade the lair of
+%n.  Only my meals are allowed down here.  Prepare
+to be eaten!"
+"""
+
+[nemesis_next]
+text = """
+"So, again you face me, %c.  No one has ever before escaped me.
+Now I shall kill you."
+"""
+
+[nemesis_other]
+text = "\\\"You are getting annoying, %c.  Prepare to die.\\\""
+
+[nemesis_wantsit]
+text = "\\\"I'll have %o from you, %c.  You shall die.\\\""
+
+[nexttime]
+text = "Once again, you arrive back at %H."
+
+[offeredit]
+synopsis = "[\"Take %o with you.  It will help in your quest for the Amulet of Yendor.\"]"
+text = """
+%lC glimpses %o in your possession.
+He smiles and says:
+
+    You have done it!  We are saved.  But I fear that %o
+    will always be a target for %C forces who will want it for their
+    own.
+
+    To prevent further trouble, I would like you, %p,
+    to take %o away with you.  It will help you as you
+quest for the Amulet of Yendor.
+"""
+
+[offeredit2]
+synopsis = "[\"You are the keeper of %o now.  Return to %Z to search for the Amulet.]"
+text = """
+%l grasps %o proudly for a moment, then looks at you.
+
+"You are its keeper now, and the time has come to resume your search
+for the Amulet.  %Z await your return through the
+magic portal which brought you here."
+"""
+
+[othertime]
+text = """
+For some reason, you think that this may be the last time you will
+enter %H.
+"""
+
+[posthanks]
+text = """
+"%pC!  Welcome back.
+How goes your quest to recover the Amulet for %d?"
+"""
+

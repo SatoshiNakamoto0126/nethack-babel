@@ -1,0 +1,466 @@
+# NetHack Babel — Food definitions
+# Values sourced from NetHack 3.7 include/objects.h
+# FOOD(name, prob, delay, wt, unk, tin, nutrition, color, sn)
+# All food items are known (kn=1), mergeable (mrg=1), not magic
+
+[[object]]
+id = 0
+name = "tripe ration"
+class = "Food"
+color = "Brown"
+material = "Flesh"
+weight = 10
+cost = 15
+prob = 140
+nutrition = 200
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 1
+name = "corpse"
+class = "Food"
+color = "Brown"
+material = "Flesh"
+weight = 0
+cost = 5
+prob = 0
+nutrition = 0
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 2
+name = "egg"
+class = "Food"
+color = "White"
+material = "Flesh"
+weight = 1
+cost = 9
+prob = 85
+nutrition = 80
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 3
+name = "meatball"
+class = "Food"
+color = "Brown"
+material = "Flesh"
+weight = 1
+cost = 5
+prob = 0
+nutrition = 5
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 4
+name = "meat stick"
+class = "Food"
+color = "Brown"
+material = "Flesh"
+weight = 1
+cost = 5
+prob = 0
+nutrition = 5
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 5
+name = "enormous meatball"
+class = "Food"
+color = "Brown"
+material = "Flesh"
+weight = 400
+cost = 105
+prob = 0
+nutrition = 2000
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 6
+name = "meat ring"
+class = "Food"
+color = "Brown"
+material = "Flesh"
+weight = 5
+cost = 1
+prob = 0
+nutrition = 5
+is_magic = false
+is_mergeable = false
+description = ""
+
+[[object]]
+id = 7
+name = "glob of gray ooze"
+class = "Food"
+color = "Gray"
+material = "Flesh"
+weight = 20
+cost = 6
+prob = 0
+nutrition = 20
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 8
+name = "glob of brown pudding"
+class = "Food"
+color = "Brown"
+material = "Flesh"
+weight = 20
+cost = 6
+prob = 0
+nutrition = 20
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 9
+name = "glob of green slime"
+class = "Food"
+color = "Green"
+material = "Flesh"
+weight = 20
+cost = 6
+prob = 0
+nutrition = 20
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 10
+name = "glob of black pudding"
+class = "Food"
+color = "Black"
+material = "Flesh"
+weight = 20
+cost = 6
+prob = 0
+nutrition = 20
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 11
+name = "kelp frond"
+class = "Food"
+color = "Green"
+material = "Veggy"
+weight = 1
+cost = 6
+prob = 0
+nutrition = 30
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 12
+name = "eucalyptus leaf"
+class = "Food"
+color = "Green"
+material = "Veggy"
+weight = 1
+cost = 5
+prob = 3
+nutrition = 1
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 13
+name = "apple"
+class = "Food"
+color = "Red"
+material = "Veggy"
+weight = 2
+cost = 7
+prob = 15
+nutrition = 50
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 14
+name = "orange"
+class = "Food"
+color = "Orange"
+material = "Veggy"
+weight = 2
+cost = 9
+prob = 10
+nutrition = 80
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 15
+name = "pear"
+class = "Food"
+color = "BrightGreen"
+material = "Veggy"
+weight = 2
+cost = 7
+prob = 10
+nutrition = 50
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 16
+name = "melon"
+class = "Food"
+color = "BrightGreen"
+material = "Veggy"
+weight = 5
+cost = 10
+prob = 10
+nutrition = 100
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 17
+name = "banana"
+class = "Food"
+color = "Yellow"
+material = "Veggy"
+weight = 2
+cost = 9
+prob = 10
+nutrition = 80
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 18
+name = "carrot"
+class = "Food"
+color = "Orange"
+material = "Veggy"
+weight = 2
+cost = 7
+prob = 15
+nutrition = 50
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 19
+name = "sprig of wolfsbane"
+class = "Food"
+color = "Green"
+material = "Veggy"
+weight = 1
+cost = 7
+prob = 7
+nutrition = 40
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 20
+name = "clove of garlic"
+class = "Food"
+color = "White"
+material = "Veggy"
+weight = 1
+cost = 7
+prob = 7
+nutrition = 40
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 21
+name = "slime mold"
+class = "Food"
+color = "Brown"
+material = "Veggy"
+weight = 5
+cost = 17
+prob = 75
+nutrition = 250
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 22
+name = "lump of royal jelly"
+class = "Food"
+color = "Yellow"
+material = "Veggy"
+weight = 2
+cost = 15
+prob = 0
+nutrition = 200
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 23
+name = "cream pie"
+class = "Food"
+color = "White"
+material = "Veggy"
+weight = 10
+cost = 10
+prob = 25
+nutrition = 100
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 24
+name = "candy bar"
+class = "Food"
+color = "BrightBlue"
+material = "Veggy"
+weight = 2
+cost = 10
+prob = 13
+nutrition = 100
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 25
+name = "fortune cookie"
+class = "Food"
+color = "Yellow"
+material = "Veggy"
+weight = 1
+cost = 7
+prob = 55
+nutrition = 40
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 26
+name = "pancake"
+class = "Food"
+color = "Yellow"
+material = "Veggy"
+weight = 2
+cost = 15
+prob = 25
+nutrition = 200
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 27
+name = "lembas wafer"
+class = "Food"
+color = "White"
+material = "Veggy"
+weight = 5
+cost = 45
+prob = 20
+nutrition = 800
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 28
+name = "cram ration"
+class = "Food"
+color = "Brown"
+material = "Veggy"
+weight = 15
+cost = 35
+prob = 20
+nutrition = 600
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 29
+name = "food ration"
+class = "Food"
+color = "Brown"
+material = "Veggy"
+weight = 20
+cost = 45
+prob = 380
+nutrition = 800
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 30
+name = "K-ration"
+class = "Food"
+color = "Brown"
+material = "Veggy"
+weight = 10
+cost = 25
+prob = 0
+nutrition = 400
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 31
+name = "C-ration"
+class = "Food"
+color = "Brown"
+material = "Veggy"
+weight = 10
+cost = 20
+prob = 0
+nutrition = 300
+is_magic = false
+is_mergeable = true
+description = ""
+
+[[object]]
+id = 32
+name = "tin"
+class = "Food"
+color = "Cyan"
+material = "Metal"
+weight = 10
+cost = 5
+prob = 75
+nutrition = 0
+is_magic = false
+is_mergeable = true
+description = ""

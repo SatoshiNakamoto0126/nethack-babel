@@ -1,0 +1,174 @@
+[level]
+name = "sokoban3b"
+branch = "Sokoban"
+flags = ["noteleport", "hardfloor", "nodig"]
+
+[map]
+halign = "center"
+valign = "center"
+data = """
+ ----          -----------
+-|..|-------   |.........|
+|..........|   |.........|
+|..-----.-.|   |.........|
+|..|...|...|   |.........|
+|.........-|   |.........|
+|.......|..|   |.........|
+|.----..--.|   |.........|
+|........|.--  |.........|
+|.---.-.....------------+|
+|...|...-................|
+|.........----------------
+----|..|.|
+    -------
+"""
+
+[[objects]]
+id = "boulder"
+x = 2
+y = 3
+
+[[objects]]
+id = "boulder"
+x = 8
+y = 3
+
+[[objects]]
+id = "boulder"
+x = 9
+y = 4
+
+[[objects]]
+id = "boulder"
+x = 2
+y = 5
+
+[[objects]]
+id = "boulder"
+x = 4
+y = 5
+
+[[objects]]
+id = "boulder"
+x = 9
+y = 5
+
+[[objects]]
+id = "boulder"
+x = 2
+y = 6
+
+[[objects]]
+id = "boulder"
+x = 5
+y = 6
+
+[[objects]]
+id = "boulder"
+x = 6
+y = 7
+
+[[objects]]
+id = "boulder"
+x = 3
+y = 8
+
+[[objects]]
+id = "boulder"
+x = 7
+y = 8
+
+[[objects]]
+id = "boulder"
+x = 5
+y = 9
+
+[[objects]]
+id = "boulder"
+x = 10
+y = 9
+
+[[objects]]
+id = "boulder"
+x = 7
+y = 10
+
+[[objects]]
+id = "boulder"
+x = 10
+y = 10
+
+[[objects]]
+id = "boulder"
+x = 3
+y = 11
+
+[[traps]]
+type = "hole"
+x = 12
+y = 10
+
+[[traps]]
+type = "hole"
+x = 13
+y = 10
+
+[[traps]]
+type = "hole"
+x = 14
+y = 10
+
+[[traps]]
+type = "hole"
+x = 15
+y = 10
+
+[[traps]]
+type = "hole"
+x = 16
+y = 10
+
+[[traps]]
+type = "hole"
+x = 17
+y = 10
+
+[[traps]]
+type = "hole"
+x = 18
+y = 10
+
+[[traps]]
+type = "hole"
+x = 19
+y = 10
+
+[[traps]]
+type = "hole"
+x = 20
+y = 10
+
+[[traps]]
+type = "hole"
+x = 21
+y = 10
+
+[[traps]]
+type = "hole"
+x = 22
+y = 10
+
+[[traps]]
+type = "hole"
+x = 23
+y = 10
+
+[[stairs]]
+direction = "up"
+x = 20
+y = 4
+
+[[stairs]]
+direction = "down"
+x = 3
+y = 1

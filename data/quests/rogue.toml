@@ -1,0 +1,249 @@
+# Quest text for the Rogue role
+# Converted from NetHack 3.7 dat/quest.lua (Rog section)
+# Variable substitutions: %p=player, %c=class, %r=rank, %l=leader,
+# %n=nemesis, %o=artifact, %i=intermediate, %d=deity, %H=homebase
+
+role = "rogue"
+abbreviation = "Rog"
+quest_leader = "Master of Thieves"
+quest_nemesis = "Master Assassin"
+quest_artifact = "The Master Key of Thievery"
+quest_guardian = "guide"
+quest_goal_terrain = "vault"
+
+[assignquest]
+synopsis = "[Get %o from %n and bring it to %l.]"
+text = """
+"Will everyone not going to retrieve %o from that
+jerk, %n, take one step backwards.  Good choice,
+%p, because I was going to send you anyway.  My other %gp
+are too valuable to me.
+
+"Here's the deal.  I want %o, %n
+has %o.  You are going to get %o
+and bring it back to me.  So simple an assignment even you can understand
+it."
+"""
+
+[badalign]
+synopsis = "[Come back when you are really %a.]"
+text = """
+"Maybe I should chain you to my perch here for a while.  Perhaps watching
+real %a men at work will bring some sense back to you.  I don't
+think I could stand the sight of you for that long though.  Come back
+when you can be trusted to act properly."
+"""
+
+[badlevel]
+synopsis = "[%rA is not adequately trained to handle this job.]"
+text = """
+"In the time that you've been gone you've only been able to master the
+arts of %ra?  I've trained ten times again as many %Rp
+in that time.  Maybe I should send one of them, no?  Where would that
+leave you, %p?  Oh yeah, I remember, I was going to kill you!"
+"""
+
+[discourage]
+lines = [
+  "\\\"May I suggest a compromise.  Are you interested in gold or gems?\\\"",
+  "\\\"Please don't force me to kill you.\\\"",
+  "\\\"Grim times are upon us all.  Will you not see reason?\\\"",
+  "\\\"I knew %l, and you're no %lt, thankfully.\\\"",
+  "\\\"It is a shame that we are not meeting under more pleasant circumstances.\\\"",
+  "\\\"I was once like you are now, %p.  Believe in me -- our way is better.\\\"",
+  "\\\"Stay with me, and I will make you %os guardian.\\\"",
+  "\\\"When you return, with or without %o, %l will have you killed.\\\"",
+  "\\\"Do not be fooled; I am prepared to kill to defend %o.\\\"",
+  "\\\"I can reunite you with the Twain.  Oh, the stories you can swap.\\\"",
+]
+
+[encourage]
+lines = [
+  "\\\"You don't seem to understand, %o isn't here so neither should you be!\\\"",
+  "\\\"May %d curse you with lead fingers.  Get going!\\\"",
+  "\\\"We don't have all year.  GET GOING!\\\"",
+  "\\\"How would you like a scar necklace?  I'm just the jeweler to do it!\\\"",
+  "\\\"Lazy S.O.B.  Maybe I should call up someone else...\\\"",
+  "\\\"Maybe I should open your skull and see if my instructions are inside?\\\"",
+  "\\\"This is not a task you can complete in the afterlife, you know.\\\"",
+  "\\\"Inside every living person is a dead person trying to get out, and I have your key!\\\"",
+  "\\\"We're almost out of hell-hound chow, so why don't you just get moving!\\\"",
+  "\\\"You know, %o isn't going to come when you whistle.  You must get it yourself.\\\"",
+]
+
+[firsttime]
+synopsis = "[You are in Ransmannsby, where you trained.  Find %l.]"
+text = """
+Unexpectedly, you find yourself back in Ransmannsby, where you trained to
+be a thief.  Quickly you make the guild sign, hoping that you AND word
+of your arrival reach %ls den.
+"""
+
+[goal_first]
+synopsis = "[You sense %o.]"
+text = """
+You feel a great swelling up of courage, sensing the presence of
+%o.  Or is it fear?
+"""
+
+[goal_next]
+text = "The hairs on the back of your neck whisper -- it's fear."
+
+[gotit]
+synopsis = "[You pick up %o and know that %l should not have it.]"
+text = """
+As you pick up %o, the hairs on the back of your
+neck fall out.  At once you realize why %n was
+willing to die to keep it out of %ls hands.  Somehow
+you know that you must do likewise.
+"""
+
+[guardtalk_after]
+lines = [
+  "\\\"I was sure wrong about Lady Tyvefelle's house; I barely got away with my life and lost my lock pick in the process.\\\"",
+  "\\\"You're back?  Even the Twain don't come back anymore.\\\"",
+  "\\\"Can you spare an old cutpurse a zorkmid for some grog?\\\"",
+  "\\\"Fritz tried to join the other side, and now he's hell-hound chow.\\\"",
+  "\\\"Be careful what you steal, I hear the boss has perfected turning rocks into worthless pieces of glass.\\\"",
+]
+
+[guardtalk_before]
+lines = [
+  "\\\"I hear that Lady Tyvefelle's household is lightly guarded.\\\"",
+  "\\\"You're back?  Even the Twain don't come back anymore.\\\"",
+  "\\\"Can you spare an old cutpurse a zorkmid for some grog?\\\"",
+  "\\\"Fritz tried to join the other side, and now he's hell-hound chow.\\\"",
+  "\\\"Be careful what you steal, I hear the boss has perfected turning rocks into worthless pieces of glass.\\\"",
+]
+
+[hasamulet]
+synopsis = "[Take the Amulet to the Astral Plane and find %ds temple.]"
+text = """
+"I see that with your abilities, and my brains, we could rule this world.
+
+"All that we would need to be all-powerful is for you to take that little
+trinket you've got there up to the Astral Plane.  From there, %d will
+show you what to do with it.  Once that's done, we will be invincible!"
+"""
+
+[killed_nemesis]
+synopsis = "[Before dying, %n tells you to use the %o wisely.]"
+text = """
+"I know what you are thinking, %p.  It is not too late for you
+to use %o wisely.  For the sake of your guild
+%sp, do what is right."
+
+You sit and wait for death to come for %n, and then you
+brace yourself for your next meeting with %l!
+"""
+
+[leader_first]
+synopsis = "[You owe back dues to your guild.  You can pay them off if you're up to the job.]"
+text = """
+"Well, look who it is boys -- %p has come home.  You seem to have
+fallen behind in your dues.  I should kill you as an example to these
+other worthless cutpurses, but I have a better plan.  If you are ready
+maybe you could work off your back dues by performing a little job for
+me.  Let us just see if you are ready..."
+"""
+
+[leader_last]
+synopsis = "[You must go.]"
+text = """
+"Well %gp, it looks like our friend has forgotten who is the boss
+around here.  Our friend seems to think that %rp have been put in
+charge.  Wrong.  DEAD WRONG!"
+
+Your sudden shift in surroundings prevents you from hearing the end
+of %ls curse.
+"""
+
+[leader_next]
+synopsis = "[Are you stupid or are you ready?]"
+text = """
+"Well, I didn't expect to see you back.  It shows that you are either stupid,
+or you are finally ready to accept my offer.  Let us hope for your sake it
+isn't stupidity that brings you back."
+"""
+
+[leader_other]
+text = """
+"Did you perhaps mistake me for some other %lt?  You must
+think me as stupid as your behavior.  I warn you not to try my patience."
+"""
+
+[locate_first]
+text = "Those damn little hairs tell you that you are nearer to %o."
+
+[locate_next]
+text = "Not wanting to face %l without having stolen %o, you continue."
+
+[nemesis_first]
+text = "\\\"Ah!  You must be %ls ... er, `hero'.  A pleasure to meet you.\\\""
+
+[nemesis_next]
+text = "\\\"We meet again.  Please reconsider your actions.\\\""
+
+[nemesis_other]
+synopsis = "[You cannot trust %l.]"
+text = """
+"Surely, %p, you have learned that you cannot trust any bargains
+that %l has made.  I can show you how to continue on
+your quest without having to run into him again."
+"""
+
+[nemesis_wantsit]
+synopsis = "[%lC should not have %o.]"
+text = """
+"Please, think for a moment about what you are doing.  Do you truly
+believe that %d would want %l to have
+%o?"
+"""
+
+[nexttime]
+text = """
+Once again, you find yourself back in Ransmannsby.  Fond memories are
+replaced by fear, knowing that %l is waiting for you.
+"""
+
+[offeredit]
+synopsis = "[Take %o with you and go.]"
+text = """
+"Well, I'll be damned.  You got it.  I am proud of you, a fine %r
+you've turned out to be.
+
+"While you were gone I got to thinking, you and %o
+together could bring me more treasure than either of you apart, so why don't
+you take it with you.  All I ask is a cut of whatever loot you come by.
+That is a better deal than I offered %n.
+
+"But, you see what happened to %n when he refused.
+Don't make me find another to send after you this time."
+"""
+
+[offeredit2]
+synopsis = "[Take %o and acquire the Amulet.]"
+text = """
+%lC seems tempted to swap %o for
+the mundane one you detect in his pocket, but noticing your alertness,
+evidently chickens out.
+
+"Go filch the Amulet before someone else beats you to it.
+%Z are back the way you came, through the magic portal."
+"""
+
+[othertime]
+text = """
+You rub your hands through your hair, hoping that the little ones on
+the back of your neck stay down, and prepare yourself for your meeting
+with %l.
+"""
+
+[posthanks]
+synopsis = "[How about trading %o for something?]"
+text = """
+"Quite the little thief, aren't we, %p.  Can I interest you in a
+swap for %o?  Look around, anything in the keep
+is yours for the asking."
+"""
+

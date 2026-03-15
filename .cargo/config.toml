@@ -1,0 +1,16 @@
+# Cargo configuration for NetHack Babel
+#
+# Platform-specific settings can be added here as needed.
+# See https://doc.rust-lang.org/cargo/reference/config.html
+
+# Use sparse protocol for faster registry index updates
+[registries.crates-io]
+protocol = "sparse"
+
+# macOS: link against system frameworks when audio feature is enabled
+# [target.aarch64-apple-darwin]
+# rustflags = []
+
+# Linux: no special flags needed by default
+# [target.x86_64-unknown-linux-gnu]
+# rustflags = []

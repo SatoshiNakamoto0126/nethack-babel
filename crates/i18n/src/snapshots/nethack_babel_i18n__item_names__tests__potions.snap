@@ -1,0 +1,43 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== potion of healing ===
+qty=1 identified buc=blessed -> a blessed potion of healing
+qty=1 identified buc=uncursed -> an uncursed potion of healing
+qty=1 identified buc=cursed -> a cursed potion of healing
+qty=1 identified buc=buc_unknown -> a potion of healing
+qty=1 unidentified -> a milky potion
+qty=1 called=heal? -> a potion called heal?
+qty=3 identified buc=blessed -> 3 blessed potion of healings
+qty=3 identified buc=uncursed -> 3 uncursed potion of healings
+qty=3 identified buc=cursed -> 3 cursed potion of healings
+qty=3 identified buc=buc_unknown -> 3 potion of healings
+qty=3 unidentified -> 3 milky potions
+qty=3 called=heal? -> 3 potion called heal?s
+=== potion of extra healing ===
+qty=1 identified buc=blessed -> a blessed potion of extra healing
+qty=1 identified buc=uncursed -> an uncursed potion of extra healing
+qty=1 identified buc=cursed -> a cursed potion of extra healing
+qty=1 identified buc=buc_unknown -> a potion of extra healing
+qty=1 unidentified -> a pink potion
+qty=1 called=heal? -> a potion called heal?
+qty=3 identified buc=blessed -> 3 blessed potion of extra healings
+qty=3 identified buc=uncursed -> 3 uncursed potion of extra healings
+qty=3 identified buc=cursed -> 3 cursed potion of extra healings
+qty=3 identified buc=buc_unknown -> 3 potion of extra healings
+qty=3 unidentified -> 3 pink potions
+qty=3 called=heal? -> 3 potion called heal?s
+=== potion of speed ===
+qty=1 identified buc=blessed -> a blessed potion of speed
+qty=1 identified buc=uncursed -> an uncursed potion of speed
+qty=1 identified buc=cursed -> a cursed potion of speed
+qty=1 identified buc=buc_unknown -> a potion of speed
+qty=1 unidentified -> an amber potion
+qty=1 called=heal? -> a potion called heal?
+qty=3 identified buc=blessed -> 3 blessed potion of speeds
+qty=3 identified buc=uncursed -> 3 uncursed potion of speeds
+qty=3 identified buc=cursed -> 3 cursed potion of speeds
+qty=3 identified buc=buc_unknown -> 3 potion of speeds
+qty=3 unidentified -> 3 amber potions
+qty=3 called=heal? -> 3 potion called heal?s

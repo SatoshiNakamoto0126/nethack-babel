@@ -1,0 +1,43 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== emerald ===
+qty=1 identified buc=blessed -> a blessed emerald
+qty=1 identified buc=uncursed -> an uncursed emerald
+qty=1 identified buc=cursed -> a cursed emerald
+qty=1 identified buc=buc_unknown -> an emerald
+qty=1 unidentified -> a green gem
+qty=1 called=valuable? -> a gem called valuable?
+qty=3 identified buc=blessed -> 3 blessed emeralds
+qty=3 identified buc=uncursed -> 3 uncursed emeralds
+qty=3 identified buc=cursed -> 3 cursed emeralds
+qty=3 identified buc=buc_unknown -> 3 emeralds
+qty=3 unidentified -> 3 green gems
+qty=3 called=valuable? -> 3 gem called valuable?s
+=== diamond ===
+qty=1 identified buc=blessed -> a blessed diamond
+qty=1 identified buc=uncursed -> an uncursed diamond
+qty=1 identified buc=cursed -> a cursed diamond
+qty=1 identified buc=buc_unknown -> a diamond
+qty=1 unidentified -> a white gem
+qty=1 called=valuable? -> a gem called valuable?
+qty=3 identified buc=blessed -> 3 blessed diamonds
+qty=3 identified buc=uncursed -> 3 uncursed diamonds
+qty=3 identified buc=cursed -> 3 cursed diamonds
+qty=3 identified buc=buc_unknown -> 3 diamonds
+qty=3 unidentified -> 3 white gems
+qty=3 called=valuable? -> 3 gem called valuable?s
+=== flint ===
+qty=1 identified buc=blessed -> a blessed flint
+qty=1 identified buc=uncursed -> an uncursed flint
+qty=1 identified buc=cursed -> a cursed flint
+qty=1 identified buc=buc_unknown -> a flint
+qty=1 unidentified -> a gray stone
+qty=1 called=valuable? -> a stone called valuable?
+qty=3 identified buc=blessed -> 3 blessed flints
+qty=3 identified buc=uncursed -> 3 uncursed flints
+qty=3 identified buc=cursed -> 3 cursed flints
+qty=3 identified buc=buc_unknown -> 3 flints
+qty=3 unidentified -> 3 gray stones
+qty=3 called=valuable? -> 3 stone called valuable?s

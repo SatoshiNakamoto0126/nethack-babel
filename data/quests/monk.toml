@@ -1,0 +1,247 @@
+# Quest text for the Monk role
+# Converted from NetHack 3.7 dat/quest.lua (Mon section)
+# Variable substitutions: %p=player, %c=class, %r=rank, %l=leader,
+# %n=nemesis, %o=artifact, %i=intermediate, %d=deity, %H=homebase
+
+role = "monk"
+abbreviation = "Mon"
+quest_leader = "Grand Master"
+quest_nemesis = "Master Kaen"
+quest_artifact = "The Eyes of the Overworld"
+quest_guardian = "abbot"
+quest_goal_terrain = "corrupted_temple"
+
+[assignquest]
+synopsis = "[Find %i, then continue to %ns lair.  Defeat %ni and return with %o.]"
+text = """
+"Yes, %p.  You are truly ready now.  Attend to me and I shall
+tell you of what has transpired:
+
+"During one of the Great Meditations a short time ago, %n and
+a legion of elementals invaded %H.  Many %gP
+were killed, including the one bearing %o.
+
+Now, there are barely enough %gP left to keep the elementals
+at bay.
+
+"We need you to find %i, then, from there,
+travel to %ns lair.  If you can manage to defeat %n and
+return %o here, we can then drive off the legions
+of elementals that slay our students.
+
+"Go with %d as your guide, %p."
+"""
+
+[badalign]
+synopsis = "[You must atone.  Come back when you are worthy of %d.]"
+text = """
+"This is terrible, %p.  You have deviated from the true path!
+You know that %d requires the most strident devotion of this
+order.  The %shood must stand for utmost piety.
+
+"Go from here, atone for your sins against %d.  Return only when
+you have purified yourself."
+"""
+
+[badlevel]
+synopsis = "[You are not ready to face %n.  Come back when you are %Ra.]"
+text = """
+"Alas, %p, it is not yet to be.  A mere %r could never
+withstand the might of %n.  Go forth, again into the world, and
+return when you have attained the post of %R."
+"""
+
+[discourage]
+lines = [
+  "\\\"Submit to my will, %c, and I shall spare you.\\\"",
+  "\\\"Your puny powers are no match for me, %c.\\\"",
+  "\\\"I shall have you turned into a zombie for my pleasure!\\\"",
+  "\\\"Despair now, %r.  %d cannot help you.\\\"",
+  "\\\"I shall feast upon your soul for many days, %c.\\\"",
+  "\\\"Your death will be slow and painful.  That I promise!\\\"",
+  "\\\"You cannot defeat %n, you fool.  I shall kill you now.\\\"",
+  "\\\"Your precious %lt will be my next victim.\\\"",
+  "\\\"I feel your powers failing you, %r.  You shall die now.\\\"",
+  "\\\"With %o, nothing can stand in my way.\\\"",
+]
+
+[encourage]
+lines = [
+  "\\\"You can prevail, if you rely on %d.\\\"",
+  "\\\"Remember that %n has great magic at his command.\\\"",
+  "\\\"Be pure, my %S.\\\"",
+  "\\\"Beware, %i is surrounded by hordes of earth elementals.\\\"",
+  "\\\"Remember your studies, and you will prevail!\\\"",
+  "\\\"Acquire and wear %o if you can.  They will aid you against %n.\\\"",
+  "\\\"Call upon %d when your need is greatest.  You will be answered.\\\"",
+  "\\\"Remember to use the elementals' strength against them!\\\"",
+  "\\\"Do not lose faith, %p.  If you do so, %n will grow stronger.\\\"",
+  "\\\"Wear %o.  They will assist you in your efforts.\\\"",
+]
+
+[firsttime]
+synopsis = "[You have reached %H but something is wrong.  %lC needs your aid.]"
+text = """
+You find yourself standing in sight of %H.
+Something is obviously wrong here.  Strange shapes lumber around
+outside %H!
+
+You realize that %l needs your assistance!
+"""
+
+[goal_first]
+synopsis = "[You are surrounded by brimstone, lava, and elementals.]"
+text = """
+The stench of brimstone is all about you, and the elementals close in
+from all sides!
+
+Ahead, there is a small clearing amidst the bubbling pits of lava...
+"""
+
+[goal_next]
+text = "Again, you have invaded %ns domain."
+
+[gotit]
+synopsis = "[You feel the essence of %d and realize that you should take %o to %l.]"
+text = """
+As you pick up %o, you feel the essence of
+%d fill your soul.  You know now why %n stole %oi from
+%H, for with %oi, %ca of %d could
+easily defeat his plans.
+
+You sense a message from %d.  Though not verbal, you
+get the impression that you must return to %l as soon
+as possible.
+"""
+
+[guardtalk_after]
+lines = [
+  "\\\"Greetings, honorable %r.  It is good to see you again.\\\"",
+  "\\\"Ah, %p!  Our deepest gratitude for all of your help.\\\"",
+  "\\\"Greetings, %s.  Perhaps you will take some time to meditate with us?\\\"",
+  "\\\"With this test behind you, may %d bring you enlightenment.\\\"",
+  "\\\"May %d be with you, %s.\\\"",
+]
+
+[guardtalk_before]
+lines = [
+  "\\\"Greetings, honorable %r.  It is good to see you.\\\"",
+  "\\\"Ah, %p!  Surely you can help us in our hour of need.\\\"",
+  "\\\"Greetings, %s.  %lC has great need of your help.\\\"",
+  "\\\"Alas, it seems as if even %d has deserted us.\\\"",
+  "\\\"May %d be with you, %s.\\\"",
+]
+
+[hasamulet]
+synopsis = "[Take the Amulet to the Astral Plane and deliver it to %d.]"
+text = """
+"You have prevailed, %p!  %d is surely with you.  Now,
+you must take the Amulet, and sacrifice it on %ds altar on
+the Astral Plane.  I suspect that I shall never see you again in this
+life, but I hope to at %ds feet."
+"""
+
+[killed_nemesis]
+synopsis = "[As %n dies, %nh threatens to return.]"
+text = """
+%nC gasps:
+
+    "You have only defeated this mortal body.  Know this: my spirit
+    is strong.  I shall return and reclaim what is mine!"
+
+With that, %n expires.
+"""
+
+[leader_first]
+synopsis = "[%lC checks whether you are ready for the great challenge.]"
+text = """
+"Ah, %p, my %S.  You have returned to us at last.
+A great blow has befallen our order; perhaps you can help us.
+First, however, I must determine if you are prepared for this
+great challenge."
+"""
+
+[leader_last]
+synopsis = "[You are a heretic and have failed utterly.]"
+text = """
+"You are a heretic, %p!  How can you, %ra, deviate so from the
+teachings of %d?  Begone from this temple.  You are no longer
+%sa to this order.  We will pray to %d for other assistance,
+as you have failed us utterly."
+"""
+
+[leader_next]
+text = "\\\"Again, my %S, you stand before me.  Are you ready now to help us?\\\""
+
+[leader_other]
+text = "\\\"Once more, %p, you stand within the sanctum.  Are you ready now?\\\""
+
+[locate_first]
+synopsis = "[You have reached %i.  %nC lurks further ahead.]"
+text = """
+You remember the descriptions of %i, given
+to you by %l.  It is ahead that you will find
+%n's trail.
+"""
+
+[locate_next]
+text = "Again, you stand before %i."
+
+[nemesis_first]
+synopsis = "[You are no %g.  You shall never regain %o.]"
+text = """
+"Ah, so %l has sent another %g to retrieve
+%o.
+
+"No, I see you are no %g.  Perhaps I shall have some fun today
+after all.  Prepare to die, %r!  You shall never regain
+%o."
+"""
+
+[nemesis_next]
+text = "\\\"So, %r.  Again you challenge me.\\\""
+
+[nemesis_other]
+text = "\\\"Die now, %r.  %d has no power here to aid you.\\\""
+
+[nemesis_wantsit]
+text = "\\\"You shall die, %r, and I will have %o back.\\\""
+
+[nexttime]
+text = "Once again, you stand before %H."
+
+[offeredit]
+synopsis = "[Keep %o.  %oH will help you recover the Amulet of Yendor.]"
+text = """
+"You have returned, %p.  And with %o, I see.
+Congratulations.
+
+"I have been in meditation, and have received direction from
+a minion of %d.  %d commands that you retain
+%o.  With %oi, you must recover the Amulet
+of Yendor.
+
+"Go forth, and let %d guide your steps."
+"""
+
+[offeredit2]
+synopsis = "[Keep %o and return to %Z to search for the Amulet.]"
+text = """
+%lC studies %o for a moment,
+then returns his gaze to you.
+
+"%oC must remain with you.  Use %oi
+as you resume your search for the Amulet.
+%Z await your return through the magic portal
+that brought you here."
+"""
+
+[othertime]
+text = """
+Again you face %H.  Your intuition hints that this
+may be the final time you come here.
+"""
+
+[posthanks]
+text = "\\\"Welcome back, %p.  How is your quest for the Amulet going?\\\""
+

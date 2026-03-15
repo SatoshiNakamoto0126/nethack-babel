@@ -1,0 +1,173 @@
+# NetHack Babel — Amulet definitions
+# Values sourced from NetHack 3.7 include/objects.h
+# AMULET(name, desc, power, prob, sn)
+# Standard amulets: weight=20, cost=150, material=Iron, color=Cyan (HI_METAL), magic=true
+
+[[object]]
+id = 0
+name = "amulet of ESP"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 120
+is_magic = true
+is_mergeable = false
+description = "circular"
+
+[[object]]
+id = 1
+name = "amulet of life saving"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 75
+is_magic = true
+is_mergeable = false
+description = "spherical"
+
+[[object]]
+id = 2
+name = "amulet of strangulation"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 115
+is_magic = true
+is_mergeable = false
+description = "oval"
+
+[[object]]
+id = 3
+name = "amulet of restful sleep"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 115
+is_magic = true
+is_mergeable = false
+description = "triangular"
+
+[[object]]
+id = 4
+name = "amulet versus poison"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 115
+is_magic = true
+is_mergeable = false
+description = "pyramidal"
+
+[[object]]
+id = 5
+name = "amulet of change"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 115
+is_magic = true
+is_mergeable = false
+description = "square"
+
+[[object]]
+id = 6
+name = "amulet of unchanging"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 60
+is_magic = true
+is_mergeable = false
+description = "concave"
+
+[[object]]
+id = 7
+name = "amulet of reflection"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 75
+is_magic = true
+is_mergeable = false
+description = "hexagonal"
+
+[[object]]
+id = 8
+name = "amulet of magical breathing"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 75
+is_magic = true
+is_mergeable = false
+description = "octagonal"
+
+[[object]]
+id = 9
+name = "amulet of guarding"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 75
+is_magic = true
+is_mergeable = false
+description = "perforated"
+
+[[object]]
+id = 10
+name = "amulet of flying"
+class = "Amulet"
+color = "Cyan"
+material = "Iron"
+weight = 20
+cost = 150
+prob = 60
+is_magic = true
+is_mergeable = false
+description = "cubical"
+
+[[object]]
+id = 11
+name = "cheap plastic imitation of the Amulet of Yendor"
+class = "Amulet"
+color = "Cyan"
+material = "Plastic"
+weight = 20
+cost = 0
+prob = 0
+is_magic = false
+is_mergeable = false
+description = "Amulet of Yendor"
+
+[[object]]
+id = 12
+name = "Amulet of Yendor"
+class = "Amulet"
+color = "Cyan"
+material = "Mithril"
+weight = 20
+cost = 30000
+prob = 0
+is_magic = true
+is_mergeable = false
+description = "Amulet of Yendor"

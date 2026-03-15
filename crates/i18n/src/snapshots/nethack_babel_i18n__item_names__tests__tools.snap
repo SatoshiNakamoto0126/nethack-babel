@@ -1,0 +1,37 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== skeleton key ===
+qty=1 buc=blessed -> a blessed skeleton key
+qty=1 buc=uncursed -> an uncursed skeleton key
+qty=1 buc=cursed -> a cursed skeleton key
+qty=1 buc=buc_unknown -> a skeleton key
+qty=1 named=MyKey -> a skeleton key named MyKey
+qty=3 buc=blessed -> 3 blessed skeleton keys
+qty=3 buc=uncursed -> 3 uncursed skeleton keys
+qty=3 buc=cursed -> 3 cursed skeleton keys
+qty=3 buc=buc_unknown -> 3 skeleton keys
+qty=3 named=MyKey -> 3 skeleton keys named MyKey
+=== tinning kit ===
+qty=1 buc=blessed -> a blessed tinning kit
+qty=1 buc=uncursed -> an uncursed tinning kit
+qty=1 buc=cursed -> a cursed tinning kit
+qty=1 buc=buc_unknown -> a tinning kit
+qty=1 named=MyKey -> a tinning kit named MyKey
+qty=3 buc=blessed -> 3 blessed tinning kits
+qty=3 buc=uncursed -> 3 uncursed tinning kits
+qty=3 buc=cursed -> 3 cursed tinning kits
+qty=3 buc=buc_unknown -> 3 tinning kits
+qty=3 named=MyKey -> 3 tinning kits named MyKey
+=== lamp ===
+qty=1 buc=blessed -> a blessed lamp
+qty=1 buc=uncursed -> an uncursed lamp
+qty=1 buc=cursed -> a cursed lamp
+qty=1 buc=buc_unknown -> a lamp
+qty=1 named=MyKey -> a lamp named MyKey
+qty=3 buc=blessed -> 3 blessed lamps
+qty=3 buc=uncursed -> 3 uncursed lamps
+qty=3 buc=cursed -> 3 cursed lamps
+qty=3 buc=buc_unknown -> 3 lamps
+qty=3 named=MyKey -> 3 lamps named MyKey

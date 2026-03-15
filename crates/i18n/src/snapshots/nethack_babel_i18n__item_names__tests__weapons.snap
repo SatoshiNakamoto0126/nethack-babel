@@ -1,0 +1,208 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== long sword ===
+qty=1 buc=blessed ench=None -> a blessed long sword
+qty=1 buc=blessed ench=Some(-1) -> a blessed -1 long sword
+qty=1 buc=blessed ench=Some(0) -> a blessed +0 long sword
+qty=1 buc=blessed ench=Some(2) -> a blessed +2 long sword
+qty=1 buc=blessed ench=Some(5) -> a blessed +5 long sword
+qty=1 buc=uncursed ench=None -> an uncursed long sword
+qty=1 buc=uncursed ench=Some(-1) -> a -1 long sword
+qty=1 buc=uncursed ench=Some(0) -> a +0 long sword
+qty=1 buc=uncursed ench=Some(2) -> a +2 long sword
+qty=1 buc=uncursed ench=Some(5) -> a +5 long sword
+qty=1 buc=cursed ench=None -> a cursed long sword
+qty=1 buc=cursed ench=Some(-1) -> a cursed -1 long sword
+qty=1 buc=cursed ench=Some(0) -> a cursed +0 long sword
+qty=1 buc=cursed ench=Some(2) -> a cursed +2 long sword
+qty=1 buc=cursed ench=Some(5) -> a cursed +5 long sword
+qty=1 buc=buc_unknown ench=None -> a long sword
+qty=1 buc=buc_unknown ench=Some(-1) -> a -1 long sword
+qty=1 buc=buc_unknown ench=Some(0) -> a +0 long sword
+qty=1 buc=buc_unknown ench=Some(2) -> a +2 long sword
+qty=1 buc=buc_unknown ench=Some(5) -> a +5 long sword
+qty=1 erosion=rusty -> a rusty +0 long sword
+qty=1 erosion=very_rusty -> a very rusty +0 long sword
+qty=1 erosion=corroded -> a corroded +0 long sword
+qty=1 erosion=very_rusty+corroded -> a very rusty corroded +0 long sword
+qty=1 named=Sting -> a long sword named Sting
+qty=1 called=stabby -> a long sword called stabby
+qty=3 buc=blessed ench=None -> 3 blessed long swords
+qty=3 buc=blessed ench=Some(-1) -> 3 blessed -1 long swords
+qty=3 buc=blessed ench=Some(0) -> 3 blessed +0 long swords
+qty=3 buc=blessed ench=Some(2) -> 3 blessed +2 long swords
+qty=3 buc=blessed ench=Some(5) -> 3 blessed +5 long swords
+qty=3 buc=uncursed ench=None -> 3 uncursed long swords
+qty=3 buc=uncursed ench=Some(-1) -> 3 -1 long swords
+qty=3 buc=uncursed ench=Some(0) -> 3 +0 long swords
+qty=3 buc=uncursed ench=Some(2) -> 3 +2 long swords
+qty=3 buc=uncursed ench=Some(5) -> 3 +5 long swords
+qty=3 buc=cursed ench=None -> 3 cursed long swords
+qty=3 buc=cursed ench=Some(-1) -> 3 cursed -1 long swords
+qty=3 buc=cursed ench=Some(0) -> 3 cursed +0 long swords
+qty=3 buc=cursed ench=Some(2) -> 3 cursed +2 long swords
+qty=3 buc=cursed ench=Some(5) -> 3 cursed +5 long swords
+qty=3 buc=buc_unknown ench=None -> 3 long swords
+qty=3 buc=buc_unknown ench=Some(-1) -> 3 -1 long swords
+qty=3 buc=buc_unknown ench=Some(0) -> 3 +0 long swords
+qty=3 buc=buc_unknown ench=Some(2) -> 3 +2 long swords
+qty=3 buc=buc_unknown ench=Some(5) -> 3 +5 long swords
+qty=3 erosion=rusty -> 3 rusty +0 long swords
+qty=3 erosion=very_rusty -> 3 very rusty +0 long swords
+qty=3 erosion=corroded -> 3 corroded +0 long swords
+qty=3 erosion=very_rusty+corroded -> 3 very rusty corroded +0 long swords
+qty=3 named=Sting -> 3 long swords named Sting
+qty=3 called=stabby -> 3 long sword called stabbies
+=== dagger ===
+qty=1 buc=blessed ench=None -> a blessed dagger
+qty=1 buc=blessed ench=Some(-1) -> a blessed -1 dagger
+qty=1 buc=blessed ench=Some(0) -> a blessed +0 dagger
+qty=1 buc=blessed ench=Some(2) -> a blessed +2 dagger
+qty=1 buc=blessed ench=Some(5) -> a blessed +5 dagger
+qty=1 buc=uncursed ench=None -> an uncursed dagger
+qty=1 buc=uncursed ench=Some(-1) -> a -1 dagger
+qty=1 buc=uncursed ench=Some(0) -> a +0 dagger
+qty=1 buc=uncursed ench=Some(2) -> a +2 dagger
+qty=1 buc=uncursed ench=Some(5) -> a +5 dagger
+qty=1 buc=cursed ench=None -> a cursed dagger
+qty=1 buc=cursed ench=Some(-1) -> a cursed -1 dagger
+qty=1 buc=cursed ench=Some(0) -> a cursed +0 dagger
+qty=1 buc=cursed ench=Some(2) -> a cursed +2 dagger
+qty=1 buc=cursed ench=Some(5) -> a cursed +5 dagger
+qty=1 buc=buc_unknown ench=None -> a dagger
+qty=1 buc=buc_unknown ench=Some(-1) -> a -1 dagger
+qty=1 buc=buc_unknown ench=Some(0) -> a +0 dagger
+qty=1 buc=buc_unknown ench=Some(2) -> a +2 dagger
+qty=1 buc=buc_unknown ench=Some(5) -> a +5 dagger
+qty=1 erosion=rusty -> a rusty +0 dagger
+qty=1 erosion=very_rusty -> a very rusty +0 dagger
+qty=1 erosion=corroded -> a corroded +0 dagger
+qty=1 erosion=very_rusty+corroded -> a very rusty corroded +0 dagger
+qty=1 named=Sting -> a dagger named Sting
+qty=1 called=stabby -> a dagger called stabby
+qty=3 buc=blessed ench=None -> 3 blessed daggers
+qty=3 buc=blessed ench=Some(-1) -> 3 blessed -1 daggers
+qty=3 buc=blessed ench=Some(0) -> 3 blessed +0 daggers
+qty=3 buc=blessed ench=Some(2) -> 3 blessed +2 daggers
+qty=3 buc=blessed ench=Some(5) -> 3 blessed +5 daggers
+qty=3 buc=uncursed ench=None -> 3 uncursed daggers
+qty=3 buc=uncursed ench=Some(-1) -> 3 -1 daggers
+qty=3 buc=uncursed ench=Some(0) -> 3 +0 daggers
+qty=3 buc=uncursed ench=Some(2) -> 3 +2 daggers
+qty=3 buc=uncursed ench=Some(5) -> 3 +5 daggers
+qty=3 buc=cursed ench=None -> 3 cursed daggers
+qty=3 buc=cursed ench=Some(-1) -> 3 cursed -1 daggers
+qty=3 buc=cursed ench=Some(0) -> 3 cursed +0 daggers
+qty=3 buc=cursed ench=Some(2) -> 3 cursed +2 daggers
+qty=3 buc=cursed ench=Some(5) -> 3 cursed +5 daggers
+qty=3 buc=buc_unknown ench=None -> 3 daggers
+qty=3 buc=buc_unknown ench=Some(-1) -> 3 -1 daggers
+qty=3 buc=buc_unknown ench=Some(0) -> 3 +0 daggers
+qty=3 buc=buc_unknown ench=Some(2) -> 3 +2 daggers
+qty=3 buc=buc_unknown ench=Some(5) -> 3 +5 daggers
+qty=3 erosion=rusty -> 3 rusty +0 daggers
+qty=3 erosion=very_rusty -> 3 very rusty +0 daggers
+qty=3 erosion=corroded -> 3 corroded +0 daggers
+qty=3 erosion=very_rusty+corroded -> 3 very rusty corroded +0 daggers
+qty=3 named=Sting -> 3 daggers named Sting
+qty=3 called=stabby -> 3 dagger called stabbies
+=== arrow ===
+qty=1 buc=blessed ench=None -> a blessed arrow
+qty=1 buc=blessed ench=Some(-1) -> a blessed -1 arrow
+qty=1 buc=blessed ench=Some(0) -> a blessed +0 arrow
+qty=1 buc=blessed ench=Some(2) -> a blessed +2 arrow
+qty=1 buc=blessed ench=Some(5) -> a blessed +5 arrow
+qty=1 buc=uncursed ench=None -> an uncursed arrow
+qty=1 buc=uncursed ench=Some(-1) -> an -1 arrow
+qty=1 buc=uncursed ench=Some(0) -> an +0 arrow
+qty=1 buc=uncursed ench=Some(2) -> an +2 arrow
+qty=1 buc=uncursed ench=Some(5) -> an +5 arrow
+qty=1 buc=cursed ench=None -> a cursed arrow
+qty=1 buc=cursed ench=Some(-1) -> a cursed -1 arrow
+qty=1 buc=cursed ench=Some(0) -> a cursed +0 arrow
+qty=1 buc=cursed ench=Some(2) -> a cursed +2 arrow
+qty=1 buc=cursed ench=Some(5) -> a cursed +5 arrow
+qty=1 buc=buc_unknown ench=None -> an arrow
+qty=1 buc=buc_unknown ench=Some(-1) -> an -1 arrow
+qty=1 buc=buc_unknown ench=Some(0) -> an +0 arrow
+qty=1 buc=buc_unknown ench=Some(2) -> an +2 arrow
+qty=1 buc=buc_unknown ench=Some(5) -> an +5 arrow
+qty=1 erosion=rusty -> a rusty +0 arrow
+qty=1 erosion=very_rusty -> a very rusty +0 arrow
+qty=1 erosion=corroded -> a corroded +0 arrow
+qty=1 erosion=very_rusty+corroded -> a very rusty corroded +0 arrow
+qty=1 named=Sting -> an arrow named Sting
+qty=1 called=stabby -> an arrow called stabby
+qty=3 buc=blessed ench=None -> 3 blessed arrows
+qty=3 buc=blessed ench=Some(-1) -> 3 blessed -1 arrows
+qty=3 buc=blessed ench=Some(0) -> 3 blessed +0 arrows
+qty=3 buc=blessed ench=Some(2) -> 3 blessed +2 arrows
+qty=3 buc=blessed ench=Some(5) -> 3 blessed +5 arrows
+qty=3 buc=uncursed ench=None -> 3 uncursed arrows
+qty=3 buc=uncursed ench=Some(-1) -> 3 -1 arrows
+qty=3 buc=uncursed ench=Some(0) -> 3 +0 arrows
+qty=3 buc=uncursed ench=Some(2) -> 3 +2 arrows
+qty=3 buc=uncursed ench=Some(5) -> 3 +5 arrows
+qty=3 buc=cursed ench=None -> 3 cursed arrows
+qty=3 buc=cursed ench=Some(-1) -> 3 cursed -1 arrows
+qty=3 buc=cursed ench=Some(0) -> 3 cursed +0 arrows
+qty=3 buc=cursed ench=Some(2) -> 3 cursed +2 arrows
+qty=3 buc=cursed ench=Some(5) -> 3 cursed +5 arrows
+qty=3 buc=buc_unknown ench=None -> 3 arrows
+qty=3 buc=buc_unknown ench=Some(-1) -> 3 -1 arrows
+qty=3 buc=buc_unknown ench=Some(0) -> 3 +0 arrows
+qty=3 buc=buc_unknown ench=Some(2) -> 3 +2 arrows
+qty=3 buc=buc_unknown ench=Some(5) -> 3 +5 arrows
+qty=3 erosion=rusty -> 3 rusty +0 arrows
+qty=3 erosion=very_rusty -> 3 very rusty +0 arrows
+qty=3 erosion=corroded -> 3 corroded +0 arrows
+qty=3 erosion=very_rusty+corroded -> 3 very rusty corroded +0 arrows
+qty=3 named=Sting -> 3 arrows named Sting
+qty=3 called=stabby -> 3 arrow called stabbies
+=== elven broadsword ===
+qty=1 buc=blessed ench=None -> a blessed elven broadsword
+qty=1 buc=blessed ench=Some(-1) -> a blessed -1 elven broadsword
+qty=1 buc=blessed ench=Some(0) -> a blessed +0 elven broadsword
+qty=1 buc=blessed ench=Some(2) -> a blessed +2 elven broadsword
+qty=1 buc=blessed ench=Some(5) -> a blessed +5 elven broadsword
+qty=1 buc=uncursed ench=None -> an uncursed elven broadsword
+qty=1 buc=uncursed ench=Some(-1) -> an -1 elven broadsword
+qty=1 buc=uncursed ench=Some(0) -> an +0 elven broadsword
+qty=1 buc=uncursed ench=Some(2) -> an +2 elven broadsword
+qty=1 buc=uncursed ench=Some(5) -> an +5 elven broadsword
+qty=1 buc=cursed ench=None -> a cursed elven broadsword
+qty=1 buc=cursed ench=Some(-1) -> a cursed -1 elven broadsword
+qty=1 buc=cursed ench=Some(0) -> a cursed +0 elven broadsword
+qty=1 buc=cursed ench=Some(2) -> a cursed +2 elven broadsword
+qty=1 buc=cursed ench=Some(5) -> a cursed +5 elven broadsword
+qty=1 buc=buc_unknown ench=None -> an elven broadsword
+qty=1 buc=buc_unknown ench=Some(-1) -> an -1 elven broadsword
+qty=1 buc=buc_unknown ench=Some(0) -> an +0 elven broadsword
+qty=1 buc=buc_unknown ench=Some(2) -> an +2 elven broadsword
+qty=1 buc=buc_unknown ench=Some(5) -> an +5 elven broadsword
+qty=1 named=Sting -> an elven broadsword named Sting
+qty=1 called=stabby -> an elven broadsword called stabby
+qty=3 buc=blessed ench=None -> 3 blessed elven broadswords
+qty=3 buc=blessed ench=Some(-1) -> 3 blessed -1 elven broadswords
+qty=3 buc=blessed ench=Some(0) -> 3 blessed +0 elven broadswords
+qty=3 buc=blessed ench=Some(2) -> 3 blessed +2 elven broadswords
+qty=3 buc=blessed ench=Some(5) -> 3 blessed +5 elven broadswords
+qty=3 buc=uncursed ench=None -> 3 uncursed elven broadswords
+qty=3 buc=uncursed ench=Some(-1) -> 3 -1 elven broadswords
+qty=3 buc=uncursed ench=Some(0) -> 3 +0 elven broadswords
+qty=3 buc=uncursed ench=Some(2) -> 3 +2 elven broadswords
+qty=3 buc=uncursed ench=Some(5) -> 3 +5 elven broadswords
+qty=3 buc=cursed ench=None -> 3 cursed elven broadswords
+qty=3 buc=cursed ench=Some(-1) -> 3 cursed -1 elven broadswords
+qty=3 buc=cursed ench=Some(0) -> 3 cursed +0 elven broadswords
+qty=3 buc=cursed ench=Some(2) -> 3 cursed +2 elven broadswords
+qty=3 buc=cursed ench=Some(5) -> 3 cursed +5 elven broadswords
+qty=3 buc=buc_unknown ench=None -> 3 elven broadswords
+qty=3 buc=buc_unknown ench=Some(-1) -> 3 -1 elven broadswords
+qty=3 buc=buc_unknown ench=Some(0) -> 3 +0 elven broadswords
+qty=3 buc=buc_unknown ench=Some(2) -> 3 +2 elven broadswords
+qty=3 buc=buc_unknown ench=Some(5) -> 3 +5 elven broadswords
+qty=3 named=Sting -> 3 elven broadswords named Sting
+qty=3 called=stabby -> 3 elven broadsword called stabbies

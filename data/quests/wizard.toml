@@ -1,0 +1,267 @@
+# Quest text for the Wizard role
+# Converted from NetHack 3.7 dat/quest.lua (Wiz section)
+# Variable substitutions: %p=player, %c=class, %r=rank, %l=leader,
+# %n=nemesis, %o=artifact, %i=intermediate, %d=deity, %H=homebase
+
+role = "wizard"
+abbreviation = "Wiz"
+quest_leader = "Neferet the Green"
+quest_nemesis = "Dark One"
+quest_artifact = "The Eye of the Aethiopica"
+quest_guardian = "apprentice"
+quest_goal_terrain = "dark_tower"
+
+[assignquest]
+synopsis = "[Travel to %i; overcome %n; return with %o.]"
+text = """
+"Yes, %p, you truly are ready for this dire task.  Listen,
+carefully, for what I tell you now will be of vital importance.
+
+"Since you left us to hone your skills in the world, we unexpectedly came
+under attack by the forces of %n.  As you know, we thought
+%n had perished at the end of the last age, but, alas, this was
+not the case.
+
+"%nC sent an army of abominations against us.  Among them was a
+minion, mindless and ensorcelled, and thus, in the confusion, it was
+able to penetrate our defenses.  Alas, this creature has stolen
+%o and I fear has delivered %oh to %n.
+
+"Over the years, I had woven most of my power into this amulet, and thus,
+without it, I have but a shadow of my former power, and I fear that I
+shall soon perish.
+
+"You must travel to %i, and within its dungeons,
+find and overcome %n, and return %o to me.
+
+"Go now, with %d, and complete this quest before it is too late."
+"""
+
+[badalign]
+synopsis = "[Go; come back when you are worthy of %d.]"
+text = """
+"You amaze me, %p!  How many times did I tell you that the way of a mage
+is an exacting one.  One must use the world with care, lest one leave it
+in ruins and simplify the task of %n.
+
+"You must go back and show your worthiness.  Do not return until you are
+truly ready for this quest.  May %d guide you in this task."
+"""
+
+[badlevel]
+synopsis = "[Go; return when you are %Ra.]"
+text = """
+"Alas, %p, you have not yet shown your proficiency as a worthy
+spellcaster.  As %ra, you would surely be overcome in the challenge
+ahead.  Go, now, expand your horizons, and return when you have attained
+renown as %Ra."
+"""
+
+[discourage]
+lines = [
+  "\\\"Your puny powers are no match for me, fool!\\\"",
+  "\\\"When you are defeated, your torment will last for a thousand years.\\\"",
+  "\\\"After your downfall, %p, I shall devour %l for dessert!\\\"",
+  "\\\"Are you ready yet to beg for mercy?  I could be lenient...\\\"",
+  "\\\"Your soul shall join the enslaved multitude I command!\\\"",
+  "\\\"Your lack of will is evident, and you shall die as a result.\\\"",
+  "\\\"Your faith in %d is for naught!  Come, submit to me now!\\\"",
+  "\\\"A mere %r is nothing compared to my skill!\\\"",
+  "\\\"So, you are the best hope of %l?  How droll.\\\"",
+  "\\\"Feel my power, %c!  My victory is imminent!\\\"",
+]
+
+[encourage]
+lines = [
+  "\\\"Beware, for %n is immune to most magical attacks.\\\"",
+  "\\\"To enter %i you must pass many traps.\\\"",
+  "\\\"%nC may be vulnerable to physical attacks.\\\"",
+  "\\\"%d will come to your aid when you call.\\\"",
+  "\\\"You must utterly destroy %n.  He will pursue you otherwise.\\\"",
+  "\\\"%oC is a mighty artifact.  With it you can destroy %n.\\\"",
+  "\\\"Go forth with the blessings of %d.\\\"",
+  "\\\"I will have my %gP watch for your return.\\\"",
+  "\\\"Feel free to take any items in that chest that might aid you.\\\"",
+  "\\\"You will know when %o is near.  Proceed with care!\\\"",
+]
+
+[firsttime]
+synopsis = "[You have arrived at %ls tower but something is very wrong.]"
+text = """
+You are suddenly in familiar surroundings.  You notice what appears to
+be a large, squat stone structure nearby.  Wait!  That looks like the
+tower of your former teacher, %l.
+
+However, things are not the same as when you were last here.  Mists and
+areas of unexplained darkness surround the tower.  There is movement in
+the shadows.
+
+Your teacher would never allow such unaesthetic forms to surround the
+tower...  unless something were dreadfully wrong!
+"""
+
+[goal_alt]
+text = "You have returned to %ns lair."
+
+[goal_first]
+text = "You feel your mentor's presence; perhaps %o is nearby."
+
+[goal_next]
+text = "The aura of %o tingles at the edge of your perception."
+
+[gotit]
+synopsis = "[You feel %os power and know you should return %oh to %l.]"
+text = """
+As you touch %o, its comforting power infuses you
+with new energy.  You feel as if you can detect others' thoughts flowing
+through it.  Although you yearn to wear %o and
+attack the Wizard of Yendor, you know you must return it to its rightful
+owner, %l.
+"""
+
+[guardtalk_after]
+lines = [
+  "\\\"I have some eye of newt to trade, do you have a spare blind-worm's sting?\\\"",
+  "\\\"The magic portal now seems like it will remain stable for quite some time.\\\"",
+  "\\\"Have you noticed how much stronger %l is since %o was recovered?\\\"",
+  "\\\"Thank %d!  We weren't positive you would defeat %n.\\\"",
+  "\\\"I, too, will venture into the world, because %n was but one of many evils to be vanquished.\\\"",
+]
+
+[guardtalk_before]
+lines = [
+  "\\\"Would you happen to have some eye of newt in that overstuffed pack, %s?\\\"",
+  "\\\"Ah, the spell to create the magic portal worked.  Outstanding!\\\"",
+  "\\\"Hurry!  %lC may not survive that casting of the portal spell!\\\"",
+  "\\\"The spells of %n were just too powerful for us to withstand.\\\"",
+  "\\\"I, too, will venture into the world, because %n is but one of many evils to be vanquished.\\\"",
+]
+
+[hasamulet]
+synopsis = "[Take the Amulet to %ds altar on the Astral Plane.]"
+text = """
+"Congratulations, %p.  I always knew that if anyone could succeed
+in defeating the Wizard of Yendor and his minions, it would be you.
+
+"Go now, and take the Amulet to the Astral Plane.  Once there, present
+the Amulet on the altar of %d.  Along the way you shall pass through
+the four Elemental Planes.  These planes are like nothing you have ever
+experienced before, so be prepared!
+
+"For this you were born, %s!  I am very proud of you."
+"""
+
+[killed_nemesis]
+synopsis = "[%nC curses you as %nh dies.]"
+text = """
+%nC, whose body begins to shrivel up, croaks out:
+
+    "I shall haunt your progress until the end of time.  A thousand
+    curses on you and %l."
+
+Then, the body bursts into a cloud of choking dust, and blows away.
+"""
+
+[leader_first]
+synopsis = "[You have come a long way, but are you ready for the task I require?]"
+text = """
+"Come closer, %p, for my voice falters in my old age.
+Yes, I see that you have come a long way since you went out into the
+world, leaving the safe confines of this tower.  However, I must first
+determine if you have all of the skills required to take on the task
+I require of you."
+"""
+
+[leader_last]
+synopsis = "[\"Get out of here!\"]"
+text = """
+"You fool, %p!  Why did I waste all of those years teaching you
+the esoteric arts?  Get out of here!  I shall find another."
+"""
+
+[leader_next]
+text = "\\\"Well, %p, you have returned.  Perhaps you are now ready...\\\""
+
+[leader_other]
+text = """
+"This is getting tedious, %p, but perseverance is a sign of a true mage.
+I certainly hope that you are truly ready this time!"
+"""
+
+[locate_first]
+text = "Wisps of fog swirl nearby.  You feel that %ns lair is close."
+
+[locate_next]
+text = "You believe that you may once again invade %i."
+
+[nemesis_first]
+synopsis = "[\"Your destruction should make for good sport.\"]"
+text = """
+"Ah, I recognize you, %p.  So, %l has sent you to steal
+%o from me, hmmm?  Well, %lh is a fool to send such
+a mental weakling against me.
+
+"Your destruction, however, should make for good sport.  In the end, you
+shall beg me to kill you!"
+"""
+
+[nemesis_next]
+synopsis = "[\"Your soul shall soon be mine to command.\"]"
+text = """
+"How nice of you to return, %p!  I enjoyed our last meeting.  Are you
+still hungry for more pain?
+
+"Come!  Your soul, like %o, shall soon be mine to command."
+"""
+
+[nemesis_other]
+text = """
+"I'm sure that your perseverance shall be the subject of innumerable
+ballads, but you shall not be around to hear them, I fear!"
+"""
+
+[nemesis_wantsit]
+text = """
+"Thief!  %oC belongs to me, now.  I shall feed
+your living flesh to my minions."
+"""
+
+[nexttime]
+text = "Once again, you are back at %H."
+
+[offeredit]
+synopsis = "[Take %o with you in your quest for the Amulet.]"
+text = """
+%lC notices %o in your possession,
+beams at you and says:
+
+    "I knew you could defeat %n and retrieve
+    %o.  We shall never forget this
+    brave service.
+
+    "Take %oh with you in your quest for the Amulet of Yendor.
+    I can sense that it has attuned %oiself to you already.
+
+"May %d guide you in your quest, and keep you from harm."
+"""
+
+[offeredit2]
+synopsis = "[Keep %o, return through the portal to %Z; find the other Amulet.]"
+text = """
+"You are the keeper of %o now.  It is time to
+recover the /other/ Amulet.  %Z await your return through
+the magic portal which brought you here."
+"""
+
+[othertime]
+text = """
+You are back at %H.
+You have an odd feeling this may be the last time you ever come here.
+"""
+
+[posthanks]
+text = """
+"Come near, my %S, and share your adventures with me.
+So, have you succeeded in your quest for the Amulet of Yendor?"
+"""
+

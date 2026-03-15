@@ -1,0 +1,58 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== ring of teleportation ===
+qty=1 identified buc=blessed ench=None -> a blessed ring of teleportation
+qty=1 identified buc=blessed ench=Some(0) -> a blessed +0 ring of teleportation
+qty=1 identified buc=blessed ench=Some(2) -> a blessed +2 ring of teleportation
+qty=1 identified buc=uncursed ench=None -> an uncursed ring of teleportation
+qty=1 identified buc=uncursed ench=Some(0) -> an uncursed +0 ring of teleportation
+qty=1 identified buc=uncursed ench=Some(2) -> an uncursed +2 ring of teleportation
+qty=1 identified buc=cursed ench=None -> a cursed ring of teleportation
+qty=1 identified buc=cursed ench=Some(0) -> a cursed +0 ring of teleportation
+qty=1 identified buc=cursed ench=Some(2) -> a cursed +2 ring of teleportation
+qty=1 identified buc=buc_unknown ench=None -> a ring of teleportation
+qty=1 identified buc=buc_unknown ench=Some(0) -> a +0 ring of teleportation
+qty=1 identified buc=buc_unknown ench=Some(2) -> a +2 ring of teleportation
+qty=1 unidentified -> a jade ring
+qty=3 identified buc=blessed ench=None -> 3 blessed ring of teleportations
+qty=3 identified buc=blessed ench=Some(0) -> 3 blessed +0 ring of teleportations
+qty=3 identified buc=blessed ench=Some(2) -> 3 blessed +2 ring of teleportations
+qty=3 identified buc=uncursed ench=None -> 3 uncursed ring of teleportations
+qty=3 identified buc=uncursed ench=Some(0) -> 3 uncursed +0 ring of teleportations
+qty=3 identified buc=uncursed ench=Some(2) -> 3 uncursed +2 ring of teleportations
+qty=3 identified buc=cursed ench=None -> 3 cursed ring of teleportations
+qty=3 identified buc=cursed ench=Some(0) -> 3 cursed +0 ring of teleportations
+qty=3 identified buc=cursed ench=Some(2) -> 3 cursed +2 ring of teleportations
+qty=3 identified buc=buc_unknown ench=None -> 3 ring of teleportations
+qty=3 identified buc=buc_unknown ench=Some(0) -> 3 +0 ring of teleportations
+qty=3 identified buc=buc_unknown ench=Some(2) -> 3 +2 ring of teleportations
+qty=3 unidentified -> 3 jade rings
+=== ring of protection ===
+qty=1 identified buc=blessed ench=None -> a blessed ring of protection
+qty=1 identified buc=blessed ench=Some(0) -> a blessed +0 ring of protection
+qty=1 identified buc=blessed ench=Some(2) -> a blessed +2 ring of protection
+qty=1 identified buc=uncursed ench=None -> an uncursed ring of protection
+qty=1 identified buc=uncursed ench=Some(0) -> an uncursed +0 ring of protection
+qty=1 identified buc=uncursed ench=Some(2) -> an uncursed +2 ring of protection
+qty=1 identified buc=cursed ench=None -> a cursed ring of protection
+qty=1 identified buc=cursed ench=Some(0) -> a cursed +0 ring of protection
+qty=1 identified buc=cursed ench=Some(2) -> a cursed +2 ring of protection
+qty=1 identified buc=buc_unknown ench=None -> a ring of protection
+qty=1 identified buc=buc_unknown ench=Some(0) -> a +0 ring of protection
+qty=1 identified buc=buc_unknown ench=Some(2) -> a +2 ring of protection
+qty=1 unidentified -> an iron ring
+qty=3 identified buc=blessed ench=None -> 3 blessed ring of protections
+qty=3 identified buc=blessed ench=Some(0) -> 3 blessed +0 ring of protections
+qty=3 identified buc=blessed ench=Some(2) -> 3 blessed +2 ring of protections
+qty=3 identified buc=uncursed ench=None -> 3 uncursed ring of protections
+qty=3 identified buc=uncursed ench=Some(0) -> 3 uncursed +0 ring of protections
+qty=3 identified buc=uncursed ench=Some(2) -> 3 uncursed +2 ring of protections
+qty=3 identified buc=cursed ench=None -> 3 cursed ring of protections
+qty=3 identified buc=cursed ench=Some(0) -> 3 cursed +0 ring of protections
+qty=3 identified buc=cursed ench=Some(2) -> 3 cursed +2 ring of protections
+qty=3 identified buc=buc_unknown ench=None -> 3 ring of protections
+qty=3 identified buc=buc_unknown ench=Some(0) -> 3 +0 ring of protections
+qty=3 identified buc=buc_unknown ench=Some(2) -> 3 +2 ring of protections
+qty=3 unidentified -> 3 iron rings

@@ -1,0 +1,38 @@
+[translations]
+"long sword" = { name = "Langschwert", gender = "neuter" }
+"short sword" = { name = "Kurzschwert", gender = "neuter" }
+"broadsword" = { name = "Breitschwert", gender = "neuter" }
+"two-handed sword" = { name = "Zweihänder", gender = "masculine" }
+"scimitar" = { name = "Krummsäbel", gender = "masculine" }
+"katana" = { name = "Katana", gender = "neuter" }
+"dagger" = { name = "Dolch", gender = "masculine" }
+"elven dagger" = { name = "Elfendolch", gender = "masculine" }
+"orcish dagger" = { name = "Orkdolch", gender = "masculine" }
+"athame" = { name = "Athame", gender = "neuter" }
+"knife" = { name = "Messer", gender = "neuter" }
+"stiletto" = { name = "Stilett", gender = "neuter" }
+"axe" = { name = "Axt", gender = "feminine", plural = "Äxte" }
+"battle-axe" = { name = "Streitaxt", gender = "feminine", plural = "Streitäxte" }
+"mace" = { name = "Keule", gender = "feminine" }
+"morning star" = { name = "Morgenstern", gender = "masculine" }
+"war hammer" = { name = "Kriegshammer", gender = "masculine" }
+"club" = { name = "Knüppel", gender = "masculine" }
+"quarterstaff" = { name = "Kampfstab", gender = "masculine", plural = "Kampfstäbe" }
+"spear" = { name = "Speer", gender = "masculine" }
+"elven spear" = { name = "Elfenspeer", gender = "masculine" }
+"javelin" = { name = "Wurfspeer", gender = "masculine" }
+"trident" = { name = "Dreizack", gender = "masculine" }
+"lance" = { name = "Lanze", gender = "feminine" }
+"bow" = { name = "Bogen", gender = "masculine", plural = "Bögen" }
+"elven bow" = { name = "Elfenbogen", gender = "masculine", plural = "Elfenbögen" }
+"orcish bow" = { name = "Orkbogen", gender = "masculine", plural = "Orkbögen" }
+"crossbow" = { name = "Armbrust", gender = "feminine", plural = "Armbrüste" }
+"arrow" = { name = "Pfeil", gender = "masculine" }
+"elven arrow" = { name = "Elfenpfeil", gender = "masculine" }
+"orcish arrow" = { name = "Orkpfeil", gender = "masculine" }
+"silver arrow" = { name = "Silberpfeil", gender = "masculine" }
+"crossbow bolt" = { name = "Armbrustbolzen", gender = "masculine" }
+"dart" = { name = "Wurfpfeil", gender = "masculine" }
+"shuriken" = { name = "Shuriken", gender = "masculine" }
+"boomerang" = { name = "Bumerang", gender = "masculine" }
+"whip" = { name = "Peitsche", gender = "feminine" }

@@ -1,0 +1,13 @@
+code = "zh-TW"
+name = "繁體中文"
+name_en = "Traditional Chinese"
+author = "NetHack Babel Team"
+version = "0.1.0"
+fallback = "zh-CN"
+is_cjk = true
+has_articles = false
+has_plural = false
+has_verb_conj = false
+possessive = "的"
+quote_left = "「"
+quote_right = "」"

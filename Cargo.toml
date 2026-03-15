@@ -14,9 +14,19 @@ version = "0.1.0"
 edition = "2024"
 license = "NGPL"
 repository = "https://github.com/user/nethack-babel"
+homepage = "https://github.com/user/nethack-babel"
+description = "A modern Rust reimplementation of NetHack with i18n support"
+keywords = ["nethack", "roguelike", "game", "terminal", "dungeon"]
+categories = ["games", "command-line-utilities"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 tracing = "0.1"
 unicode-width = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
+codegen-units = 1

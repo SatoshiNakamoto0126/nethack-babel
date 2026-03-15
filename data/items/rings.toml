@@ -1,0 +1,368 @@
+# NetHack Babel — Ring definitions
+# Values sourced from NetHack 3.7 include/objects.h
+# RING(name, stone, power, cost, mgc, spec, mohs, metal, color, sn)
+# All rings: weight=3, prob=1, mergeable=false, magic=true
+
+[[object]]
+id = 0
+name = "adornment"
+class = "Ring"
+color = "Brown"
+material = "Wood"
+weight = 3
+cost = 100
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "wooden"
+
+[[object]]
+id = 1
+name = "gain strength"
+class = "Ring"
+color = "Gray"
+material = "Mineral"
+weight = 3
+cost = 150
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "granite"
+
+[[object]]
+id = 2
+name = "gain constitution"
+class = "Ring"
+color = "Gray"
+material = "Mineral"
+weight = 3
+cost = 150
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "opal"
+
+[[object]]
+id = 3
+name = "increase accuracy"
+class = "Ring"
+color = "Red"
+material = "Mineral"
+weight = 3
+cost = 150
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "clay"
+
+[[object]]
+id = 4
+name = "increase damage"
+class = "Ring"
+color = "Orange"
+material = "Mineral"
+weight = 3
+cost = 150
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "coral"
+
+[[object]]
+id = 5
+name = "protection"
+class = "Ring"
+color = "Black"
+material = "Mineral"
+weight = 3
+cost = 100
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "black onyx"
+
+[[object]]
+id = 6
+name = "regeneration"
+class = "Ring"
+color = "Gray"
+material = "Mineral"
+weight = 3
+cost = 200
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "moonstone"
+
+[[object]]
+id = 7
+name = "searching"
+class = "Ring"
+color = "Brown"
+material = "Gemstone"
+weight = 3
+cost = 200
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "tiger eye"
+
+[[object]]
+id = 8
+name = "stealth"
+class = "Ring"
+color = "Green"
+material = "Gemstone"
+weight = 3
+cost = 100
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "jade"
+
+[[object]]
+id = 9
+name = "sustain ability"
+class = "Ring"
+color = "Yellow"
+material = "Copper"
+weight = 3
+cost = 100
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "bronze"
+
+[[object]]
+id = 10
+name = "levitation"
+class = "Ring"
+color = "Red"
+material = "Gemstone"
+weight = 3
+cost = 200
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "agate"
+
+[[object]]
+id = 11
+name = "hunger"
+class = "Ring"
+color = "Cyan"
+material = "Gemstone"
+weight = 3
+cost = 100
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "topaz"
+
+[[object]]
+id = 12
+name = "aggravate monster"
+class = "Ring"
+color = "Blue"
+material = "Gemstone"
+weight = 3
+cost = 150
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "sapphire"
+
+[[object]]
+id = 13
+name = "conflict"
+class = "Ring"
+color = "Red"
+material = "Gemstone"
+weight = 3
+cost = 300
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "ruby"
+
+[[object]]
+id = 14
+name = "warning"
+class = "Ring"
+color = "White"
+material = "Gemstone"
+weight = 3
+cost = 100
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "diamond"
+
+[[object]]
+id = 15
+name = "poison resistance"
+class = "Ring"
+color = "White"
+material = "Bone"
+weight = 3
+cost = 150
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "pearl"
+
+[[object]]
+id = 16
+name = "fire resistance"
+class = "Ring"
+color = "Cyan"
+material = "Iron"
+weight = 3
+cost = 200
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "iron"
+
+[[object]]
+id = 17
+name = "cold resistance"
+class = "Ring"
+color = "Yellow"
+material = "Copper"
+weight = 3
+cost = 150
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "brass"
+
+[[object]]
+id = 18
+name = "shock resistance"
+class = "Ring"
+color = "Yellow"
+material = "Copper"
+weight = 3
+cost = 150
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "copper"
+
+[[object]]
+id = 19
+name = "free action"
+class = "Ring"
+color = "Cyan"
+material = "Iron"
+weight = 3
+cost = 200
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "twisted"
+
+[[object]]
+id = 20
+name = "slow digestion"
+class = "Ring"
+color = "Cyan"
+material = "Iron"
+weight = 3
+cost = 200
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "steel"
+
+[[object]]
+id = 21
+name = "teleportation"
+class = "Ring"
+color = "Gray"
+material = "Silver"
+weight = 3
+cost = 200
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "silver"
+
+[[object]]
+id = 22
+name = "teleport control"
+class = "Ring"
+color = "Yellow"
+material = "Gold"
+weight = 3
+cost = 300
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "gold"
+
+[[object]]
+id = 23
+name = "polymorph"
+class = "Ring"
+color = "White"
+material = "Bone"
+weight = 3
+cost = 300
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "ivory"
+
+[[object]]
+id = 24
+name = "polymorph control"
+class = "Ring"
+color = "BrightGreen"
+material = "Gemstone"
+weight = 3
+cost = 300
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "emerald"
+
+[[object]]
+id = 25
+name = "invisibility"
+class = "Ring"
+color = "Cyan"
+material = "Iron"
+weight = 3
+cost = 150
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "wire"
+
+[[object]]
+id = 26
+name = "see invisible"
+class = "Ring"
+color = "Cyan"
+material = "Iron"
+weight = 3
+cost = 150
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "engagement"
+
+[[object]]
+id = 27
+name = "protection from shape changers"
+class = "Ring"
+color = "BrightCyan"
+material = "Iron"
+weight = 3
+cost = 100
+prob = 1
+is_magic = true
+is_mergeable = false
+description = "shiny"

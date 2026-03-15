@@ -1,0 +1,13 @@
+code = "zh-CN"
+name = "简体中文"
+name_en = "Simplified Chinese"
+author = "NetHack Babel Team"
+version = "0.1.0"
+fallback = "en"
+is_cjk = true
+has_articles = false
+has_plural = false
+has_verb_conj = false
+possessive = "的"
+quote_left = "「"
+quote_right = "」"

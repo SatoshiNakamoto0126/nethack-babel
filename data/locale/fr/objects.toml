@@ -1,0 +1,39 @@
+[translations]
+"long sword" = { name = "épée longue", gender = "feminine" }
+"short sword" = { name = "épée courte", gender = "feminine" }
+"broadsword" = { name = "épée large", gender = "feminine" }
+"two-handed sword" = { name = "épée à deux mains", gender = "feminine" }
+"scimitar" = { name = "cimeterre", gender = "masculine" }
+"katana" = { name = "katana", gender = "masculine" }
+"dagger" = { name = "dague", gender = "feminine" }
+"elven dagger" = { name = "dague elfique", gender = "feminine" }
+"orcish dagger" = { name = "dague orque", gender = "feminine" }
+"athame" = { name = "athamé", gender = "masculine" }
+"knife" = { name = "couteau", gender = "masculine", plural = "couteaux" }
+"stiletto" = { name = "stylet", gender = "masculine" }
+"axe" = { name = "hache", gender = "feminine" }
+"battle-axe" = { name = "hache de guerre", gender = "feminine" }
+"mace" = { name = "masse", gender = "feminine" }
+"morning star" = { name = "étoile du matin", gender = "feminine" }
+"war hammer" = { name = "marteau de guerre", gender = "masculine" }
+"club" = { name = "gourdin", gender = "masculine" }
+"quarterstaff" = { name = "bâton", gender = "masculine" }
+"spear" = { name = "lance", gender = "feminine" }
+"elven spear" = { name = "lance elfique", gender = "feminine" }
+"javelin" = { name = "javelot", gender = "masculine" }
+"trident" = { name = "trident", gender = "masculine" }
+"lance" = { name = "lance de joute", gender = "feminine" }
+"bow" = { name = "arc", gender = "masculine" }
+"elven bow" = { name = "arc elfique", gender = "masculine" }
+"orcish bow" = { name = "arc orque", gender = "masculine" }
+"crossbow" = { name = "arbalète", gender = "feminine" }
+"arrow" = { name = "flèche", gender = "feminine" }
+"elven arrow" = { name = "flèche elfique", gender = "feminine" }
+"orcish arrow" = { name = "flèche orque", gender = "feminine" }
+"silver arrow" = { name = "flèche d'argent", gender = "feminine" }
+"crossbow bolt" = { name = "carreau d'arbalète", gender = "masculine" }
+"dart" = { name = "fléchette", gender = "feminine" }
+"shuriken" = { name = "shuriken", gender = "masculine" }
+"boomerang" = { name = "boomerang", gender = "masculine" }
+"whip" = { name = "fouet", gender = "masculine" }
+"rubber hose" = { name = "tuyau en caoutchouc", gender = "masculine" }

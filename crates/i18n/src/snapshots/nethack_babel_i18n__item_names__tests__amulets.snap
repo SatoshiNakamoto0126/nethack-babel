@@ -1,0 +1,30 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== amulet of life saving ===
+qty=1 identified buc=blessed -> a blessed amulet of life saving
+qty=1 identified buc=uncursed -> an uncursed amulet of life saving
+qty=1 identified buc=cursed -> a cursed amulet of life saving
+qty=1 identified buc=buc_unknown -> an amulet of life saving
+qty=1 unidentified -> a circular amulet
+qty=1 called=lifesave? -> an amulet called lifesave?
+qty=3 identified buc=blessed -> 3 blessed amulet of life savings
+qty=3 identified buc=uncursed -> 3 uncursed amulet of life savings
+qty=3 identified buc=cursed -> 3 cursed amulet of life savings
+qty=3 identified buc=buc_unknown -> 3 amulet of life savings
+qty=3 unidentified -> 3 circular amulets
+qty=3 called=lifesave? -> 3 amulet called lifesave?s
+=== amulet of reflection ===
+qty=1 identified buc=blessed -> a blessed amulet of reflection
+qty=1 identified buc=uncursed -> an uncursed amulet of reflection
+qty=1 identified buc=cursed -> a cursed amulet of reflection
+qty=1 identified buc=buc_unknown -> an amulet of reflection
+qty=1 unidentified -> a triangular amulet
+qty=1 called=lifesave? -> an amulet called lifesave?
+qty=3 identified buc=blessed -> 3 blessed amulet of reflections
+qty=3 identified buc=uncursed -> 3 uncursed amulet of reflections
+qty=3 identified buc=cursed -> 3 cursed amulet of reflections
+qty=3 identified buc=buc_unknown -> 3 amulet of reflections
+qty=3 unidentified -> 3 triangular amulets
+qty=3 called=lifesave? -> 3 amulet called lifesave?s

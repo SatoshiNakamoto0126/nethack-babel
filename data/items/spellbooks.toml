@@ -1,0 +1,664 @@
+# NetHack Babel — Spellbook definitions
+# Values sourced from NetHack 3.7 include/objects.h
+# SPELL(name, desc, sub, prob, delay, level, mgc, dir, color, sn)
+# All spellbooks: weight=50, cost=level*100, material=Paper
+
+[[object]]
+id = 0
+name = "dig"
+class = "Spellbook"
+color = "Brown"
+material = "Leather"
+weight = 50
+cost = 500
+prob = 20
+spell_level = 5
+direction = "Ray"
+is_magic = true
+is_mergeable = false
+description = "parchment"
+
+[[object]]
+id = 1
+name = "magic missile"
+class = "Spellbook"
+color = "Brown"
+material = "Leather"
+weight = 50
+cost = 200
+prob = 45
+spell_level = 2
+direction = "Ray"
+is_magic = true
+is_mergeable = false
+description = "vellum"
+
+[[object]]
+id = 2
+name = "fireball"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 400
+prob = 20
+spell_level = 4
+direction = "Ray"
+is_magic = true
+is_mergeable = false
+description = "ragged"
+
+[[object]]
+id = 3
+name = "cone of cold"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 400
+prob = 10
+spell_level = 4
+direction = "Ray"
+is_magic = true
+is_mergeable = false
+description = "dog eared"
+
+[[object]]
+id = 4
+name = "sleep"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 300
+prob = 30
+spell_level = 3
+direction = "Ray"
+is_magic = true
+is_mergeable = false
+description = "mottled"
+
+[[object]]
+id = 5
+name = "finger of death"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 700
+prob = 5
+spell_level = 7
+direction = "Ray"
+is_magic = true
+is_mergeable = false
+description = "stained"
+
+[[object]]
+id = 6
+name = "light"
+class = "Spellbook"
+color = "Brown"
+material = "Paper"
+weight = 50
+cost = 100
+prob = 45
+spell_level = 1
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "cloth"
+
+[[object]]
+id = 7
+name = "detect monsters"
+class = "Spellbook"
+color = "Brown"
+material = "Paper"
+weight = 50
+cost = 100
+prob = 43
+spell_level = 1
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "leathery"
+
+[[object]]
+id = 8
+name = "healing"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 100
+prob = 40
+spell_level = 1
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "white"
+
+[[object]]
+id = 9
+name = "knock"
+class = "Spellbook"
+color = "BrightMagenta"
+material = "Paper"
+weight = 50
+cost = 100
+prob = 25
+spell_level = 1
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "pink"
+
+[[object]]
+id = 10
+name = "force bolt"
+class = "Spellbook"
+color = "Red"
+material = "Paper"
+weight = 50
+cost = 100
+prob = 30
+spell_level = 1
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "red"
+
+[[object]]
+id = 11
+name = "confuse monster"
+class = "Spellbook"
+color = "Orange"
+material = "Paper"
+weight = 50
+cost = 100
+prob = 49
+spell_level = 1
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "orange"
+
+[[object]]
+id = 12
+name = "cure blindness"
+class = "Spellbook"
+color = "Yellow"
+material = "Paper"
+weight = 50
+cost = 200
+prob = 25
+spell_level = 2
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "yellow"
+
+[[object]]
+id = 13
+name = "drain life"
+class = "Spellbook"
+color = "Magenta"
+material = "Paper"
+weight = 50
+cost = 200
+prob = 10
+spell_level = 2
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "velvet"
+
+[[object]]
+id = 14
+name = "slow monster"
+class = "Spellbook"
+color = "BrightGreen"
+material = "Paper"
+weight = 50
+cost = 200
+prob = 30
+spell_level = 2
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "light green"
+
+[[object]]
+id = 15
+name = "wizard lock"
+class = "Spellbook"
+color = "Green"
+material = "Paper"
+weight = 50
+cost = 200
+prob = 25
+spell_level = 2
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "dark green"
+
+[[object]]
+id = 16
+name = "create monster"
+class = "Spellbook"
+color = "BrightCyan"
+material = "Paper"
+weight = 50
+cost = 200
+prob = 35
+spell_level = 2
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "turquoise"
+
+[[object]]
+id = 17
+name = "detect food"
+class = "Spellbook"
+color = "Cyan"
+material = "Paper"
+weight = 50
+cost = 200
+prob = 30
+spell_level = 2
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "cyan"
+
+[[object]]
+id = 18
+name = "cause fear"
+class = "Spellbook"
+color = "BrightBlue"
+material = "Paper"
+weight = 50
+cost = 300
+prob = 25
+spell_level = 3
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "light blue"
+
+[[object]]
+id = 19
+name = "clairvoyance"
+class = "Spellbook"
+color = "Blue"
+material = "Paper"
+weight = 50
+cost = 300
+prob = 15
+spell_level = 3
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "dark blue"
+
+[[object]]
+id = 20
+name = "cure sickness"
+class = "Spellbook"
+color = "Blue"
+material = "Paper"
+weight = 50
+cost = 300
+prob = 32
+spell_level = 3
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "indigo"
+
+[[object]]
+id = 21
+name = "charm monster"
+class = "Spellbook"
+color = "Magenta"
+material = "Paper"
+weight = 50
+cost = 500
+prob = 20
+spell_level = 5
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "magenta"
+
+[[object]]
+id = 22
+name = "haste self"
+class = "Spellbook"
+color = "Magenta"
+material = "Paper"
+weight = 50
+cost = 300
+prob = 33
+spell_level = 3
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "purple"
+
+[[object]]
+id = 23
+name = "detect unseen"
+class = "Spellbook"
+color = "Magenta"
+material = "Paper"
+weight = 50
+cost = 300
+prob = 20
+spell_level = 3
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "violet"
+
+[[object]]
+id = 24
+name = "levitation"
+class = "Spellbook"
+color = "Brown"
+material = "Paper"
+weight = 50
+cost = 400
+prob = 20
+spell_level = 4
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "tan"
+
+[[object]]
+id = 25
+name = "extra healing"
+class = "Spellbook"
+color = "Green"
+material = "Paper"
+weight = 50
+cost = 300
+prob = 27
+spell_level = 3
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "plaid"
+
+[[object]]
+id = 26
+name = "restore ability"
+class = "Spellbook"
+color = "Brown"
+material = "Paper"
+weight = 50
+cost = 400
+prob = 25
+spell_level = 4
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "light brown"
+
+[[object]]
+id = 27
+name = "invisibility"
+class = "Spellbook"
+color = "Brown"
+material = "Paper"
+weight = 50
+cost = 400
+prob = 20
+spell_level = 4
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "dark brown"
+
+[[object]]
+id = 28
+name = "detect treasure"
+class = "Spellbook"
+color = "Gray"
+material = "Paper"
+weight = 50
+cost = 400
+prob = 20
+spell_level = 4
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "gray"
+
+[[object]]
+id = 29
+name = "remove curse"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 300
+prob = 25
+spell_level = 3
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "wrinkled"
+
+[[object]]
+id = 30
+name = "magic mapping"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 500
+prob = 18
+spell_level = 5
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "dusty"
+
+[[object]]
+id = 31
+name = "identify"
+class = "Spellbook"
+color = "Yellow"
+material = "Paper"
+weight = 50
+cost = 300
+prob = 20
+spell_level = 3
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "bronze"
+
+[[object]]
+id = 32
+name = "turn undead"
+class = "Spellbook"
+color = "Yellow"
+material = "Paper"
+weight = 50
+cost = 600
+prob = 16
+spell_level = 6
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "copper"
+
+[[object]]
+id = 33
+name = "polymorph"
+class = "Spellbook"
+color = "Gray"
+material = "Paper"
+weight = 50
+cost = 600
+prob = 10
+spell_level = 6
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "silver"
+
+[[object]]
+id = 34
+name = "teleport away"
+class = "Spellbook"
+color = "Yellow"
+material = "Paper"
+weight = 50
+cost = 600
+prob = 15
+spell_level = 6
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "gold"
+
+[[object]]
+id = 35
+name = "create familiar"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 600
+prob = 10
+spell_level = 6
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "glittering"
+
+[[object]]
+id = 36
+name = "cancellation"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 700
+prob = 15
+spell_level = 7
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "shining"
+
+[[object]]
+id = 37
+name = "protection"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 100
+prob = 18
+spell_level = 1
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "dull"
+
+[[object]]
+id = 38
+name = "jumping"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 100
+prob = 20
+spell_level = 1
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "thin"
+
+[[object]]
+id = 39
+name = "stone to flesh"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 300
+prob = 15
+spell_level = 3
+direction = "Immediate"
+is_magic = true
+is_mergeable = false
+description = "thick"
+
+[[object]]
+id = 40
+name = "chain lightning"
+class = "Spellbook"
+color = "Gray"
+material = "Paper"
+weight = 50
+cost = 200
+prob = 25
+spell_level = 2
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "checkered"
+
+[[object]]
+id = 41
+name = "blank paper"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 0
+prob = 18
+spell_level = 0
+direction = "Nodir"
+is_magic = false
+is_mergeable = false
+description = "plain"
+
+[[object]]
+id = 42
+name = "novel"
+class = "Spellbook"
+color = "BrightBlue"
+material = "Paper"
+weight = 10
+cost = 20
+prob = 1
+spell_level = 1
+direction = "Nodir"
+is_magic = false
+is_mergeable = false
+description = "paperback"
+
+[[object]]
+id = 43
+name = "Book of the Dead"
+class = "Spellbook"
+color = "White"
+material = "Paper"
+weight = 50
+cost = 10000
+prob = 0
+spell_level = 7
+direction = "Nodir"
+is_magic = true
+is_mergeable = false
+description = "papyrus"

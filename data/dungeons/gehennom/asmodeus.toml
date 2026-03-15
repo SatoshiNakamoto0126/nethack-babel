@@ -1,0 +1,41 @@
+[level]
+name = "asmodeus"
+branch = "Gehennom"
+flags = ["mazelevel", "noteleport", "hardfloor"]
+
+[map]
+halign = "center"
+valign = "center"
+data = """
+------      ------
+|....|      |....|
+|....+######+....|
+|....|      |....|
+------      ------
+  ##          ##
+  ##          ##
+------      ------
+|....|      |....|
+|....+######+....|
+|....|      |....|
+------      ------
+"""
+
+[[regions]]
+area = [0, 0, 17, 11]
+lit = false
+
+[[stairs]]
+direction = "up"
+x = 2
+y = 1
+
+[[stairs]]
+direction = "down"
+x = 14
+y = 10
+
+[[monsters]]
+id = "Asmodeus"
+x = 14
+y = 4

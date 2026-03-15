@@ -1,0 +1,83 @@
+[level]
+name = "sokoban4a"
+branch = "Sokoban"
+flags = ["noteleport", "hardfloor", "nodig"]
+
+[map]
+halign = "center"
+valign = "center"
+data = """
+---------
+|.......|
+|..--..-|
+|..|..|.|
+|..|..|.|
+|..--..|.|
+|.......|.|
+|.----.-|.|
+|.|..|..+.|
+|.|..|....|
+|.----....|
+|.........|
+-----------
+"""
+
+[[objects]]
+id = "boulder"
+x = 4
+y = 2
+
+[[objects]]
+id = "boulder"
+x = 4
+y = 4
+
+[[objects]]
+id = "boulder"
+x = 2
+y = 6
+
+[[objects]]
+id = "boulder"
+x = 5
+y = 6
+
+[[objects]]
+id = "boulder"
+x = 3
+y = 9
+
+[[traps]]
+type = "pit"
+x = 2
+y = 10
+
+[[traps]]
+type = "pit"
+x = 2
+y = 11
+
+[[traps]]
+type = "pit"
+x = 3
+y = 11
+
+[[traps]]
+type = "pit"
+x = 4
+y = 11
+
+[[traps]]
+type = "pit"
+x = 5
+y = 11
+
+[[stairs]]
+direction = "up"
+x = 1
+y = 1
+
+[[stairs]]
+direction = "down"
+x = 5
+y = 11

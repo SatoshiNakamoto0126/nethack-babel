@@ -1,0 +1,128 @@
+# Dungeon topology for NetHack Babel
+# Defines branches, depths, connections, and special level assignments
+
+[[branches]]
+name = "Main"
+max_depth = 29
+special_levels = [
+    { name = "oracle", depth_range = [5, 9] },
+    { name = "rogue", depth_range = [15, 18] },
+    { name = "bigroom", depth_range = [10, 13] },
+    { name = "medusa", depth = 24 },
+    { name = "castle", depth = 25 },
+]
+
+[[branches]]
+name = "Mines"
+max_depth = 10
+special_levels = [
+    { name = "minetown", depth = 5 },
+    { name = "mines_end", depth = 10 },
+]
+
+[[branches]]
+name = "Sokoban"
+max_depth = 4
+special_levels = [
+    { name = "sokoban1", depth = 1 },
+    { name = "sokoban2", depth = 2 },
+    { name = "sokoban3", depth = 3 },
+    { name = "sokoban4", depth = 4 },
+]
+
+[[branches]]
+name = "Quest"
+max_depth = 7
+special_levels = [
+    { name = "quest_start", depth = 1 },
+    { name = "quest_locator", depth = 4 },
+    { name = "quest_goal", depth = 7 },
+]
+
+[[branches]]
+name = "FortLudios"
+max_depth = 1
+special_levels = [
+    { name = "fort_ludios", depth = 1 },
+]
+
+[[branches]]
+name = "Gehennom"
+max_depth = 25
+special_levels = [
+    { name = "valley", depth = 1 },
+    { name = "juiblex", depth = 5 },
+    { name = "asmodeus", depth = 7 },
+    { name = "baalzebub", depth = 10 },
+    { name = "orcus", depth = 12 },
+    { name = "fakewiz1", depth = 14 },
+    { name = "fakewiz2", depth = 15 },
+    { name = "wizard_tower", depth = 17 },
+    { name = "wizard_tower2", depth = 18 },
+    { name = "wizard_tower3", depth = 19 },
+    { name = "sanctum", depth = 20 },
+]
+
+[[branches]]
+name = "VladsTower"
+max_depth = 3
+flags = ["going_up"]
+special_levels = [
+    { name = "vlad1", depth = 1 },
+    { name = "vlad2", depth = 2 },
+    { name = "vlad3", depth = 3 },
+]
+
+[[branches]]
+name = "Endgame"
+max_depth = 6
+special_levels = [
+    { name = "earth", depth = 1 },
+    { name = "air", depth = 2 },
+    { name = "fire", depth = 3 },
+    { name = "water", depth = 4 },
+    { name = "astral", depth = 5 },
+]
+
+# Branch connections
+[[connections]]
+from_branch = "Main"
+to_branch = "Mines"
+entrance_range = [3, 5]
+connection_type = "stairs"
+
+[[connections]]
+from_branch = "Mines"
+to_branch = "Sokoban"
+entrance_range = [3, 4]
+connection_type = "stairs"
+
+[[connections]]
+from_branch = "Main"
+to_branch = "Quest"
+entrance_depth = 14
+connection_type = "portal"
+
+[[connections]]
+from_branch = "Main"
+to_branch = "FortLudios"
+entrance_depth = 20
+connection_type = "portal"
+
+[[connections]]
+from_branch = "Main"
+to_branch = "Gehennom"
+entrance_depth = 26
+connection_type = "stairs"
+
+[[connections]]
+from_branch = "Gehennom"
+to_branch = "VladsTower"
+entrance_depth = 13
+connection_type = "portal"
+
+[[connections]]
+from_branch = "Gehennom"
+to_branch = "Endgame"
+entrance_depth = 21
+connection_type = "magic_portal"

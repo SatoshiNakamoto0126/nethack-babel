@@ -1,0 +1,11 @@
+code = "de"
+name = "Deutsch"
+name_en = "German"
+author = "NetHack Babel Team"
+version = "0.1.0"
+fallback = "en"
+is_cjk = false
+has_articles = true
+has_plural = true
+has_verb_conj = true
+has_gender = true

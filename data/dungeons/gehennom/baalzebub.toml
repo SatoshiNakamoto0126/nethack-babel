@@ -1,0 +1,38 @@
+[level]
+name = "baalzebub"
+branch = "Gehennom"
+flags = ["mazelevel", "noteleport", "hardfloor"]
+
+[map]
+halign = "center"
+valign = "center"
+data = """
+---------------------
+|...................|
+|.-----+----+-----.|
+|.|....|....|....|.|
+|.|....|....|....|.|
+|.|....|....|....|.|
+|.------+--------.|
+|...................|
+---------------------
+"""
+
+[[regions]]
+area = [0, 0, 20, 8]
+lit = false
+
+[[stairs]]
+direction = "up"
+x = 1
+y = 1
+
+[[stairs]]
+direction = "down"
+x = 19
+y = 7
+
+[[monsters]]
+id = "Baalzebub"
+x = 10
+y = 4

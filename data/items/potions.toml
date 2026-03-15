@@ -1,0 +1,342 @@
+# NetHack Babel — Potion definitions
+# Values sourced from NetHack 3.7 include/objects.h
+# POTION(name, desc, mgc, power, prob, cost, color, sn)
+# All potions: weight = 20, material = Glass, mergeable = true
+
+[[object]]
+id = 0
+name = "gain ability"
+class = "Potion"
+color = "Red"
+material = "Glass"
+weight = 20
+cost = 300
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "ruby"
+
+[[object]]
+id = 1
+name = "restore ability"
+class = "Potion"
+color = "BrightMagenta"
+material = "Glass"
+weight = 20
+cost = 100
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "pink"
+
+[[object]]
+id = 2
+name = "confusion"
+class = "Potion"
+color = "Orange"
+material = "Glass"
+weight = 20
+cost = 100
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "orange"
+
+[[object]]
+id = 3
+name = "blindness"
+class = "Potion"
+color = "Yellow"
+material = "Glass"
+weight = 20
+cost = 150
+prob = 30
+is_magic = true
+is_mergeable = true
+description = "yellow"
+
+[[object]]
+id = 4
+name = "paralysis"
+class = "Potion"
+color = "BrightGreen"
+material = "Glass"
+weight = 20
+cost = 300
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "emerald"
+
+[[object]]
+id = 5
+name = "speed"
+class = "Potion"
+color = "Green"
+material = "Glass"
+weight = 20
+cost = 200
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "dark green"
+
+[[object]]
+id = 6
+name = "levitation"
+class = "Potion"
+color = "Cyan"
+material = "Glass"
+weight = 20
+cost = 200
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "cyan"
+
+[[object]]
+id = 7
+name = "hallucination"
+class = "Potion"
+color = "Cyan"
+material = "Glass"
+weight = 20
+cost = 100
+prob = 30
+is_magic = true
+is_mergeable = true
+description = "sky blue"
+
+[[object]]
+id = 8
+name = "invisibility"
+class = "Potion"
+color = "BrightBlue"
+material = "Glass"
+weight = 20
+cost = 150
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "brilliant blue"
+
+[[object]]
+id = 9
+name = "see invisible"
+class = "Potion"
+color = "Magenta"
+material = "Glass"
+weight = 20
+cost = 50
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "magenta"
+
+[[object]]
+id = 10
+name = "healing"
+class = "Potion"
+color = "Magenta"
+material = "Glass"
+weight = 20
+cost = 20
+prob = 115
+is_magic = true
+is_mergeable = true
+description = "purple-red"
+
+[[object]]
+id = 11
+name = "extra healing"
+class = "Potion"
+color = "Red"
+material = "Glass"
+weight = 20
+cost = 100
+prob = 45
+is_magic = true
+is_mergeable = true
+description = "puce"
+
+[[object]]
+id = 12
+name = "gain level"
+class = "Potion"
+color = "White"
+material = "Glass"
+weight = 20
+cost = 300
+prob = 20
+is_magic = true
+is_mergeable = true
+description = "milky"
+
+[[object]]
+id = 13
+name = "enlightenment"
+class = "Potion"
+color = "Brown"
+material = "Glass"
+weight = 20
+cost = 200
+prob = 20
+is_magic = true
+is_mergeable = true
+description = "swirly"
+
+[[object]]
+id = 14
+name = "monster detection"
+class = "Potion"
+color = "White"
+material = "Glass"
+weight = 20
+cost = 150
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "bubbly"
+
+[[object]]
+id = 15
+name = "object detection"
+class = "Potion"
+color = "Gray"
+material = "Glass"
+weight = 20
+cost = 150
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "smoky"
+
+[[object]]
+id = 16
+name = "gain energy"
+class = "Potion"
+color = "White"
+material = "Glass"
+weight = 20
+cost = 150
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "cloudy"
+
+[[object]]
+id = 17
+name = "sleeping"
+class = "Potion"
+color = "Gray"
+material = "Glass"
+weight = 20
+cost = 100
+prob = 40
+is_magic = true
+is_mergeable = true
+description = "effervescent"
+
+[[object]]
+id = 18
+name = "full healing"
+class = "Potion"
+color = "Black"
+material = "Glass"
+weight = 20
+cost = 200
+prob = 10
+is_magic = true
+is_mergeable = true
+description = "black"
+
+[[object]]
+id = 19
+name = "polymorph"
+class = "Potion"
+color = "Yellow"
+material = "Glass"
+weight = 20
+cost = 200
+prob = 10
+is_magic = true
+is_mergeable = true
+description = "golden"
+
+[[object]]
+id = 20
+name = "booze"
+class = "Potion"
+color = "Brown"
+material = "Glass"
+weight = 20
+cost = 50
+prob = 40
+is_magic = false
+is_mergeable = true
+description = "brown"
+
+[[object]]
+id = 21
+name = "sickness"
+class = "Potion"
+color = "Cyan"
+material = "Glass"
+weight = 20
+cost = 50
+prob = 40
+is_magic = false
+is_mergeable = true
+description = "fizzy"
+
+[[object]]
+id = 22
+name = "fruit juice"
+class = "Potion"
+color = "Black"
+material = "Glass"
+weight = 20
+cost = 50
+prob = 40
+is_magic = false
+is_mergeable = true
+description = "dark"
+
+[[object]]
+id = 23
+name = "acid"
+class = "Potion"
+color = "White"
+material = "Glass"
+weight = 20
+cost = 250
+prob = 10
+is_magic = false
+is_mergeable = true
+description = "white"
+
+[[object]]
+id = 24
+name = "oil"
+class = "Potion"
+color = "Brown"
+material = "Glass"
+weight = 20
+cost = 250
+prob = 30
+is_magic = false
+is_mergeable = true
+description = "murky"
+
+[[object]]
+id = 25
+name = "water"
+class = "Potion"
+color = "Cyan"
+material = "Glass"
+weight = 20
+cost = 100
+prob = 80
+is_magic = false
+is_mergeable = true
+description = "clear"

@@ -2,21 +2,37 @@
 name = "nethack-babel"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "NetHack Babel CLI - a modern Rust reimplementation of NetHack"
+keywords = ["nethack", "roguelike", "game", "terminal"]
+categories = ["games", "command-line-utilities"]
+default-run = "nethack-babel"
+
+[[bin]]
+name = "nethack-babel"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
-bincode = "2"
+bincode = { version = "2", features = ["serde"] }
 tracing = { workspace = true }
 tracing-subscriber = "0.3"
 nethack-babel-engine = { path = "../engine" }
 nethack-babel-data = { path = "../data" }
 nethack-babel-i18n = { path = "../i18n" }
+hecs = "0.10"
+fluent = "0.16"
 nethack-babel-tui = { path = "../tui" }
 nethack-babel-audio = { path = "../audio", optional = true }
 steamworks = { version = "0.11", optional = true }
 serde = { workspace = true }
 toml = { workspace = true }
+rand = "0.9"
+rand_pcg = "0.9"
+crossterm = "0.28"
 
 [features]
 default = ["audio"]

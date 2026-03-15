@@ -1,0 +1,30 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== wand of fire ===
+qty=1 identified buc=blessed -> a blessed wand of fire
+qty=1 identified buc=uncursed -> an uncursed wand of fire
+qty=1 identified buc=cursed -> a cursed wand of fire
+qty=1 identified buc=buc_unknown -> a wand of fire
+qty=1 unidentified -> an oak wand
+qty=1 called=zap! -> a wand called zap!
+qty=3 identified buc=blessed -> 3 blessed wand of fires
+qty=3 identified buc=uncursed -> 3 uncursed wand of fires
+qty=3 identified buc=cursed -> 3 cursed wand of fires
+qty=3 identified buc=buc_unknown -> 3 wand of fires
+qty=3 unidentified -> 3 oak wands
+qty=3 called=zap! -> 3 wand called zap!s
+=== wand of death ===
+qty=1 identified buc=blessed -> a blessed wand of death
+qty=1 identified buc=uncursed -> an uncursed wand of death
+qty=1 identified buc=cursed -> a cursed wand of death
+qty=1 identified buc=buc_unknown -> a wand of death
+qty=1 unidentified -> an ebony wand
+qty=1 called=zap! -> a wand called zap!
+qty=3 identified buc=blessed -> 3 blessed wand of deaths
+qty=3 identified buc=uncursed -> 3 uncursed wand of deaths
+qty=3 identified buc=cursed -> 3 cursed wand of deaths
+qty=3 identified buc=buc_unknown -> 3 wand of deaths
+qty=3 unidentified -> 3 ebony wands
+qty=3 called=zap! -> 3 wand called zap!s

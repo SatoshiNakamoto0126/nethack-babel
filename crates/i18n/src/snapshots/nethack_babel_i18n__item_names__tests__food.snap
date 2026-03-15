@@ -1,0 +1,31 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== food ration ===
+qty=1 buc=blessed -> a blessed food ration
+qty=1 buc=uncursed -> an uncursed food ration
+qty=1 buc=cursed -> a cursed food ration
+qty=1 buc=buc_unknown -> a food ration
+qty=3 buc=blessed -> 3 blessed food rations
+qty=3 buc=uncursed -> 3 uncursed food rations
+qty=3 buc=cursed -> 3 cursed food rations
+qty=3 buc=buc_unknown -> 3 food rations
+=== apple ===
+qty=1 buc=blessed -> a blessed apple
+qty=1 buc=uncursed -> an uncursed apple
+qty=1 buc=cursed -> a cursed apple
+qty=1 buc=buc_unknown -> an apple
+qty=3 buc=blessed -> 3 blessed apples
+qty=3 buc=uncursed -> 3 uncursed apples
+qty=3 buc=cursed -> 3 cursed apples
+qty=3 buc=buc_unknown -> 3 apples
+=== tripe ration ===
+qty=1 buc=blessed -> a blessed tripe ration
+qty=1 buc=uncursed -> an uncursed tripe ration
+qty=1 buc=cursed -> a cursed tripe ration
+qty=1 buc=buc_unknown -> a tripe ration
+qty=3 buc=blessed -> 3 blessed tripe rations
+qty=3 buc=uncursed -> 3 uncursed tripe rations
+qty=3 buc=cursed -> 3 cursed tripe rations
+qty=3 buc=buc_unknown -> 3 tripe rations

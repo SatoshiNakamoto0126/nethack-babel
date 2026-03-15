@@ -1,0 +1,222 @@
+[level]
+name = "sokoban1b"
+branch = "Sokoban"
+flags = ["noteleport", "hardfloor", "nodig"]
+
+[map]
+halign = "center"
+valign = "center"
+data = """
+  ------------------------
+  |......................|
+  |..-------------------.|
+----.|    -----        |.|
+|..|.--  --...|        |.|
+|.....|--|....|        |.|
+|.....|..|....|        |.|
+--....|......--        |.|
+ |.......|...|   ------|.|
+ |....|..|...| --|.....|.|
+ |....|--|...| |.+.....|.|
+ |.......|..-- |-|.....|.|
+ ----....|.--  |.+.....+.|
+    ---.--.|   |-|.....|--
+     |.....|   |.+.....|
+     |..|..|   --|.....|
+     -------     -------
+"""
+
+[[objects]]
+id = "boulder"
+x = 4
+y = 4
+
+[[objects]]
+id = "boulder"
+x = 2
+y = 6
+
+[[objects]]
+id = "boulder"
+x = 3
+y = 6
+
+[[objects]]
+id = "boulder"
+x = 4
+y = 7
+
+[[objects]]
+id = "boulder"
+x = 5
+y = 7
+
+[[objects]]
+id = "boulder"
+x = 2
+y = 8
+
+[[objects]]
+id = "boulder"
+x = 5
+y = 8
+
+[[objects]]
+id = "boulder"
+x = 3
+y = 9
+
+[[objects]]
+id = "boulder"
+x = 4
+y = 9
+
+[[objects]]
+id = "boulder"
+x = 3
+y = 10
+
+[[objects]]
+id = "boulder"
+x = 5
+y = 10
+
+[[objects]]
+id = "boulder"
+x = 6
+y = 12
+
+[[objects]]
+id = "boulder"
+x = 7
+y = 14
+
+[[objects]]
+id = "boulder"
+x = 11
+y = 5
+
+[[objects]]
+id = "boulder"
+x = 12
+y = 6
+
+[[objects]]
+id = "boulder"
+x = 10
+y = 7
+
+[[objects]]
+id = "boulder"
+x = 11
+y = 7
+
+[[objects]]
+id = "boulder"
+x = 10
+y = 8
+
+[[objects]]
+id = "boulder"
+x = 12
+y = 9
+
+[[objects]]
+id = "boulder"
+x = 11
+y = 10
+
+[[traps]]
+type = "hole"
+x = 5
+y = 1
+
+[[traps]]
+type = "hole"
+x = 6
+y = 1
+
+[[traps]]
+type = "hole"
+x = 7
+y = 1
+
+[[traps]]
+type = "hole"
+x = 8
+y = 1
+
+[[traps]]
+type = "hole"
+x = 9
+y = 1
+
+[[traps]]
+type = "hole"
+x = 10
+y = 1
+
+[[traps]]
+type = "hole"
+x = 11
+y = 1
+
+[[traps]]
+type = "hole"
+x = 12
+y = 1
+
+[[traps]]
+type = "hole"
+x = 13
+y = 1
+
+[[traps]]
+type = "hole"
+x = 14
+y = 1
+
+[[traps]]
+type = "hole"
+x = 15
+y = 1
+
+[[traps]]
+type = "hole"
+x = 16
+y = 1
+
+[[traps]]
+type = "hole"
+x = 17
+y = 1
+
+[[traps]]
+type = "hole"
+x = 18
+y = 1
+
+[[traps]]
+type = "hole"
+x = 19
+y = 1
+
+[[traps]]
+type = "hole"
+x = 20
+y = 1
+
+[[traps]]
+type = "hole"
+x = 21
+y = 1
+
+[[traps]]
+type = "hole"
+x = 22
+y = 1
+
+[[stairs]]
+direction = "down"
+x = 6
+y = 15

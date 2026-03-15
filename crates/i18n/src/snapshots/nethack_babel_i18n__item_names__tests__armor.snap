@@ -1,0 +1,103 @@
+---
+source: crates/i18n/src/item_names.rs
+expression: output
+---
+=== plate mail ===
+qty=1 buc=blessed ench=None -> a blessed plate mail
+qty=1 buc=blessed ench=Some(0) -> a blessed +0 plate mail
+qty=1 buc=blessed ench=Some(2) -> a blessed +2 plate mail
+qty=1 buc=blessed ench=Some(5) -> a blessed +5 plate mail
+qty=1 buc=uncursed ench=None -> an uncursed plate mail
+qty=1 buc=uncursed ench=Some(0) -> an uncursed +0 plate mail
+qty=1 buc=uncursed ench=Some(2) -> an uncursed +2 plate mail
+qty=1 buc=uncursed ench=Some(5) -> an uncursed +5 plate mail
+qty=1 buc=cursed ench=None -> a cursed plate mail
+qty=1 buc=cursed ench=Some(0) -> a cursed +0 plate mail
+qty=1 buc=cursed ench=Some(2) -> a cursed +2 plate mail
+qty=1 buc=cursed ench=Some(5) -> a cursed +5 plate mail
+qty=1 buc=buc_unknown ench=None -> a plate mail
+qty=1 buc=buc_unknown ench=Some(0) -> a +0 plate mail
+qty=1 buc=buc_unknown ench=Some(2) -> a +2 plate mail
+qty=1 buc=buc_unknown ench=Some(5) -> a +5 plate mail
+qty=3 buc=blessed ench=None -> 3 blessed plate mails
+qty=3 buc=blessed ench=Some(0) -> 3 blessed +0 plate mails
+qty=3 buc=blessed ench=Some(2) -> 3 blessed +2 plate mails
+qty=3 buc=blessed ench=Some(5) -> 3 blessed +5 plate mails
+qty=3 buc=uncursed ench=None -> 3 uncursed plate mails
+qty=3 buc=uncursed ench=Some(0) -> 3 uncursed +0 plate mails
+qty=3 buc=uncursed ench=Some(2) -> 3 uncursed +2 plate mails
+qty=3 buc=uncursed ench=Some(5) -> 3 uncursed +5 plate mails
+qty=3 buc=cursed ench=None -> 3 cursed plate mails
+qty=3 buc=cursed ench=Some(0) -> 3 cursed +0 plate mails
+qty=3 buc=cursed ench=Some(2) -> 3 cursed +2 plate mails
+qty=3 buc=cursed ench=Some(5) -> 3 cursed +5 plate mails
+qty=3 buc=buc_unknown ench=None -> 3 plate mails
+qty=3 buc=buc_unknown ench=Some(0) -> 3 +0 plate mails
+qty=3 buc=buc_unknown ench=Some(2) -> 3 +2 plate mails
+qty=3 buc=buc_unknown ench=Some(5) -> 3 +5 plate mails
+=== leather armor ===
+qty=1 buc=blessed ench=None -> a blessed leather armor
+qty=1 buc=blessed ench=Some(0) -> a blessed +0 leather armor
+qty=1 buc=blessed ench=Some(2) -> a blessed +2 leather armor
+qty=1 buc=blessed ench=Some(5) -> a blessed +5 leather armor
+qty=1 buc=uncursed ench=None -> an uncursed leather armor
+qty=1 buc=uncursed ench=Some(0) -> an uncursed +0 leather armor
+qty=1 buc=uncursed ench=Some(2) -> an uncursed +2 leather armor
+qty=1 buc=uncursed ench=Some(5) -> an uncursed +5 leather armor
+qty=1 buc=cursed ench=None -> a cursed leather armor
+qty=1 buc=cursed ench=Some(0) -> a cursed +0 leather armor
+qty=1 buc=cursed ench=Some(2) -> a cursed +2 leather armor
+qty=1 buc=cursed ench=Some(5) -> a cursed +5 leather armor
+qty=1 buc=buc_unknown ench=None -> a leather armor
+qty=1 buc=buc_unknown ench=Some(0) -> a +0 leather armor
+qty=1 buc=buc_unknown ench=Some(2) -> a +2 leather armor
+qty=1 buc=buc_unknown ench=Some(5) -> a +5 leather armor
+qty=3 buc=blessed ench=None -> 3 blessed leather armors
+qty=3 buc=blessed ench=Some(0) -> 3 blessed +0 leather armors
+qty=3 buc=blessed ench=Some(2) -> 3 blessed +2 leather armors
+qty=3 buc=blessed ench=Some(5) -> 3 blessed +5 leather armors
+qty=3 buc=uncursed ench=None -> 3 uncursed leather armors
+qty=3 buc=uncursed ench=Some(0) -> 3 uncursed +0 leather armors
+qty=3 buc=uncursed ench=Some(2) -> 3 uncursed +2 leather armors
+qty=3 buc=uncursed ench=Some(5) -> 3 uncursed +5 leather armors
+qty=3 buc=cursed ench=None -> 3 cursed leather armors
+qty=3 buc=cursed ench=Some(0) -> 3 cursed +0 leather armors
+qty=3 buc=cursed ench=Some(2) -> 3 cursed +2 leather armors
+qty=3 buc=cursed ench=Some(5) -> 3 cursed +5 leather armors
+qty=3 buc=buc_unknown ench=None -> 3 leather armors
+qty=3 buc=buc_unknown ench=Some(0) -> 3 +0 leather armors
+qty=3 buc=buc_unknown ench=Some(2) -> 3 +2 leather armors
+qty=3 buc=buc_unknown ench=Some(5) -> 3 +5 leather armors
+=== elven cloak ===
+qty=1 buc=blessed ench=None -> a blessed elven cloak
+qty=1 buc=blessed ench=Some(0) -> a blessed +0 elven cloak
+qty=1 buc=blessed ench=Some(2) -> a blessed +2 elven cloak
+qty=1 buc=blessed ench=Some(5) -> a blessed +5 elven cloak
+qty=1 buc=uncursed ench=None -> an uncursed elven cloak
+qty=1 buc=uncursed ench=Some(0) -> an uncursed +0 elven cloak
+qty=1 buc=uncursed ench=Some(2) -> an uncursed +2 elven cloak
+qty=1 buc=uncursed ench=Some(5) -> an uncursed +5 elven cloak
+qty=1 buc=cursed ench=None -> a cursed elven cloak
+qty=1 buc=cursed ench=Some(0) -> a cursed +0 elven cloak
+qty=1 buc=cursed ench=Some(2) -> a cursed +2 elven cloak
+qty=1 buc=cursed ench=Some(5) -> a cursed +5 elven cloak
+qty=1 buc=buc_unknown ench=None -> an elven cloak
+qty=1 buc=buc_unknown ench=Some(0) -> an +0 elven cloak
+qty=1 buc=buc_unknown ench=Some(2) -> an +2 elven cloak
+qty=1 buc=buc_unknown ench=Some(5) -> an +5 elven cloak
+qty=3 buc=blessed ench=None -> 3 blessed elven cloaks
+qty=3 buc=blessed ench=Some(0) -> 3 blessed +0 elven cloaks
+qty=3 buc=blessed ench=Some(2) -> 3 blessed +2 elven cloaks
+qty=3 buc=blessed ench=Some(5) -> 3 blessed +5 elven cloaks
+qty=3 buc=uncursed ench=None -> 3 uncursed elven cloaks
+qty=3 buc=uncursed ench=Some(0) -> 3 uncursed +0 elven cloaks
+qty=3 buc=uncursed ench=Some(2) -> 3 uncursed +2 elven cloaks
+qty=3 buc=uncursed ench=Some(5) -> 3 uncursed +5 elven cloaks
+qty=3 buc=cursed ench=None -> 3 cursed elven cloaks
+qty=3 buc=cursed ench=Some(0) -> 3 cursed +0 elven cloaks
+qty=3 buc=cursed ench=Some(2) -> 3 cursed +2 elven cloaks
+qty=3 buc=cursed ench=Some(5) -> 3 cursed +5 elven cloaks
+qty=3 buc=buc_unknown ench=None -> 3 elven cloaks
+qty=3 buc=buc_unknown ench=Some(0) -> 3 +0 elven cloaks
+qty=3 buc=buc_unknown ench=Some(2) -> 3 +2 elven cloaks
+qty=3 buc=buc_unknown ench=Some(5) -> 3 +5 elven cloaks

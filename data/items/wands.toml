@@ -1,0 +1,340 @@
+# NetHack Babel — Wand definitions
+# Values sourced from NetHack 3.7 include/objects.h
+# WAND(name, typ, prob, cost, mgc, dir, metal, color, sn)
+# All wands: weight = 7, mergeable = false
+
+[[object]]
+id = 0
+name = "light"
+class = "Wand"
+color = "BrightCyan"
+material = "Glass"
+weight = 7
+cost = 100
+prob = 95
+is_magic = true
+is_mergeable = false
+direction = "nodir"
+description = "glass"
+
+[[object]]
+id = 1
+name = "secret door detection"
+class = "Wand"
+color = "Brown"
+material = "Wood"
+weight = 7
+cost = 150
+prob = 50
+is_magic = true
+is_mergeable = false
+direction = "nodir"
+description = "balsa"
+
+[[object]]
+id = 2
+name = "enlightenment"
+class = "Wand"
+color = "BrightCyan"
+material = "Glass"
+weight = 7
+cost = 150
+prob = 15
+is_magic = true
+is_mergeable = false
+direction = "nodir"
+description = "crystal"
+
+[[object]]
+id = 3
+name = "create monster"
+class = "Wand"
+color = "Brown"
+material = "Wood"
+weight = 7
+cost = 200
+prob = 45
+is_magic = true
+is_mergeable = false
+direction = "nodir"
+description = "maple"
+
+[[object]]
+id = 4
+name = "wishing"
+class = "Wand"
+color = "Brown"
+material = "Wood"
+weight = 7
+cost = 500
+prob = 5
+is_magic = true
+is_mergeable = false
+direction = "nodir"
+description = "pine"
+
+[[object]]
+id = 5
+name = "nothing"
+class = "Wand"
+color = "Brown"
+material = "Wood"
+weight = 7
+cost = 100
+prob = 25
+is_magic = false
+is_mergeable = false
+direction = "immediate"
+description = "oak"
+
+[[object]]
+id = 6
+name = "striking"
+class = "Wand"
+color = "Brown"
+material = "Wood"
+weight = 7
+cost = 150
+prob = 75
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "ebony"
+
+[[object]]
+id = 7
+name = "make invisible"
+class = "Wand"
+color = "Gray"
+material = "Mineral"
+weight = 7
+cost = 150
+prob = 45
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "marble"
+
+[[object]]
+id = 8
+name = "slow monster"
+class = "Wand"
+color = "Cyan"
+material = "Metal"
+weight = 7
+cost = 150
+prob = 50
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "tin"
+
+[[object]]
+id = 9
+name = "speed monster"
+class = "Wand"
+color = "Yellow"
+material = "Copper"
+weight = 7
+cost = 150
+prob = 50
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "brass"
+
+[[object]]
+id = 10
+name = "undead turning"
+class = "Wand"
+color = "Yellow"
+material = "Copper"
+weight = 7
+cost = 150
+prob = 50
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "copper"
+
+[[object]]
+id = 11
+name = "polymorph"
+class = "Wand"
+color = "Gray"
+material = "Silver"
+weight = 7
+cost = 200
+prob = 45
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "silver"
+
+[[object]]
+id = 12
+name = "cancellation"
+class = "Wand"
+color = "White"
+material = "Platinum"
+weight = 7
+cost = 200
+prob = 45
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "platinum"
+
+[[object]]
+id = 13
+name = "teleportation"
+class = "Wand"
+color = "BrightCyan"
+material = "Metal"
+weight = 7
+cost = 200
+prob = 45
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "iridium"
+
+[[object]]
+id = 14
+name = "opening"
+class = "Wand"
+color = "Cyan"
+material = "Metal"
+weight = 7
+cost = 150
+prob = 25
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "zinc"
+
+[[object]]
+id = 15
+name = "locking"
+class = "Wand"
+color = "Cyan"
+material = "Metal"
+weight = 7
+cost = 150
+prob = 25
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "aluminum"
+
+[[object]]
+id = 16
+name = "probing"
+class = "Wand"
+color = "Cyan"
+material = "Metal"
+weight = 7
+cost = 150
+prob = 30
+is_magic = true
+is_mergeable = false
+direction = "immediate"
+description = "uranium"
+
+[[object]]
+id = 17
+name = "digging"
+class = "Wand"
+color = "Cyan"
+material = "Iron"
+weight = 7
+cost = 150
+prob = 55
+is_magic = true
+is_mergeable = false
+direction = "ray"
+description = "iron"
+
+[[object]]
+id = 18
+name = "magic missile"
+class = "Wand"
+color = "Cyan"
+material = "Iron"
+weight = 7
+cost = 150
+prob = 50
+is_magic = true
+is_mergeable = false
+direction = "ray"
+description = "steel"
+
+[[object]]
+id = 19
+name = "fire"
+class = "Wand"
+color = "Cyan"
+material = "Iron"
+weight = 7
+cost = 175
+prob = 40
+is_magic = true
+is_mergeable = false
+direction = "ray"
+description = "hexagonal"
+
+[[object]]
+id = 20
+name = "cold"
+class = "Wand"
+color = "Cyan"
+material = "Iron"
+weight = 7
+cost = 175
+prob = 40
+is_magic = true
+is_mergeable = false
+direction = "ray"
+description = "short"
+
+[[object]]
+id = 21
+name = "sleep"
+class = "Wand"
+color = "Cyan"
+material = "Iron"
+weight = 7
+cost = 175
+prob = 50
+is_magic = true
+is_mergeable = false
+direction = "ray"
+description = "runed"
+
+[[object]]
+id = 22
+name = "death"
+class = "Wand"
+color = "Cyan"
+material = "Iron"
+weight = 7
+cost = 500
+prob = 5
+is_magic = true
+is_mergeable = false
+direction = "ray"
+description = "long"
+
+[[object]]
+id = 23
+name = "lightning"
+class = "Wand"
+color = "Cyan"
+material = "Iron"
+weight = 7
+cost = 175
+prob = 40
+is_magic = true
+is_mergeable = false
+direction = "ray"
+description = "curved"

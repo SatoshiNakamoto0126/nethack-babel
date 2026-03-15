@@ -1,0 +1,34 @@
+# 量词映射表 - Chinese counter words / classifiers
+# Format: flat [class] and [name] sections for Classifier::load_from_toml()
+
+default = "个"
+
+[class]
+weapon = "把"
+armor = "件"
+ring = "枚"
+amulet = "个"
+tool = "个"
+food = "个"
+potion = "瓶"
+scroll = "张"
+spellbook = "本"
+wand = "支"
+coin = "枚"
+gem = "颗"
+
+[name]
+bow = "张"
+arrow = "支"
+crossbow_bolt = "支"
+dart = "支"
+shuriken = "枚"
+boomerang = "个"
+lamp = "盏"
+candle = "支"
+key = "把"
+mirror = "面"
+horn = "把"
+corpse = "具"
+egg = "枚"
+tin = "罐"

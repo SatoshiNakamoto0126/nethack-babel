@@ -1,0 +1,1521 @@
+# NetHack Babel — Armor definitions
+# Values sourced from NetHack 3.7 include/objects.h
+#
+# ARMOR macro: ARMOR(name, desc, kn, mgc, blk, power, prob, delay, wt,
+#                    cost, ac, can, sub, metal, color, sn)
+# Note: ac_bonus in TOML = 10 - ac (the raw 'ac' param from the macro)
+# ArmorCategory: Suit=0, Shield=1, Helm=2, Gloves=3, Boots=4, Cloak=5, Shirt=6
+
+# ============================================================================
+# Helmets (ARM_HELM)
+# ============================================================================
+
+[[object]]
+id = 0
+name = "elven leather helm"
+class = "Armor"
+sub = "Helm"
+color = "Brown"
+material = "Leather"
+weight = 3
+cost = 8
+prob = 6
+ac_bonus = 1
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "leather hat"
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 1
+name = "orcish helm"
+class = "Armor"
+sub = "Helm"
+color = "Black"
+material = "Iron"
+weight = 30
+cost = 10
+prob = 6
+ac_bonus = 1
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "iron skull cap"
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 2
+name = "dwarvish iron helm"
+class = "Armor"
+sub = "Helm"
+color = "Cyan"
+material = "Iron"
+weight = 40
+cost = 20
+prob = 6
+ac_bonus = 2
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "hard hat"
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 3
+name = "fedora"
+class = "Armor"
+sub = "Helm"
+color = "Brown"
+material = "Cloth"
+weight = 3
+cost = 1
+prob = 0
+ac_bonus = 0
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 4
+name = "cornuthaum"
+class = "Armor"
+sub = "Helm"
+color = "Blue"
+material = "Cloth"
+weight = 4
+cost = 80
+prob = 3
+ac_bonus = 0
+magic_cancel = 1
+is_magic = true
+is_bulky = false
+description = "conical hat"
+conferred_property = "Clairvoyant"
+use_delay = 1
+
+[[object]]
+id = 5
+name = "dunce cap"
+class = "Armor"
+sub = "Helm"
+color = "Blue"
+material = "Cloth"
+weight = 4
+cost = 1
+prob = 3
+ac_bonus = 0
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "conical hat"
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 6
+name = "dented pot"
+class = "Armor"
+sub = "Helm"
+color = "Black"
+material = "Iron"
+weight = 10
+cost = 8
+prob = 2
+ac_bonus = 1
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 7
+name = "helm of brilliance"
+class = "Armor"
+sub = "Helm"
+color = "White"
+material = "Glass"
+weight = 40
+cost = 50
+prob = 3
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "crystal helmet"
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 8
+name = "helmet"
+class = "Armor"
+sub = "Helm"
+color = "Cyan"
+material = "Iron"
+weight = 30
+cost = 10
+prob = 10
+ac_bonus = 1
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "plumed helmet"
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 9
+name = "helm of caution"
+class = "Armor"
+sub = "Helm"
+color = "Green"
+material = "Iron"
+weight = 50
+cost = 50
+prob = 3
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "etched helmet"
+conferred_property = "Warning"
+use_delay = 1
+
+[[object]]
+id = 10
+name = "helm of opposite alignment"
+class = "Armor"
+sub = "Helm"
+color = "Cyan"
+material = "Iron"
+weight = 50
+cost = 50
+prob = 6
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "crested helmet"
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 11
+name = "helm of telepathy"
+class = "Armor"
+sub = "Helm"
+color = "Cyan"
+material = "Iron"
+weight = 50
+cost = 50
+prob = 2
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "visored helmet"
+conferred_property = "Telepat"
+use_delay = 1
+
+# ============================================================================
+# Dragon Scale Mail (ARM_SUIT, dragon hide)
+# DRGN_ARMR: ARMOR(name, NoDes, 1, mgc, 1, power, 0, 5, 40, cost, ac, 0,
+#                  ARM_SUIT, DRAGON_HIDE, color, sn)
+# ============================================================================
+
+[[object]]
+id = 12
+name = "gray dragon scale mail"
+class = "Armor"
+sub = "Suit"
+color = "Gray"
+material = "DragonHide"
+weight = 40
+cost = 1200
+prob = 0
+ac_bonus = 9
+magic_cancel = 0
+is_magic = true
+is_bulky = true
+description = ""
+conferred_property = "Antimagic"
+use_delay = 5
+
+[[object]]
+id = 13
+name = "gold dragon scale mail"
+class = "Armor"
+sub = "Suit"
+color = "Yellow"
+material = "DragonHide"
+weight = 40
+cost = 900
+prob = 0
+ac_bonus = 9
+magic_cancel = 0
+is_magic = true
+is_bulky = true
+description = ""
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 14
+name = "silver dragon scale mail"
+class = "Armor"
+sub = "Suit"
+color = "BrightCyan"
+material = "DragonHide"
+weight = 40
+cost = 1200
+prob = 0
+ac_bonus = 9
+magic_cancel = 0
+is_magic = true
+is_bulky = true
+description = ""
+conferred_property = "Reflecting"
+use_delay = 5
+
+[[object]]
+id = 15
+name = "red dragon scale mail"
+class = "Armor"
+sub = "Suit"
+color = "Red"
+material = "DragonHide"
+weight = 40
+cost = 900
+prob = 0
+ac_bonus = 9
+magic_cancel = 0
+is_magic = true
+is_bulky = true
+description = ""
+conferred_property = "FireRes"
+use_delay = 5
+
+[[object]]
+id = 16
+name = "white dragon scale mail"
+class = "Armor"
+sub = "Suit"
+color = "White"
+material = "DragonHide"
+weight = 40
+cost = 900
+prob = 0
+ac_bonus = 9
+magic_cancel = 0
+is_magic = true
+is_bulky = true
+description = ""
+conferred_property = "ColdRes"
+use_delay = 5
+
+[[object]]
+id = 17
+name = "orange dragon scale mail"
+class = "Armor"
+sub = "Suit"
+color = "Orange"
+material = "DragonHide"
+weight = 40
+cost = 900
+prob = 0
+ac_bonus = 9
+magic_cancel = 0
+is_magic = true
+is_bulky = true
+description = ""
+conferred_property = "SleepRes"
+use_delay = 5
+
+[[object]]
+id = 18
+name = "black dragon scale mail"
+class = "Armor"
+sub = "Suit"
+color = "Black"
+material = "DragonHide"
+weight = 40
+cost = 1200
+prob = 0
+ac_bonus = 9
+magic_cancel = 0
+is_magic = true
+is_bulky = true
+description = ""
+conferred_property = "DisintRes"
+use_delay = 5
+
+[[object]]
+id = 19
+name = "blue dragon scale mail"
+class = "Armor"
+sub = "Suit"
+color = "Blue"
+material = "DragonHide"
+weight = 40
+cost = 900
+prob = 0
+ac_bonus = 9
+magic_cancel = 0
+is_magic = true
+is_bulky = true
+description = ""
+conferred_property = "ShockRes"
+use_delay = 5
+
+[[object]]
+id = 20
+name = "green dragon scale mail"
+class = "Armor"
+sub = "Suit"
+color = "Green"
+material = "DragonHide"
+weight = 40
+cost = 900
+prob = 0
+ac_bonus = 9
+magic_cancel = 0
+is_magic = true
+is_bulky = true
+description = ""
+conferred_property = "PoisonRes"
+use_delay = 5
+
+[[object]]
+id = 21
+name = "yellow dragon scale mail"
+class = "Armor"
+sub = "Suit"
+color = "Yellow"
+material = "DragonHide"
+weight = 40
+cost = 900
+prob = 0
+ac_bonus = 9
+magic_cancel = 0
+is_magic = true
+is_bulky = true
+description = ""
+conferred_property = "AcidRes"
+use_delay = 5
+
+# ============================================================================
+# Dragon Scales (ARM_SUIT, dragon hide, non-magic)
+# ============================================================================
+
+[[object]]
+id = 22
+name = "gray dragon scales"
+class = "Armor"
+sub = "Suit"
+color = "Gray"
+material = "DragonHide"
+weight = 40
+cost = 700
+prob = 0
+ac_bonus = 3
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = "Antimagic"
+use_delay = 5
+
+[[object]]
+id = 23
+name = "gold dragon scales"
+class = "Armor"
+sub = "Suit"
+color = "Yellow"
+material = "DragonHide"
+weight = 40
+cost = 500
+prob = 0
+ac_bonus = 3
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 24
+name = "silver dragon scales"
+class = "Armor"
+sub = "Suit"
+color = "BrightCyan"
+material = "DragonHide"
+weight = 40
+cost = 700
+prob = 0
+ac_bonus = 3
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = "Reflecting"
+use_delay = 5
+
+[[object]]
+id = 25
+name = "red dragon scales"
+class = "Armor"
+sub = "Suit"
+color = "Red"
+material = "DragonHide"
+weight = 40
+cost = 500
+prob = 0
+ac_bonus = 3
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = "FireRes"
+use_delay = 5
+
+[[object]]
+id = 26
+name = "white dragon scales"
+class = "Armor"
+sub = "Suit"
+color = "White"
+material = "DragonHide"
+weight = 40
+cost = 500
+prob = 0
+ac_bonus = 3
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = "ColdRes"
+use_delay = 5
+
+[[object]]
+id = 27
+name = "orange dragon scales"
+class = "Armor"
+sub = "Suit"
+color = "Orange"
+material = "DragonHide"
+weight = 40
+cost = 500
+prob = 0
+ac_bonus = 3
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = "SleepRes"
+use_delay = 5
+
+[[object]]
+id = 28
+name = "black dragon scales"
+class = "Armor"
+sub = "Suit"
+color = "Black"
+material = "DragonHide"
+weight = 40
+cost = 700
+prob = 0
+ac_bonus = 3
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = "DisintRes"
+use_delay = 5
+
+[[object]]
+id = 29
+name = "blue dragon scales"
+class = "Armor"
+sub = "Suit"
+color = "Blue"
+material = "DragonHide"
+weight = 40
+cost = 500
+prob = 0
+ac_bonus = 3
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = "ShockRes"
+use_delay = 5
+
+[[object]]
+id = 30
+name = "green dragon scales"
+class = "Armor"
+sub = "Suit"
+color = "Green"
+material = "DragonHide"
+weight = 40
+cost = 500
+prob = 0
+ac_bonus = 3
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = "PoisonRes"
+use_delay = 5
+
+[[object]]
+id = 31
+name = "yellow dragon scales"
+class = "Armor"
+sub = "Suit"
+color = "Yellow"
+material = "DragonHide"
+weight = 40
+cost = 500
+prob = 0
+ac_bonus = 3
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = "AcidRes"
+use_delay = 5
+
+# ============================================================================
+# Other Suits of Armor (ARM_SUIT)
+# ============================================================================
+
+[[object]]
+id = 32
+name = "plate mail"
+class = "Armor"
+sub = "Suit"
+color = "Cyan"
+material = "Iron"
+weight = 450
+cost = 600
+prob = 44
+ac_bonus = 7
+magic_cancel = 2
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 33
+name = "crystal plate mail"
+class = "Armor"
+sub = "Suit"
+color = "White"
+material = "Glass"
+weight = 415
+cost = 820
+prob = 10
+ac_bonus = 7
+magic_cancel = 2
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 34
+name = "bronze plate mail"
+class = "Armor"
+sub = "Suit"
+color = "Yellow"
+material = "Copper"
+weight = 450
+cost = 400
+prob = 25
+ac_bonus = 6
+magic_cancel = 1
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 35
+name = "splint mail"
+class = "Armor"
+sub = "Suit"
+color = "Cyan"
+material = "Iron"
+weight = 400
+cost = 80
+prob = 62
+ac_bonus = 6
+magic_cancel = 1
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 36
+name = "banded mail"
+class = "Armor"
+sub = "Suit"
+color = "Cyan"
+material = "Iron"
+weight = 350
+cost = 90
+prob = 72
+ac_bonus = 6
+magic_cancel = 1
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 37
+name = "dwarvish mithril-coat"
+class = "Armor"
+sub = "Suit"
+color = "Gray"
+material = "Mithril"
+weight = 150
+cost = 240
+prob = 10
+ac_bonus = 6
+magic_cancel = 2
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 38
+name = "elven mithril-coat"
+class = "Armor"
+sub = "Suit"
+color = "Gray"
+material = "Mithril"
+weight = 150
+cost = 240
+prob = 15
+ac_bonus = 5
+magic_cancel = 2
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 39
+name = "chain mail"
+class = "Armor"
+sub = "Suit"
+color = "Cyan"
+material = "Iron"
+weight = 300
+cost = 75
+prob = 72
+ac_bonus = 5
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 40
+name = "orcish chain mail"
+class = "Armor"
+sub = "Suit"
+color = "Black"
+material = "Iron"
+weight = 300
+cost = 75
+prob = 20
+ac_bonus = 4
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = "crude chain mail"
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 41
+name = "scale mail"
+class = "Armor"
+sub = "Suit"
+color = "Cyan"
+material = "Iron"
+weight = 250
+cost = 45
+prob = 72
+ac_bonus = 4
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 42
+name = "studded leather armor"
+class = "Armor"
+sub = "Suit"
+color = "Brown"
+material = "Leather"
+weight = 200
+cost = 15
+prob = 72
+ac_bonus = 3
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 3
+
+[[object]]
+id = 43
+name = "ring mail"
+class = "Armor"
+sub = "Suit"
+color = "Cyan"
+material = "Iron"
+weight = 250
+cost = 100
+prob = 72
+ac_bonus = 3
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 44
+name = "orcish ring mail"
+class = "Armor"
+sub = "Suit"
+color = "Black"
+material = "Iron"
+weight = 250
+cost = 80
+prob = 20
+ac_bonus = 2
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = "crude ring mail"
+conferred_property = ""
+use_delay = 5
+
+[[object]]
+id = 45
+name = "leather armor"
+class = "Armor"
+sub = "Suit"
+color = "Brown"
+material = "Leather"
+weight = 150
+cost = 5
+prob = 82
+ac_bonus = 2
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 3
+
+[[object]]
+id = 46
+name = "leather jacket"
+class = "Armor"
+sub = "Suit"
+color = "Black"
+material = "Leather"
+weight = 30
+cost = 10
+prob = 12
+ac_bonus = 1
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 0
+
+# ============================================================================
+# Shirts (ARM_SHIRT)
+# ============================================================================
+
+[[object]]
+id = 47
+name = "Hawaiian shirt"
+class = "Armor"
+sub = "Shirt"
+color = "Magenta"
+material = "Cloth"
+weight = 5
+cost = 3
+prob = 8
+ac_bonus = 0
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 48
+name = "T-shirt"
+class = "Armor"
+sub = "Shirt"
+color = "White"
+material = "Cloth"
+weight = 5
+cost = 2
+prob = 2
+ac_bonus = 0
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 0
+
+# ============================================================================
+# Cloaks (ARM_CLOAK)
+# ============================================================================
+
+[[object]]
+id = 49
+name = "mummy wrapping"
+class = "Armor"
+sub = "Cloak"
+color = "Gray"
+material = "Cloth"
+weight = 3
+cost = 2
+prob = 0
+ac_bonus = 0
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 50
+name = "elven cloak"
+class = "Armor"
+sub = "Cloak"
+color = "Black"
+material = "Cloth"
+weight = 10
+cost = 60
+prob = 8
+ac_bonus = 1
+magic_cancel = 1
+is_magic = true
+is_bulky = false
+description = "faded pall"
+conferred_property = "Stealth"
+use_delay = 0
+
+[[object]]
+id = 51
+name = "orcish cloak"
+class = "Armor"
+sub = "Cloak"
+color = "Black"
+material = "Cloth"
+weight = 10
+cost = 40
+prob = 8
+ac_bonus = 0
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = "coarse mantelet"
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 52
+name = "dwarvish cloak"
+class = "Armor"
+sub = "Cloak"
+color = "Brown"
+material = "Cloth"
+weight = 10
+cost = 50
+prob = 8
+ac_bonus = 0
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = "hooded cloak"
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 53
+name = "oilskin cloak"
+class = "Armor"
+sub = "Cloak"
+color = "Brown"
+material = "Cloth"
+weight = 10
+cost = 50
+prob = 8
+ac_bonus = 1
+magic_cancel = 2
+is_magic = false
+is_bulky = false
+description = "slippery cloak"
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 54
+name = "robe"
+class = "Armor"
+sub = "Cloak"
+color = "Red"
+material = "Cloth"
+weight = 15
+cost = 50
+prob = 3
+ac_bonus = 2
+magic_cancel = 2
+is_magic = true
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 55
+name = "alchemy smock"
+class = "Armor"
+sub = "Cloak"
+color = "White"
+material = "Cloth"
+weight = 10
+cost = 50
+prob = 9
+ac_bonus = 1
+magic_cancel = 1
+is_magic = true
+is_bulky = false
+description = "apron"
+conferred_property = "PoisonRes"
+use_delay = 0
+
+[[object]]
+id = 56
+name = "leather cloak"
+class = "Armor"
+sub = "Cloak"
+color = "Brown"
+material = "Leather"
+weight = 15
+cost = 40
+prob = 8
+ac_bonus = 1
+magic_cancel = 1
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 57
+name = "cloak of protection"
+class = "Armor"
+sub = "Cloak"
+color = "Brown"
+material = "Cloth"
+weight = 10
+cost = 50
+prob = 9
+ac_bonus = 3
+magic_cancel = 3
+is_magic = true
+is_bulky = false
+description = "tattered cape"
+conferred_property = "Protection"
+use_delay = 0
+
+[[object]]
+id = 58
+name = "cloak of invisibility"
+class = "Armor"
+sub = "Cloak"
+color = "BrightMagenta"
+material = "Cloth"
+weight = 10
+cost = 60
+prob = 10
+ac_bonus = 1
+magic_cancel = 1
+is_magic = true
+is_bulky = false
+description = "opera cloak"
+conferred_property = "Invis"
+use_delay = 0
+
+[[object]]
+id = 59
+name = "cloak of magic resistance"
+class = "Armor"
+sub = "Cloak"
+color = "White"
+material = "Cloth"
+weight = 10
+cost = 60
+prob = 2
+ac_bonus = 1
+magic_cancel = 1
+is_magic = true
+is_bulky = false
+description = "ornamental cope"
+conferred_property = "Antimagic"
+use_delay = 0
+
+[[object]]
+id = 60
+name = "cloak of displacement"
+class = "Armor"
+sub = "Cloak"
+color = "Brown"
+material = "Cloth"
+weight = 10
+cost = 50
+prob = 10
+ac_bonus = 1
+magic_cancel = 1
+is_magic = true
+is_bulky = false
+description = "piece of cloth"
+conferred_property = "Displaced"
+use_delay = 0
+
+# ============================================================================
+# Shields (ARM_SHIELD)
+# ============================================================================
+
+[[object]]
+id = 61
+name = "small shield"
+class = "Armor"
+sub = "Shield"
+color = "Brown"
+material = "Wood"
+weight = 30
+cost = 3
+prob = 6
+ac_bonus = 1
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = ""
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 62
+name = "elven shield"
+class = "Armor"
+sub = "Shield"
+color = "Green"
+material = "Wood"
+weight = 40
+cost = 7
+prob = 2
+ac_bonus = 2
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "blue and green shield"
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 63
+name = "Uruk-hai shield"
+class = "Armor"
+sub = "Shield"
+color = "Cyan"
+material = "Iron"
+weight = 50
+cost = 7
+prob = 2
+ac_bonus = 1
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "white-handed shield"
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 64
+name = "orcish shield"
+class = "Armor"
+sub = "Shield"
+color = "Red"
+material = "Iron"
+weight = 50
+cost = 7
+prob = 2
+ac_bonus = 1
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "red-eyed shield"
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 65
+name = "large shield"
+class = "Armor"
+sub = "Shield"
+color = "Cyan"
+material = "Iron"
+weight = 100
+cost = 10
+prob = 7
+ac_bonus = 2
+magic_cancel = 0
+is_magic = false
+is_bulky = true
+description = ""
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 66
+name = "dwarvish roundshield"
+class = "Armor"
+sub = "Shield"
+color = "Cyan"
+material = "Iron"
+weight = 100
+cost = 10
+prob = 4
+ac_bonus = 2
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "large round shield"
+conferred_property = ""
+use_delay = 0
+
+[[object]]
+id = 67
+name = "shield of reflection"
+class = "Armor"
+sub = "Shield"
+color = "Gray"
+material = "Silver"
+weight = 50
+cost = 50
+prob = 3
+ac_bonus = 2
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "polished silver shield"
+conferred_property = "Reflecting"
+use_delay = 0
+
+# ============================================================================
+# Gloves (ARM_GLOVES)
+# ============================================================================
+
+[[object]]
+id = 68
+name = "leather gloves"
+class = "Armor"
+sub = "Gloves"
+color = "Brown"
+material = "Leather"
+weight = 10
+cost = 8
+prob = 16
+ac_bonus = 1
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "old gloves"
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 69
+name = "gauntlets of fumbling"
+class = "Armor"
+sub = "Gloves"
+color = "Brown"
+material = "Leather"
+weight = 10
+cost = 50
+prob = 8
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "padded gloves"
+conferred_property = "Fumbling"
+use_delay = 1
+
+[[object]]
+id = 70
+name = "gauntlets of power"
+class = "Armor"
+sub = "Gloves"
+color = "Brown"
+material = "Iron"
+weight = 30
+cost = 50
+prob = 8
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "riding gloves"
+conferred_property = ""
+use_delay = 1
+
+[[object]]
+id = 71
+name = "gauntlets of dexterity"
+class = "Armor"
+sub = "Gloves"
+color = "Brown"
+material = "Leather"
+weight = 10
+cost = 50
+prob = 8
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "fencing gloves"
+conferred_property = ""
+use_delay = 1
+
+# ============================================================================
+# Boots (ARM_BOOTS)
+# ============================================================================
+
+[[object]]
+id = 72
+name = "low boots"
+class = "Armor"
+sub = "Boots"
+color = "Brown"
+material = "Leather"
+weight = 10
+cost = 8
+prob = 25
+ac_bonus = 1
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "walking shoes"
+conferred_property = ""
+use_delay = 2
+
+[[object]]
+id = 73
+name = "iron shoes"
+class = "Armor"
+sub = "Boots"
+color = "Cyan"
+material = "Iron"
+weight = 50
+cost = 16
+prob = 7
+ac_bonus = 2
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "hard shoes"
+conferred_property = ""
+use_delay = 2
+
+[[object]]
+id = 74
+name = "high boots"
+class = "Armor"
+sub = "Boots"
+color = "Brown"
+material = "Leather"
+weight = 20
+cost = 12
+prob = 15
+ac_bonus = 2
+magic_cancel = 0
+is_magic = false
+is_bulky = false
+description = "jackboots"
+conferred_property = ""
+use_delay = 2
+
+[[object]]
+id = 75
+name = "speed boots"
+class = "Armor"
+sub = "Boots"
+color = "Brown"
+material = "Leather"
+weight = 20
+cost = 50
+prob = 12
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "combat boots"
+conferred_property = "Fast"
+use_delay = 2
+
+[[object]]
+id = 76
+name = "water walking boots"
+class = "Armor"
+sub = "Boots"
+color = "Brown"
+material = "Leather"
+weight = 15
+cost = 50
+prob = 12
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "jungle boots"
+conferred_property = "Wwalking"
+use_delay = 2
+
+[[object]]
+id = 77
+name = "jumping boots"
+class = "Armor"
+sub = "Boots"
+color = "Brown"
+material = "Leather"
+weight = 20
+cost = 50
+prob = 12
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "hiking boots"
+conferred_property = "Jumping"
+use_delay = 2
+
+[[object]]
+id = 78
+name = "elven boots"
+class = "Armor"
+sub = "Boots"
+color = "Brown"
+material = "Leather"
+weight = 15
+cost = 8
+prob = 12
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "mud boots"
+conferred_property = "Stealth"
+use_delay = 2
+
+[[object]]
+id = 79
+name = "kicking boots"
+class = "Armor"
+sub = "Boots"
+color = "Brown"
+material = "Iron"
+weight = 50
+cost = 8
+prob = 12
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "buckled boots"
+conferred_property = ""
+use_delay = 2
+
+[[object]]
+id = 80
+name = "fumble boots"
+class = "Armor"
+sub = "Boots"
+color = "Brown"
+material = "Leather"
+weight = 20
+cost = 30
+prob = 12
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "riding boots"
+conferred_property = "Fumbling"
+use_delay = 2
+
+[[object]]
+id = 81
+name = "levitation boots"
+class = "Armor"
+sub = "Boots"
+color = "Brown"
+material = "Leather"
+weight = 15
+cost = 30
+prob = 12
+ac_bonus = 1
+magic_cancel = 0
+is_magic = true
+is_bulky = false
+description = "snow boots"
+conferred_property = "Levitation"
+use_delay = 2

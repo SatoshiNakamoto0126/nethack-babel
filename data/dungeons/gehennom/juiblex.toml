@@ -1,0 +1,39 @@
+[level]
+name = "juiblex"
+branch = "Gehennom"
+flags = ["mazelevel", "noteleport", "hardfloor"]
+
+[map]
+halign = "center"
+valign = "center"
+data = """
+-----------
+|.........|
+|.}}}}}}|.|
+|.}}}}}}|.|
+|.}}}}}}|.|
+|.-------.|
+|.........|
+|.--------+
+|.........|
+-----------
+"""
+
+[[regions]]
+area = [0, 0, 10, 9]
+lit = false
+
+[[stairs]]
+direction = "up"
+x = 1
+y = 1
+
+[[stairs]]
+direction = "down"
+x = 9
+y = 8
+
+[[monsters]]
+id = "Juiblex"
+x = 5
+y = 3

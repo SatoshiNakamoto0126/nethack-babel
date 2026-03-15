@@ -1,0 +1,5 @@
+[level]
+name = "bigroom11"
+branch = "Dungeons"
+flags = ["mazelevel", "noflip", "nodig"]
+style = "maze"
