@@ -184,6 +184,41 @@ NetHack Babel separates all player-visible text from game logic:
 
 The `specs/` directory contains 29 mechanism specifications extracted from the original NetHack C source, reviewed, and verified. Each spec documents the exact formulas, constants, edge cases, and test vectors for a game subsystem.
 
+## Testing Infrastructure
+
+NetHack Babel uses a 4-layer test pyramid plus a differential execution harness for compiler-grade cross-validation against the original C engine.
+
+### Test Pyramid (4,086 tests)
+
+| Layer | Tests | Purpose |
+|-------|-------|---------|
+| **Unit tests** | ~3,500 | Pure function I/O: damage formulas, AC calculation, BUC matrices |
+| **Snapshot tests** | ~500 | Prevent silent regression in item names, messages, i18n rendering |
+| **Integration touchstones** | 100 | Multi-system event chains: melee→death→corpse, stoning→cure, polymorph→revert |
+| **Property-based (proptest)** | 26 | Random input invariants: dice bounds, rnl range, plural never empty, score non-negative |
+| **Monte Carlo (10K samples)** | 21 | Probability distributions: hit rates, dice means, choking 1/20, fountain wish 1/4000 |
+
+### Differential Execution Harness
+
+An industrial-grade cross-validation framework that lets the C and Rust engines "talk to each other":
+
+1. **C-Side Observer**: Instrumented C NetHack (`#ifdef DIFF_TEST`) dumps per-turn state to JSONL — player HP/position/AC/status, RNG call log, inventory weight, 14-bit status bitmask, monster count
+2. **Rust-Side Replay**: Loads C recordings, replays actions via `resolve_turn()`, compares observable state
+3. **Fuzzing Pipeline**: `scripts/fuzz_c_recordings.sh` generates thousands of random recordings to hunt divergences automatically
+
+```bash
+# Generate a C recording
+bash scripts/generate_c_recording.sh 12345 movement
+
+# Run differential tests
+cargo test -p nethack-babel-engine --test differential
+
+# Fuzz: generate 100 random recordings × 200 turns each
+bash scripts/fuzz_c_recordings.sh 100 200
+```
+
+When a divergence is found (e.g., "C says player is Punished, Rust says not"), the exact turn, RNG calls, and state delta are reported for targeted debugging.
+
 ## Building
 
 ### Prerequisites

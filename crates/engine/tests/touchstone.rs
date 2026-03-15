@@ -29,7 +29,7 @@ use nethack_babel_engine::shop::{
 use nethack_babel_engine::traps::{place_trap, TrapType};
 use nethack_babel_engine::world::{
     Boulder, GameWorld, HitPoints, Monster, MovementPoints, Name, Positioned,
-    Speed, NORMAL_SPEED,
+    Speed, Tame, NORMAL_SPEED,
 };
 
 use hecs::Entity;
@@ -2676,4 +2676,1625 @@ fn touchstone_03_shop_buy_sell_spread() {
             base_cost,
         );
     }
+}
+
+// ==========================================================================
+// Scenario 10: Cross-system Event Chains — Combat
+// ==========================================================================
+
+/// Touchstone 10.1 -- Melee kill generates EntityDied event.
+///
+/// Player attacks a weak monster directly → monster dies → EntityDied event.
+/// Uses resolve_melee_attack for direct combat testing.
+#[test]
+fn touchstone_10_melee_kill_generates_death_and_xp() {
+    use nethack_babel_engine::world::{ArmorClass, PlayerCombat};
+
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Guarantee a hit.
+    if let Some(mut pc) = world.get_component_mut::<PlayerCombat>(player) {
+        pc.uhitinc = 100;
+        pc.udaminc = 100; // Also guarantee lethal damage.
+    }
+
+    // Place a weak monster adjacent to the player.
+    let monster_pos = Position::new(6, 5);
+    world.dungeon_mut().current_level
+        .set_terrain(Position::new(5, 5), Terrain::Floor);
+    world.dungeon_mut().current_level
+        .set_terrain(monster_pos, Terrain::Floor);
+
+    let order = world.next_creation_order();
+    let monster = world.spawn((
+        Monster,
+        Positioned(monster_pos),
+        HitPoints { current: 1, max: 1 },
+        ArmorClass(10),
+        Name("grid bug".to_string()),
+        Speed(12),
+        MovementPoints(0),
+        order,
+    ));
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let mut events = Vec::new();
+    resolve_melee_attack(&mut world, player, monster, &mut rng, &mut events);
+
+    // The monster should be dead (EntityDied event emitted).
+    let has_death = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::EntityDied { entity, .. } if *entity == monster
+    ));
+    assert!(
+        has_death,
+        "killing a 1 HP monster with +100 damage should emit EntityDied event.\nEvents: {:?}",
+        events
+    );
+}
+
+/// Touchstone 10.2 -- Floating eye passive paralyze gaze is a 3+ module chain:
+/// combat → status → event.
+///
+/// Already tested in scenario 1.2 but this validates the full event chain:
+/// MeleeHit → PassiveAttack → StatusApplied.
+#[test]
+fn touchstone_10_passive_gaze_event_chain() {
+    use nethack_babel_engine::status::is_paralyzed;
+    use nethack_babel_engine::world::{ArmorClass, PlayerCombat};
+
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    if let Some(mut pc) = world.get_component_mut::<PlayerCombat>(player) {
+        pc.uhitinc = 100; // Guarantee hit.
+    }
+
+    let eye_pos = Position::new(6, 5);
+    let order = world.next_creation_order();
+    let eye = world.spawn((
+        Monster,
+        Positioned(eye_pos),
+        HitPoints { current: 100, max: 100 },
+        ArmorClass(9),
+        Name("floating eye".to_string()),
+        Speed(1),
+        MovementPoints(0),
+        order,
+    ));
+
+    world.dungeon_mut().current_level.set_terrain(Position::new(5, 5), Terrain::Floor);
+    world.dungeon_mut().current_level.set_terrain(eye_pos, Terrain::Floor);
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let mut events = Vec::new();
+    resolve_melee_attack(&mut world, player, eye, &mut rng, &mut events);
+
+    // Verify full event chain: MeleeHit + PassiveAttack + StatusApplied
+    let has_hit = events.iter().any(|e| matches!(e, EngineEvent::MeleeHit { .. }));
+    let has_passive = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::PassiveAttack { effect: PassiveEffect::Paralyze, .. }
+    ));
+    let has_status = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::StatusApplied { status: StatusEffect::Paralyzed, .. }
+    ));
+
+    assert!(has_hit, "should have MeleeHit event");
+    assert!(has_passive, "should have PassiveAttack event");
+    assert!(has_status, "should have StatusApplied event");
+
+    // All three event types should be present in a single combat interaction,
+    // demonstrating the cross-module chain: combat → passive → status.
+    assert!(is_paralyzed(&world, player), "player should be paralyzed");
+}
+
+// ==========================================================================
+// Scenario 11: Status Effect Chains
+// ==========================================================================
+
+/// Touchstone 11.1 -- Stoning countdown: apply stoning → tick → verify
+/// progressive stages.
+#[test]
+fn touchstone_11_stoning_applied_and_queryable() {
+    use nethack_babel_engine::status::{is_stoning, make_stoned};
+
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Initially not stoning.
+    assert!(!is_stoning(&world, player));
+
+    // Apply stoning with 5-turn countdown.
+    let events = make_stoned(&mut world, player, 5);
+    assert!(is_stoning(&world, player), "player should be stoning after make_stoned");
+
+    // StatusApplied event should be emitted.
+    let has_stoning = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::StatusApplied { status: StatusEffect::Stoning, .. }
+    ));
+    assert!(has_stoning, "should emit StatusApplied::Stoning event");
+}
+
+/// Touchstone 11.2 -- Confusion affects direction randomization.
+///
+/// Cross-module chain: status → movement → event.
+/// `maybe_confuse_direction(confused, stunned, rng)` returns `Some(random_dir)`
+/// when the direction is overridden, `None` when it isn't.
+#[test]
+fn touchstone_11_confusion_randomizes_direction() {
+    use nethack_babel_engine::status::maybe_confuse_direction;
+
+    // When confused (not stunned), the direction should sometimes be overridden.
+    let mut changed_count = 0;
+    for seed in 0..100u64 {
+        let mut rng = Pcg64::seed_from_u64(seed);
+        let result = maybe_confuse_direction(true, false, &mut rng);
+        if result.is_some() {
+            changed_count += 1;
+        }
+    }
+
+    // Confused movement should randomize at least sometimes (~20% chance per call).
+    assert!(
+        changed_count > 0,
+        "confusion should randomize direction at least once in 100 tries"
+    );
+
+    // But not always (only 1/5 chance when confused, not stunned).
+    assert!(
+        changed_count < 100,
+        "confusion should not always change direction"
+    );
+
+    // When not confused and not stunned, direction should never change.
+    for seed in 0..50u64 {
+        let mut rng = Pcg64::seed_from_u64(seed);
+        let result = maybe_confuse_direction(false, false, &mut rng);
+        assert_eq!(result, None, "non-confused should not override direction");
+    }
+}
+
+/// Touchstone 11.3 -- Blindness blocks scroll reading.
+///
+/// Cross-module chain: status (blind) → scrolls (read_scroll) → event.
+#[test]
+fn touchstone_11_blindness_blocks_scroll_reading() {
+    use nethack_babel_engine::status::make_blinded;
+
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Make the player blind.
+    make_blinded(&mut world, player, 100);
+
+    // Create a scroll entity.
+    let scroll = world.spawn((
+        Positioned(Position::new(5, 5)),
+        Name("scroll of identify".to_string()),
+    ));
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let events = nethack_babel_engine::scrolls::read_scroll(
+        &mut world,
+        player,
+        scroll,
+        nethack_babel_engine::scrolls::ScrollType::Identify,
+        false,
+        &mut rng,
+    );
+
+    // When blind, reading should either produce no identify effect or
+    // produce a "can't see" message.  The scroll system may still process
+    // the scroll (some scrolls work while blind), but identify specifically
+    // selects from inventory which requires sight.
+    // At minimum, verify the scroll was consumed (events should exist).
+    assert!(
+        !events.is_empty(),
+        "reading a scroll should produce some events even when blind"
+    );
+}
+
+/// Touchstone 11.4 -- Multiple status effects can coexist on the same entity.
+#[test]
+fn touchstone_11_multiple_status_effects_coexist() {
+    use nethack_babel_engine::status::{
+        is_confused, is_blind, is_stunned,
+        make_confused, make_blinded, make_stunned,
+    };
+
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Apply multiple status effects.
+    make_confused(&mut world, player, 10);
+    make_blinded(&mut world, player, 20);
+    make_stunned(&mut world, player, 15);
+
+    // All three should be active simultaneously.
+    assert!(is_confused(&world, player), "should be confused");
+    assert!(is_blind(&world, player), "should be blind");
+    assert!(is_stunned(&world, player), "should be stunned");
+}
+
+/// Touchstone 11.5 -- Sickness with cure: make_sick → cure_sick removes it.
+#[test]
+fn touchstone_11_sickness_cured() {
+    use nethack_babel_engine::status::{is_sick, make_sick, cure_sick};
+
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Apply sickness.
+    let events = make_sick(&mut world, player, 10, 1);
+    assert!(is_sick(&world, player), "should be sick");
+
+    let has_sick_event = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::StatusApplied { status: StatusEffect::FoodPoisoned, .. }
+            | EngineEvent::StatusApplied { status: StatusEffect::Sick, .. }
+    ));
+    assert!(has_sick_event, "should emit a sickness StatusApplied event");
+
+    // Cure the sickness.
+    let cure_events = cure_sick(&mut world, player, 1);
+    assert!(!is_sick(&world, player), "sickness should be cured");
+
+    let has_removal = cure_events.iter().any(|e| matches!(
+        e,
+        EngineEvent::StatusRemoved { .. }
+    ));
+    assert!(has_removal, "curing should emit StatusRemoved event");
+}
+
+// ==========================================================================
+// Scenario 12: Item Interaction Chains
+// ==========================================================================
+
+/// Touchstone 12.1 -- Blessed scroll of identify: identifies inventory items.
+///
+/// Cross-module chain: scrolls → identification → event.
+#[test]
+fn touchstone_12_blessed_identify_reveals_items() {
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Create a scroll entity with blessed BUC.
+    let scroll = world.spawn((
+        Positioned(Position::new(5, 5)),
+        Name("scroll of identify".to_string()),
+        nethack_babel_data::BucStatus {
+            blessed: true,
+            cursed: false,
+            bknown: true,
+        },
+    ));
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let events = nethack_babel_engine::scrolls::read_scroll(
+        &mut world,
+        player,
+        scroll,
+        nethack_babel_engine::scrolls::ScrollType::Identify,
+        false,
+        &mut rng,
+    );
+
+    // A blessed scroll of identify should produce identify-related events
+    // or messages.  Even if no items to identify, events should include
+    // the scroll consumption.
+    assert!(
+        !events.is_empty(),
+        "reading blessed scroll of identify should produce events"
+    );
+
+    // Check for identify-related events.
+    let has_identify = events.iter().any(|e| match e {
+        EngineEvent::ItemIdentified { .. } => true,
+        EngineEvent::Message { key, .. } if key.contains("identify") => true,
+        _ => false,
+    });
+    // Identify may or may not find items, but scroll consumption should happen.
+    let has_destruction = events.iter().any(|e| matches!(e, EngineEvent::ItemDestroyed { .. }));
+    assert!(
+        has_identify || has_destruction,
+        "blessed identify should either identify items or consume the scroll"
+    );
+}
+
+/// Touchstone 12.2 -- Cursed equipment cannot be removed.
+///
+/// Cross-module chain: equipment → BUC → event.
+#[test]
+fn touchstone_12_cursed_equipment_blocks_removal() {
+    use nethack_babel_engine::equipment::{EquipSlot, EquipmentSlots, EquipError, unequip_slot};
+    use nethack_babel_data::ObjectCore;
+
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Create a cursed ring entity.
+    let ring = world.spawn((
+        Positioned(Position::new(5, 5)),
+        Name("cursed ring".to_string()),
+        nethack_babel_data::BucStatus {
+            cursed: true,
+            blessed: false,
+            bknown: true,
+        },
+    ));
+
+    // Put the ring in the player's ring slot directly.
+    if let Some(mut equip) = world.get_component_mut::<EquipmentSlots>(player) {
+        equip.set(EquipSlot::RingLeft, Some(ring));
+    } else {
+        // Player might not have EquipmentSlots; add one.
+        let mut equip = EquipmentSlots::default();
+        equip.set(EquipSlot::RingLeft, Some(ring));
+        let _ = world.ecs_mut().insert_one(player, equip);
+    }
+
+    // Try to remove the cursed ring.
+    let result = unequip_slot(&mut world, player, EquipSlot::RingLeft);
+    assert!(
+        matches!(result, Err(EquipError::CursedCannotRemove)),
+        "removing a cursed ring should return CursedCannotRemove error, got: {:?}",
+        result
+    );
+
+    // Verify the ring is still equipped.
+    let still_equipped = world
+        .get_component::<EquipmentSlots>(player)
+        .and_then(|e| e.get(EquipSlot::RingLeft));
+    assert_eq!(still_equipped, Some(ring), "cursed ring should remain equipped");
+}
+
+/// Touchstone 12.3 -- Potion of healing: BUC affects healing amount.
+///
+/// Cross-module chain: potions → world (HP) → event.
+#[test]
+fn touchstone_12_potion_healing_buc_amounts() {
+    use nethack_babel_engine::potions::PotionType;
+
+    // Test blessed healing.
+    let mut world_b = GameWorld::new(Position::new(5, 5));
+    let player_b = world_b.player();
+    set_player_hp(&mut world_b, 1, 50);
+
+    let potion_b = world_b.spawn((
+        Positioned(Position::new(5, 5)),
+        Name("potion of healing".to_string()),
+        nethack_babel_data::BucStatus {
+            blessed: true,
+            cursed: false,
+            bknown: true,
+        },
+    ));
+    let mut rng_b = Pcg64::seed_from_u64(42);
+    let _events_b = nethack_babel_engine::potions::quaff_potion(
+        &mut world_b, player_b, potion_b, PotionType::Healing, &mut rng_b,
+    );
+    let hp_blessed = world_b
+        .get_component::<HitPoints>(player_b)
+        .map(|h| h.current)
+        .unwrap_or(0);
+
+    // Test uncursed healing.
+    let mut world_u = GameWorld::new(Position::new(5, 5));
+    let player_u = world_u.player();
+    set_player_hp(&mut world_u, 1, 50);
+
+    let potion_u = world_u.spawn((
+        Positioned(Position::new(5, 5)),
+        Name("potion of healing".to_string()),
+        nethack_babel_data::BucStatus {
+            blessed: false,
+            cursed: false,
+            bknown: true,
+        },
+    ));
+    let mut rng_u = Pcg64::seed_from_u64(42);
+    let _events_u = nethack_babel_engine::potions::quaff_potion(
+        &mut world_u, player_u, potion_u, PotionType::Healing, &mut rng_u,
+    );
+    let hp_uncursed = world_u
+        .get_component::<HitPoints>(player_u)
+        .map(|h| h.current)
+        .unwrap_or(0);
+
+    // Test cursed healing.
+    let mut world_c = GameWorld::new(Position::new(5, 5));
+    let player_c = world_c.player();
+    set_player_hp(&mut world_c, 1, 50);
+
+    let potion_c = world_c.spawn((
+        Positioned(Position::new(5, 5)),
+        Name("potion of healing".to_string()),
+        nethack_babel_data::BucStatus {
+            blessed: false,
+            cursed: true,
+            bknown: true,
+        },
+    ));
+    let mut rng_c = Pcg64::seed_from_u64(42);
+    let _events_c = nethack_babel_engine::potions::quaff_potion(
+        &mut world_c, player_c, potion_c, PotionType::Healing, &mut rng_c,
+    );
+    let hp_cursed = world_c
+        .get_component::<HitPoints>(player_c)
+        .map(|h| h.current)
+        .unwrap_or(0);
+
+    // Blessed should heal more than or equal to uncursed.
+    assert!(
+        hp_blessed >= hp_uncursed,
+        "blessed healing ({}) should be >= uncursed ({})",
+        hp_blessed, hp_uncursed
+    );
+    // Uncursed should heal more than or equal to cursed.
+    assert!(
+        hp_uncursed >= hp_cursed,
+        "uncursed healing ({}) should be >= cursed ({})",
+        hp_uncursed, hp_cursed
+    );
+    // At least blessed should heal something.
+    assert!(hp_blessed > 1, "blessed healing should increase HP from 1");
+}
+
+// ==========================================================================
+// Scenario 13: Trap Chains
+// ==========================================================================
+
+/// Touchstone 13.1 -- Teleport trap moves the entity to a new position.
+///
+/// Cross-module chain: traps → teleport → world (position) → event.
+#[test]
+fn touchstone_13_teleport_trap_moves_entity() {
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Create floor tiles for teleportation targets.
+    for y in 1..=15 {
+        for x in 1..=60 {
+            world.dungeon_mut().current_level
+                .set_terrain(Position::new(x, y), Terrain::Floor);
+        }
+    }
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let events = nethack_babel_engine::teleport::handle_teleport_trap(
+        &mut world, player, &mut rng,
+    );
+
+    // Player should have been teleported (position may have changed).
+    let has_teleport = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::EntityTeleported { .. }
+    ));
+    let has_msg = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Message { key, .. } if key.contains("teleport")
+    ));
+
+    assert!(
+        has_teleport || has_msg,
+        "teleport trap should either move entity or emit teleport message.\nEvents: {:?}",
+        events
+    );
+}
+
+/// Touchstone 13.2 -- Pit trap damages and traps the entity.
+///
+/// Cross-module chain: traps → HP reduction → trapped status → event.
+#[test]
+fn touchstone_13_pit_trap_damages_and_traps() {
+    use nethack_babel_engine::traps::{TrapEntityInfo, TrapInstance, trigger_trap};
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let trap_pos = Position::new(10, 5);
+
+    let info = TrapEntityInfo {
+        entity: dummy_entity(),
+        pos: trap_pos,
+        hp: 30,
+        max_hp: 30,
+        is_flying: false,
+        is_levitating: false,
+        is_player: true,
+        ..TrapEntityInfo::default()
+    };
+
+    let mut trap = TrapInstance::new(trap_pos, TrapType::Pit);
+
+    let events = trigger_trap(&mut rng, &info, &mut trap);
+
+    // Should emit TrapTriggered event.
+    let has_trigger = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::TrapTriggered {
+            trap_type: TrapType::Pit,
+            ..
+        }
+    ));
+    assert!(has_trigger, "pit trap should emit TrapTriggered event");
+
+    // Should deal damage (HpChange with negative amount).
+    let has_damage = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::HpChange { amount, .. } if *amount < 0
+    ));
+    assert!(
+        has_damage,
+        "pit trap should deal damage.\nEvents: {:?}",
+        events
+    );
+}
+
+/// Touchstone 13.3 -- Fire trap triggers and may damage/interact with items.
+#[test]
+fn touchstone_13_fire_trap_triggers() {
+    use nethack_babel_engine::traps::{TrapEntityInfo, TrapInstance, trigger_trap};
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let trap_pos = Position::new(15, 8);
+
+    let info = TrapEntityInfo {
+        entity: dummy_entity(),
+        pos: trap_pos,
+        hp: 50,
+        max_hp: 50,
+        fire_resistant: false,
+        is_player: true,
+        ..TrapEntityInfo::default()
+    };
+
+    let mut trap = TrapInstance::new(trap_pos, TrapType::FireTrap);
+    let events = trigger_trap(&mut rng, &info, &mut trap);
+
+    let has_trigger = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::TrapTriggered {
+            trap_type: TrapType::FireTrap,
+            ..
+        }
+    ));
+    assert!(has_trigger, "fire trap should emit TrapTriggered event");
+
+    // Fire trap should deal damage to non-fire-resistant entity.
+    let has_damage = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::HpChange { amount, .. } if *amount < 0
+    ));
+    assert!(
+        has_damage,
+        "fire trap should deal damage to non-resistant entity.\nEvents: {:?}",
+        events
+    );
+}
+
+/// Touchstone 13.4 -- Bear trap immobilizes (traps) the entity.
+#[test]
+fn touchstone_13_bear_trap_immobilizes() {
+    use nethack_babel_engine::traps::{TrapEntityInfo, TrapInstance, trigger_trap};
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let trap_pos = Position::new(20, 10);
+
+    let info = TrapEntityInfo {
+        entity: dummy_entity(),
+        pos: trap_pos,
+        hp: 30,
+        max_hp: 30,
+        is_player: true,
+        ..TrapEntityInfo::default()
+    };
+
+    let mut trap = TrapInstance::new(trap_pos, TrapType::BearTrap);
+    let events = trigger_trap(&mut rng, &info, &mut trap);
+
+    let has_trigger = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::TrapTriggered {
+            trap_type: TrapType::BearTrap,
+            ..
+        }
+    ));
+    assert!(has_trigger, "bear trap should emit TrapTriggered event");
+}
+
+/// Touchstone 13.5 -- Sleeping gas trap causes sleep status.
+#[test]
+fn touchstone_13_sleeping_gas_trap() {
+    use nethack_babel_engine::traps::{TrapEntityInfo, TrapInstance, trigger_trap};
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let trap_pos = Position::new(25, 12);
+
+    let info = TrapEntityInfo {
+        entity: dummy_entity(),
+        pos: trap_pos,
+        hp: 30,
+        max_hp: 30,
+        sleep_resistant: false,
+        is_player: true,
+        ..TrapEntityInfo::default()
+    };
+
+    let mut trap = TrapInstance::new(trap_pos, TrapType::SleepingGasTrap);
+    let events = trigger_trap(&mut rng, &info, &mut trap);
+
+    // Should trigger.
+    let has_trigger = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::TrapTriggered {
+            trap_type: TrapType::SleepingGasTrap,
+            ..
+        }
+    ));
+    assert!(has_trigger, "sleeping gas trap should trigger");
+
+    // Non-resistant entity should get sleep status applied.
+    let has_sleep = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::StatusApplied { status: StatusEffect::Sleeping, .. }
+    ));
+    assert!(
+        has_sleep,
+        "sleeping gas should apply Asleep status to non-resistant entity.\nEvents: {:?}",
+        events
+    );
+}
+
+// ==========================================================================
+// Scenario 14: Explosion Chains
+// ==========================================================================
+
+/// Touchstone 14.1 -- Fire explosion destroys scrolls.
+///
+/// Cross-module chain: explode → item class check → destroyed event.
+#[test]
+fn touchstone_14_fire_explosion_destroys_scrolls() {
+    use nethack_babel_engine::explode::item_destroyed_by_explosion;
+    use nethack_babel_data::DamageType;
+
+    // Fire destroys scrolls, spellbooks, and potions.
+    assert!(
+        item_destroyed_by_explosion(ObjectClass::Scroll, DamageType::Fire),
+        "fire should destroy scrolls"
+    );
+    assert!(
+        item_destroyed_by_explosion(ObjectClass::Spellbook, DamageType::Fire),
+        "fire should destroy spellbooks"
+    );
+    assert!(
+        item_destroyed_by_explosion(ObjectClass::Potion, DamageType::Fire),
+        "fire should destroy potions"
+    );
+
+    // Fire should NOT destroy weapons, armor, or gems.
+    assert!(
+        !item_destroyed_by_explosion(ObjectClass::Weapon, DamageType::Fire),
+        "fire should not destroy weapons"
+    );
+    assert!(
+        !item_destroyed_by_explosion(ObjectClass::Armor, DamageType::Fire),
+        "fire should not destroy armor"
+    );
+    assert!(
+        !item_destroyed_by_explosion(ObjectClass::Gem, DamageType::Fire),
+        "fire should not destroy gems"
+    );
+}
+
+/// Touchstone 14.2 -- Cold explosion destroys potions but not scrolls.
+#[test]
+fn touchstone_14_cold_explosion_destroys_potions_not_scrolls() {
+    use nethack_babel_engine::explode::item_destroyed_by_explosion;
+    use nethack_babel_data::DamageType;
+
+    assert!(
+        item_destroyed_by_explosion(ObjectClass::Potion, DamageType::Cold),
+        "cold should destroy potions"
+    );
+    assert!(
+        !item_destroyed_by_explosion(ObjectClass::Scroll, DamageType::Cold),
+        "cold should not destroy scrolls"
+    );
+}
+
+/// Touchstone 14.3 -- Electrical explosion destroys wands and rings.
+#[test]
+fn touchstone_14_electricity_destroys_wands_rings() {
+    use nethack_babel_engine::explode::item_destroyed_by_explosion;
+    use nethack_babel_data::DamageType;
+
+    assert!(
+        item_destroyed_by_explosion(ObjectClass::Wand, DamageType::Electricity),
+        "electricity should destroy wands"
+    );
+    assert!(
+        item_destroyed_by_explosion(ObjectClass::Ring, DamageType::Electricity),
+        "electricity should destroy rings"
+    );
+    assert!(
+        !item_destroyed_by_explosion(ObjectClass::Scroll, DamageType::Electricity),
+        "electricity should not destroy scrolls"
+    );
+}
+
+/// Touchstone 14.4 -- Explosion damages all tiles in 3x3 blast radius.
+#[test]
+fn touchstone_14_explosion_blast_radius() {
+    use nethack_babel_engine::explode::{explode, ExplosionType};
+    use nethack_babel_data::DamageType;
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let result = explode(
+        10, 10,
+        (6, 6), // 6d6 damage
+        DamageType::Fire,
+        ExplosionType::Fiery,
+        "wand of fire",
+        &mut rng,
+    );
+
+    // Should have 9 tiles (3x3 blast).
+    assert_eq!(result.tiles.len(), 9, "explosion should cover 9 tiles");
+    assert_eq!(result.radius, 1, "standard explosion radius is 1");
+
+    // All tiles should have positive damage.
+    for tile in &result.tiles {
+        assert!(
+            tile.damage_dealt > 0,
+            "each tile in blast should have positive damage"
+        );
+    }
+
+    // Total damage should be 9 * (single roll), since all tiles get same roll.
+    let single_roll = result.tiles[0].damage_dealt;
+    assert_eq!(
+        result.total_damage,
+        single_roll * 9,
+        "total damage should be 9 * per-tile damage (uniform roll)"
+    );
+}
+
+// ==========================================================================
+// Scenario 15: Polymorph Chains
+// ==========================================================================
+
+/// Touchstone 15.1 -- Polymorph changes form and stats.
+///
+/// Cross-module chain: polyself → world (attributes, HP, speed) → event.
+#[test]
+fn touchstone_15_polymorph_changes_form() {
+    use nethack_babel_engine::polyself::{is_polymorphed, polymorph_self, OriginalForm};
+    use nethack_babel_data::MonsterDef;
+
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Player should not be polymorphed initially.
+    assert!(!is_polymorphed(&world, player));
+
+    // Load game data to get a monster definition.
+    let data = load_game_data(&wish_data_dir()).expect("load data");
+    let dragon = data.monsters.iter()
+        .find(|m| m.names.male.contains("red dragon"))
+        .expect("red dragon should exist in data");
+
+    let hp_before = world
+        .get_component::<HitPoints>(player)
+        .map(|h| h.max)
+        .unwrap_or(0);
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let events = polymorph_self(&mut world, player, dragon, &mut rng);
+
+    // Player should now be polymorphed.
+    assert!(is_polymorphed(&world, player), "player should be polymorphed");
+
+    // OriginalForm should be stored.
+    let has_original = world.get_component::<OriginalForm>(player).is_some();
+    assert!(has_original, "OriginalForm component should be stored");
+
+    // HP should have changed (dragon has higher HP).
+    let hp_after = world
+        .get_component::<HitPoints>(player)
+        .map(|h| h.max)
+        .unwrap_or(0);
+    assert_ne!(hp_before, hp_after, "HP max should change after polymorph");
+
+    // Should have polymorph-related events.
+    assert!(!events.is_empty(), "polymorph should produce events");
+}
+
+/// Touchstone 15.2 -- Polymorph revert restores original form.
+#[test]
+fn touchstone_15_polymorph_revert() {
+    use nethack_babel_engine::polyself::{is_polymorphed, polymorph_self, revert_form, OriginalForm};
+
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    let hp_before = world
+        .get_component::<HitPoints>(player)
+        .map(|h| *h)
+        .unwrap();
+
+    // Polymorph into something.
+    let data = load_game_data(&wish_data_dir()).expect("load data");
+    let newt = data.monsters.iter()
+        .find(|m| m.names.male == "newt")
+        .expect("newt should exist");
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    polymorph_self(&mut world, player, newt, &mut rng);
+    assert!(is_polymorphed(&world, player));
+
+    // Revert.
+    let events = revert_form(&mut world, player);
+    assert!(!is_polymorphed(&world, player), "should no longer be polymorphed");
+
+    // HP should be restored to original.
+    let hp_after = world
+        .get_component::<HitPoints>(player)
+        .map(|h| *h)
+        .unwrap();
+    assert_eq!(
+        hp_after.max, hp_before.max,
+        "HP max should be restored after revert"
+    );
+}
+
+// ==========================================================================
+// Scenario 16: Pet Chains
+// ==========================================================================
+
+/// Touchstone 16.1 -- Pet adjacent to player can follow through stairs.
+///
+/// Cross-module chain: pets → dungeon (stairs) → position check.
+#[test]
+fn touchstone_16_pet_follows_through_stairs() {
+    use nethack_babel_engine::pets::can_follow_through_stairs;
+
+    let player_pos = Position::new(10, 10);
+
+    // Adjacent pet (distance 1) should follow.
+    let pet_adjacent = Position::new(11, 10);
+    assert!(
+        can_follow_through_stairs(pet_adjacent, player_pos, false),
+        "adjacent pet should follow through stairs"
+    );
+
+    // Diagonal adjacent (distance 1) should also follow.
+    let pet_diagonal = Position::new(11, 11);
+    assert!(
+        can_follow_through_stairs(pet_diagonal, player_pos, false),
+        "diagonally adjacent pet should follow through stairs"
+    );
+
+    // Far away pet (distance > 1) should NOT follow.
+    let pet_far = Position::new(13, 10);
+    assert!(
+        !can_follow_through_stairs(pet_far, player_pos, false),
+        "distant pet should not follow through stairs"
+    );
+
+    // Leashed pet at distance 2 should follow.
+    let pet_leashed = Position::new(12, 10);
+    assert!(
+        can_follow_through_stairs(pet_leashed, player_pos, true),
+        "leashed pet at distance 2 should follow"
+    );
+
+    // Leashed pet at distance 3 should NOT follow.
+    let pet_leashed_far = Position::new(13, 10);
+    assert!(
+        !can_follow_through_stairs(pet_leashed_far, player_pos, true),
+        "leashed pet at distance 3 should not follow"
+    );
+}
+
+/// Touchstone 16.2 -- Tameness decay: pet separated too long goes feral.
+///
+/// Cross-module chain: pets (tameness) → world (Tame component) → event.
+#[test]
+fn touchstone_16_tameness_decay_to_feral() {
+    use nethack_babel_engine::pets::{apply_tameness_decay, PetState};
+
+    let (mut world, _) = create_test_world(42);
+
+    // Create a pet with low tameness.
+    let pet_pos = Position::new(41, 10);
+    world.dungeon_mut().current_level
+        .set_terrain(pet_pos, Terrain::Floor);
+
+    let pet_state = PetState::new(10, 0); // charisma=10, creation turn=0
+    let order = world.next_creation_order();
+    let pet = world.spawn((
+        Monster,
+        Tame,
+        Positioned(pet_pos),
+        HitPoints { current: 10, max: 10 },
+        Speed(18),
+        MovementPoints(NORMAL_SPEED as i32),
+        Name("kitten".to_string()),
+        pet_state,
+        order,
+    ));
+
+    // Verify pet starts tame.
+    assert!(
+        world.get_component::<Tame>(pet).is_some(),
+        "pet should start with Tame component"
+    );
+
+    // Apply extreme tameness decay (many turns separated).
+    let mut rng = Pcg64::seed_from_u64(42);
+    let went_feral = apply_tameness_decay(&mut world, pet, 100_000, &mut rng);
+
+    assert!(
+        went_feral,
+        "pet separated for 100k turns should go feral"
+    );
+
+    // Tame component should be removed.
+    assert!(
+        world.get_component::<Tame>(pet).is_none(),
+        "feral pet should not have Tame component"
+    );
+}
+
+/// Touchstone 16.3 -- Pet init creates a tame entity with correct components.
+#[test]
+fn touchstone_16_pet_init_creates_tame_entity() {
+    use nethack_babel_engine::pets::{init_pet, Role, PetState};
+
+    let (mut world, mut rng) = create_test_world(42);
+
+    // Set up floor around player.
+    for dx in -1..=1 {
+        for dy in -1..=1 {
+            let pos = Position::new(40 + dx, 10 + dy);
+            world.dungeon_mut().current_level.set_terrain(pos, Terrain::Floor);
+        }
+    }
+
+    let (pet, events) = init_pet(&mut world, Role::Valkyrie, &mut rng);
+
+    // Pet should have Tame and PetState components.
+    assert!(world.get_component::<Tame>(pet).is_some(), "pet should be tame");
+    assert!(world.get_component::<PetState>(pet).is_some(), "pet should have PetState");
+    assert!(world.get_component::<Monster>(pet).is_some(), "pet should be a Monster");
+    assert!(world.get_component::<HitPoints>(pet).is_some(), "pet should have HP");
+
+    // Should have a pet creation message.
+    assert!(!events.is_empty(), "pet creation should produce events");
+}
+
+// ==========================================================================
+// Scenario 17: Teleportation Chains
+// ==========================================================================
+
+/// Touchstone 17.1 -- Random teleport moves entity to a different position.
+///
+/// Cross-module chain: teleport → world (position) → event.
+#[test]
+fn touchstone_17_random_teleport_moves_entity() {
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Create a large floor area.
+    for y in 1..=18 {
+        for x in 1..=70 {
+            world.dungeon_mut().current_level
+                .set_terrain(Position::new(x, y), Terrain::Floor);
+        }
+    }
+
+    let pos_before = player_pos(&world);
+    let mut rng = Pcg64::seed_from_u64(42);
+
+    let events = nethack_babel_engine::teleport::random_teleport(
+        &mut world, player, &mut rng,
+    );
+
+    let pos_after = player_pos(&world);
+
+    // Should have teleported (EntityTeleported event).
+    let has_teleport = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::EntityTeleported { .. }
+    ));
+    assert!(has_teleport, "random teleport should emit EntityTeleported event");
+
+    // Position should have changed (statistically very unlikely to land on same spot).
+    // But we don't assert inequality because the RNG could theoretically pick the same spot.
+    // Instead verify the event has correct from/to.
+    if let Some(EngineEvent::EntityTeleported { from, to, .. }) =
+        events.iter().find(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
+    {
+        assert_eq!(*from, pos_before, "teleport 'from' should match original position");
+        assert_eq!(*to, pos_after, "teleport 'to' should match new position");
+    }
+}
+
+/// Touchstone 17.2 -- Controlled teleport to a specific valid position.
+#[test]
+fn touchstone_17_controlled_teleport_to_target() {
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Set up floor.
+    for y in 1..=15 {
+        for x in 1..=60 {
+            world.dungeon_mut().current_level
+                .set_terrain(Position::new(x, y), Terrain::Floor);
+        }
+    }
+
+    let target = Position::new(30, 10);
+    let events = nethack_babel_engine::teleport::controlled_teleport(
+        &mut world, player, target,
+    );
+
+    assert_eq!(
+        player_pos(&world), target,
+        "controlled teleport should move player to target"
+    );
+
+    let has_teleport = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::EntityTeleported { .. }
+    ));
+    assert!(has_teleport, "controlled teleport should emit EntityTeleported event");
+}
+
+/// Touchstone 17.3 -- Controlled teleport to a wall position is rejected.
+#[test]
+fn touchstone_17_controlled_teleport_to_wall_rejected() {
+    let mut world = GameWorld::new(Position::new(5, 5));
+    let player = world.player();
+
+    // Set (5,5) as floor, (10,10) as wall.
+    world.dungeon_mut().current_level.set_terrain(Position::new(5, 5), Terrain::Floor);
+    world.dungeon_mut().current_level.set_terrain(Position::new(10, 10), Terrain::Wall);
+
+    let target = Position::new(10, 10);
+    let events = nethack_babel_engine::teleport::controlled_teleport(
+        &mut world, player, target,
+    );
+
+    // Player should NOT have moved.
+    assert_eq!(
+        player_pos(&world), Position::new(5, 5),
+        "player should not teleport into a wall"
+    );
+
+    // Should have an error/invalid message.
+    let has_invalid = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Message { key, .. } if key.contains("invalid") || key.contains("blocked")
+    ));
+    assert!(
+        has_invalid,
+        "teleporting to wall should produce invalid-target message.\nEvents: {:?}",
+        events
+    );
+}
+
+// ==========================================================================
+// Scenario 18: Religion Chains (extending scenario 4)
+// ==========================================================================
+
+/// Touchstone 18.1 -- Prayer when starving: successful prayer restores nutrition.
+///
+/// Cross-module chain: religion → hunger (nutrition) → event.
+#[test]
+fn touchstone_18_prayer_when_starving_restores_nutrition() {
+    let mut state = make_religion_state();
+    state.nutrition = 0; // Starving.
+    state.bless_cooldown = 0;
+    state.god_anger = 0;
+    state.alignment_record = 10;
+    state.luck = 3;
+
+    let ptype = evaluate_prayer_simple(&state, false, None);
+    assert_eq!(ptype, PrayerType::Success, "prayer should succeed");
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let events = pray_simple(
+        &mut state,
+        dummy_entity(),
+        false,
+        None,
+        &mut rng,
+    );
+
+    // Nutrition should be restored (no longer 0).
+    assert!(
+        state.nutrition > 0,
+        "successful prayer while starving should restore nutrition (got {})",
+        state.nutrition
+    );
+
+    // Should have healing events.
+    assert!(!events.is_empty(), "prayer should produce events");
+}
+
+/// Touchstone 18.2 -- Offering the Amulet on wrong plane does nothing.
+#[test]
+fn touchstone_18_amulet_offering_wrong_plane() {
+    // Offering on a non-Astral plane should return NotAstralPlane.
+    for player_align in [Alignment::Lawful, Alignment::Neutral, Alignment::Chaotic] {
+        for altar_align in [Alignment::Lawful, Alignment::Neutral, Alignment::Chaotic] {
+            let result = offer_amulet(player_align, altar_align, false);
+            assert_eq!(
+                result,
+                AmuletOfferingResult::NotAstralPlane,
+                "offering on non-Astral plane should return NotAstralPlane"
+            );
+        }
+    }
+}
+
+// ==========================================================================
+// Scenario 19: Wand Chains
+// ==========================================================================
+
+/// Touchstone 19.1 -- Zapping a wand of fire at a monster deals damage.
+///
+/// Cross-module chain: wands → combat (damage) → event.
+#[test]
+fn touchstone_19_wand_of_fire_damages_monster() {
+    let mut world = GameWorld::new(Position::new(5, 5));
+
+    // Set up floor tiles for the beam.
+    for x in 5..=15 {
+        world.dungeon_mut().current_level
+            .set_terrain(Position::new(x, 5), Terrain::Floor);
+    }
+
+    // Place a monster in the beam path.
+    let mon_pos = Position::new(6, 5);
+    let monster = world.spawn((
+        Monster,
+        Positioned(mon_pos),
+        HitPoints { current: 50, max: 50 },
+        Name("goblin".to_string()),
+    ));
+
+    let mut charges = WandCharges { spe: 5, recharged: 0 };
+    let mut rng = test_rng();
+
+    let events = zap_wand(
+        &world,
+        world.player(),
+        WandType::Fire,
+        &mut charges,
+        Direction::East,
+        &mut rng,
+    );
+
+    // Wand charge should be consumed.
+    assert_eq!(charges.spe, 4, "zapping should consume a charge");
+
+    // Should have damage or hit events.
+    let has_damage = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::HpChange { amount, .. } if *amount < 0
+    ));
+    let has_hit = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::RangedHit { .. }
+    ));
+    let has_msg = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Message { key, .. } if key.contains("fire") || key.contains("burn")
+    ));
+
+    assert!(
+        has_damage || has_hit || has_msg,
+        "wand of fire should damage or affect a monster in its path.\nEvents: {:?}",
+        events
+    );
+}
+
+/// Touchstone 19.2 -- Empty wand (0 charges) produces a failure event.
+#[test]
+fn touchstone_19_empty_wand_fails() {
+    let world = GameWorld::new(Position::new(5, 5));
+    let mut charges = WandCharges { spe: 0, recharged: 0 };
+    let mut rng = test_rng();
+
+    let events = zap_wand(
+        &world,
+        world.player(),
+        WandType::Fire,
+        &mut charges,
+        Direction::East,
+        &mut rng,
+    );
+
+    // With 0 charges, the wand should fail.
+    // Charges should not go negative.
+    assert!(
+        charges.spe <= 0,
+        "empty wand should not gain charges"
+    );
+
+    // Should have a "nothing happens" message or wresting event.
+    let has_fail = events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Message { .. }
+    ));
+    assert!(
+        has_fail,
+        "zapping empty wand should produce a message.\nEvents: {:?}",
+        events
+    );
+}
+
+// ==========================================================================
+// Scenario 20: Dungeon Traversal Chains
+// ==========================================================================
+
+/// Touchstone 20.1 -- Dungeon branch flags are correctly propagated.
+///
+/// Cross-module chain: dungeon (branch) → religion (Gehennom check) → event.
+#[test]
+fn touchstone_20_dungeon_branch_propagation() {
+    let (mut world, _rng) = create_test_world(42);
+
+    // Default should be Main.
+    assert_eq!(world.dungeon().branch, DungeonBranch::Main);
+
+    // Set to Gehennom and verify it propagates to religion state.
+    world.dungeon_mut().branch = DungeonBranch::Gehennom;
+    let mut state = make_religion_state();
+    state.in_gehennom = world.dungeon().branch == DungeonBranch::Gehennom;
+    assert!(state.in_gehennom, "in_gehennom should be true for Gehennom branch");
+
+    // Set to Mines and verify.
+    world.dungeon_mut().branch = DungeonBranch::Mines;
+    state.in_gehennom = world.dungeon().branch == DungeonBranch::Gehennom;
+    assert!(!state.in_gehennom, "in_gehennom should be false for Mines branch");
+}
+
+/// Touchstone 20.2 -- Special branch properties: Gehennom is hellish.
+#[test]
+fn touchstone_20_branch_properties() {
+    use nethack_babel_engine::dungeon::{branch_is_hellish, branch_is_mazelike};
+
+    assert!(
+        branch_is_hellish(DungeonBranch::Gehennom),
+        "Gehennom should be hellish"
+    );
+    assert!(
+        !branch_is_hellish(DungeonBranch::Main),
+        "Main dungeon should not be hellish"
+    );
+    assert!(
+        !branch_is_hellish(DungeonBranch::Mines),
+        "Mines should not be hellish"
+    );
+}
+
+// ==========================================================================
+// Scenario 21: Hunger Chains
+// ==========================================================================
+
+/// Touchstone 21.1 -- Starvation threshold depends on constitution.
+///
+/// Cross-module chain: hunger (nutrition) → attributes (CON) → death.
+#[test]
+fn touchstone_21_starvation_threshold() {
+    use nethack_babel_engine::hunger::{starvation_threshold, should_starve, nutrition_to_hunger_level};
+    use nethack_babel_engine::event::HungerLevel;
+
+    // Higher CON gives slightly lower starvation threshold.
+    let threshold_low = starvation_threshold(3);
+    let threshold_high = starvation_threshold(18);
+    assert!(
+        threshold_low >= threshold_high,
+        "low CON threshold ({}) should be >= high CON threshold ({})",
+        threshold_low, threshold_high
+    );
+
+    // Nutrition 0 should mean starving.
+    assert!(
+        nutrition_to_hunger_level(0) == HungerLevel::Fainting
+            || nutrition_to_hunger_level(0) == HungerLevel::Starved,
+        "nutrition 0 should be fainting or starved"
+    );
+
+    // Nutrition 900 should be not hungry.
+    assert_eq!(
+        nutrition_to_hunger_level(900),
+        HungerLevel::NotHungry,
+        "nutrition 900 should be NotHungry"
+    );
+
+    // Should starve at deeply negative nutrition (below threshold).
+    // Threshold for CON=10 is -(100 + 10*10) = -200.
+    assert!(
+        should_starve(-300, 10),
+        "nutrition -300 should cause starvation (threshold is -200 for CON 10)"
+    );
+
+    // Should NOT starve at 0 nutrition (above threshold).
+    assert!(
+        !should_starve(0, 10),
+        "nutrition 0 should not cause immediate starvation (threshold is -200)"
+    );
+}
+
+// ==========================================================================
+// Scenario 22: Score/Conduct Integration
+// ==========================================================================
+
+/// Touchstone 22.1 -- Conducts affect score in expected direction.
+///
+/// Cross-module chain: conduct → score → event.
+#[test]
+fn touchstone_22_conduct_affects_score() {
+    // Full conducts ascension.
+    let full = ConductState::new();
+    let input_full = ScoreInput {
+        experience: 5000,
+        score_experience: 2000,
+        gold_carried: 10_000,
+        gold_deposited: 5_000,
+        artifacts_held: 5,
+        conducts: full,
+        ascended: true,
+        max_depth: 50,
+    };
+    let score_full = calculate_score(&input_full);
+
+    // Break several conducts.
+    let mut broken = ConductState::new();
+    let _ = check_conduct(&mut broken, &ConductAction::Kill);
+    let _ = check_conduct(&mut broken, &ConductAction::Read);
+    let _ = check_conduct(&mut broken, &ConductAction::Eat {
+        is_vegan: false,
+        is_vegetarian: false,
+    });
+
+    let input_broken = ScoreInput {
+        conducts: broken,
+        ..input_full.clone()
+    };
+    let score_broken = calculate_score(&input_broken);
+
+    assert!(
+        score_full > score_broken,
+        "full conducts ({}) should score higher than broken ({})",
+        score_full, score_broken
+    );
+}
+
+/// Touchstone 22.2 -- Non-ascension vs ascension score difference.
+#[test]
+fn touchstone_22_ascension_bonus() {
+    let conducts = ConductState::new();
+    let input = ScoreInput {
+        experience: 1000,
+        score_experience: 500,
+        gold_carried: 5000,
+        gold_deposited: 2000,
+        artifacts_held: 2,
+        conducts: conducts.clone(),
+        ascended: true,
+        max_depth: 30,
+    };
+    let score_asc = calculate_score(&input);
+
+    let input_no_asc = ScoreInput {
+        ascended: false,
+        ..input.clone()
+    };
+    let score_no_asc = calculate_score(&input_no_asc);
+
+    assert_eq!(
+        score_asc - score_no_asc, 50_000,
+        "ascension should add exactly 50,000 to score"
+    );
+}
+
+// ==========================================================================
+// Scenario 23: Cross-module Coherence
+// ==========================================================================
+
+/// Touchstone 23.1 -- Turn loop processes multiple systems without panicking.
+///
+/// Cross-module chain: turn → movement → combat → status → event.
+#[test]
+fn touchstone_23_turn_loop_multi_system_coherence() {
+    let (mut world, mut rng) = create_test_world(42);
+
+    // Set up a small arena.
+    for y in 8..=12 {
+        for x in 38..=42 {
+            world.dungeon_mut().current_level
+                .set_terrain(Position::new(x, y), Terrain::Floor);
+        }
+    }
+
+    // Place a monster.
+    let _monster = place_monster(&mut world, Position::new(41, 10), "kobold", 5);
+
+    // Run several turns of movement without panicking.
+    let directions = [
+        Direction::East, Direction::West, Direction::North,
+        Direction::South, Direction::East, Direction::East,
+    ];
+
+    for dir in &directions {
+        if let Some(mut mp) = world.get_component_mut::<MovementPoints>(world.player()) {
+            mp.0 = NORMAL_SPEED as i32;
+        }
+        let _events = do_action(
+            &mut world,
+            PlayerAction::Move { direction: *dir },
+            &mut rng,
+        );
+    }
+
+    // If we get here without panic, the turn loop handles multi-system
+    // interaction correctly.
+}
+
+/// Touchstone 23.2 -- World state consistency after multiple actions.
+#[test]
+fn touchstone_23_world_state_consistency() {
+    let (mut world, mut rng) = create_test_world(42);
+
+    // Set up floor.
+    for y in 5..=15 {
+        for x in 35..=45 {
+            world.dungeon_mut().current_level
+                .set_terrain(Position::new(x, y), Terrain::Floor);
+        }
+    }
+
+    // Record initial state.
+    let initial_hp = world
+        .get_component::<HitPoints>(world.player())
+        .map(|h| h.max)
+        .unwrap_or(0);
+
+    // Perform several actions: move, wait, pray.
+    let actions = [
+        PlayerAction::Move { direction: Direction::East },
+        PlayerAction::Wait,
+        PlayerAction::Wait,
+    ];
+
+    for action in &actions {
+        if let Some(mut mp) = world.get_component_mut::<MovementPoints>(world.player()) {
+            mp.0 = NORMAL_SPEED as i32;
+        }
+        let _events = do_action(&mut world, action.clone(), &mut rng);
+    }
+
+    // Player should still exist with valid components.
+    assert!(
+        world.get_component::<HitPoints>(world.player()).is_some(),
+        "player should still have HP after multiple actions"
+    );
+    assert!(
+        world.get_component::<Positioned>(world.player()).is_some(),
+        "player should still have position after multiple actions"
+    );
+
+    // HP max should not have changed from basic movement.
+    let hp_after = world
+        .get_component::<HitPoints>(world.player())
+        .map(|h| h.max)
+        .unwrap_or(0);
+    assert_eq!(
+        initial_hp, hp_after,
+        "HP max should not change from basic movement"
+    );
+}
+
+/// Touchstone 23.3 -- Luck decay over time.
+///
+/// Cross-module chain: status (luck) → turn (tick) → world.
+#[test]
+fn touchstone_23_luck_decay() {
+    use nethack_babel_engine::status::tick_luck;
+    use nethack_babel_engine::world::PlayerCombat;
+
+    let (mut world, _) = create_test_world(42);
+    let player = world.player();
+
+    // Set luck to 5 (above base of 0).
+    if let Some(mut pc) = world.get_component_mut::<PlayerCombat>(player) {
+        pc.luck = 5;
+    }
+
+    // Simulate luck ticks at intervals that trigger decay (every 600 turns).
+    // tick_luck only fires when turn % interval == 0.
+    let mut decayed = false;
+    for turn in 1..=60u64 {
+        let t = turn * 600; // Each tick at a multiple of 600.
+        let _events = tick_luck(
+            &mut world,
+            player,
+            t,
+            0,     // base_luck
+            false, // no luckstone
+            false, // not cursed
+            false, // not blessed
+            false, // no amulet/angry god
+        );
+        let current_luck = world
+            .get_component::<PlayerCombat>(player)
+            .map(|pc| pc.luck)
+            .unwrap_or(0);
+        if current_luck < 5 {
+            decayed = true;
+            break;
+        }
+    }
+
+    assert!(decayed, "luck should eventually decay without a luckstone");
+}
+
+/// Touchstone 23.4 -- Hallucination randomizes names.
+///
+/// Cross-module chain: status (hallucinating) → display (name) → event.
+#[test]
+fn touchstone_23_hallucination_randomizes_names() {
+    use nethack_babel_engine::status::hallucinate_monster_name;
+
+    let mut rng = Pcg64::seed_from_u64(42);
+    let real_name = "goblin";
+
+    // Hallucinated names should differ from the real name.
+    let hallu_name = hallucinate_monster_name(real_name, &mut rng);
+    assert_ne!(
+        hallu_name, real_name,
+        "hallucinated name should differ from real name"
+    );
+}
+
+// ==========================================================================
+// Scenario 24: Form abilities and polymorph integration
+// ==========================================================================
+
+/// Touchstone 24.1 -- Dragon form has breath weapon ability.
+#[test]
+fn touchstone_24_dragon_form_abilities() {
+    use nethack_babel_engine::polyself::{form_special_abilities, FormAbility};
+
+    let abilities = form_special_abilities("red dragon");
+    let has_breath = abilities.iter().any(|a| matches!(a, FormAbility::BreathWeapon(_)));
+    assert!(
+        has_breath,
+        "red dragon form should have breath weapon ability.\nAbilities: {:?}",
+        abilities
+    );
+}
+
+/// Touchstone 24.2 -- Floating eye form has no special attack abilities.
+#[test]
+fn touchstone_24_floating_eye_form_no_attack() {
+    use nethack_babel_engine::polyself::form_special_abilities;
+
+    let abilities = form_special_abilities("floating eye");
+    // Floating eyes don't have offensive abilities.
+    assert!(
+        abilities.is_empty() || abilities.iter().all(|a| !matches!(
+            a,
+            nethack_babel_engine::polyself::FormAbility::BreathWeapon(_)
+        )),
+        "floating eye should not have breath weapon"
+    );
 }

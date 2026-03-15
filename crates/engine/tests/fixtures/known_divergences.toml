@@ -1,0 +1,18 @@
+# Known intentional divergences between C NetHack and Rust Babel.
+# The differential test harness accepts these differences.
+
+[[divergence]]
+field = "hunger_rate"
+reason = "Babel uses slightly different accessory hunger calculation"
+severity = "minor"
+
+[[divergence]]
+field = "monster_order"
+reason = "ECS entity ordering differs from C linked-list ordering"
+severity = "cosmetic"
+
+[[divergence]]
+field = "rng_sequence"
+reason = "C uses ISAAC64, Rust uses PCG64 — different algorithms"
+severity = "fundamental"
+note = "RNG-dependent values (damage, hit/miss) will always differ"
