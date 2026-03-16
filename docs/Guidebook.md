@@ -17,7 +17,9 @@
 [10. Tips for New Players](#10-tips-for-new-players) --
 [11. Language Support](#11-language-support) --
 [12. Command Reference](#12-command-reference) --
-[13. Symbol Reference](#13-symbol-reference)
+[13. Symbol Reference](#13-symbol-reference) --
+[14. Original NetHack at a Glance](#14-original-nethack-at-a-glance) --
+[15. Project Roadmap and TODO](#15-project-roadmap-and-todo)
 
 ---
 
@@ -507,6 +509,35 @@ Translation files use Project Fluent format (`.ftl`) in `data/locale/`. When a t
 | `:` | Lizard | `;` | Sea monster |
 
 Colors distinguish monsters of the same letter. A red `D` is a red dragon; a white `D` is a white dragon. Pay attention to color -- it can mean the difference between a manageable fight and instant death.
+
+## 14. Original NetHack at a Glance
+
+Original NetHack is a long-running, community-maintained roguelike known for deep system interactions and strict permadeath. It rewards planning, experimentation, and risk management over reflexes. The game world is procedural, but the rules are consistent enough that mastery comes from understanding interactions.
+
+The core campaign flow in both original NetHack and NetHack Babel is:
+
+1. Descend through the Dungeons of Doom and side branches.
+2. Retrieve the Amulet of Yendor.
+3. Ascend through the Elemental Planes.
+4. Offer the Amulet on the correct Astral altar.
+
+## 15. Project Roadmap and TODO
+
+### Roadmap (2026)
+
+1. Finish remaining parity wiring in turn resolution and command dispatch.
+2. Expand differential replay (C recordings vs Rust replay) and fuzzing for edge-case drift detection.
+3. Add more full-run stability tests across quest, Gehennom, ascension, and disclosure paths.
+4. Harden runtime interfaces: save compatibility policy, replay behavior, and server mode contracts.
+5. Keep contributor tooling and docs aligned with implementation changes.
+
+### Active TODO
+
+- [ ] Close remaining turn-pipeline wiring TODOs around prayer/action dispatch and inventory/equipment entity lookup.
+- [ ] Grow deterministic replay corpora and automate nightly divergence reports.
+- [ ] Add more scoring and disclosure assertions for win/lose end states.
+- [ ] Audit wizard/debug command behavior and backfill parity tests.
+- [ ] Improve contributor docs for adding monsters, objects, and levels with validation checklists.
 
 ---
 

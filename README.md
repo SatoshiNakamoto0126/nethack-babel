@@ -29,6 +29,10 @@
 
 NetHack Babel is a ground-up reimplementation of [NetHack 3.7](https://github.com/NetHack/NetHack) in Rust, preserving formula-level accuracy while adopting a modern architecture. It replaces NetHack's global state and manual memory management with an ECS-based design (hecs), separates game logic from all IO, and defines all game content — monsters, items, dungeons — in TOML data files rather than compiled-in tables. The engine emits typed events instead of formatted strings, enabling built-in multilingual support (English, Simplified Chinese, Traditional Chinese, German, French) via Project Fluent without any changes to game logic. The result is a NetHack that is easier to extend, test, translate, and port to new frontends.
 
+## About Original NetHack
+
+NetHack is one of the foundational roguelikes, developed continuously for decades by the NetHack DevTeam. It is a turn-based, single-player dungeon simulation centered on emergent interactions: item effects combine in surprising ways, dungeon branches create long strategic arcs, and permadeath makes every decision final. The classic objective is to retrieve the Amulet of Yendor, ascend through the Planes, and sacrifice it on the correct Astral altar. NetHack Babel follows this original gameplay contract and treats NetHack 3.7 behavior as the reference standard.
+
 ## Features
 
 - **True Color terminal rendering** — ratatui-based TUI with BUC-colored inventory, 16-color system with status highlighting
@@ -266,6 +270,27 @@ cargo build --release                    # Release build
 The game engine is feature-complete with 99.8% coverage of NetHack 3.7 gameplay systems. All core systems — combat, magic, items, monsters, dungeon generation, special levels, quests, pets, religion, traps, shops, hunger, status effects, identification, polymorph, riding, conducts, bones, save/load, leaderboard, and the terminal UI — are implemented and verified against the original NetHack source with 4,217+ passing tests.
 
 See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENCES.md](DIFFERENCES.md) for known deviations from NetHack 3.7 behavior.
+
+## Roadmap (2026)
+
+1. **Parity closure (mechanics wiring)**  
+   Finish remaining turn-loop wiring gaps so all already-implemented systems are reachable from live gameplay paths.
+2. **Differential validation at scale**  
+   Expand C-vs-Rust recording replay and fuzzing to run continuously and catch edge-case divergences automatically.
+3. **Start-to-end campaign hardening**  
+   Add more long-run tests for full runs (early game, quest branches, Gehennom, ascension, and death/disclosure paths).
+4. **Runtime and release hardening**  
+   Stabilize replay/server interfaces, improve save compatibility rules, and improve release packaging and reproducibility.
+5. **Modding and documentation tooling**  
+   Improve data schema docs, add workflow guides for content contributors, and keep Guidebook/README parity.
+
+## TODO (Short-Term)
+
+- [ ] Close remaining action wiring TODOs in the turn pipeline (prayer, inventory entity lookup, ranged equipment lookup, summon hooks).
+- [ ] Increase deterministic differential corpus size and add nightly fuzz runs with regression triage.
+- [ ] Add full-run touchstone scenarios covering win/lose disclosures and score pipeline.
+- [ ] Audit wizard/debug commands for parity with documented behavior and add missing tests.
+- [ ] Add contributor-facing docs for adding monsters/items/special levels safely with validation steps.
 
 ## Documentation
 

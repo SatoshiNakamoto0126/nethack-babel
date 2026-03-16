@@ -344,3 +344,34 @@ Some roles have female-specific rank titles (e.g., Priestess instead of Priest).
 8. **Save your scrolls of identify** — use them on high-value unidentified items.
 9. **Carry a lizard corpse** — it never rots and cures stoning.
 10. **The DevTeam thinks of everything** — if you think "I wonder if I can...", the answer is probably yes.
+
+## 17. Original NetHack at a Glance
+
+Original NetHack is a long-running roguelike lineage project developed by the NetHack DevTeam. Its defining traits are procedural dungeon generation, extreme system interaction depth, and strict permadeath. It is both a strategy game and a simulation sandbox: tiny decisions about inventory, positioning, luck, and timing can decide an entire run.
+
+The core campaign loop is unchanged in NetHack Babel:
+
+1. Descend through the Dungeons of Doom and side branches.
+2. Retrieve the Amulet of Yendor.
+3. Ascend through the Elemental Planes.
+4. Offer the Amulet on the correct Astral altar.
+
+If you are using this guide to learn Babel, most "classic NetHack wisdom" still applies directly.
+
+## 18. Project Roadmap and TODO
+
+### Roadmap (2026)
+
+1. Finish parity wiring in turn resolution so all implemented mechanics are reachable from live gameplay commands.
+2. Scale differential testing (C recordings vs Rust replay) and fuzzing to continuously catch edge-case divergences.
+3. Harden start-to-end campaign stability with long-run touchstones (early game, quest, Gehennom, ascension, and full disclosure chain).
+4. Stabilize runtime surfaces (save compatibility policy, replay format behavior, server mode contracts).
+5. Keep contributor tooling and docs aligned with implementation pace.
+
+### Active TODO
+
+- [ ] Close remaining turn-pipeline wiring TODOs around prayer/action dispatch and inventory/equipment entity lookup.
+- [ ] Add larger deterministic corpora for differential replay and automate nightly divergence reports.
+- [ ] Add more endgame and scoring/disclosure assertions to integration tests.
+- [ ] Audit wizard/debug command behavior and backfill parity tests where missing.
+- [ ] Document recommended workflows for adding data content (monsters, objects, levels) with validation checklists.
