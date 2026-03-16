@@ -370,8 +370,8 @@ If you are using this guide to learn Babel, most "classic NetHack wisdom" still 
 
 ### Active TODO
 
-- [ ] Close remaining turn-pipeline wiring TODOs around prayer/action dispatch and inventory/equipment entity lookup.
-- [ ] Add larger deterministic corpora for differential replay and automate nightly divergence reports.
-- [ ] Add more endgame and scoring/disclosure assertions to integration tests.
+- [x] Close remaining turn-pipeline wiring TODOs around prayer/action dispatch and inventory/equipment entity lookup.
+- [x] Add nightly differential/property/Monte-Carlo regression workflow (with optional C-side corpus refresh).
+- [x] Add more endgame and scoring/disclosure assertions to integration tests.
 - [ ] Audit wizard/debug command behavior and backfill parity tests where missing.
 - [ ] Document recommended workflows for adding data content (monsters, objects, levels) with validation checklists.

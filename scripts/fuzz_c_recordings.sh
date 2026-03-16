@@ -10,8 +10,10 @@ TURNS="${2:-50}"
 OUTDIR="crates/engine/tests/fixtures/fuzz"
 mkdir -p "$OUTDIR"
 
-# Valid movement keys + common actions
-VALID_KEYS="hjklyubn.ssss"
+# Valid movement keys + common safe actions.
+VALID_KEYS="hjklyubn.s"
+SUCCESS=0
+FAIL=0
 
 echo "=== Fuzzing C NetHack ($NUM_RUNS runs × $TURNS turns) ==="
 
@@ -27,19 +29,23 @@ for run in $(seq 1 "$NUM_RUNS"); do
 
     echo "Run $run/$NUM_RUNS: seed=$SEED, ${#KEYS} keystrokes"
 
-    # Use the generate script
-    bash scripts/generate_c_recording.sh "$SEED" "$KEYS" 2>/dev/null || true
+    OUT_BASENAME="fuzz_seed_${SEED}"
+    OUTPUT_NAME="$OUT_BASENAME" bash scripts/generate_c_recording.sh "$KEYS" "$TURNS" \
+        >/dev/null 2>&1 || true
 
-    # Move output to fuzz directory
-    if [ -f "crates/engine/tests/fixtures/c_recording_${KEYS}.jsonl" ]; then
-        mv "crates/engine/tests/fixtures/c_recording_${KEYS}.jsonl" \
-           "$OUTDIR/fuzz_seed_${SEED}.jsonl"
+    # Move output to fuzz directory.
+    SRC="crates/engine/tests/fixtures/c_recording_${OUT_BASENAME}.jsonl"
+    if [ -f "$SRC" ]; then
+        mv "$SRC" "$OUTDIR/${OUT_BASENAME}.jsonl"
+        SUCCESS=$((SUCCESS + 1))
+    else
+        FAIL=$((FAIL + 1))
     fi
 done
 
 echo ""
 echo "=== Fuzzing Complete ==="
-echo "Generated recordings in $OUTDIR/"
+echo "Generated recordings in $OUTDIR/ (success=$SUCCESS, failed=$FAIL)"
 ls -la "$OUTDIR/" 2>/dev/null | tail -20
 
 echo ""

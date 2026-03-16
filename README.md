@@ -236,7 +236,9 @@ An industrial-grade cross-validation framework that lets the C and Rust engines 
 
 ```bash
 # Generate a C recording
-bash scripts/generate_c_recording.sh 12345 movement
+bash scripts/generate_c_recording.sh movement 20
+# (legacy form still supported)
+bash scripts/generate_c_recording.sh 12345 movement 20
 
 # Run differential tests
 cargo test -p nethack-babel-engine --test differential
@@ -248,6 +250,8 @@ bash scripts/fuzz_c_recordings.sh 100 200
 When a divergence is found (e.g., "C says player is Punished, Rust says not"), the exact turn, RNG calls, and state delta are reported for targeted debugging.
 
 The harness has been validated end-to-end: a 20-turn C recording was successfully generated and consumed by the Rust differential tests.
+Nightly replay/property/Monte-Carlo regression is automated in
+`.github/workflows/nightly-differential.yml` (with optional C-side corpus refresh if `NETHACK_DIR` is configured in repository variables).
 
 ## Building
 
@@ -286,9 +290,9 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 
 ## TODO (Short-Term)
 
-- [ ] Close remaining action wiring TODOs in the turn pipeline (prayer, inventory entity lookup, ranged equipment lookup, summon hooks).
-- [ ] Increase deterministic differential corpus size and add nightly fuzz runs with regression triage.
-- [ ] Add full-run touchstone scenarios covering win/lose disclosures and score pipeline.
+- [x] Close remaining action wiring TODOs in the turn pipeline (prayer, inventory entity lookup, ranged equipment lookup, summon hooks).
+- [x] Add nightly differential/property/Monte-Carlo regression workflow (with optional C corpus refresh).
+- [x] Add full-run touchstone scenarios covering win/lose disclosures and score pipeline.
 - [ ] Audit wizard/debug commands for parity with documented behavior and add missing tests.
 - [ ] Add contributor-facing docs for adding monsters/items/special levels safely with validation steps.
 

@@ -3,17 +3,45 @@
 # Requires: C NetHack built with DIFF_TEST enabled + WANT_SOURCE_INSTALL=1
 # Uses Python pty to handle NetHack's interactive terminal (--More-- prompts).
 #
-# Usage: ./scripts/generate_c_recording.sh [scenario] [num_turns]
+# Usage:
+#   ./scripts/generate_c_recording.sh [scenario] [num_turns]
+#   ./scripts/generate_c_recording.sh [seed] [scenario] [num_turns]   (legacy)
 #   scenario: rest|movement|search|<custom_keys>
 #   num_turns: number of keystrokes (default 20)
 set -euo pipefail
 
 NETHACK_DIR="${NETHACK_DIR:-/Users/hz/Downloads/NetHack}"
 BABEL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SCENARIO="${1:-rest}"
-NUM_TURNS="${2:-20}"
+OUTPUT_NAME="${OUTPUT_NAME:-}"
+LEGACY_SEED=""
+
+if [ "$#" -ge 2 ] && [[ "$1" =~ ^[0-9]+$ ]] && ! [[ "$2" =~ ^[0-9]+$ ]]; then
+    # Backward-compatible form: [seed] [scenario] [num_turns]
+    LEGACY_SEED="$1"
+    SCENARIO="$2"
+    NUM_TURNS="${3:-20}"
+else
+    SCENARIO="${1:-rest}"
+    NUM_TURNS="${2:-20}"
+fi
+
+if ! [[ "$NUM_TURNS" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: num_turns must be an integer, got: $NUM_TURNS"
+    exit 1
+fi
+
+if [ -z "$OUTPUT_NAME" ]; then
+    OUTPUT_NAME="$SCENARIO"
+fi
+SAFE_OUTPUT_NAME="$(printf '%s' "$OUTPUT_NAME" | tr -cd '[:alnum:]_.-')"
+if [ -z "$SAFE_OUTPUT_NAME" ]; then
+    SAFE_OUTPUT_NAME="recording"
+fi
 
 echo "=== Generating C NetHack recording (scenario=$SCENARIO, turns=$NUM_TURNS) ==="
+if [ -n "$LEGACY_SEED" ]; then
+    echo "Legacy seed argument provided ($LEGACY_SEED); C runtime seed control is not wired in this script."
+fi
 
 if [ ! -f "$NETHACK_DIR/playground/nethack" ]; then
     echo "ERROR: No binary at $NETHACK_DIR/playground/nethack"
@@ -93,8 +121,8 @@ else:
 JSONL="$NETHACK_DIR/playground/diff_test_output.jsonl"
 if [ -f "$JSONL" ] && [ -s "$JSONL" ]; then
     mkdir -p "$BABEL_DIR/crates/engine/tests/fixtures"
-    cp "$JSONL" "$BABEL_DIR/crates/engine/tests/fixtures/c_recording_${SCENARIO}.jsonl"
-    echo "→ crates/engine/tests/fixtures/c_recording_${SCENARIO}.jsonl"
+    cp "$JSONL" "$BABEL_DIR/crates/engine/tests/fixtures/c_recording_${SAFE_OUTPUT_NAME}.jsonl"
+    echo "→ crates/engine/tests/fixtures/c_recording_${SAFE_OUTPUT_NAME}.jsonl"
 else
     echo "ERROR: No recording to copy"
     exit 1

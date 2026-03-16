@@ -1099,13 +1099,13 @@ pub fn check_separated_starvation(
 
 /// Determine whether a pet is currently inside a shop boundary.
 ///
-/// This is a simplified check that tests whether the pet's position falls
-/// within a shopkeeper-owned room.  The full implementation requires shop
-/// integration from Track Q; this provides the skeleton.
-pub fn pet_is_in_shop(_world: &GameWorld, _pet_pos: Position) -> bool {
-    // Stub: full implementation deferred to shop.rs integration.
-    // When shops are fully implemented, this checks shop room boundaries.
-    false
+/// Uses the runtime shop room registry on `DungeonState`.
+pub fn pet_is_in_shop(world: &GameWorld, pet_pos: Position) -> bool {
+    world
+        .dungeon()
+        .shop_rooms
+        .iter()
+        .any(|shop| shop.contains(pet_pos))
 }
 
 /// Execute the pet shop stealing strategy.
@@ -1120,22 +1120,54 @@ pub fn pet_is_in_shop(_world: &GameWorld, _pet_pos: Position) -> bool {
 pub fn pet_shop_steal_check(
     world: &mut GameWorld,
     pet: Entity,
-    _old_pos: Position,
-    _new_pos: Position,
+    old_pos: Position,
+    new_pos: Position,
 ) -> Vec<EngineEvent> {
-    let events = Vec::new();
+    let mut events = Vec::new();
 
     // Check if pet is tame.
     if world.get_component::<Tame>(pet).is_none() {
         return events;
     }
 
-    // The full shop stealing logic requires:
-    // 1. Check if old_pos was inside a shop and new_pos is outside.
-    // 2. If so, any items in the pet's inventory become "stolen" (free).
-    // 3. Shopkeeper becomes angry.
-    //
-    // This skeleton is preserved for Track Q integration.
+    // Trigger only when crossing shop boundary outward.
+    if !pet_is_in_shop(world, old_pos) || pet_is_in_shop(world, new_pos) {
+        return events;
+    }
+
+    // Count carried merchandise as a coarse stolen-value proxy.
+    let carrier_id = pet.to_bits().get() as u32;
+    let stolen_amount: i32 = world
+        .ecs()
+        .query::<(&ObjectCore, &ObjectLocation)>()
+        .iter()
+        .filter_map(|(_, (core, loc))| match loc {
+            ObjectLocation::MonsterInventory { carrier_id: cid } if *cid == carrier_id => {
+                Some(core.quantity as i32)
+            }
+            _ => None,
+        })
+        .sum();
+
+    if stolen_amount <= 0 {
+        return events;
+    }
+
+    if let Some(shop) = world
+        .dungeon_mut()
+        .shop_rooms
+        .iter_mut()
+        .find(|s| s.contains(old_pos))
+    {
+        shop.angry = true;
+        shop.robbed += stolen_amount;
+    }
+
+    events.push(EngineEvent::msg("shop-theft-warning"));
+    events.push(EngineEvent::msg_with(
+        "shop-stolen-amount",
+        vec![("amount", stolen_amount.to_string())],
+    ));
 
     events
 }
@@ -1656,6 +1688,7 @@ mod tests {
     use super::*;
     use crate::action::Position;
     use crate::dungeon::Terrain;
+    use crate::shop::{ShopRoom, ShopType};
     use crate::world::{
         ArmorClass, Attributes, ExperienceLevel, HitPoints, Monster, MovementPoints, NORMAL_SPEED,
         Name, Positioned, Speed, Tame,
@@ -1740,6 +1773,19 @@ mod tests {
                 y: pos.y as i16,
             },
         ))
+    }
+
+    /// Register a simple rectangular shop room in the test dungeon.
+    fn add_shop_room(world: &mut GameWorld, top_left: Position, bottom_right: Position) {
+        let keeper = spawn_monster_at(world, top_left, "Izchak");
+        let room = ShopRoom::new(
+            top_left,
+            bottom_right,
+            ShopType::General,
+            keeper,
+            "Izchak".to_string(),
+        );
+        world.dungeon_mut().shop_rooms.push(room);
     }
 
     // ── Test 1: Starting pet by role ─────────────────────────────
@@ -2750,11 +2796,12 @@ mod tests {
         assert_eq!(MonsterSize::Gigantic.nutrition_multiplier(), 2);
     }
 
-    // ── Track L: Shop Stealing Skeleton Tests ────────────────────
+    // ── Track L: Shop stealing tests ─────────────────────────────
 
     #[test]
     fn test_pet_shop_steal_check_not_tame() {
         let mut world = make_test_world();
+        add_shop_room(&mut world, Position::new(8, 8), Position::new(12, 12));
         let monster = spawn_monster_at(&mut world, Position::new(9, 8), "goblin");
         let events = pet_shop_steal_check(
             &mut world,
@@ -2769,9 +2816,70 @@ mod tests {
     }
 
     #[test]
-    fn test_pet_shop_is_in_shop_stub() {
-        let world = make_test_world();
-        // Stub always returns false until shop system is integrated.
+    fn test_pet_shop_inclusion_uses_shop_boundaries() {
+        let mut world = make_test_world();
+        add_shop_room(&mut world, Position::new(8, 8), Position::new(12, 12));
+
+        assert!(pet_is_in_shop(&world, Position::new(9, 9)));
         assert!(!pet_is_in_shop(&world, Position::new(5, 5)));
+    }
+
+    #[test]
+    fn test_pet_shop_steal_check_pet_exits_with_merchandise() {
+        let mut world = make_test_world();
+        add_shop_room(&mut world, Position::new(8, 8), Position::new(12, 12));
+        let pet = spawn_pet_at(&mut world, Position::new(9, 9), 10);
+
+        // Simulate the pet carrying unpaid goods.
+        let carrier_id = pet.to_bits().get() as u32;
+        let _loot = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(123),
+                object_class: ObjectClass::Food,
+                quantity: 2,
+                weight: 10,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::MonsterInventory { carrier_id },
+        ));
+
+        assert!(pet_is_in_shop(&world, Position::new(9, 9)));
+        assert!(!pet_is_in_shop(&world, Position::new(13, 9)));
+        let carried_qty: i32 = world
+            .ecs()
+            .query::<(&ObjectCore, &ObjectLocation)>()
+            .iter()
+            .filter_map(|(_, (core, loc))| match loc {
+                ObjectLocation::MonsterInventory { carrier_id: cid } if *cid == carrier_id => {
+                    Some(core.quantity as i32)
+                }
+                _ => None,
+            })
+            .sum();
+        assert_eq!(carried_qty, 2, "pet should carry 2 units of shop loot");
+
+        let events =
+            pet_shop_steal_check(&mut world, pet, Position::new(9, 9), Position::new(13, 9));
+
+        assert!(
+            events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "shop-theft-warning")
+            ),
+            "pet leaving shop with loot should trigger theft warning"
+        );
+        assert!(
+            events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "shop-stolen-amount")
+            ),
+            "pet leaving shop with loot should report stolen amount"
+        );
+        let shop = &world.dungeon().shop_rooms[0];
+        assert!(shop.angry, "shopkeeper should become angry");
+        assert_eq!(
+            shop.robbed, 2,
+            "robbed amount should track pet-carried quantity"
+        );
     }
 }

@@ -1,0 +1,46 @@
+name: Nightly Differential
+
+on:
+  schedule:
+    - cron: '20 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  differential-regression:
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Optional C-side fuzz corpus refresh
+        env:
+          NETHACK_DIR: ${{ vars.NETHACK_DIR }}
+          FUZZ_RUNS: ${{ vars.NETHACK_FUZZ_RUNS }}
+          FUZZ_TURNS: ${{ vars.NETHACK_FUZZ_TURNS }}
+        run: |
+          if [ -n "${NETHACK_DIR:-}" ] && [ -x "${NETHACK_DIR}/playground/nethack" ]; then
+            echo "C NetHack detected at ${NETHACK_DIR}; generating extra fuzz recordings..."
+            NETHACK_DIR="${NETHACK_DIR}" \
+              bash scripts/fuzz_c_recordings.sh "${FUZZ_RUNS:-25}" "${FUZZ_TURNS:-150}"
+          else
+            echo "Skipping C-side corpus refresh: set repository variable NETHACK_DIR to enable."
+          fi
+
+      - name: Differential replay tests
+        run: cargo test -p nethack-babel-engine --test differential -- --nocapture
+
+      - name: Property-based invariants
+        run: cargo test -p nethack-babel-engine --test property_tests -- --nocapture
+
+      - name: Monte Carlo distribution checks
+        run: cargo test -p nethack-babel-engine --test monte_carlo -- --nocapture
+
+      - name: Upload generated fuzz corpus
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-fuzz-corpus
+          path: crates/engine/tests/fixtures/fuzz/*.jsonl
+          if-no-files-found: ignore

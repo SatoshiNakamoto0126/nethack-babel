@@ -11,14 +11,21 @@ use nethack_babel_engine::bones::{
 };
 use nethack_babel_engine::combat::{has_passive_paralyze_gaze, resolve_melee_attack};
 use nethack_babel_engine::conduct::{
-    ConductAction, ConductState, ScoreInput, calculate_score, check_conduct, pudding_should_split,
+    Conduct, ConductAction, ConductState, ScoreEntry, ScoreInput, Scoreboard, calculate_score,
+    check_conduct, display_conducts, pudding_should_split,
 };
 use nethack_babel_engine::dungeon::{DungeonBranch, LevelMap, Terrain};
+use nethack_babel_engine::end::{
+    DisclosureOption, DoneParams, EndHow, VanquishedEntry, auto_disclose,
+    default_disclosure_options, done, format_disclosure, generate_disclosure, render_tombstone,
+};
 use nethack_babel_engine::event::{DeathCause, EngineEvent, PassiveEffect, StatusEffect};
+use nethack_babel_engine::exper::Experience;
 use nethack_babel_engine::religion::{
     AmuletOfferingResult, PrayerType, ReligionState, evaluate_prayer_simple, has_invocation_items,
     offer_amulet, pray_simple,
 };
+use nethack_babel_engine::role::Role;
 use nethack_babel_engine::shop::{
     ShopRoom, ShopType, get_cost, get_full_buy_price, kop_counts, pay_bill, rob_shop,
 };
@@ -4412,4 +4419,214 @@ fn touchstone_24_floating_eye_form_no_attack() {
             )),
         "floating eye should not have breath weapon"
     );
+}
+
+// ==========================================================================
+// Scenario 25: Endgame closure chain (lose/win)
+// ==========================================================================
+
+/// Touchstone 25.1 -- Death path endgame chain:
+/// done() -> tombstone -> disclosures -> scoreboard ordering.
+#[test]
+fn touchstone_25_death_endgame_disclosure_score_pipeline() {
+    let mut world = GameWorld::new(Position::new(40, 10));
+    let player = world.player();
+
+    if let Some(mut name) = world.get_component_mut::<Name>(player) {
+        name.0 = "Touchstone".to_string();
+    }
+    if let Some(mut level) =
+        world.get_component_mut::<nethack_babel_engine::world::ExperienceLevel>(player)
+    {
+        level.0 = 12;
+    }
+    if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+        hp.current = 0;
+        hp.max = 61;
+    }
+    let _ = world.ecs_mut().insert_one(
+        player,
+        Experience {
+            xp: 12_000,
+            score_xp: 32_000,
+        },
+    );
+
+    let mut conducts = ConductState::new();
+    let _ = check_conduct(&mut conducts, &ConductAction::Read);
+    let _ = check_conduct(&mut conducts, &ConductAction::Kill);
+
+    let result = done(
+        &world,
+        player,
+        DoneParams {
+            how: EndHow::Died,
+            killer: "hill orc".to_string(),
+            deepest_level: 18,
+            gold: 4200,
+            starting_gold: 200,
+            vanquished: vec![
+                VanquishedEntry {
+                    name: "hill orc".to_string(),
+                    count: 3,
+                },
+                VanquishedEntry {
+                    name: "goblin".to_string(),
+                    count: 7,
+                },
+            ],
+            conducts: conducts.clone(),
+            depth_string: "Dlvl:18".to_string(),
+            role: Role::Wizard,
+            original_alignment: true,
+        },
+    );
+
+    assert_eq!(result.how, EndHow::Died);
+    assert!(result.events.iter().any(|e| {
+        matches!(
+            e,
+            EngineEvent::GameOver {
+                cause: DeathCause::KilledBy { killer_name },
+                score
+            } if killer_name == "hill orc" && *score == result.score
+        )
+    }));
+
+    assert_eq!(result.tombstone.role, "Wizard");
+    let tombstone = render_tombstone(&result.tombstone).join("\n");
+    assert!(tombstone.contains("Touchstone"));
+    assert!(tombstone.contains("Dlvl:18"));
+    assert!(tombstone.contains(&result.score.to_string()));
+
+    let disclosure_opts = default_disclosure_options(&result.how);
+    assert!(disclosure_opts.contains(&DisclosureOption::Inventory));
+    assert!(disclosure_opts.contains(&DisclosureOption::Conducts));
+    assert!(!auto_disclose(&result.how, DisclosureOption::Inventory));
+
+    let conduct_rows = display_conducts(&conducts);
+    let maintained: Vec<String> = conduct_rows
+        .iter()
+        .filter_map(|(conduct, ok, _)| ok.then(|| conduct.name().to_string()))
+        .collect();
+    let broken: Vec<String> = conduct_rows
+        .iter()
+        .filter_map(|(conduct, ok, _)| (!ok).then(|| conduct.name().to_string()))
+        .collect();
+    let kill_counts: Vec<(String, u32)> = result
+        .vanquished
+        .iter()
+        .map(|v| (v.name.clone(), v.count))
+        .collect();
+
+    let disclosures = generate_disclosure(
+        &[(
+            'a',
+            "blessed +2 long sword".to_string(),
+            "runed broadsword".to_string(),
+            "blessed".to_string(),
+        )],
+        &[("Str".to_string(), "18/**".to_string())],
+        &["poison resistance".to_string()],
+        &kill_counts,
+        &[],
+        &maintained,
+        &broken,
+    );
+    assert_eq!(
+        disclosures.len(),
+        5,
+        "all disclosure categories should exist"
+    );
+    let conduct_lines = format_disclosure(disclosures.last().expect("conduct disclosure"));
+    assert!(
+        conduct_lines
+            .iter()
+            .any(|line| line.contains("Voluntary challenges")),
+        "conduct disclosure should be present"
+    );
+
+    let maintained_conducts: Vec<Conduct> = Conduct::ALL
+        .iter()
+        .copied()
+        .filter(|c| conducts.is_maintained(*c))
+        .collect();
+    let mut board = Scoreboard::new();
+    board.add_entry(ScoreEntry {
+        name: result.tombstone.name.clone(),
+        role: Role::Wizard.to_id(),
+        race: 0,
+        score: result.score,
+        death_cause: "killed by hill orc".to_string(),
+        turns: result.tombstone.turns,
+        conducts_maintained: maintained_conducts.clone(),
+    });
+    board.add_entry(ScoreEntry {
+        name: "RunnerUp".to_string(),
+        role: Role::Wizard.to_id(),
+        race: 0,
+        score: result.score.saturating_sub(1),
+        death_cause: "quit".to_string(),
+        turns: 1,
+        conducts_maintained: maintained_conducts,
+    });
+    assert_eq!(board.len(), 2);
+    assert_eq!(board.get_top(1)[0].name, "Touchstone");
+}
+
+/// Touchstone 25.2 -- Ascension path gives ascended cause + auto-disclosure
+/// and outscores a non-ascended completion.
+#[test]
+fn touchstone_25_ascension_endgame_score_and_disclosure_path() {
+    let mut world = GameWorld::new(Position::new(40, 10));
+    let player = world.player();
+    if let Some(mut level) =
+        world.get_component_mut::<nethack_babel_engine::world::ExperienceLevel>(player)
+    {
+        level.0 = 20;
+    }
+    let _ = world.ecs_mut().insert_one(
+        player,
+        Experience {
+            xp: 50_000,
+            score_xp: 80_000,
+        },
+    );
+
+    let make_params = |how: EndHow| DoneParams {
+        how,
+        killer: "the gods".to_string(),
+        deepest_level: 40,
+        gold: 20_000,
+        starting_gold: 0,
+        vanquished: vec![],
+        conducts: ConductState::new(),
+        depth_string: "Astral Plane".to_string(),
+        role: Role::Valkyrie,
+        original_alignment: true,
+    };
+
+    let ascended = done(&world, player, make_params(EndHow::Ascended));
+    let escaped = done(&world, player, make_params(EndHow::Escaped));
+
+    assert!(ascended.score > escaped.score);
+    assert!(ascended.events.iter().any(|e| {
+        matches!(
+            e,
+            EngineEvent::GameOver {
+                cause: DeathCause::Ascended,
+                score
+            } if *score == ascended.score
+        )
+    }));
+
+    assert!(auto_disclose(
+        &EndHow::Ascended,
+        DisclosureOption::Inventory
+    ));
+    assert!(auto_disclose(&EndHow::Ascended, DisclosureOption::Conducts));
+    assert!(!auto_disclose(
+        &EndHow::Ascended,
+        DisclosureOption::Overview
+    ));
 }

@@ -8,13 +8,17 @@ use hecs::Entity;
 use rand::Rng;
 
 use nethack_babel_data::{
-    GenoFlags, MonsterDef, MonsterFlags, MonsterId, ObjectClass, ObjectCore, ObjectLocation,
-    ObjectTypeId,
+    AttackMethod, GenoFlags, MonsterDef, MonsterFlags, MonsterId, ObjectClass, ObjectCore,
+    ObjectLocation, ObjectTypeId,
 };
 
 use crate::action::Position;
+use crate::combat::{MonsterAttacks, MonsterResistances};
 use crate::dungeon::Terrain;
 use crate::event::EngineEvent;
+use crate::monster_ai::{
+    Covetous, Intelligence, MonsterIntelligence, MonsterSpeciesFlags, Spellcaster,
+};
 use crate::status::{Intrinsics, StatusEffects};
 use crate::world::{
     ArmorClass, Boulder, DisplaySymbol, GameWorld, HitPoints, Monster, MovementPoints,
@@ -105,6 +109,31 @@ pub fn makemon(
     // hecs tuple limit — insert remaining components individually.
     let _ = world.ecs_mut().insert_one(entity, StatusEffects::default());
     let _ = world.ecs_mut().insert_one(entity, Intrinsics::default());
+    let _ = world
+        .ecs_mut()
+        .insert_one(entity, MonsterAttacks(def.attacks.clone()));
+    let _ = world
+        .ecs_mut()
+        .insert_one(entity, MonsterResistances(def.resistances));
+    let _ = world
+        .ecs_mut()
+        .insert_one(entity, MonsterSpeciesFlags(def.flags));
+    let intelligence = infer_monster_intelligence(def);
+    let _ = world
+        .ecs_mut()
+        .insert_one(entity, Intelligence(intelligence));
+    if intelligence == MonsterIntelligence::Spellcaster {
+        let _ = world.ecs_mut().insert_one(
+            entity,
+            Spellcaster {
+                monster_level: def.base_level.max(1) as u8,
+                is_cleric: infer_is_cleric(def),
+            },
+        );
+    }
+    if def.flags.contains(MonsterFlags::COVETOUS) {
+        let _ = world.ecs_mut().insert_one(entity, Covetous);
+    }
 
     // Equip weapon/inventory unless suppressed.
     if !flags.contains(MakeMonFlags::NO_MINVENT) {
@@ -126,6 +155,34 @@ pub fn makemon(
     }
 
     Some(entity)
+}
+
+/// Infer AI intelligence tier from static monster definition.
+fn infer_monster_intelligence(def: &MonsterDef) -> MonsterIntelligence {
+    if def
+        .attacks
+        .iter()
+        .any(|a| matches!(a.method, AttackMethod::MagicMissile))
+    {
+        return MonsterIntelligence::Spellcaster;
+    }
+    if def
+        .flags
+        .intersects(MonsterFlags::ANIMAL | MonsterFlags::MINDLESS)
+    {
+        MonsterIntelligence::Animal
+    } else {
+        MonsterIntelligence::Humanoid
+    }
+}
+
+/// Heuristic for whether a spellcaster should use cleric spells.
+fn infer_is_cleric(def: &MonsterDef) -> bool {
+    let name = def.names.male.to_ascii_lowercase();
+    name.contains("priest")
+        || name.contains("cleric")
+        || name.contains("angel")
+        || def.flags.contains(MonsterFlags::MINION)
 }
 
 // ---------------------------------------------------------------------------
@@ -681,6 +738,10 @@ fn rnd(n: u32, rng: &mut impl Rng) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::combat::{MonsterAttacks, MonsterResistances};
+    use crate::monster_ai::{
+        Covetous, Intelligence, MonsterIntelligence, MonsterSpeciesFlags, Spellcaster,
+    };
     use crate::world::CreationOrder;
     use arrayvec::ArrayVec;
     use nethack_babel_data::*;
@@ -786,6 +847,12 @@ mod tests {
         // Has display symbol.
         let sym = world.get_component::<DisplaySymbol>(entity).unwrap();
         assert_eq!(sym.symbol, 'a');
+
+        // Core combat/AI components are wired at spawn.
+        assert!(world.get_component::<MonsterAttacks>(entity).is_some());
+        assert!(world.get_component::<MonsterResistances>(entity).is_some());
+        assert!(world.get_component::<MonsterSpeciesFlags>(entity).is_some());
+        assert!(world.get_component::<Intelligence>(entity).is_some());
     }
 
     #[test]
@@ -827,6 +894,74 @@ mod tests {
 
         assert!(world.get_component::<StatusEffects>(entity).is_some());
         assert!(world.get_component::<Intrinsics>(entity).is_some());
+    }
+
+    #[test]
+    fn makemon_spellcaster_gets_spellcaster_component() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let mut def = test_monster_def(42, "arch-mage", 12, 12);
+        def.attacks.push(AttackDef {
+            method: AttackMethod::MagicMissile,
+            damage_type: DamageType::MagicMissile,
+            dice: DiceExpr { count: 2, sides: 6 },
+        });
+
+        let entity = makemon(
+            &mut world,
+            &[def],
+            Some(MonsterId(42)),
+            Position::new(10, 10),
+            MakeMonFlags::NO_GROUP,
+            &mut rng,
+        )
+        .unwrap();
+
+        let intel = world.get_component::<Intelligence>(entity).unwrap().0;
+        assert_eq!(intel, MonsterIntelligence::Spellcaster);
+        assert!(world.get_component::<Spellcaster>(entity).is_some());
+    }
+
+    #[test]
+    fn makemon_animal_flags_map_to_animal_intelligence() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let mut def = test_monster_def(43, "wolf", 5, 12);
+        def.flags |= MonsterFlags::ANIMAL;
+
+        let entity = makemon(
+            &mut world,
+            &[def],
+            Some(MonsterId(43)),
+            Position::new(10, 10),
+            MakeMonFlags::NO_GROUP,
+            &mut rng,
+        )
+        .unwrap();
+
+        let intel = world.get_component::<Intelligence>(entity).unwrap().0;
+        assert_eq!(intel, MonsterIntelligence::Animal);
+        assert!(world.get_component::<Spellcaster>(entity).is_none());
+    }
+
+    #[test]
+    fn makemon_covetous_flag_attaches_component() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let mut def = test_monster_def(44, "wizard of yendor", 30, 12);
+        def.flags |= MonsterFlags::COVETOUS;
+
+        let entity = makemon(
+            &mut world,
+            &[def],
+            Some(MonsterId(44)),
+            Position::new(10, 10),
+            MakeMonFlags::NO_GROUP,
+            &mut rng,
+        )
+        .unwrap();
+
+        assert!(world.get_component::<Covetous>(entity).is_some());
     }
 
     #[test]

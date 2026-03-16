@@ -533,9 +533,9 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 
 ### Active TODO
 
-- [ ] Close remaining turn-pipeline wiring TODOs around prayer/action dispatch and inventory/equipment entity lookup.
-- [ ] Grow deterministic replay corpora and automate nightly divergence reports.
-- [ ] Add more scoring and disclosure assertions for win/lose end states.
+- [x] Close remaining turn-pipeline wiring TODOs around prayer/action dispatch and inventory/equipment entity lookup.
+- [x] Add nightly differential/property/Monte-Carlo regression workflow (with optional C-side corpus refresh).
+- [x] Add win/lose scoring and disclosure touchstones for endgame closure paths.
 - [ ] Audit wizard/debug command behavior and backfill parity tests.
 - [ ] Improve contributor docs for adding monsters, objects, and levels with validation checklists.
 

@@ -204,7 +204,46 @@ pub fn resolve_monster_attack(
         }
 
         AttackMethod::MagicMissile => {
-            // Monster spellcasting: stub — treat as physical for now.
+            // Route monster magic attacks through the spellcasting subsystem.
+            // If the monster has Spellcaster metadata, castmu drives spell
+            // choice and effect application. Otherwise, fall back to the
+            // legacy damage-type path for backward compatibility.
+            let mut spell_events =
+                crate::mcastu::castmu(world, params.attacker, params.defender, rng);
+            if !spell_events.is_empty() {
+                let fatal = world
+                    .get_component::<HitPoints>(params.defender)
+                    .is_some_and(|hp| hp.current <= 0);
+
+                // Keep event stream self-contained for consumers that rely
+                // on explicit death events.
+                if fatal
+                    && !spell_events.iter().any(|e| {
+                        matches!(
+                            e,
+                            EngineEvent::EntityDied { entity, .. } if *entity == params.defender
+                        )
+                    })
+                {
+                    let attacker_name = world.entity_name(params.attacker);
+                    spell_events.push(EngineEvent::EntityDied {
+                        entity: params.defender,
+                        killer: Some(params.attacker),
+                        cause: DeathCause::KilledBy {
+                            killer_name: attacker_name,
+                        },
+                    });
+                }
+
+                return AttackResult {
+                    events: spell_events,
+                    damage: 0,
+                    hit: true,
+                    fatal,
+                    attacker_died: false,
+                };
+            }
+
             if !monster_hit_chance(params.monster_level, params.player_ac, rng) {
                 return AttackResult::miss(params.attacker, params.defender);
             }
@@ -629,6 +668,7 @@ mod tests {
     use crate::action::Position;
     use crate::combat::MonsterAttacks;
     use crate::event::StatusEffect;
+    use crate::monster_ai::Spellcaster;
     use crate::status::StatusEffects;
     use crate::world::{ArmorClass, ExperienceLevel, GameWorld, HitPoints, Monster, Name};
     use nethack_babel_data::{AttackDef, AttackMethod, DamageType, DiceExpr};
@@ -1300,5 +1340,48 @@ mod tests {
                 seed
             );
         }
+    }
+
+    // --- Test 20: Magic attack dispatches through castmu ---
+
+    #[test]
+    fn magic_attack_uses_spellcasting_pipeline() {
+        let mut world = make_test_world();
+        let defender = world.player();
+        let attacker = spawn_monster(&mut world, 12, 30, 10, vec![]);
+        let _ = world.ecs_mut().insert_one(
+            attacker,
+            Spellcaster {
+                monster_level: 12,
+                is_cleric: false,
+            },
+        );
+        let mut rng = TestRng::seed_from_u64(7);
+        let params = MonsterAttackParams {
+            attacker,
+            defender,
+            attack: make_attack(AttackMethod::MagicMissile, DamageType::MagicMissile, 2, 6),
+            monster_level: 12,
+            monster_str: 10,
+            player_resistances: ResistanceSet::empty(),
+            player_ac: 10,
+        };
+
+        let result = resolve_monster_attack(&mut world, &params, &mut rng);
+
+        assert!(result.hit, "magic attack should count as a resolved hit");
+        assert!(
+            result.events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "monster-casts-mage")
+            ),
+            "magic attack should emit castmu mage cast message"
+        );
+        assert!(
+            !result
+                .events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::MeleeHit { .. })),
+            "spellcasting path should not synthesize melee-hit events"
+        );
     }
 }

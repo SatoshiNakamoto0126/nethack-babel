@@ -649,6 +649,9 @@ pub struct DungeonState {
     pub called_item_classes: HashMap<char, String>,
     /// Vault rooms on the current level (for guard spawning).
     pub vault_rooms: Vec<crate::vault::VaultRoom>,
+    /// Shop rooms on the current level.
+    #[serde(default)]
+    pub shop_rooms: Vec<crate::shop::ShopRoom>,
     /// Whether a vault guard is currently active on this level.
     pub vault_guard_present: bool,
     /// Active gas clouds on the current level.
@@ -688,6 +691,7 @@ impl DungeonState {
             level_annotations: HashMap::new(),
             called_item_classes: HashMap::new(),
             vault_rooms: Vec::new(),
+            shop_rooms: Vec::new(),
             vault_guard_present: false,
             gas_clouds: Vec::new(),
             autopickup_enabled: true,
@@ -715,6 +719,7 @@ impl DungeonState {
             level_annotations: HashMap::new(),
             called_item_classes: HashMap::new(),
             vault_rooms: Vec::new(),
+            shop_rooms: Vec::new(),
             vault_guard_present: false,
             gas_clouds: Vec::new(),
             autopickup_enabled: true,

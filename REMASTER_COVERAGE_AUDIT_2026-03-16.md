@@ -17,6 +17,8 @@
 - 新增落地：text 模式已打通 `save/savequit` 命令到真实存档写盘（`SaveReason::Checkpoint/Quit`），与“可手动保存”的链路声明一致。
 - 新增落地：text 模式已支持 `repeat`（复用上一次可重放动作，UI/存档类动作自动排除），与 TUI `#repeat` 语义进一步趋同。
 - 新增落地：autopickup 已打通配置联动（启动时注入 + options 菜单变更后即时生效）；状态栏已接入真实 gold 统计与 encumbrance 显示；`--replay` 已从 stub 升级为可执行 NDJSON 回放；`--server` 已从 `NotImplemented` 升级为可运行 TCP 监听（多连接 + 连接上限 + line-based 会话协议）；测试临时路径已唯一化，串行/并发执行稳定性提升。
+- 增量落地（2026-03-17）：`makemon` 生成链路已补齐 `MonsterAttacks/MonsterResistances/MonsterSpeciesFlags/Intelligence` 与 `Spellcaster/Covetous` 组件挂载；`mhitu` 的 `MagicMissile` 分支已优先接入 `mcastu::castmu`（无施法元数据时回退旧路径）；`pet_shop_steal_check` 已从 skeleton 升级为“越店门 + 携带货物”可触发的真实判定并回写 `shop_rooms` 抢劫状态。
+- 增量落地（2026-03-17）：补齐 endgame 全流程 touchstone（`touchstone_25_*`）覆盖死亡/飞升下的结算、披露与榜单链路；新增 nightly 回归工作流 `.github/workflows/nightly-differential.yml`（differential + property + Monte Carlo，支持可选 C 侧语料刷新）；并修复 `scripts/generate_c_recording.sh` / `scripts/diff_test.sh` / `scripts/fuzz_c_recordings.sh` 参数错位，保证脚本链路可执行。
 
 ## 外部反馈核对（本次新增）
 
@@ -158,7 +160,7 @@
 2. 继续压缩 generic fallback 覆盖面，并把 `conduct` 等状态从“局部写回”推进到“全链路实时写回”。  
 3. 将结局披露与排行榜的剩余 fallback（组件缺失回退）进一步缩小到异常路径。  
 4. 把 server 从“协议层 MVP”推进到“远程可玩 MVP”（把 line-based 会话与真实游戏回合/UI 进一步闭环）。  
-5. 持续跑 differential/fuzz + Monte Carlo，优先盯输入分发、结局落账与回放链路的防退化。  
+5. 在 nightly 回归（differential/property/Monte Carlo）基础上继续扩大 C 侧语料规模，并把偏差 triage 流程产品化（自动归档失败样本 + 关联已知偏差表）。  
 
 ---
 
