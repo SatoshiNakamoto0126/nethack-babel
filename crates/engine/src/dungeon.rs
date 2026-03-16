@@ -638,6 +638,10 @@ pub struct DungeonState {
     pub topology: DungeonTopology,
     /// Flags for the current level (no_dig, no_teleport, etc.).
     pub current_level_flags: CurrentLevelFlags,
+    /// Vault rooms on the current level (for guard spawning).
+    pub vault_rooms: Vec<crate::vault::VaultRoom>,
+    /// Whether a vault guard is currently active on this level.
+    pub vault_guard_present: bool,
 }
 
 impl DungeonState {
@@ -666,6 +670,8 @@ impl DungeonState {
             max_depth_value: None,
             topology,
             current_level_flags: CurrentLevelFlags::default(),
+            vault_rooms: Vec::new(),
+            vault_guard_present: false,
         }
     }
 
@@ -686,6 +692,8 @@ impl DungeonState {
             max_depth_value: None,
             topology: DungeonTopology::default(),
             current_level_flags: CurrentLevelFlags::default(),
+            vault_rooms: Vec::new(),
+            vault_guard_present: false,
         }
     }
 

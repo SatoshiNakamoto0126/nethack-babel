@@ -13,9 +13,9 @@ members = [
 version = "0.1.0"
 edition = "2024"
 license = "NGPL"
-repository = "https://github.com/user/nethack-babel"
-homepage = "https://github.com/user/nethack-babel"
-description = "A modern Rust reimplementation of NetHack with i18n support"
+repository = "https://github.com/SatoshiNakamoto0126/nethack-babel"
+homepage = "https://github.com/SatoshiNakamoto0126/nethack-babel"
+description = "A modern Rust reimplementation of NetHack 3.7 with built-in multilingual support"
 keywords = ["nethack", "roguelike", "game", "terminal", "dungeon"]
 categories = ["games", "command-line-utilities"]
 

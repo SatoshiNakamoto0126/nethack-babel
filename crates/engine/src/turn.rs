@@ -12,7 +12,7 @@ use crate::dungeon::{CachedMonster, Terrain};
 use crate::event::{EngineEvent, HpSource, HungerLevel};
 use crate::map_gen::generate_level;
 use crate::special_levels::{dispatch_special_level, identify_special_level};
-use crate::traps::detect_trap;
+use crate::traps::{detect_trap, trigger_trap_at, TrapEntityInfo};
 use crate::world::{
     Boulder, CreationOrder, DisplaySymbol, Encumbrance, EncumbranceLevel,
     ExperienceLevel, GameWorld, HeroSpeed, HeroSpeedBonus, HitPoints,
@@ -597,7 +597,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events);
+            try_move_entity(world, world.player(), effective_dir, events, rng);
         }
         PlayerAction::Rest => {
             // Resting: no movement, just pass the turn.
@@ -995,7 +995,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events);
+            try_move_entity(world, world.player(), effective_dir, events, rng);
         }
         PlayerAction::FightDirection { direction } => {
             // Force fight: move/attack in direction, skipping peaceful check.
@@ -1011,7 +1011,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events);
+            try_move_entity(world, world.player(), effective_dir, events, rng);
         }
         PlayerAction::RunDirection { direction } => {
             // Run until interrupted (simplified — one step for now).
@@ -1027,7 +1027,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events);
+            try_move_entity(world, world.player(), effective_dir, events, rng);
         }
         PlayerAction::RushDirection { direction } => {
             // Rush: run without picking up items (simplified — one step).
@@ -1043,7 +1043,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events);
+            try_move_entity(world, world.player(), effective_dir, events, rng);
         }
         PlayerAction::MoveNoPickup { direction } => {
             // Move without auto-pickup.
@@ -1059,7 +1059,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events);
+            try_move_entity(world, world.player(), effective_dir, events, rng);
         }
         PlayerAction::Wait => {
             // Do nothing, consume one turn.
@@ -1685,6 +1685,7 @@ fn try_move_entity(
     entity: hecs::Entity,
     direction: Direction,
     events: &mut Vec<EngineEvent>,
+    rng: &mut impl Rng,
 ) {
     let current_pos = match world.get_component::<Positioned>(entity) {
         Some(p) => p.0,
@@ -1769,6 +1770,30 @@ fn try_move_entity(
         from: current_pos,
         to: target_pos,
     });
+
+    // Check for traps at the destination tile.
+    if entity == world.player() {
+        let trap_info = build_player_trap_info(world, entity, target_pos);
+        let (trap_events, _triggered) =
+            trigger_trap_at(rng, &trap_info, &mut world.dungeon_mut().trap_map);
+        events.extend(trap_events);
+    }
+
+    // Check if the player entered a vault (spawn guard if needed).
+    if entity == world.player() {
+        let vault_rooms = world.dungeon().vault_rooms.clone();
+        let guard_present = world.dungeon().vault_guard_present;
+        if let Some(_vault_idx) = crate::vault::player_in_vault(target_pos, &vault_rooms) {
+            if !guard_present {
+                let guard_data = crate::vault::spawn_guard(rng);
+                world.dungeon_mut().vault_guard_present = true;
+                events.push(EngineEvent::msg_with(
+                    "guard-appears",
+                    vec![("name", guard_data.guard_name)],
+                ));
+            }
+        }
+    }
 
     // Check for items on the destination tile (autopickup notification).
     // TODO: implement full autopickup logic (filter by item class, config).
@@ -2071,6 +2096,59 @@ fn process_hunger(
                 source: None,
             });
         }
+    }
+}
+
+// ── Trap info builder ─────────────────────────────────────────────────
+
+/// Build a `TrapEntityInfo` from player ECS components for trap
+/// triggering during movement.
+fn build_player_trap_info(
+    world: &GameWorld,
+    entity: hecs::Entity,
+    pos: Position,
+) -> TrapEntityInfo {
+    let hp_comp = world
+        .get_component::<HitPoints>(entity)
+        .map(|h| *h)
+        .unwrap_or(HitPoints { current: 16, max: 16 });
+    let pw_comp = world
+        .get_component::<Power>(entity)
+        .map(|p| *p)
+        .unwrap_or(Power { current: 4, max: 4 });
+    let attrs = world
+        .get_component::<crate::world::Attributes>(entity)
+        .map(|a| *a)
+        .unwrap_or_default();
+    let luck = world
+        .get_component::<PlayerCombat>(entity)
+        .map(|pc| pc.luck)
+        .unwrap_or(0);
+    let intrinsics = match world.get_component::<crate::status::Intrinsics>(entity) {
+        Some(i) => (*i).clone(),
+        None => crate::status::Intrinsics::default(),
+    };
+    let is_levitating = crate::status::is_levitating(world, entity);
+
+    TrapEntityInfo {
+        entity,
+        pos,
+        hp: hp_comp.current,
+        max_hp: hp_comp.max,
+        pw: pw_comp.current,
+        max_pw: pw_comp.max,
+        ac: 10,
+        strength: attrs.strength,
+        dexterity: attrs.dexterity,
+        is_flying: false,
+        is_levitating,
+        sleep_resistant: intrinsics.sleep_resistance,
+        fire_resistant: intrinsics.fire_resistance,
+        poison_resistant: intrinsics.poison_resistance,
+        magic_resistant: false,
+        is_amorphous: false,
+        is_player: world.is_player(entity),
+        luck,
     }
 }
 
@@ -3975,6 +4053,163 @@ mod tests {
         assert!(
             clouds.iter().all(|c| c.turns_remaining <= 2),
             "Cloud should have dissipated or been refreshed with reduced damage"
+        );
+    }
+
+    // ── Cross-system gap wiring tests ───────────────────────────────
+
+    #[test]
+    fn test_polymorph_trap_emits_status_applied() {
+        use crate::traps::TrapInstance;
+        use nethack_babel_data::TrapType;
+
+        let mut world = make_test_world();
+
+        // Place a polymorph trap at (6, 5), one step east of the player.
+        world.dungeon_mut().trap_map.traps.push(TrapInstance {
+            pos: Position::new(6, 5),
+            trap_type: TrapType::PolyTrap,
+            detected: false,
+            triggered_count: 0,
+        });
+
+        // Try multiple RNG seeds to find one where the trap triggers
+        // (avoidance is probabilistic).
+        let mut found_poly = false;
+        for seed in 0..200u64 {
+            // Reset trap state.
+            world.dungeon_mut().trap_map.traps[0].triggered_count = 0;
+
+            let mut rng = Pcg64::seed_from_u64(seed);
+            let events = resolve_turn(
+                &mut world,
+                PlayerAction::Move { direction: Direction::East },
+                &mut rng,
+            );
+
+            let has_poly = events.iter().any(|e| matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: crate::event::StatusEffect::Polymorphed, ..
+                }
+            ));
+            if has_poly {
+                found_poly = true;
+                break;
+            }
+
+            // Move the player back so we can try again.
+            if let Some(mut pos) = world.get_component_mut::<Positioned>(world.player()) {
+                pos.0 = Position::new(5, 5);
+            }
+        }
+
+        assert!(
+            found_poly,
+            "stepping on a polymorph trap should eventually emit StatusApplied Polymorphed"
+        );
+    }
+
+    #[test]
+    fn test_vault_entry_spawns_guard() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        // Set up a vault room covering (6,5)..(7,6).
+        world.dungeon_mut().vault_rooms.push(crate::vault::VaultRoom {
+            top_left: Position::new(6, 5),
+            bottom_right: Position::new(7, 6),
+        });
+        // Make that area walkable.
+        for y in 5..=6 {
+            for x in 6..=7 {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(x, y), Terrain::Floor);
+            }
+        }
+
+        // Move east into the vault.
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move { direction: Direction::East },
+            &mut rng,
+        );
+
+        let has_guard = events.iter().any(|e| {
+            matches!(e, EngineEvent::Message { key, .. } if key == "guard-appears")
+        });
+        assert!(has_guard, "entering a vault should spawn a guard");
+        assert!(
+            world.dungeon().vault_guard_present,
+            "vault_guard_present flag should be set"
+        );
+    }
+
+    #[test]
+    fn test_prayer_creates_minion_entity() {
+        // Test that angry prayer at anger_roll 7 emits MonsterGenerated.
+        use crate::religion::{pray, ReligionState, Trouble};
+
+        let base_state = ReligionState {
+            alignment: nethack_babel_data::Alignment::Lawful,
+            alignment_record: -5,
+            god_anger: 5,
+            god_gifts: 0,
+            blessed_amount: 0,
+            bless_cooldown: 0,
+            crowned: false,
+            demigod: false,
+            turn: 1000,
+            experience_level: 10,
+            current_hp: 50,
+            max_hp: 50,
+            current_pw: 20,
+            max_pw: 20,
+            nutrition: 900,
+            luck: 0,
+            luck_bonus: 0,
+            has_luckstone: false,
+            luckstone_blessed: false,
+            luckstone_cursed: false,
+            in_gehennom: false,
+            is_undead: false,
+            is_demon: false,
+            original_alignment: nethack_babel_data::Alignment::Lawful,
+            has_converted: false,
+            alignment_abuse: 0,
+        };
+
+        // Try many seeds to find one where the anger roll = 7 or 8
+        // (summon minion path).
+        let mut found_minion = false;
+        for seed in 0..500u64 {
+            let mut test_state = base_state.clone();
+            let mut rng = Pcg64::seed_from_u64(seed);
+            let player_entity = hecs::Entity::DANGLING;
+            let events = pray(
+                &mut test_state,
+                player_entity,
+                false,
+                None,
+                Trouble::None,
+                &[Trouble::None],
+                false,
+                &mut rng,
+            );
+            let has_monster = events.iter().any(|e| {
+                matches!(e, EngineEvent::MonsterGenerated { .. })
+            });
+            if has_monster {
+                found_minion = true;
+                break;
+            }
+        }
+
+        assert!(
+            found_minion,
+            "angry prayer should eventually summon a minion (MonsterGenerated event)"
         );
     }
 }

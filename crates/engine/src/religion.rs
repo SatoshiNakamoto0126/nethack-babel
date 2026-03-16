@@ -1430,8 +1430,23 @@ fn prayer_angry_for<R: Rng>(
             events.push(EngineEvent::msg("pray-angry-punished"));
         }
         7 | 8 => {
-            // Summon minions
-            events.push(EngineEvent::msg("pray-angry-summon"));
+            // Summon hostile minions
+            let result = crate::minion::summon_angry_minion(
+                resp_god,
+                state.experience_level,
+                rng,
+            );
+            events.push(EngineEvent::msg_with(
+                "pray-angry-summon",
+                vec![
+                    ("minion", format!("{:?}", result.minion_type)),
+                    ("tame", result.is_tame.to_string()),
+                ],
+            ));
+            events.push(EngineEvent::MonsterGenerated {
+                entity: player_entity,
+                position: crate::action::Position::new(0, 0),
+            });
         }
         _ => {
             // 9+ — god_zaps_you (lightning + disintegration)

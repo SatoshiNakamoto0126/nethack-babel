@@ -105,7 +105,7 @@ pub fn random_guard_name(rng: &mut impl Rng) -> &'static str {
 // ---------------------------------------------------------------------------
 
 /// Simplified vault room descriptor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultRoom {
     /// Top-left corner of the vault.
     pub top_left: Position,
