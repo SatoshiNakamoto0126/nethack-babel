@@ -1775,10 +1775,10 @@ fn try_move_entity(
     if entity == world.player() {
         let items_here = count_items_at(world, target_pos);
         if items_here == 1 {
-            events.push(EngineEvent::msg("You see an item here."));
+            events.push(EngineEvent::msg("see-item-here"));
         } else if items_here > 1 {
             events.push(EngineEvent::msg_with(
-                "You see items here.",
+                "see-items-here",
                 vec![("count", items_here.to_string())],
             ));
         }

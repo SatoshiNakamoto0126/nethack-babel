@@ -2121,6 +2121,7 @@ mount-too-far = That creature is too far away.
 mount-too-weak = You are too weak to ride.
 not-mounted = You are not riding anything.
 steed-stops-galloping = Your steed slows to a halt.
+steed-swims = Your steed paddles through the water.
 
 ## ============================================================================
 ## Miscellaneous
@@ -2139,12 +2140,15 @@ not-punished = You are not being punished.
 not-wearing-that = You are not wearing that.
 wait = Time passes...
 see-item-here = You see an item here.
+see-items-here = You see items here.
+scroll-cant-read-blind = You can't read while blind!
 
 ## ============================================================================
 ## Polymorph
 ## ============================================================================
 
 polymorph-controlled = What monster do you want to turn into?
+polymorph-dismount = You can no longer ride your steed.
 polymorph-newman-survive = You survive your attempted polymorph.
 polymorph-revert = You return to your normal form.
 polymorph-system-shock = Your body shudders and undergoes a violent transformation!

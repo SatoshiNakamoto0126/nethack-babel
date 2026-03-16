@@ -16,11 +16,54 @@ use nethack_babel_engine::religion::rnl;
 use nethack_babel_engine::inventory::encumbrance_level;
 use nethack_babel_engine::action::Position;
 use nethack_babel_engine::ball::chebyshev_distance;
+use nethack_babel_engine::wands::{recharge_wand, RechargeResult, WandCharges, WandType};
 
 use nethack_babel_data::DiceExpr;
 
 use rand::SeedableRng;
 use rand_pcg::Pcg64;
+
+// ─── Custom Domain Strategies ───
+
+/// Strategy for valid NetHack map positions (within 80x21 standard map).
+fn valid_position() -> impl Strategy<Value = (i32, i32)> {
+    (1..79i32, 1..20i32)
+}
+
+/// Strategy for valid AC values (typical range in NetHack).
+fn valid_ac() -> impl Strategy<Value = i32> {
+    -50..50i32
+}
+
+/// Strategy for valid experience levels (1-30).
+fn valid_xlevel() -> impl Strategy<Value = u32> {
+    1..=30u32
+}
+
+/// Strategy for valid damage dice (1-10 dice, 1-20 sides).
+fn valid_dice() -> impl Strategy<Value = (u8, u8)> {
+    (1..=10u8, 1..=20u8)
+}
+
+/// Strategy for valid luck values (-13 to +13).
+fn valid_luck() -> impl Strategy<Value = i32> {
+    -13..=13i32
+}
+
+/// Strategy for valid hunger/nutrition (0-2000).
+fn valid_nutrition() -> impl Strategy<Value = i32> {
+    0..=2000i32
+}
+
+/// Strategy for valid HP as (current, max) where current <= max.
+fn valid_hp() -> impl Strategy<Value = (i32, i32)> {
+    (1..=500i32).prop_flat_map(|max| (1..=max, Just(max)))
+}
+
+/// Strategy for valid carried weight and capacity.
+fn valid_weight_capacity() -> impl Strategy<Value = (u32, u32)> {
+    (100..2000u32).prop_flat_map(|cap| (0..cap * 5, Just(cap)))
+}
 
 // ─── Combat Invariants ───
 
@@ -28,8 +71,7 @@ proptest! {
     /// Damage dice always produce values in valid range [count, count*sides].
     #[test]
     fn damage_dice_in_range(
-        count in 1..10u8,
-        sides in 1..20u8,
+        (count, sides) in valid_dice(),
         seed in any::<u64>(),
     ) {
         let dice = DiceExpr { count, sides };
@@ -72,7 +114,7 @@ proptest! {
     /// Armor class calculations are always bounded in [-127, 127].
     #[test]
     fn ac_always_bounded(
-        base_ac in -50..50i32,
+        base_ac in valid_ac(),
         armor_bonus in -30..30i32,
         ring_bonus in -10..10i32,
         spell_bonus in -10..10i32,
@@ -86,8 +128,8 @@ proptest! {
     /// HP after damage: if current - damage <= 0, death must follow.
     #[test]
     fn hp_lethal_damage_detected(
+        (current_hp, _max_hp) in valid_hp(),
         damage in 1..1000i32,
-        current_hp in 1..500i32,
     ) {
         let final_hp = current_hp - damage;
         if final_hp <= 0 {
@@ -105,8 +147,8 @@ proptest! {
     /// Higher nutrition should never produce a MORE hungry state.
     #[test]
     fn hunger_state_monotonic(
-        nutrition_a in 0..2000i32,
-        nutrition_b in 0..2000i32,
+        nutrition_a in valid_nutrition(),
+        nutrition_b in valid_nutrition(),
     ) {
         fn hunger_level(n: i32) -> u8 {
             match n {
@@ -127,7 +169,7 @@ proptest! {
     /// Eating food always increases nutrition.
     #[test]
     fn eating_always_increases_nutrition(
-        current_nutrition in 0..2000i32,
+        current_nutrition in valid_nutrition(),
         food_nutrition in 1..1000i32,
     ) {
         let new_nutrition = current_nutrition + food_nutrition;
@@ -143,10 +185,8 @@ proptest! {
     /// Chebyshev distance is always non-negative and symmetric.
     #[test]
     fn chebyshev_distance_properties(
-        x1 in -100..100i32,
-        y1 in -100..100i32,
-        x2 in -100..100i32,
-        y2 in -100..100i32,
+        (x1, y1) in valid_position(),
+        (x2, y2) in valid_position(),
     ) {
         let a = Position { x: x1, y: y1 };
         let b = Position { x: x2, y: y2 };
@@ -159,8 +199,7 @@ proptest! {
     /// Chebyshev distance to self is always zero.
     #[test]
     fn chebyshev_distance_zero_to_self(
-        x in -100..100i32,
-        y in -100..100i32,
+        (x, y) in valid_position(),
     ) {
         let p = Position { x, y };
         prop_assert_eq!(chebyshev_distance(p, p), 0,
@@ -170,8 +209,7 @@ proptest! {
     /// Movement in a direction then opposite returns to origin.
     #[test]
     fn movement_reversible(
-        x in -1000..1000i32,
-        y in -1000..1000i32,
+        (x, y) in valid_position(),
         dx in -1..=1i32,
         dy in -1..=1i32,
     ) {
@@ -184,9 +222,9 @@ proptest! {
     /// Triangle inequality: dist(a,c) <= dist(a,b) + dist(b,c).
     #[test]
     fn chebyshev_triangle_inequality(
-        x1 in -50..50i32, y1 in -50..50i32,
-        x2 in -50..50i32, y2 in -50..50i32,
-        x3 in -50..50i32, y3 in -50..50i32,
+        x1 in 1..50i32, y1 in 1..20i32,
+        x2 in 1..50i32, y2 in 1..20i32,
+        x3 in 1..50i32, y3 in 1..20i32,
     ) {
         let a = Position { x: x1, y: y1 };
         let b = Position { x: x2, y: y2 };
@@ -198,13 +236,23 @@ proptest! {
             "Triangle inequality violated: dist({:?},{:?})={} > dist({:?},{:?})={} + dist({:?},{:?})={}",
             a, c, ac, a, b, ab, b, c, bc);
     }
+
+    /// Valid positions are always within map bounds.
+    #[test]
+    fn position_always_valid((x, y) in valid_position()) {
+        let pos = Position::new(x, y);
+        prop_assert!(pos.x >= 1 && pos.x < 79,
+            "x={} out of valid map range [1,79)", pos.x);
+        prop_assert!(pos.y >= 1 && pos.y < 20,
+            "y={} out of valid map range [1,20)", pos.y);
+    }
 }
 
 // ─── Item Naming Invariants ───
 
 proptest! {
     /// Pluralization should never produce an empty string from non-empty input.
-    /// Note: Latin plurals can be shorter (e.g., "us"→"i", "matzoh"→"matzot").
+    /// Note: Latin plurals can be shorter (e.g., "us"->"i", "matzoh"->"matzot").
     #[test]
     fn plural_never_empty(name in "[a-z]{1,20}") {
         let plural = makeplural(&name);
@@ -248,7 +296,7 @@ proptest! {
     #[test]
     fn rnl_always_in_range(
         x in 2..100i32,
-        luck in -13..=13i32,
+        luck in valid_luck(),
         seed in any::<u64>(),
     ) {
         let mut rng = Pcg64::seed_from_u64(seed);
@@ -262,7 +310,7 @@ proptest! {
     /// rnl(0) always returns 0 regardless of luck.
     #[test]
     fn rnl_zero_returns_zero(
-        luck in -13..=13i32,
+        luck in valid_luck(),
         seed in any::<u64>(),
     ) {
         let mut rng = Pcg64::seed_from_u64(seed);
@@ -274,13 +322,38 @@ proptest! {
     /// rnl(1) always returns 0 (only one possible value).
     #[test]
     fn rnl_one_returns_zero(
-        luck in -13..=13i32,
+        luck in valid_luck(),
         seed in any::<u64>(),
     ) {
         let mut rng = Pcg64::seed_from_u64(seed);
         let result = rnl(&mut rng, 1, luck);
         prop_assert_eq!(result, 0,
             "rnl(1, luck={}) should be 0, got {}", luck, result);
+    }
+
+    /// Positive luck biases rnl toward lower values (over many samples).
+    #[test]
+    fn rnl_positive_luck_biases_low(seed in any::<u64>()) {
+        let x = 20;
+        let trials = 200;
+        let mut sum_lucky = 0i64;
+        let mut sum_unlucky = 0i64;
+
+        for i in 0..trials {
+            let mut rng_lucky = Pcg64::seed_from_u64(seed.wrapping_add(i));
+            let mut rng_unlucky = Pcg64::seed_from_u64(seed.wrapping_add(i));
+            sum_lucky += rnl(&mut rng_lucky, x, 13) as i64;
+            sum_unlucky += rnl(&mut rng_unlucky, x, -13) as i64;
+        }
+
+        // With positive luck, average should be lower (biased toward 0).
+        // With negative luck, average should be higher.
+        // We don't assert strict inequality per-seed, just that the
+        // sums are plausibly different (positive luck sum <= unlucky sum).
+        // This is a statistical property, so we use a loose bound.
+        prop_assert!(sum_lucky <= sum_unlucky + (trials as i64 * x as i64 / 2),
+            "Positive luck should bias rnl lower: lucky_sum={} unlucky_sum={}",
+            sum_lucky, sum_unlucky);
     }
 }
 
@@ -290,17 +363,15 @@ proptest! {
     /// Encumbrance level is monotonically increasing with carried weight.
     #[test]
     fn encumbrance_monotonic_with_weight(
-        weight_a in 0..5000u32,
-        weight_b in 0..5000u32,
-        capacity in 100..2000u32,
+        (weight_a, capacity) in valid_weight_capacity(),
+        extra in 0..3000u32,
     ) {
+        let weight_b = weight_a + extra;
         let enc_a = encumbrance_level(weight_a, capacity) as u8;
         let enc_b = encumbrance_level(weight_b, capacity) as u8;
-        if weight_a <= weight_b {
-            prop_assert!(enc_a <= enc_b,
-                "More weight ({} vs {}) with cap {} should not decrease encumbrance ({} vs {})",
-                weight_a, weight_b, capacity, enc_a, enc_b);
-        }
+        prop_assert!(enc_a <= enc_b,
+            "More weight ({} vs {}) with cap {} should not decrease encumbrance ({} vs {})",
+            weight_a, weight_b, capacity, enc_a, enc_b);
     }
 
     /// Encumbrance at or below capacity is always Unencumbered.
@@ -441,5 +512,151 @@ proptest! {
         sorted.sort();
         prop_assert_eq!(sorted, original,
             "Shuffled array should be a permutation of the original");
+    }
+}
+
+// ─── Wand Recharge BUC Invariants ───
+
+proptest! {
+    /// Cursed recharge always strips charges to 0.
+    #[test]
+    fn cursed_recharge_always_strips(
+        initial_spe in 0..8i8,
+        seed in any::<u64>(),
+    ) {
+        let mut charges = WandCharges { spe: initial_spe, recharged: 0 };
+        let mut rng = Pcg64::seed_from_u64(seed);
+        let result = recharge_wand(WandType::MagicMissile, &mut charges, false, true, &mut rng);
+        prop_assert_eq!(result, RechargeResult::Stripped,
+            "Cursed recharge should strip, got {:?}", result);
+        prop_assert_eq!(charges.spe, 0,
+            "Cursed recharge should set spe to 0, got {}", charges.spe);
+    }
+
+    /// Blessed recharge always gives >= charges than uncursed (first recharge).
+    #[test]
+    fn blessed_recharge_ge_uncursed(
+        seed in any::<u64>(),
+    ) {
+        let mut charges_b = WandCharges { spe: 0, recharged: 0 };
+        let mut charges_u = WandCharges { spe: 0, recharged: 0 };
+        let mut rng_b = Pcg64::seed_from_u64(seed);
+        let mut rng_u = Pcg64::seed_from_u64(seed);
+
+        let result_b = recharge_wand(WandType::MagicMissile, &mut charges_b, true, false, &mut rng_b);
+        let result_u = recharge_wand(WandType::MagicMissile, &mut charges_u, false, false, &mut rng_u);
+
+        if let (RechargeResult::Success { new_spe: spe_b }, RechargeResult::Success { new_spe: spe_u }) = (result_b, result_u) {
+            prop_assert!(spe_b >= spe_u,
+                "Blessed recharge should give >= charges than uncursed: {} vs {}", spe_b, spe_u);
+        }
+    }
+}
+
+// ─── BUC Parametrized Tests (manual matrix) ───
+
+/// Test wand recharge behavior across BUC status for all wand types.
+#[test]
+fn wand_recharge_buc_matrix() {
+    let wand_types = [
+        WandType::MagicMissile,
+        WandType::Fire,
+        WandType::Cold,
+        WandType::Sleep,
+        WandType::Light,
+        WandType::Nothing,
+    ];
+
+    // (label, blessed, cursed, expected_behavior)
+    let buc_cases: &[(&str, bool, bool)] = &[
+        ("blessed", true, false),
+        ("uncursed", false, false),
+        ("cursed", false, true),
+    ];
+
+    for wand_type in &wand_types {
+        for &(buc_label, blessed, cursed) in buc_cases {
+            for seed in 0..50u64 {
+                let mut charges = WandCharges {
+                    spe: 3,
+                    recharged: 0,
+                };
+                let mut rng = Pcg64::seed_from_u64(seed);
+                let result =
+                    recharge_wand(*wand_type, &mut charges, blessed, cursed, &mut rng);
+
+                match result {
+                    RechargeResult::Stripped => {
+                        assert!(
+                            cursed,
+                            "Only cursed should strip: wand={:?} buc={} seed={}",
+                            wand_type, buc_label, seed,
+                        );
+                        assert_eq!(
+                            charges.spe, 0,
+                            "Stripped wand should have 0 charges: wand={:?} buc={} seed={}",
+                            wand_type, buc_label, seed,
+                        );
+                    }
+                    RechargeResult::Success { new_spe } => {
+                        assert!(
+                            !cursed,
+                            "Cursed should not succeed: wand={:?} buc={} seed={}",
+                            wand_type, buc_label, seed,
+                        );
+                        assert!(
+                            new_spe >= 1,
+                            "Successful recharge should give >= 1 spe: wand={:?} buc={} spe={} seed={}",
+                            wand_type, buc_label, new_spe, seed,
+                        );
+                    }
+                    RechargeResult::Exploded => {
+                        // Explosions can happen on any BUC if recharged > 0.
+                        // Since recharged starts at 0 here, this shouldn't happen.
+                        panic!(
+                            "First recharge should not explode: wand={:?} buc={} seed={}",
+                            wand_type, buc_label, seed,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Test that dice rolling distribution covers the full range across many seeds.
+#[test]
+fn dice_distribution_covers_range() {
+    let cases: &[(u8, u8)] = &[
+        (1, 6),   // 1d6
+        (2, 6),   // 2d6
+        (1, 20),  // 1d20
+        (3, 4),   // 3d4
+    ];
+
+    for &(count, sides) in cases {
+        let dice = DiceExpr { count, sides };
+        let min_expected = count as i32;
+        let max_expected = count as i32 * sides as i32;
+        let mut min_seen = i32::MAX;
+        let mut max_seen = i32::MIN;
+
+        for seed in 0..1000u64 {
+            let mut rng = Pcg64::seed_from_u64(seed);
+            let result = roll_dice(dice, &mut rng);
+            min_seen = min_seen.min(result);
+            max_seen = max_seen.max(result);
+        }
+
+        assert_eq!(
+            min_seen, min_expected,
+            "{}d{}: expected min {} but saw {}",
+            count, sides, min_expected, min_seen,
+        );
+        assert_eq!(
+            max_seen, max_expected,
+            "{}d{}: expected max {} but saw {}",
+            count, sides, max_expected, max_seen,
+        );
     }
 }

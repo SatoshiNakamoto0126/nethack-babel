@@ -1929,15 +1929,7 @@ pub fn monster_ranged_attack_dispatch(
                             amount: hp_damage as u32,
                             source: DamageSource::Melee,
                         });
-                        if let Some(mut hp) = world.get_component_mut::<HitPoints>(target) {
-                            hp.current -= hp_damage;
-                            events.push(EngineEvent::HpChange {
-                                entity: target,
-                                amount: -hp_damage,
-                                new_hp: hp.current,
-                                source: HpSource::Combat,
-                            });
-                        }
+                        apply_hp_damage(world, target, hp_damage, attacker, HpSource::Combat, &mut events);
                     }
                     return events;
                 }

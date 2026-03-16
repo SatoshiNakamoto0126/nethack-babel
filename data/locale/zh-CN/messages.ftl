@@ -2303,6 +2303,8 @@ play-nothing = You can't think of anything appropriate to play.
 
 # TODO: translate
 polymorph-controlled = What monster do you want to turn into?
+# TODO: translate
+polymorph-dismount = You can no longer ride your steed.
 
 # TODO: translate
 polymorph-newman-survive = You survive your attempted polymorph.
@@ -2483,6 +2485,11 @@ scroll-identify-self = You feel self-knowledgeable...
 
 # TODO: translate
 see-item-here = You see an item here.
+# TODO: translate
+see-items-here = You see items here.
+
+# TODO: translate
+scroll-cant-read-blind = You can't read while blind!
 
 # TODO: translate
 sick-deaths-door = You are at death's door.
@@ -2807,6 +2814,8 @@ steal-nothing-to-take = { $monster } finds nothing to steal.
 
 # TODO: translate
 steed-stops-galloping = Your steed slows to a halt.
+# TODO: translate
+steed-swims = Your steed paddles through the water.
 
 # TODO: translate
 stoning-limbs-stiffening = Your limbs are stiffening.
