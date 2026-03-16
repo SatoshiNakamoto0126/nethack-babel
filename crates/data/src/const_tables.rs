@@ -331,29 +331,29 @@ const _: () = {
 
 // Verify terrain passability for key types
 const _: () = {
-    assert!(!is_terrain_passable(0));  // Stone
-    assert!(!is_terrain_passable(1));  // VWall
+    assert!(!is_terrain_passable(0)); // Stone
+    assert!(!is_terrain_passable(1)); // VWall
     assert!(!is_terrain_passable(16)); // Pool
     assert!(!is_terrain_passable(20)); // LavaPool
-    assert!(is_terrain_passable(23));  // Door
-    assert!(is_terrain_passable(24));  // Corridor
-    assert!(is_terrain_passable(25));  // Room
-    assert!(is_terrain_passable(26));  // Stairs
-    assert!(is_terrain_passable(33));  // Ice
-    assert!(is_terrain_passable(35));  // Air
+    assert!(is_terrain_passable(23)); // Door
+    assert!(is_terrain_passable(24)); // Corridor
+    assert!(is_terrain_passable(25)); // Room
+    assert!(is_terrain_passable(26)); // Stairs
+    assert!(is_terrain_passable(33)); // Ice
+    assert!(is_terrain_passable(35)); // Air
 };
 
 // Verify terrain opacity for key types
 const _: () = {
-    assert!(is_terrain_opaque(0));   // Stone
-    assert!(is_terrain_opaque(1));   // VWall
-    assert!(is_terrain_opaque(13));  // Tree
-    assert!(is_terrain_opaque(14));  // SecretDoor
+    assert!(is_terrain_opaque(0)); // Stone
+    assert!(is_terrain_opaque(1)); // VWall
+    assert!(is_terrain_opaque(13)); // Tree
+    assert!(is_terrain_opaque(14)); // SecretDoor
     assert!(!is_terrain_opaque(22)); // IronBars (see-through)
     assert!(!is_terrain_opaque(23)); // Door
     assert!(!is_terrain_opaque(24)); // Corridor
     assert!(!is_terrain_opaque(25)); // Room
-    assert!(is_terrain_opaque(36));  // Cloud
+    assert!(is_terrain_opaque(36)); // Cloud
 };
 
 // ===========================================================================
@@ -369,7 +369,8 @@ mod tests {
         // STR < 6: -2
         for s in 0..=5u8 {
             assert_eq!(
-                STR_TO_HIT[encode_strength(s, 0)], -2,
+                STR_TO_HIT[encode_strength(s, 0)],
+                -2,
                 "STR_TO_HIT for STR {s}"
             );
         }
@@ -379,7 +380,8 @@ mod tests {
         // STR 8-16: 0
         for s in 8..=16u8 {
             assert_eq!(
-                STR_TO_HIT[encode_strength(s, 0)], 0,
+                STR_TO_HIT[encode_strength(s, 0)],
+                0,
                 "STR_TO_HIT for STR {s}"
             );
         }
@@ -403,14 +405,16 @@ mod tests {
         // STR < 6: -1
         for s in 0..=5u8 {
             assert_eq!(
-                STR_DAMAGE[encode_strength(s, 0)], -1,
+                STR_DAMAGE[encode_strength(s, 0)],
+                -1,
                 "STR_DAMAGE for STR {s}"
             );
         }
         // STR 6-15: 0
         for s in 6..=15u8 {
             assert_eq!(
-                STR_DAMAGE[encode_strength(s, 0)], 0,
+                STR_DAMAGE[encode_strength(s, 0)],
+                0,
                 "STR_DAMAGE for STR {s}"
             );
         }
@@ -493,10 +497,7 @@ mod tests {
         assert!(!is_terrain_passable(20)); // LavaPool
         // All floor-like types
         for t in 23..=36u8 {
-            assert!(
-                is_terrain_passable(t),
-                "terrain {t} should be passable"
-            );
+            assert!(is_terrain_passable(t), "terrain {t} should be passable");
         }
     }
 
@@ -507,8 +508,8 @@ mod tests {
         assert_eq!(encode_strength(18, 0), 18);
         assert_eq!(encode_strength(18, 1), 19);
         assert_eq!(encode_strength(18, 100), 118);
-        assert_eq!(encode_strength(19, 0), 119);        // 100 + 19
-        assert_eq!(encode_strength(25, 0), 125);       // 100 + 25
+        assert_eq!(encode_strength(19, 0), 119); // 100 + 19
+        assert_eq!(encode_strength(25, 0), 125); // 100 + 25
         // Clamping: STR > 25 treated as 25
         assert_eq!(encode_strength(30, 0), encode_strength(25, 0));
         // Extra > 100 treated as 18/100

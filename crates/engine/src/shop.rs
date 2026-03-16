@@ -95,7 +95,10 @@ impl ShopType {
                 matches!(class, ObjectClass::Spellbook | ObjectClass::Scroll)
             }
             ShopType::HealthFood => {
-                matches!(class, ObjectClass::Food | ObjectClass::Potion | ObjectClass::Scroll)
+                matches!(
+                    class,
+                    ObjectClass::Food | ObjectClass::Potion | ObjectClass::Scroll
+                )
             }
             ShopType::Candle => matches!(
                 class,
@@ -445,15 +448,13 @@ pub fn get_base_price(
     };
 
     match class {
-        ObjectClass::Wand
-            if spe == -1 => {
-                // Empty/cancelled wand is worthless.
-                base = 0;
-            }
-        ObjectClass::Armor | ObjectClass::Weapon
-            if spe > 0 => {
-                base += 10 * spe as i32;
-            }
+        ObjectClass::Wand if spe == -1 => {
+            // Empty/cancelled wand is worthless.
+            base = 0;
+        }
+        ObjectClass::Armor | ObjectClass::Weapon if spe > 0 => {
+            base += 10 * spe as i32;
+        }
         _ => {}
     }
 
@@ -653,9 +654,7 @@ pub fn get_full_sell_price(
     is_artifact: bool,
     artifact_cost: i32,
 ) -> i32 {
-    let base = get_base_price(
-        base_cost, class, spe, is_artifact, artifact_cost, true,
-    );
+    let base = get_base_price(base_cost, class, spe, is_artifact, artifact_cost, true);
     let tmp = base * quantity.max(1);
 
     let divisor: i32 = if is_tourist_or_dunce { 3 } else { 2 };
@@ -762,11 +761,7 @@ pub fn kop_counts(depth: i32, rnd5: i32) -> (i32, i32, i32, i32) {
 // ---------------------------------------------------------------------------
 
 /// Generate greeting events when the player enters a shop.
-pub fn enter_shop(
-    world: &GameWorld,
-    player: Entity,
-    shop: &ShopRoom,
-) -> Vec<EngineEvent> {
+pub fn enter_shop(world: &GameWorld, player: Entity, shop: &ShopRoom) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let _player_name = world.entity_name(player);
@@ -836,7 +831,12 @@ pub fn pickup_in_shop(
 
     // Compute base price with class adjustments.
     let adjusted_base = get_base_price(
-        base_cost, item_class, spe, is_artifact, base_cost * 4, false,
+        base_cost,
+        item_class,
+        spe,
+        is_artifact,
+        base_cost * 4,
+        false,
     );
 
     let unit_price = get_cost(adjusted_base, 1, charisma, true, false);
@@ -1155,11 +1155,7 @@ pub fn pacify_shop(shop: &mut ShopRoom) {
 ///
 /// The number and rank of Kops depends on the dungeon depth.
 /// Returns `MonsterGenerated` events for each spawned Kop.
-fn spawn_kops<R: Rng>(
-    world: &GameWorld,
-    player: Entity,
-    rng: &mut R,
-) -> Vec<EngineEvent> {
+fn spawn_kops<R: Rng>(world: &GameWorld, player: Entity, rng: &mut R) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let player_pos = world
@@ -1246,62 +1242,137 @@ pub struct ItemProb {
 /// specific object type ID (for shop types that stock specific items).
 pub fn shop_iprobs(shop_type: ShopType) -> &'static [ItemProb] {
     match shop_type {
-        ShopType::General => &[
-            ItemProb { prob: 100, item_type: ObjectClass::Random as i16 },
-        ],
+        ShopType::General => &[ItemProb {
+            prob: 100,
+            item_type: ObjectClass::Random as i16,
+        }],
         ShopType::Armor => &[
-            ItemProb { prob: 90, item_type: ObjectClass::Armor as i16 },
-            ItemProb { prob: 100, item_type: ObjectClass::Weapon as i16 },
+            ItemProb {
+                prob: 90,
+                item_type: ObjectClass::Armor as i16,
+            },
+            ItemProb {
+                prob: 100,
+                item_type: ObjectClass::Weapon as i16,
+            },
         ],
         ShopType::Scroll => &[
-            ItemProb { prob: 90, item_type: ObjectClass::Scroll as i16 },
-            ItemProb { prob: 100, item_type: ObjectClass::Spellbook as i16 },
+            ItemProb {
+                prob: 90,
+                item_type: ObjectClass::Scroll as i16,
+            },
+            ItemProb {
+                prob: 100,
+                item_type: ObjectClass::Spellbook as i16,
+            },
         ],
-        ShopType::Potion => &[
-            ItemProb { prob: 100, item_type: ObjectClass::Potion as i16 },
-        ],
+        ShopType::Potion => &[ItemProb {
+            prob: 100,
+            item_type: ObjectClass::Potion as i16,
+        }],
         ShopType::Weapon => &[
-            ItemProb { prob: 90, item_type: ObjectClass::Weapon as i16 },
-            ItemProb { prob: 100, item_type: ObjectClass::Armor as i16 },
+            ItemProb {
+                prob: 90,
+                item_type: ObjectClass::Weapon as i16,
+            },
+            ItemProb {
+                prob: 100,
+                item_type: ObjectClass::Armor as i16,
+            },
         ],
         ShopType::Food => &[
             // 83% FOOD_CLASS, then specific items (negative values).
             // We approximate specific items as FOOD_CLASS and POTION_CLASS.
-            ItemProb { prob: 83, item_type: ObjectClass::Food as i16 },
-            ItemProb { prob: 92, item_type: ObjectClass::Potion as i16 },
-            ItemProb { prob: 100, item_type: ObjectClass::Tool as i16 },
+            ItemProb {
+                prob: 83,
+                item_type: ObjectClass::Food as i16,
+            },
+            ItemProb {
+                prob: 92,
+                item_type: ObjectClass::Potion as i16,
+            },
+            ItemProb {
+                prob: 100,
+                item_type: ObjectClass::Tool as i16,
+            },
         ],
         ShopType::Ring => &[
-            ItemProb { prob: 85, item_type: ObjectClass::Ring as i16 },
-            ItemProb { prob: 95, item_type: ObjectClass::Gem as i16 },
-            ItemProb { prob: 100, item_type: ObjectClass::Amulet as i16 },
+            ItemProb {
+                prob: 85,
+                item_type: ObjectClass::Ring as i16,
+            },
+            ItemProb {
+                prob: 95,
+                item_type: ObjectClass::Gem as i16,
+            },
+            ItemProb {
+                prob: 100,
+                item_type: ObjectClass::Amulet as i16,
+            },
         ],
         ShopType::Wand => &[
             // 90% WAND_CLASS, 5% leather gloves (armor), 5% elven cloak (armor).
-            ItemProb { prob: 90, item_type: ObjectClass::Wand as i16 },
-            ItemProb { prob: 100, item_type: ObjectClass::Armor as i16 },
+            ItemProb {
+                prob: 90,
+                item_type: ObjectClass::Wand as i16,
+            },
+            ItemProb {
+                prob: 100,
+                item_type: ObjectClass::Armor as i16,
+            },
         ],
-        ShopType::Tool => &[
-            ItemProb { prob: 100, item_type: ObjectClass::Tool as i16 },
-        ],
+        ShopType::Tool => &[ItemProb {
+            prob: 100,
+            item_type: ObjectClass::Tool as i16,
+        }],
         ShopType::Book => &[
-            ItemProb { prob: 90, item_type: ObjectClass::Spellbook as i16 },
-            ItemProb { prob: 100, item_type: ObjectClass::Scroll as i16 },
+            ItemProb {
+                prob: 90,
+                item_type: ObjectClass::Spellbook as i16,
+            },
+            ItemProb {
+                prob: 100,
+                item_type: ObjectClass::Scroll as i16,
+            },
         ],
         ShopType::HealthFood => &[
             // 70% VEGETARIAN (food), 20% POT_FRUIT_JUICE (potion),
             // then specific potions/scrolls.
-            ItemProb { prob: 70, item_type: ObjectClass::Food as i16 },
-            ItemProb { prob: 94, item_type: ObjectClass::Potion as i16 },
-            ItemProb { prob: 100, item_type: ObjectClass::Scroll as i16 },
+            ItemProb {
+                prob: 70,
+                item_type: ObjectClass::Food as i16,
+            },
+            ItemProb {
+                prob: 94,
+                item_type: ObjectClass::Potion as i16,
+            },
+            ItemProb {
+                prob: 100,
+                item_type: ObjectClass::Scroll as i16,
+            },
         ],
         ShopType::Candle => &[
             // Specific candle/lamp items; we map to Tool + Potion + Wand + Scroll.
-            ItemProb { prob: 88, item_type: ObjectClass::Tool as i16 },
-            ItemProb { prob: 93, item_type: ObjectClass::Potion as i16 },
-            ItemProb { prob: 96, item_type: ObjectClass::Wand as i16 },
-            ItemProb { prob: 98, item_type: ObjectClass::Scroll as i16 },
-            ItemProb { prob: 100, item_type: ObjectClass::Spellbook as i16 },
+            ItemProb {
+                prob: 88,
+                item_type: ObjectClass::Tool as i16,
+            },
+            ItemProb {
+                prob: 93,
+                item_type: ObjectClass::Potion as i16,
+            },
+            ItemProb {
+                prob: 96,
+                item_type: ObjectClass::Wand as i16,
+            },
+            ItemProb {
+                prob: 98,
+                item_type: ObjectClass::Scroll as i16,
+            },
+            ItemProb {
+                prob: 100,
+                item_type: ObjectClass::Spellbook as i16,
+            },
         ],
     }
 }
@@ -1377,12 +1448,7 @@ pub fn identify_by_price(
 /// - Wands: base_cost / (charges + 1), minimum 10
 /// - Spellbooks: base_cost / (charges + 1), minimum 5
 /// - Other charged tools: base_cost / (charges + 1), minimum 1
-pub fn cost_per_charge(
-    base_cost: i32,
-    charges: i32,
-    is_wand: bool,
-    is_spellbook: bool,
-) -> i32 {
+pub fn cost_per_charge(base_cost: i32, charges: i32, is_wand: bool, is_spellbook: bool) -> i32 {
     let denominator = (charges + 1).max(1);
     let per_charge = base_cost / denominator;
     if is_wand {
@@ -1466,24 +1532,14 @@ pub fn get_pricing_units(quantity: i32, is_ammo: bool, is_mergeable: bool) -> i3
 /// shops (for handling wands safely).
 ///
 /// Mirrors `special_stock()` from `shk.c`.
-pub fn is_special_stock(
-    shop_type: ShopType,
-    item_name: &str,
-    item_class: ObjectClass,
-) -> bool {
+pub fn is_special_stock(shop_type: ShopType, item_name: &str, item_class: ObjectClass) -> bool {
     match shop_type {
         ShopType::Wand => {
-            matches!(
-                item_name,
-                "leather gloves" | "elven cloak"
-            )
+            matches!(item_name, "leather gloves" | "elven cloak")
         }
         ShopType::Food => {
             // Tin, tinning kit, tin opener — food shops stock these tools.
-            matches!(
-                item_name,
-                "tin" | "tinning kit" | "tin opener"
-            )
+            matches!(item_name, "tin" | "tinning kit" | "tin opener")
         }
         ShopType::HealthFood => {
             // Health food stores stock potions and scrolls.
@@ -1493,11 +1549,7 @@ pub fn is_special_stock(
             // Lighting shops stock specific items.
             matches!(
                 item_name,
-                "tallow candle"
-                    | "wax candle"
-                    | "oil lamp"
-                    | "brass lantern"
-                    | "magic lamp"
+                "tallow candle" | "wax candle" | "oil lamp" | "brass lantern" | "magic lamp"
             )
         }
         _ => false,
@@ -1611,40 +1663,112 @@ pub fn repair_one_damage(shop: &mut ShopRoom) -> Option<ShopDamage> {
 pub fn shopkeeper_name_pool(shop_type: ShopType) -> &'static [&'static str] {
     match shop_type {
         ShopType::General | ShopType::Tool => &[
-            "Njezjansen", "Tansen", "Snansen", "Anansen", "Manansen",
-            "Danansen", "Janansen", "Panansen", "Ranansen", "Wansen",
+            "Njezjansen",
+            "Tansen",
+            "Snansen",
+            "Anansen",
+            "Manansen",
+            "Danansen",
+            "Janansen",
+            "Panansen",
+            "Ranansen",
+            "Wansen",
         ],
         ShopType::Armor => &[
-            "Demstransen", "Stansen", "Mansen", "Tanansen", "Kanansen",
-            "Donansen", "Hanansen", "Lanansen", "Vanansen", "Zanansen",
+            "Demstransen",
+            "Stansen",
+            "Mansen",
+            "Tanansen",
+            "Kanansen",
+            "Donansen",
+            "Hanansen",
+            "Lanansen",
+            "Vanansen",
+            "Zanansen",
         ],
         ShopType::Scroll | ShopType::Book => &[
-            "Kirjansen", "Bookansen", "Volansen", "Tomansen", "Pagansen",
-            "Readansen", "Leafansen", "Wordansen", "Textansen", "Lineansen",
+            "Kirjansen",
+            "Bookansen",
+            "Volansen",
+            "Tomansen",
+            "Pagansen",
+            "Readansen",
+            "Leafansen",
+            "Wordansen",
+            "Textansen",
+            "Lineansen",
         ],
         ShopType::Potion => &[
-            "Juansen", "Drinkansen", "Sipansen", "Gulpansen", "Potansen",
-            "Elixansen", "Brewansen", "Mixansen", "Vialansen", "Flaskansen",
+            "Juansen",
+            "Drinkansen",
+            "Sipansen",
+            "Gulpansen",
+            "Potansen",
+            "Elixansen",
+            "Brewansen",
+            "Mixansen",
+            "Vialansen",
+            "Flaskansen",
         ],
         ShopType::Weapon => &[
-            "Sansen", "Bladeansen", "Edgeansen", "Pointansen", "Hiltansen",
-            "Sharpansen", "Steelansen", "Ironansen", "Brassansen", "Bronzansen",
+            "Sansen",
+            "Bladeansen",
+            "Edgeansen",
+            "Pointansen",
+            "Hiltansen",
+            "Sharpansen",
+            "Steelansen",
+            "Ironansen",
+            "Brassansen",
+            "Bronzansen",
         ],
         ShopType::Food | ShopType::HealthFood => &[
-            "Dansen", "Feedansen", "Mealansen", "Bitansen", "Tastansen",
-            "Freshansen", "Cookansen", "Bakansen", "Roastansen", "Grillansen",
+            "Dansen",
+            "Feedansen",
+            "Mealansen",
+            "Bitansen",
+            "Tastansen",
+            "Freshansen",
+            "Cookansen",
+            "Bakansen",
+            "Roastansen",
+            "Grillansen",
         ],
         ShopType::Ring => &[
-            "Ringansen", "Gemansen", "Sparkansen", "Shinansen", "Glowansen",
-            "Bandansen", "Loopansen", "Circansen", "Hoopansen", "Orbansen",
+            "Ringansen",
+            "Gemansen",
+            "Sparkansen",
+            "Shinansen",
+            "Glowansen",
+            "Bandansen",
+            "Loopansen",
+            "Circansen",
+            "Hoopansen",
+            "Orbansen",
         ],
         ShopType::Wand => &[
-            "Wandansen", "Stickansen", "Rodansen", "Staffansen", "Twiganson",
-            "Beamansen", "Rayansen", "Boltansen", "Zapansen", "Flickansen",
+            "Wandansen",
+            "Stickansen",
+            "Rodansen",
+            "Staffansen",
+            "Twiganson",
+            "Beamansen",
+            "Rayansen",
+            "Boltansen",
+            "Zapansen",
+            "Flickansen",
         ],
         ShopType::Candle => &[
-            "Flamansen", "Lightansen", "Glowansen", "Wickansen", "Waxansen",
-            "Burnansen", "Torchansen", "Lampansen", "Beamansen", "Shineansen",
+            "Flamansen",
+            "Lightansen",
+            "Glowansen",
+            "Wickansen",
+            "Waxansen",
+            "Burnansen",
+            "Torchansen",
+            "Lampansen",
+            "Beamansen",
+            "Shineansen",
         ],
     }
 }
@@ -2186,8 +2310,16 @@ mod tests {
         // #2: oc_cost=100, CHA=12, unid with o_id%4==0 => 133
         // OID surcharge adds 4/3 multiplier.
         let price = get_full_buy_price(
-            100, ObjectClass::Weapon, 0, 1, 12,
-            false, false, 0, true, false,
+            100,
+            ObjectClass::Weapon,
+            0,
+            1,
+            12,
+            false,
+            false,
+            0,
+            true,
+            false,
         );
         assert_eq!(price, 133);
     }
@@ -2231,8 +2363,16 @@ mod tests {
     fn test_shop_pricing_vector_8_artifact() {
         // #8: oc_cost=100, CHA=12, identified, artifact => 400
         let price = get_full_buy_price(
-            100, ObjectClass::Weapon, 0, 1, 12,
-            false, true, 100, false, false,
+            100,
+            ObjectClass::Weapon,
+            0,
+            1,
+            12,
+            false,
+            true,
+            100,
+            false,
+            false,
         );
         assert_eq!(price, 400);
     }
@@ -2241,8 +2381,16 @@ mod tests {
     fn test_shop_pricing_vector_9_anger_surcharge() {
         // #9: oc_cost=100, CHA=12, identified, angry => 134
         let price = get_full_buy_price(
-            100, ObjectClass::Weapon, 0, 1, 12,
-            false, false, 0, false, true,
+            100,
+            ObjectClass::Weapon,
+            0,
+            1,
+            12,
+            false,
+            false,
+            0,
+            false,
+            true,
         );
         // base=100, no modifiers => 100, anger: 100 + (100+2)/3 = 100+34 = 134
         assert_eq!(price, 134);
@@ -2259,8 +2407,16 @@ mod tests {
         // no artifact
         // anger: 356 + (356+2)/3 = 356 + 119 = 475
         let price = get_full_buy_price(
-            100, ObjectClass::Weapon, 0, 1, 5,
-            true, false, 0, true, true,
+            100,
+            ObjectClass::Weapon,
+            0,
+            1,
+            5,
+            true,
+            false,
+            0,
+            true,
+            true,
         );
         assert_eq!(price, 475);
     }
@@ -2268,27 +2424,21 @@ mod tests {
     #[test]
     fn test_shop_sell_vector_11_normal() {
         // #11: oc_cost=100, normal => sell 50
-        let price = get_full_sell_price(
-            100, ObjectClass::Weapon, 0, 1, false, false, 0,
-        );
+        let price = get_full_sell_price(100, ObjectClass::Weapon, 0, 1, false, false, 0);
         assert_eq!(price, 50);
     }
 
     #[test]
     fn test_shop_sell_vector_12_tourist() {
         // #12: oc_cost=100, tourist => sell 33
-        let price = get_full_sell_price(
-            100, ObjectClass::Weapon, 0, 1, true, false, 0,
-        );
+        let price = get_full_sell_price(100, ObjectClass::Weapon, 0, 1, true, false, 0);
         assert_eq!(price, 33);
     }
 
     #[test]
     fn test_shop_sell_vector_13_dunce() {
         // #13: oc_cost=100, dunce => sell 33
-        let price = get_full_sell_price(
-            100, ObjectClass::Weapon, 0, 1, true, false, 0,
-        );
+        let price = get_full_sell_price(100, ObjectClass::Weapon, 0, 1, true, false, 0);
         assert_eq!(price, 33);
     }
 
@@ -2459,8 +2609,16 @@ mod tests {
         // Base 50, +3 weapon, CHA 12, no modifiers.
         // get_base_price => 50+30 = 80.  get_cost(80,1,12,buy) = 80.
         let price = get_full_buy_price(
-            50, ObjectClass::Weapon, 3, 1, 12,
-            false, false, 0, false, false,
+            50,
+            ObjectClass::Weapon,
+            3,
+            1,
+            12,
+            false,
+            false,
+            0,
+            false,
+            false,
         );
         assert_eq!(price, 80);
     }
@@ -2476,8 +2634,16 @@ mod tests {
         // get_cost(320, 1, 12, buy, false) = 320.
         // artifact 4x => 320 * 4 = 1280.
         let price = get_full_buy_price(
-            50, ObjectClass::Weapon, 2, 1, 12,
-            false, true, 300, false, false,
+            50,
+            ObjectClass::Weapon,
+            2,
+            1,
+            12,
+            false,
+            true,
+            300,
+            false,
+            false,
         );
         assert_eq!(price, 1280);
     }
@@ -2488,9 +2654,7 @@ mod tests {
     fn test_shop_full_sell_enchanted_armor() {
         // +2 armor, base 40.  get_base_price(40, Armor, 2, false, 0, true) = 60.
         // sell: 60/2 = 30.
-        let price = get_full_sell_price(
-            40, ObjectClass::Armor, 2, 1, false, false, 0,
-        );
+        let price = get_full_sell_price(40, ObjectClass::Armor, 2, 1, false, false, 0);
         assert_eq!(price, 30);
     }
 
@@ -2499,9 +2663,7 @@ mod tests {
         // Artifact, artifact_cost=400, Weapon, spe=0.
         // get_base_price(50, Weapon, 0, true, 400, shk_buying=true) = 400/4 = 100.
         // sell: 100/2 = 50.
-        let price = get_full_sell_price(
-            50, ObjectClass::Weapon, 0, 1, false, true, 400,
-        );
+        let price = get_full_sell_price(50, ObjectClass::Weapon, 0, 1, false, true, 400);
         assert_eq!(price, 50);
     }
 
@@ -2551,43 +2713,64 @@ mod tests {
     #[test]
     fn test_shop_usage_fee_marker() {
         // Magic marker: cost/2
-        assert_eq!(usage_fee(100, false, false, false, false, true, false, false), 50);
+        assert_eq!(
+            usage_fee(100, false, false, false, false, true, false, false),
+            50
+        );
     }
 
     #[test]
     fn test_shop_usage_fee_bag_of_tricks() {
         // Bag of tricks per use: cost/5
-        assert_eq!(usage_fee(100, false, true, false, false, false, false, false), 20);
+        assert_eq!(
+            usage_fee(100, false, true, false, false, false, false, false),
+            20
+        );
     }
 
     #[test]
     fn test_shop_usage_fee_bag_of_tricks_emptied() {
         // Bag of tricks emptied: full cost
-        assert_eq!(usage_fee(100, false, true, false, false, false, false, true), 100);
+        assert_eq!(
+            usage_fee(100, false, true, false, false, false, false, true),
+            100
+        );
     }
 
     #[test]
     fn test_shop_usage_fee_spellbook() {
         // Spellbook: 4/5 of cost
-        assert_eq!(usage_fee(100, false, false, true, false, false, false, false), 80);
+        assert_eq!(
+            usage_fee(100, false, false, true, false, false, false, false),
+            80
+        );
     }
 
     #[test]
     fn test_shop_usage_fee_cheap_charged() {
         // Can of grease etc.: cost/10
-        assert_eq!(usage_fee(100, false, false, false, true, false, false, false), 10);
+        assert_eq!(
+            usage_fee(100, false, false, false, true, false, false, false),
+            10
+        );
     }
 
     #[test]
     fn test_shop_usage_fee_oil_potion() {
         // Potion of oil: cost/5
-        assert_eq!(usage_fee(100, false, false, false, false, false, true, false), 20);
+        assert_eq!(
+            usage_fee(100, false, false, false, false, false, true, false),
+            20
+        );
     }
 
     #[test]
     fn test_shop_usage_fee_wand() {
         // Wand/crystal ball etc.: cost/4
-        assert_eq!(usage_fee(100, false, false, false, false, false, false, false), 25);
+        assert_eq!(
+            usage_fee(100, false, false, false, false, false, false, false),
+            25
+        );
     }
 
     // ── Credit for sale ─────────────────────────────────────────
@@ -3138,16 +3321,8 @@ mod tests {
     fn test_repair_one_damage() {
         let mut world = GameWorld::new(Position::new(10, 5));
         let mut shop = test_shop(&mut world);
-        record_shop_damage(
-            &mut shop,
-            Position::new(7, 3),
-            ShopDamageType::DoorBroken,
-        );
-        record_shop_damage(
-            &mut shop,
-            Position::new(8, 3),
-            ShopDamageType::FloorDamaged,
-        );
+        record_shop_damage(&mut shop, Position::new(7, 3), ShopDamageType::DoorBroken);
+        record_shop_damage(&mut shop, Position::new(8, 3), ShopDamageType::FloorDamaged);
         assert_eq!(shop.damage_list.len(), 2);
 
         let repaired = repair_one_damage(&mut shop);
@@ -3182,11 +3357,7 @@ mod tests {
         ];
         for st in &shop_types {
             let pool = shopkeeper_name_pool(*st);
-            assert!(
-                !pool.is_empty(),
-                "{:?} should have name pool",
-                st
-            );
+            assert!(!pool.is_empty(), "{:?} should have name pool", st);
         }
     }
 
@@ -3258,11 +3429,16 @@ mod tests {
             assert!(
                 price >= base - variation && price <= base + variation,
                 "price {} should be in [{}, {}]",
-                price, base - variation, base + variation
+                price,
+                base - variation,
+                base + variation
             );
         }
         // Should see some variation.
-        assert!(max_seen > min_seen, "should see price variation for unidentified items");
+        assert!(
+            max_seen > min_seen,
+            "should see price variation for unidentified items"
+        );
     }
 
     #[test]

@@ -214,10 +214,7 @@ pub fn infect_lycanthropy(
 /// Cure lycanthropy from an entity.
 ///
 /// Returns events describing the cure.
-pub fn cure_lycanthropy(
-    world: &mut GameWorld,
-    entity: Entity,
-) -> Vec<EngineEvent> {
+pub fn cure_lycanthropy(world: &mut GameWorld, entity: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let had_it = world.get_component::<LycanthropyState>(entity).is_some();
@@ -279,11 +276,7 @@ pub fn is_full_moon(turn: u32) -> bool {
 ///
 /// Mirrors C `were_change(mon)`.
 /// Returns `true` if the creature should transform.
-pub fn should_were_change<R: Rng>(
-    rng: &mut R,
-    turn: u32,
-    is_animal_form: bool,
-) -> bool {
+pub fn should_were_change<R: Rng>(rng: &mut R, turn: u32, is_animal_form: bool) -> bool {
     let full_moon = is_full_moon(turn);
 
     if full_moon && !is_animal_form {
@@ -398,8 +391,8 @@ mod tests {
     use super::*;
     use crate::action::Position;
     use crate::world::GameWorld;
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_world() -> GameWorld {
         GameWorld::new(Position::new(5, 5))
@@ -414,15 +407,9 @@ mod tests {
     #[test]
     fn counter_were_returns_opposite_form() {
         // Werewolf (human) → wolf (animal)
-        assert_eq!(
-            counter_were(MonsterId(104)),
-            Some(MonsterId(105))
-        );
+        assert_eq!(counter_were(MonsterId(104)), Some(MonsterId(105)));
         // Wolf (animal) → werewolf (human)
-        assert_eq!(
-            counter_were(MonsterId(105)),
-            Some(MonsterId(104))
-        );
+        assert_eq!(counter_were(MonsterId(105)), Some(MonsterId(104)));
     }
 
     #[test]
@@ -652,10 +639,22 @@ mod tests {
 
     #[test]
     fn were_type_from_monster_id() {
-        assert_eq!(WereType::from_monster_id(MonsterId(100)), Some(WereType::Wererat));
-        assert_eq!(WereType::from_monster_id(MonsterId(101)), Some(WereType::Wererat));
-        assert_eq!(WereType::from_monster_id(MonsterId(104)), Some(WereType::Werewolf));
-        assert_eq!(WereType::from_monster_id(MonsterId(105)), Some(WereType::Werewolf));
+        assert_eq!(
+            WereType::from_monster_id(MonsterId(100)),
+            Some(WereType::Wererat)
+        );
+        assert_eq!(
+            WereType::from_monster_id(MonsterId(101)),
+            Some(WereType::Wererat)
+        );
+        assert_eq!(
+            WereType::from_monster_id(MonsterId(104)),
+            Some(WereType::Werewolf)
+        );
+        assert_eq!(
+            WereType::from_monster_id(MonsterId(105)),
+            Some(WereType::Werewolf)
+        );
         assert_eq!(WereType::from_monster_id(MonsterId(999)), None);
     }
 

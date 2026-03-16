@@ -17,11 +17,9 @@ use crate::combat::resolve_melee_attack;
 use crate::dungeon::Terrain;
 use crate::event::{EngineEvent, HpSource};
 use crate::religion::rnl;
-use crate::steed;
 use crate::status;
-use crate::world::{
-    Attributes, CarryWeight, GameWorld, Monster, PlayerCombat, Positioned, Tame,
-};
+use crate::steed;
+use crate::world::{Attributes, CarryWeight, GameWorld, Monster, PlayerCombat, Positioned, Tame};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -70,7 +68,14 @@ pub fn resolve_move(
     if let Some(occupant) = entity_at(world, target_pos, player) {
         if is_tame(world, occupant) {
             // Swap positions with pet.
-            swap_with_pet(world, player, occupant, current_pos, target_pos, &mut events);
+            swap_with_pet(
+                world,
+                player,
+                occupant,
+                current_pos,
+                target_pos,
+                &mut events,
+            );
             return events;
         }
         if is_monster(world, occupant) {
@@ -172,10 +177,8 @@ pub fn try_open_door(
         .map(|pc| pc.luck)
         .unwrap_or(0);
 
-    let avg_attrib = (attrs.strength as i32
-        + attrs.dexterity as i32
-        + attrs.constitution as i32)
-        / 3;
+    let avg_attrib =
+        (attrs.strength as i32 + attrs.dexterity as i32 + attrs.constitution as i32) / 3;
 
     let roll = rnl(rng, 20, luck);
 
@@ -227,10 +230,8 @@ pub fn try_close_door(
         .map(|pc| pc.luck)
         .unwrap_or(0);
 
-    let avg_attrib = (attrs.strength as i32
-        + attrs.dexterity as i32
-        + attrs.constitution as i32)
-        / 3;
+    let avg_attrib =
+        (attrs.strength as i32 + attrs.dexterity as i32 + attrs.constitution as i32) / 3;
 
     let roll = rnl(rng, 25, luck);
 
@@ -288,10 +289,8 @@ pub fn try_kick_door(
         .map(|pc| pc.luck)
         .unwrap_or(0);
 
-    let avg_attrib = (attrs.strength as i32
-        + attrs.dexterity as i32
-        + attrs.constitution as i32)
-        / 3;
+    let avg_attrib =
+        (attrs.strength as i32 + attrs.dexterity as i32 + attrs.constitution as i32) / 3;
 
     let roll = rnl(rng, 35, luck);
 
@@ -362,9 +361,7 @@ pub fn diagonal_ok(world: &GameWorld, from: Position, to: Position) -> bool {
 
     // Diagonal door restriction: cannot move diagonally into or out of a
     // door (closed or open -- i.e. an intact doorway).
-    let from_is_door = map
-        .get(from)
-        .is_some_and(|c| is_door(c.terrain));
+    let from_is_door = map.get(from).is_some_and(|c| is_door(c.terrain));
     let to_is_door = map.get(to).is_some_and(|c| is_door(c.terrain));
     if from_is_door || to_is_door {
         return false;
@@ -602,9 +599,7 @@ pub fn try_pool_movement(
         if let Some(steed_entity) = steed::get_steed(world, entity) {
             let steed_can_swim = world
                 .get_component::<crate::monster_ai::MonsterSpeciesFlags>(steed_entity)
-                .is_some_and(|f| {
-                    f.0.contains(nethack_babel_data::MonsterFlags::SWIM)
-                });
+                .is_some_and(|f| f.0.contains(nethack_babel_data::MonsterFlags::SWIM));
             if steed_can_swim {
                 events.push(EngineEvent::msg("steed-swims"));
                 return (events, true);
@@ -816,8 +811,7 @@ mod tests {
     use crate::action::Position;
     use crate::dungeon::Terrain;
     use crate::world::{
-        Attributes, CarryWeight, HitPoints, Monster, Name, Positioned, Speed,
-        Tame,
+        Attributes, CarryWeight, HitPoints, Monster, Name, Positioned, Speed, Tame,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
@@ -857,9 +851,7 @@ mod tests {
             .any(|e| matches!(e, EngineEvent::EntityMoved { .. }));
         assert!(moved, "expected EntityMoved event");
 
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(6, 5));
     }
 
@@ -876,13 +868,13 @@ mod tests {
         let events = resolve_move(&mut world, Direction::East, &mut rng);
 
         // Player should not have moved.
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(5, 5));
 
         // Should have a bump message.
-        let has_msg = events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("bump")));
+        let has_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("bump")));
         assert!(has_msg, "expected bump message");
     }
 
@@ -917,12 +909,7 @@ mod tests {
             .any(|e| matches!(e, EngineEvent::DoorOpened { .. }));
         assert!(opened, "expected door to open with high attributes");
 
-        let terrain = world
-            .dungeon()
-            .current_level
-            .get(door_pos)
-            .unwrap()
-            .terrain;
+        let terrain = world.dungeon().current_level.get(door_pos).unwrap().terrain;
         assert_eq!(terrain, Terrain::DoorOpen);
     }
 
@@ -939,15 +926,13 @@ mod tests {
         let events = resolve_move(&mut world, Direction::East, &mut rng);
 
         // Player should not move.
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(5, 5));
 
         // Should get "locked" message.
-        let has_locked_msg = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("locked"))
-        });
+        let has_locked_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("locked")));
         assert!(has_locked_msg, "expected locked door message");
     }
 
@@ -976,14 +961,12 @@ mod tests {
         let broken = events
             .iter()
             .any(|e| matches!(e, EngineEvent::DoorBroken { .. }));
-        assert!(broken, "expected door to be broken open with high attributes");
+        assert!(
+            broken,
+            "expected door to be broken open with high attributes"
+        );
 
-        let terrain = world
-            .dungeon()
-            .current_level
-            .get(door_pos)
-            .unwrap()
-            .terrain;
+        let terrain = world.dungeon().current_level.get(door_pos).unwrap().terrain;
         assert_eq!(terrain, Terrain::DoorOpen);
     }
 
@@ -1036,23 +1019,19 @@ mod tests {
 
         // Give the player heavy carry weight (> 600).
         let player = world.player();
-        let _ = world
-            .ecs_mut()
-            .insert_one(player, CarryWeight(700));
+        let _ = world.ecs_mut().insert_one(player, CarryWeight(700));
 
         let mut rng = test_rng();
         let events = resolve_move(&mut world, Direction::NorthEast, &mut rng);
 
         // Player should not have moved.
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(5, 5));
 
         // Should have a squeeze message.
-        let has_squeeze_msg = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("squeeze"))
-        });
+        let has_squeeze_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("squeeze")));
         assert!(has_squeeze_msg, "expected diagonal squeeze blocked message");
     }
 
@@ -1076,9 +1055,7 @@ mod tests {
 
         // Light carry weight (< 600).
         let player = world.player();
-        let _ = world
-            .ecs_mut()
-            .insert_one(player, CarryWeight(300));
+        let _ = world.ecs_mut().insert_one(player, CarryWeight(300));
 
         let mut rng = test_rng();
         let events = resolve_move(&mut world, Direction::NorthEast, &mut rng);
@@ -1088,9 +1065,7 @@ mod tests {
             .any(|e| matches!(e, EngineEvent::EntityMoved { .. }));
         assert!(moved, "expected move to succeed with light load");
 
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(6, 4));
     }
 
@@ -1116,9 +1091,7 @@ mod tests {
         let events = resolve_move(&mut world, Direction::East, &mut rng);
 
         // Player should NOT have moved (attacking instead).
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(5, 5));
 
         // Should have a combat event (MeleeHit or MeleeMiss).
@@ -1128,7 +1101,10 @@ mod tests {
                 EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
             )
         });
-        assert!(has_combat, "expected melee combat event when walking into monster");
+        assert!(
+            has_combat,
+            "expected melee combat event when walking into monster"
+        );
     }
 
     #[test]
@@ -1140,10 +1116,7 @@ mod tests {
             Monster,
             Tame,
             Positioned(Position::new(6, 5)),
-            HitPoints {
-                current: 8,
-                max: 8,
-            },
+            HitPoints { current: 8, max: 8 },
             Speed(12),
             Name("little dog".to_string()),
         ));
@@ -1152,9 +1125,7 @@ mod tests {
         let events = resolve_move(&mut world, Direction::East, &mut rng);
 
         // Player should be at (6,5) now.
-        let player_pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let player_pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(player_pos.0, Position::new(6, 5));
 
         // Pet should be at (5,5) (player's old position).
@@ -1162,9 +1133,9 @@ mod tests {
         assert_eq!(pet_pos.0, Position::new(5, 5));
 
         // Should have swap message.
-        let has_swap_msg = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("swap"))
-        });
+        let has_swap_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("swap")));
         assert!(has_swap_msg, "expected pet swap message");
     }
 
@@ -1217,12 +1188,7 @@ mod tests {
             .any(|e| matches!(e, EngineEvent::DoorClosed { .. }));
         assert!(closed, "expected door to close with high attributes");
 
-        let terrain = world
-            .dungeon()
-            .current_level
-            .get(door_pos)
-            .unwrap()
-            .terrain;
+        let terrain = world.dungeon().current_level.get(door_pos).unwrap().terrain;
         assert_eq!(terrain, Terrain::DoorClosed);
     }
 
@@ -1259,9 +1225,7 @@ mod tests {
             .any(|e| matches!(e, EngineEvent::EntityMoved { .. }));
         assert!(moved, "expected player to move through opened door");
 
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(6, 5));
     }
 
@@ -1276,14 +1240,12 @@ mod tests {
         let mut rng = test_rng();
         let events = resolve_move(&mut world, Direction::East, &mut rng);
 
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(5, 5));
 
-        let has_water_msg = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("water"))
-        });
+        let has_water_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("water")));
         assert!(has_water_msg, "expected water warning message");
     }
 
@@ -1298,14 +1260,12 @@ mod tests {
         let mut rng = test_rng();
         let events = resolve_move(&mut world, Direction::East, &mut rng);
 
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(5, 5));
 
-        let has_lava_msg = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("lava"))
-        });
+        let has_lava_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("lava")));
         assert!(has_lava_msg, "expected lava warning message");
     }
 
@@ -1350,10 +1310,7 @@ mod tests {
 
         let events = ice_slide(&mut world, player, Direction::East, &mut rng);
 
-        let pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let pos = world.get_component::<Positioned>(player).unwrap().0;
 
         // Should have slid east across ice tiles.
         assert!(pos.x > 5, "player should have slid east, at {:?}", pos);
@@ -1382,10 +1339,7 @@ mod tests {
 
         let _events = ice_slide(&mut world, player, Direction::East, &mut rng);
 
-        let pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let pos = world.get_component::<Positioned>(player).unwrap().0;
 
         // Should stop before the wall.
         assert!(
@@ -1414,10 +1368,7 @@ mod tests {
 
         assert!(events.is_empty(), "levitating should not slide on ice");
 
-        let pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let pos = world.get_component::<Positioned>(player).unwrap().0;
         assert_eq!(pos, Position::new(5, 5), "should not have moved");
     }
 
@@ -1444,7 +1395,10 @@ mod tests {
         )));
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::HpChange { source: HpSource::Environment, .. }
+            EngineEvent::HpChange {
+                source: HpSource::Environment,
+                ..
+            }
         )));
     }
 
@@ -1513,7 +1467,10 @@ mod tests {
         assert!(allowed, "unprotected should still enter water");
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::HpChange { source: HpSource::Environment, .. }
+            EngineEvent::HpChange {
+                source: HpSource::Environment,
+                ..
+            }
         )));
         assert!(events.iter().any(|e| matches!(
             e,
@@ -1540,7 +1497,11 @@ mod tests {
             EngineEvent::Message { key, .. } if key == "lava-float-over"
         )));
         // No damage.
-        assert!(!events.iter().any(|e| matches!(e, EngineEvent::HpChange { .. })));
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::HpChange { .. }))
+        );
     }
 
     #[test]
@@ -1563,7 +1524,11 @@ mod tests {
             EngineEvent::Message { key, .. } if key == "lava-resist"
         )));
         // Should take damage (reduced).
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::HpChange { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::HpChange { .. }))
+        );
     }
 
     #[test]
@@ -1615,8 +1580,7 @@ mod tests {
             .ecs_mut()
             .insert_one(player, Engulfed { engulfer: monster });
 
-        let events =
-            resolve_engulfed_move(&mut world, player, Direction::East, &mut rng);
+        let events = resolve_engulfed_move(&mut world, player, Direction::East, &mut rng);
 
         assert!(events.iter().any(|e| matches!(
             e,
@@ -1651,8 +1615,7 @@ mod tests {
             .ecs_mut()
             .insert_one(player, Engulfed { engulfer: monster });
 
-        let events =
-            resolve_engulfed_move(&mut world, player, Direction::East, &mut rng);
+        let events = resolve_engulfed_move(&mut world, player, Direction::East, &mut rng);
 
         // Monster should die, player should escape.
         assert!(events.iter().any(|e| matches!(
@@ -1674,8 +1637,7 @@ mod tests {
         let player = world.player();
 
         // Not engulfed: should be a no-op.
-        let events =
-            resolve_engulfed_move(&mut world, player, Direction::East, &mut rng);
+        let events = resolve_engulfed_move(&mut world, player, Direction::East, &mut rng);
         assert!(events.is_empty());
     }
 
@@ -1704,8 +1666,7 @@ mod tests {
         // Despawn the engulfer.
         let _ = world.despawn(monster);
 
-        let events =
-            resolve_engulfed_move(&mut world, player, Direction::East, &mut rng);
+        let events = resolve_engulfed_move(&mut world, player, Direction::East, &mut rng);
 
         assert!(events.iter().any(|e| matches!(
             e,
@@ -1748,7 +1709,10 @@ mod tests {
                 )));
                 assert!(events.iter().any(|e| matches!(
                     e,
-                    EngineEvent::HpChange { source: HpSource::Environment, .. }
+                    EngineEvent::HpChange {
+                        source: HpSource::Environment,
+                        ..
+                    }
                 )));
                 break;
             }
@@ -1783,8 +1747,16 @@ mod tests {
                 }
             }
         }
-        assert!(min_dmg >= 1, "fumble damage min should be >= 1, got {}", min_dmg);
-        assert!(max_dmg <= 3, "fumble damage max should be <= 3, got {}", max_dmg);
+        assert!(
+            min_dmg >= 1,
+            "fumble damage min should be >= 1, got {}",
+            min_dmg
+        );
+        assert!(
+            max_dmg <= 3,
+            "fumble damage max should be <= 3, got {}",
+            max_dmg
+        );
     }
 
     // ── Steed integration: mounted speed ─────────────────────────
@@ -1803,7 +1775,10 @@ mod tests {
             Positioned(steed_pos),
             Name("warhorse".to_string()),
             Speed(18),
-            HitPoints { current: 30, max: 30 },
+            HitPoints {
+                current: 30,
+                max: 30,
+            },
         ));
         let _ = crate::steed::mount(&mut world, player, steed, &mut rng);
         assert!(crate::steed::is_mounted(&world, player));
@@ -1839,21 +1814,26 @@ mod tests {
             Positioned(steed_pos),
             Name("water horse".to_string()),
             Speed(18),
-            HitPoints { current: 30, max: 30 },
-            crate::monster_ai::MonsterSpeciesFlags(
-                nethack_babel_data::MonsterFlags::SWIM,
-            ),
+            HitPoints {
+                current: 30,
+                max: 30,
+            },
+            crate::monster_ai::MonsterSpeciesFlags(nethack_babel_data::MonsterFlags::SWIM),
         ));
         let _ = crate::steed::mount(&mut world, player, steed, &mut rng);
 
         // Try pool movement while mounted on swimming steed.
-        let (events, allowed) = try_pool_movement(
-            &mut world, player, Position::new(6, 5), &mut rng,
+        let (events, allowed) =
+            try_pool_movement(&mut world, player, Position::new(6, 5), &mut rng);
+        assert!(
+            allowed,
+            "mounted on swimming steed should allow water passage"
         );
-        assert!(allowed, "mounted on swimming steed should allow water passage");
-        assert!(events.iter().any(|e| matches!(e,
+        assert!(
+            events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "steed-swims")),
-            "should emit steed-swims message");
+            "should emit steed-swims message"
+        );
     }
 
     // ── Luck-adjusted door tests ───────────────────────────────
@@ -1883,7 +1863,10 @@ mod tests {
                     .set_terrain(door_pos, Terrain::DoorClosed);
                 let mut rng = Pcg64::seed_from_u64(seed);
                 let events = try_open_door(&mut world, door_pos, &mut rng);
-                if events.iter().any(|e| matches!(e, EngineEvent::DoorOpened { .. })) {
+                if events
+                    .iter()
+                    .any(|e| matches!(e, EngineEvent::DoorOpened { .. }))
+                {
                     successes_no_luck += 1;
                 }
             }
@@ -1907,7 +1890,10 @@ mod tests {
                     .set_terrain(door_pos, Terrain::DoorClosed);
                 let mut rng = Pcg64::seed_from_u64(seed);
                 let events = try_open_door(&mut world, door_pos, &mut rng);
-                if events.iter().any(|e| matches!(e, EngineEvent::DoorOpened { .. })) {
+                if events
+                    .iter()
+                    .any(|e| matches!(e, EngineEvent::DoorOpened { .. }))
+                {
                     successes_high_luck += 1;
                 }
             }
@@ -1942,7 +1928,10 @@ mod tests {
                     .set_terrain(door_pos, Terrain::DoorLocked);
                 let mut rng = Pcg64::seed_from_u64(seed);
                 let events = try_kick_door(&mut world, door_pos, &mut rng);
-                if events.iter().any(|e| matches!(e, EngineEvent::DoorBroken { .. })) {
+                if events
+                    .iter()
+                    .any(|e| matches!(e, EngineEvent::DoorBroken { .. }))
+                {
                     successes_no_luck += 1;
                 }
             }
@@ -1965,7 +1954,10 @@ mod tests {
                     .set_terrain(door_pos, Terrain::DoorLocked);
                 let mut rng = Pcg64::seed_from_u64(seed);
                 let events = try_kick_door(&mut world, door_pos, &mut rng);
-                if events.iter().any(|e| matches!(e, EngineEvent::DoorBroken { .. })) {
+                if events
+                    .iter()
+                    .any(|e| matches!(e, EngineEvent::DoorBroken { .. }))
+                {
                     successes_high_luck += 1;
                 }
             }

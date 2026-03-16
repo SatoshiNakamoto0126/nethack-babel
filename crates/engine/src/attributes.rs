@@ -456,7 +456,14 @@ pub fn apply_exercise(
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
-    for &attr in &[Attr::Str, Attr::Dex, Attr::Con, Attr::Int, Attr::Wis, Attr::Cha] {
+    for &attr in &[
+        Attr::Str,
+        Attr::Dex,
+        Attr::Con,
+        Attr::Int,
+        Attr::Wis,
+        Attr::Cha,
+    ] {
         let ex = get_exercise(exercise, attr);
         let current = get_attr(attrs, attr);
         let cap = racial_cap(race, attr);
@@ -471,10 +478,7 @@ pub fn apply_exercise(
                     "attribute-increased",
                     vec![("attr", attr_name(attr).to_string())],
                 ));
-            } else if attr == Attr::Str
-                && current == 18
-                && fighter_role == FighterRole::Fighter
-            {
+            } else if attr == Attr::Str && current == 18 && fighter_role == FighterRole::Fighter {
                 // Increase STR 18/xx sub-value
                 let new_extra = (attrs.strength_extra + 10).min(100);
                 if new_extra > attrs.strength_extra {
@@ -520,11 +524,7 @@ pub fn apply_exercise(
 /// strength.
 ///
 /// Returns events describing the drain.
-pub fn drain_attribute(
-    attrs: &mut Attributes,
-    attr: Attr,
-    amount: u8,
-) -> Vec<EngineEvent> {
+pub fn drain_attribute(attrs: &mut Attributes, attr: Attr, amount: u8) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     if attr == Attr::Str {
@@ -572,8 +572,7 @@ pub fn restore_attribute(
     let current = get_attr(attrs, attr);
     let max = get_natural(natural, attr);
 
-    let str_extra_drained = attr == Attr::Str
-        && attrs.strength_extra < natural.strength_extra;
+    let str_extra_drained = attr == Attr::Str && attrs.strength_extra < natural.strength_extra;
 
     if current < max || str_extra_drained {
         set_attr(attrs, attr, max);
@@ -597,7 +596,14 @@ pub fn restore_all_attributes(
     natural: &NaturalAttributes,
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
-    for &attr in &[Attr::Str, Attr::Dex, Attr::Con, Attr::Int, Attr::Wis, Attr::Cha] {
+    for &attr in &[
+        Attr::Str,
+        Attr::Dex,
+        Attr::Con,
+        Attr::Int,
+        Attr::Wis,
+        Attr::Cha,
+    ] {
         events.extend(restore_attribute(attrs, natural, attr));
     }
     events
@@ -1192,7 +1198,14 @@ mod tests {
     #[test]
     fn test_racial_caps_all_races() {
         // Human: all 18
-        for attr in &[Attr::Str, Attr::Dex, Attr::Con, Attr::Int, Attr::Wis, Attr::Cha] {
+        for attr in &[
+            Attr::Str,
+            Attr::Dex,
+            Attr::Con,
+            Attr::Int,
+            Attr::Wis,
+            Attr::Cha,
+        ] {
             assert_eq!(racial_cap(Race::Human, *attr), 18);
         }
 
@@ -1234,7 +1247,7 @@ mod tests {
             &mut attrs,
             &mut natural,
             &mut exercise,
-            Race::Elf,       // Elf DEX cap = 20
+            Race::Elf, // Elf DEX cap = 20
             FighterRole::NonFighter,
         );
 

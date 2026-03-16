@@ -226,11 +226,7 @@ pub struct RayPath {
 fn terrain_blocks_ray(terrain: Terrain) -> bool {
     matches!(
         terrain,
-        Terrain::Wall
-            | Terrain::Stone
-            | Terrain::DoorClosed
-            | Terrain::DoorLocked
-            | Terrain::Tree
+        Terrain::Wall | Terrain::Stone | Terrain::DoorClosed | Terrain::DoorLocked | Terrain::Tree
     )
 }
 
@@ -238,11 +234,7 @@ fn terrain_blocks_ray(terrain: Terrain) -> bool {
 fn terrain_blocks_beam(terrain: Terrain) -> bool {
     matches!(
         terrain,
-        Terrain::Wall
-            | Terrain::Stone
-            | Terrain::DoorClosed
-            | Terrain::DoorLocked
-            | Terrain::Tree
+        Terrain::Wall | Terrain::Stone | Terrain::DoorClosed | Terrain::DoorLocked | Terrain::Tree
     )
 }
 
@@ -265,7 +257,9 @@ fn bounce_direction<R: Rng>(
     rng: &mut R,
 ) -> (i32, i32) {
     // Cardinal direction or random bounceback
-    if dx == 0 || dy == 0 || (bounceback_chance > 0 && rng.random_range(0u32..bounceback_chance) == 0)
+    if dx == 0
+        || dy == 0
+        || (bounceback_chance > 0 && rng.random_range(0u32..bounceback_chance) == 0)
     {
         return (-dx, -dy);
     }
@@ -277,23 +271,25 @@ fn bounce_direction<R: Rng>(
     let lateral_y = Position::new(pos.x, pos.y - dy);
     if map.in_bounds(lateral_y)
         && let Some(cell) = map.get(lateral_y)
-            && !terrain_blocks_ray(cell.terrain) {
-                bounce = 1; // can reverse Y
-            }
+        && !terrain_blocks_ray(cell.terrain)
+    {
+        bounce = 1; // can reverse Y
+    }
 
     // Check if we can reverse X (move along Y from pre-bounce position)
     let lateral_x = Position::new(pos.x - dx, pos.y);
     if map.in_bounds(lateral_x)
         && let Some(cell) = map.get(lateral_x)
-            && !terrain_blocks_ray(cell.terrain)
-                && (bounce == 0 || rng.random_range(0u32..2) != 0) {
-                    bounce = 2; // can reverse X
-                }
+        && !terrain_blocks_ray(cell.terrain)
+        && (bounce == 0 || rng.random_range(0u32..2) != 0)
+    {
+        bounce = 2; // can reverse X
+    }
 
     match bounce {
-        1 => (dx, -dy),        // reverse Y only
-        2 => (-dx, dy),        // reverse X only
-        _ => (-dx, -dy),       // full reverse (fallback)
+        1 => (dx, -dy),  // reverse Y only
+        2 => (-dx, dy),  // reverse X only
+        _ => (-dx, -dy), // full reverse (fallback)
     }
 }
 
@@ -353,8 +349,7 @@ pub fn trace_ray<R: Rng>(
             let bchance: u32 = 75; // default for normal walls
             x -= dx;
             y -= dy;
-            let (ndx, ndy) =
-                bounce_direction(map, Position::new(x, y), dx, dy, bchance, rng);
+            let (ndx, ndy) = bounce_direction(map, Position::new(x, y), dx, dy, bchance, rng);
             dx = ndx;
             dy = ndy;
             cells.push(RayCell {
@@ -411,11 +406,7 @@ pub fn trace_ray_gen<'a, R: Rng>(
             if !map.in_bounds(pos) {
                 x -= dx;
                 y -= dy;
-                let (ndx, ndy) = bounce_direction(
-                    map,
-                    Position::new(x, y),
-                    dx, dy, 10, rng,
-                );
+                let (ndx, ndy) = bounce_direction(map, Position::new(x, y), dx, dy, 10, rng);
                 dx = ndx;
                 dy = ndy;
                 continue;
@@ -431,11 +422,7 @@ pub fn trace_ray_gen<'a, R: Rng>(
                 let bchance: u32 = 75;
                 x -= dx;
                 y -= dy;
-                let (ndx, ndy) = bounce_direction(
-                    map,
-                    Position::new(x, y),
-                    dx, dy, bchance, rng,
-                );
+                let (ndx, ndy) = bounce_direction(map, Position::new(x, y), dx, dy, bchance, rng);
                 dx = ndx;
                 dy = ndy;
                 yield RayCell {
@@ -703,10 +690,26 @@ pub fn zap_wand<R: Rng>(
             dispatch_nodir(world, wand_type, zapper, &mut events, rng);
         }
         WandDirection::Immediate => {
-            dispatch_immediate(world, wand_type, zapper, zapper_pos, direction, &mut events, rng);
+            dispatch_immediate(
+                world,
+                wand_type,
+                zapper,
+                zapper_pos,
+                direction,
+                &mut events,
+                rng,
+            );
         }
         WandDirection::Ray => {
-            dispatch_ray(world, wand_type, zapper, zapper_pos, direction, &mut events, rng);
+            dispatch_ray(
+                world,
+                wand_type,
+                zapper,
+                zapper_pos,
+                direction,
+                &mut events,
+                rng,
+            );
         }
     }
 
@@ -737,10 +740,7 @@ fn dispatch_nodir<R: Rng>(
                         if map.in_bounds(p) {
                             events.push(EngineEvent::msg_with(
                                 "wand-light-cell",
-                                vec![
-                                    ("x", p.x.to_string()),
-                                    ("y", p.y.to_string()),
-                                ],
+                                vec![("x", p.x.to_string()), ("y", p.y.to_string())],
                             ));
                         }
                     }
@@ -756,14 +756,12 @@ fn dispatch_nodir<R: Rng>(
                 for x in 0..w {
                     let p = Position::new(x as i32, y as i32);
                     if let Some(cell) = map.get(p)
-                        && cell.terrain == Terrain::DoorClosed && !cell.explored
+                        && cell.terrain == Terrain::DoorClosed
+                        && !cell.explored
                     {
                         events.push(EngineEvent::msg_with(
                             "wand-reveal-door",
-                            vec![
-                                ("x", p.x.to_string()),
-                                ("y", p.y.to_string()),
-                            ],
+                            vec![("x", p.x.to_string()), ("y", p.y.to_string())],
                         ));
                     }
                 }
@@ -811,8 +809,10 @@ fn dispatch_immediate<R: Rng>(
     // Walk through the beam path and check for entities and terrain
     for pos in &path {
         // Check for monsters at this position
-        for (entity, (positioned, _monster, hp)) in
-            world.ecs().query::<(&Positioned, &Monster, &HitPoints)>().iter()
+        for (entity, (positioned, _monster, hp)) in world
+            .ecs()
+            .query::<(&Positioned, &Monster, &HitPoints)>()
+            .iter()
         {
             if positioned.0 == *pos {
                 let imm_events = apply_immediate_effect(wand_type, entity, hp, rng);
@@ -830,8 +830,7 @@ fn dispatch_immediate<R: Rng>(
                     events.push(EngineEvent::DoorOpened { position: *pos });
                 }
                 WandType::Locking
-                    if cell.terrain == Terrain::DoorOpen
-                        || cell.terrain == Terrain::DoorClosed =>
+                    if cell.terrain == Terrain::DoorOpen || cell.terrain == Terrain::DoorClosed =>
                 {
                     events.push(EngineEvent::DoorLocked { position: *pos });
                 }
@@ -996,10 +995,7 @@ fn dispatch_ray<R: Rng>(
             {
                 events.push(EngineEvent::msg_with(
                     "wand-digging-cell",
-                    vec![
-                        ("x", pos.x.to_string()),
-                        ("y", pos.y.to_string()),
-                    ],
+                    vec![("x", pos.x.to_string()), ("y", pos.y.to_string())],
                 ));
                 dug_any = true;
             }
@@ -1046,8 +1042,10 @@ fn dispatch_ray<R: Rng>(
 
         // Check for entities at this position
         let mut hit_entity = false;
-        for (entity, (positioned, _monster, hp)) in
-            world.ecs().query::<(&Positioned, &Monster, &HitPoints)>().iter()
+        for (entity, (positioned, _monster, hp)) in world
+            .ecs()
+            .query::<(&Positioned, &Monster, &HitPoints)>()
+            .iter()
         {
             if positioned.0 == pos {
                 // Use AC 10 as default for simplified zap_hit
@@ -1084,10 +1082,7 @@ fn dispatch_ray<R: Rng>(
                                     entity,
                                     killer: Some(zapper),
                                     cause: DeathCause::KilledBy {
-                                        killer_name: format!(
-                                            "a {}",
-                                            wand_type.ray_name()
-                                        ),
+                                        killer_name: format!("a {}", wand_type.ray_name()),
                                     },
                                 });
                             }
@@ -1122,8 +1117,7 @@ fn dispatch_ray<R: Rng>(
             let bchance: u32 = 75;
             x -= dx;
             y -= dy;
-            let (ndx, ndy) =
-                bounce_direction(map, Position::new(x, y), dx, dy, bchance, rng);
+            let (ndx, ndy) = bounce_direction(map, Position::new(x, y), dx, dy, bchance, rng);
             dx = ndx;
             dy = ndy;
         }
@@ -1342,10 +1336,16 @@ pub fn self_zap_effect<R: Rng>(
             let duration = rng.random_range(0u32..15) + 31;
             SelfZapOutcome::Invisible(duration)
         }
-        WandType::Digging | WandType::Nothing | WandType::Probing
-        | WandType::Opening | WandType::Locking | WandType::UndeadTurning
-        | WandType::Light | WandType::SecretDoorDetection
-        | WandType::CreateMonster | WandType::Wishing
+        WandType::Digging
+        | WandType::Nothing
+        | WandType::Probing
+        | WandType::Opening
+        | WandType::Locking
+        | WandType::UndeadTurning
+        | WandType::Light
+        | WandType::SecretDoorDetection
+        | WandType::CreateMonster
+        | WandType::Wishing
         | WandType::Enlightenment => SelfZapOutcome::NoEffect,
     }
 }
@@ -1509,10 +1509,12 @@ pub fn zap_updown<R: Rng>(
             VerticalZapOutcome::CreateMonster(num)
         }
         // RAY wands zapped vertically just pass through
-        WandType::Fire | WandType::Cold | WandType::Lightning
-        | WandType::Death | WandType::Sleep | WandType::MagicMissile => {
-            VerticalZapOutcome::PassThrough
-        }
+        WandType::Fire
+        | WandType::Cold
+        | WandType::Lightning
+        | WandType::Death
+        | WandType::Sleep
+        | WandType::MagicMissile => VerticalZapOutcome::PassThrough,
         // Everything else: no special vertical effect
         _ => VerticalZapOutcome::NoEffect,
     }
@@ -1560,10 +1562,7 @@ pub fn ray_destroys_material(wand_type: WandType, material: ObjectMaterial) -> b
                 | ObjectMaterial::Organic
                 | ObjectMaterial::Wax
         ),
-        WandType::Cold => matches!(
-            material,
-            ObjectMaterial::Glass | ObjectMaterial::Liquid
-        ),
+        WandType::Cold => matches!(material, ObjectMaterial::Glass | ObjectMaterial::Liquid),
         WandType::Lightning => matches!(
             material,
             ObjectMaterial::Metal
@@ -1625,8 +1624,9 @@ pub fn engrave_with_wand(wand_type: WandType) -> EngraveEffect {
         WandType::Striking => EngraveEffect::Scrawl,
         WandType::Cancellation | WandType::Teleportation => EngraveEffect::Erase,
         WandType::MakeInvisible | WandType::Nothing => EngraveEffect::Invisible,
-        WandType::Cold | WandType::Sleep | WandType::Death
-        | WandType::MagicMissile => EngraveEffect::Normal,
+        WandType::Cold | WandType::Sleep | WandType::Death | WandType::MagicMissile => {
+            EngraveEffect::Normal
+        }
         WandType::SlowMonster | WandType::SpeedMonster => EngraveEffect::Normal,
         _ => EngraveEffect::Normal,
     }
@@ -1679,7 +1679,7 @@ pub fn wand_auto_identifies_on_zap(wand_type: WandType) -> bool {
 /// identify wands without zapping them.
 pub fn wand_auto_identifies_on_engrave(wand_type: WandType) -> bool {
     match engrave_with_wand(wand_type) {
-        EngraveEffect::Burn => true,      // fire, digging: distinctive
+        EngraveEffect::Burn => true,       // fire, digging: distinctive
         EngraveEffect::Electric => true,   // lightning: distinctive
         EngraveEffect::Erase => true,      // cancellation, teleport
         EngraveEffect::Scrawl => false,    // polymorph, striking: not unique
@@ -1742,11 +1742,9 @@ pub fn wand_hits_object<R: Rng>(
         WandType::Polymorph => WandObjectResult::Transform,
         WandType::Cancellation => WandObjectResult::Cancel,
         WandType::MakeInvisible => WandObjectResult::MakeInvisible,
-        WandType::Striking => {
-            WandObjectResult::Damage {
-                amount: roll_dice(2, 12, rng),
-            }
-        }
+        WandType::Striking => WandObjectResult::Damage {
+            amount: roll_dice(2, 12, rng),
+        },
         WandType::Fire => {
             // Fire burns scrolls ('?') and spellbooks ('+')
             if matches!(object_class, '?' | '+') {
@@ -1758,7 +1756,9 @@ pub fn wand_hits_object<R: Rng>(
         WandType::Cold => {
             // Cold shatters potions ('!')
             if object_class == '!' {
-                WandObjectResult::Destroy { reason: "shattered" }
+                WandObjectResult::Destroy {
+                    reason: "shattered",
+                }
             } else {
                 WandObjectResult::NoEffect
             }
@@ -1777,10 +1777,9 @@ pub fn wand_hits_object<R: Rng>(
         _ if object_material == "stone" && wand_type == WandType::Polymorph => {
             WandObjectResult::Transform
         }
-        WandType::Death
-        | WandType::Sleep
-        | WandType::SlowMonster
-        | WandType::SpeedMonster => WandObjectResult::NoEffect,
+        WandType::Death | WandType::Sleep | WandType::SlowMonster | WandType::SpeedMonster => {
+            WandObjectResult::NoEffect
+        }
         _ => WandObjectResult::NoEffect,
     }
 }
@@ -1823,11 +1822,7 @@ mod tests {
         let mut map = LevelMap::new(width, height);
         for y in 0..height {
             for x in 0..width {
-                let terrain = if x == 0
-                    || y == 0
-                    || x == width - 1
-                    || y == height - 1
-                {
+                let terrain = if x == 0 || y == 0 || x == width - 1 || y == height - 1 {
                     Terrain::Wall
                 } else {
                     Terrain::Floor
@@ -1970,7 +1965,10 @@ mod tests {
                 break;
             }
         }
-        assert!(found_wrest, "Should find a seed that produces wresting in 10000 tries");
+        assert!(
+            found_wrest,
+            "Should find a seed that produces wresting in 10000 tries"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2005,15 +2003,18 @@ mod tests {
         let events = break_wand(&world, player, WandType::Fire, &charges);
 
         // Should contain an explosion message
-        let has_explosion = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("wand-break"))
-        });
-        assert!(has_explosion, "Breaking a fire wand should produce an explosion");
+        let has_explosion = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("wand-break")));
+        assert!(
+            has_explosion,
+            "Breaking a fire wand should produce an explosion"
+        );
 
         // Damage should be spe * 4 * 2 = 3 * 4 * 2 = 24
-        let has_damage = events.iter().any(|e| {
-            matches!(e, EngineEvent::ExtraDamage { amount, .. } if *amount == 24)
-        });
+        let has_damage = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ExtraDamage { amount, .. } if *amount == 24));
         assert!(
             has_damage,
             "Fire wand explosion should deal spe*4*2 = 24 damage"
@@ -2123,12 +2124,17 @@ mod tests {
         let events = break_wand(&world, player, WandType::Nothing, &charges);
 
         // Should NOT contain explosion damage
-        let has_damage = events.iter().any(|e| matches!(e, EngineEvent::ExtraDamage { .. }));
-        assert!(!has_damage, "Breaking wand of nothing should not deal damage");
+        let has_damage = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ExtraDamage { .. }));
+        assert!(
+            !has_damage,
+            "Breaking wand of nothing should not deal damage"
+        );
 
-        let has_nothing = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("wand-nothing"))
-        });
+        let has_nothing = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("wand-nothing")));
         assert!(has_nothing, "Should say 'nothing else happens'");
     }
 
@@ -2157,11 +2163,7 @@ mod tests {
             let outcome = ray_effect_on_target(WandType::MagicMissile, &target, &mut rng);
             match outcome {
                 RayHitOutcome::Damage(d) => {
-                    assert!(
-                        (2..=12).contains(&d),
-                        "d(2,6) should be 2..12, got {}",
-                        d
-                    );
+                    assert!((2..=12).contains(&d), "d(2,6) should be 2..12, got {}", d);
                 }
                 other => panic!("Expected Damage, got {:?}", other),
             }
@@ -2229,7 +2231,11 @@ mod tests {
 
         // All positions should be before the wall
         for pos in &path {
-            assert!(pos.x < 8, "Immediate beam should stop before wall at x=8, got x={}", pos.x);
+            assert!(
+                pos.x < 8,
+                "Immediate beam should stop before wall at x=8, got x={}",
+                pos.x
+            );
         }
     }
 
@@ -2254,10 +2260,13 @@ mod tests {
             &mut rng,
         );
 
-        let has_nothing = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("wand-nothing"))
-        });
-        assert!(has_nothing, "Zapping exhausted wand should produce 'Nothing happens'");
+        let has_nothing = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("wand-nothing")));
+        assert!(
+            has_nothing,
+            "Zapping exhausted wand should produce 'Nothing happens'"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2283,13 +2292,8 @@ mod tests {
             let path = trace_ray(&map, Position::new(10, 5), dir, &mut rng_a);
 
             let mut rng_b = test_rng();
-            let gen_cells: Vec<RayCell> = trace_ray_gen(
-                &map,
-                Position::new(10, 5),
-                dir,
-                &mut rng_b,
-            )
-            .collect();
+            let gen_cells: Vec<RayCell> =
+                trace_ray_gen(&map, Position::new(10, 5), dir, &mut rng_b).collect();
 
             assert_eq!(
                 path.cells.len(),
@@ -2297,14 +2301,8 @@ mod tests {
                 "cell count mismatch for {:?}",
                 dir
             );
-            for (i, (a, b)) in
-                path.cells.iter().zip(gen_cells.iter()).enumerate()
-            {
-                assert_eq!(
-                    a, b,
-                    "cell {} differs for {:?}",
-                    i, dir
-                );
+            for (i, (a, b)) in path.cells.iter().zip(gen_cells.iter()).enumerate() {
+                assert_eq!(a, b, "cell {} differs for {:?}", i, dir);
             }
         }
     }
@@ -2315,21 +2313,11 @@ mod tests {
         let map = floor_map(20, 5);
 
         let mut rng_a = test_rng();
-        let path = trace_ray(
-            &map,
-            Position::new(16, 2),
-            Direction::East,
-            &mut rng_a,
-        );
+        let path = trace_ray(&map, Position::new(16, 2), Direction::East, &mut rng_a);
 
         let mut rng_b = test_rng();
-        let gen_cells: Vec<RayCell> = trace_ray_gen(
-            &map,
-            Position::new(16, 2),
-            Direction::East,
-            &mut rng_b,
-        )
-        .collect();
+        let gen_cells: Vec<RayCell> =
+            trace_ray_gen(&map, Position::new(16, 2), Direction::East, &mut rng_b).collect();
 
         assert_eq!(path.cells.len(), gen_cells.len());
         for (a, b) in path.cells.iter().zip(gen_cells.iter()) {
@@ -2382,8 +2370,11 @@ mod tests {
         let mut rng = test_rng();
         let target = TargetProperties::default();
         let outcome = self_zap_effect(WandType::Death, &target, &mut rng);
-        assert_eq!(outcome, SelfZapOutcome::InstantDeath,
-            "self-zap with death wand should be instant death");
+        assert_eq!(
+            outcome,
+            SelfZapOutcome::InstantDeath,
+            "self-zap with death wand should be instant death"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2397,8 +2388,11 @@ mod tests {
             ..Default::default()
         };
         let outcome = self_zap_effect(WandType::Death, &target, &mut rng);
-        assert_eq!(outcome, SelfZapOutcome::Resisted,
-            "self-zap death should be resisted by nonliving form");
+        assert_eq!(
+            outcome,
+            SelfZapOutcome::Resisted,
+            "self-zap death should be resisted by nonliving form"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2424,8 +2418,16 @@ mod tests {
             }
         }
         // d(6,6) + 7 = range [13, 43]
-        assert!(min_damage >= 13, "fire vs cold-resistant min should be >= 13, got {}", min_damage);
-        assert!(max_damage <= 43, "fire vs cold-resistant max should be <= 43, got {}", max_damage);
+        assert!(
+            min_damage >= 13,
+            "fire vs cold-resistant min should be >= 13, got {}",
+            min_damage
+        );
+        assert!(
+            max_damage <= 43,
+            "fire vs cold-resistant max should be <= 43, got {}",
+            max_damage
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2451,8 +2453,16 @@ mod tests {
             }
         }
         // d(6,6) + d(6,3) = range [12, 54]
-        assert!(min_damage >= 12, "cold vs fire-resistant min should be >= 12, got {}", min_damage);
-        assert!(max_damage <= 54, "cold vs fire-resistant max should be <= 54, got {}", max_damage);
+        assert!(
+            min_damage >= 12,
+            "cold vs fire-resistant min should be >= 12, got {}",
+            min_damage
+        );
+        assert!(
+            max_damage <= 54,
+            "cold vs fire-resistant max should be <= 54, got {}",
+            max_damage
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2474,10 +2484,22 @@ mod tests {
                 other => panic!("Expected Sleep, got {:?}", other),
             }
         }
-        assert!(min_dur >= 6, "d(6,25) minimum should be >= 6, got {}", min_dur);
-        assert!(max_dur <= 150, "d(6,25) maximum should be <= 150, got {}", max_dur);
+        assert!(
+            min_dur >= 6,
+            "d(6,25) minimum should be >= 6, got {}",
+            min_dur
+        );
+        assert!(
+            max_dur <= 150,
+            "d(6,25) maximum should be <= 150, got {}",
+            max_dur
+        );
         // With 500 trials, minimum should be close to 6 and max well above 25.
-        assert!(max_dur > 25, "d(6,25) should routinely exceed 25, got max {}", max_dur);
+        assert!(
+            max_dur > 25,
+            "d(6,25) should routinely exceed 25, got max {}",
+            max_dur
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2488,10 +2510,16 @@ mod tests {
         // TV-4 (recharged=0): 0^3=0, condition n>0 false -> never explodes.
         for seed in 0u64..200 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            let mut charges = WandCharges { spe: 3, recharged: 0 };
+            let mut charges = WandCharges {
+                spe: 3,
+                recharged: 0,
+            };
             let result = recharge_wand(WandType::Fire, &mut charges, false, false, &mut rng);
-            assert_ne!(result, RechargeResult::Exploded,
-                "first recharge (recharged=0) should never explode");
+            assert_ne!(
+                result,
+                RechargeResult::Exploded,
+                "first recharge (recharged=0) should never explode"
+            );
         }
     }
 
@@ -2503,10 +2531,16 @@ mod tests {
         // TV-4 (recharged=7): 7^3=343, rn2(343) range 0..342, 343>any -> always.
         for seed in 0u64..100 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            let mut charges = WandCharges { spe: 3, recharged: 7 };
+            let mut charges = WandCharges {
+                spe: 3,
+                recharged: 7,
+            };
             let result = recharge_wand(WandType::Fire, &mut charges, false, false, &mut rng);
-            assert_eq!(result, RechargeResult::Exploded,
-                "recharging with recharged=7 should always explode");
+            assert_eq!(
+                result,
+                RechargeResult::Exploded,
+                "recharging with recharged=7 should always explode"
+            );
         }
     }
 
@@ -2518,10 +2552,16 @@ mod tests {
         // TV-4: Wishing wand with recharged=1 -> always explode.
         for seed in 0u64..50 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            let mut charges = WandCharges { spe: 0, recharged: 1 };
+            let mut charges = WandCharges {
+                spe: 0,
+                recharged: 1,
+            };
             let result = recharge_wand(WandType::Wishing, &mut charges, true, false, &mut rng);
-            assert_eq!(result, RechargeResult::Exploded,
-                "wishing wand recharge with recharged>0 should always explode");
+            assert_eq!(
+                result,
+                RechargeResult::Exploded,
+                "wishing wand recharge with recharged>0 should always explode"
+            );
         }
     }
 
@@ -2532,7 +2572,10 @@ mod tests {
     fn test_wand_wishing_recharge_first_succeeds() {
         // TV-4: Wishing wand with recharged=0 -> should succeed (spe=1).
         let mut rng = test_rng();
-        let mut charges = WandCharges { spe: 0, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 0,
+            recharged: 0,
+        };
         let result = recharge_wand(WandType::Wishing, &mut charges, true, false, &mut rng);
         match result {
             RechargeResult::Success { new_spe } => {
@@ -2548,7 +2591,10 @@ mod tests {
     #[test]
     fn test_wand_recharge_cursed_strips() {
         let mut rng = test_rng();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         let result = recharge_wand(WandType::Fire, &mut charges, false, true, &mut rng);
         assert_eq!(result, RechargeResult::Stripped);
         assert_eq!(charges.spe, 0, "cursed recharge should strip charges to 0");
@@ -2564,14 +2610,21 @@ mod tests {
         let trials = 12100u64;
         for seed in 0..trials {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            let mut charges = WandCharges { spe: 0, recharged: 0 };
+            let mut charges = WandCharges {
+                spe: 0,
+                recharged: 0,
+            };
             if zappable(&mut charges, &mut rng) == ZapResult::Wrested {
                 wrest_count += 1;
             }
         }
         // Expected: ~100 wrests. Allow 50..200 range.
-        assert!(wrest_count > 30 && wrest_count < 300,
-            "wresting should occur ~1/121 of the time, got {}/{}", wrest_count, trials);
+        assert!(
+            wrest_count > 30 && wrest_count < 300,
+            "wresting should occur ~1/121 of the time, got {}/{}",
+            wrest_count,
+            trials
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2589,8 +2642,12 @@ mod tests {
             }
         }
         // Expected: ~100. Allow 50..200.
-        assert!(fire_count > 30 && fire_count < 300,
-            "backfire should occur ~1% of the time, got {}/{}", fire_count, trials);
+        assert!(
+            fire_count > 30 && fire_count < 300,
+            "backfire should occur ~1% of the time, got {}/{}",
+            fire_count,
+            trials
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2602,8 +2659,11 @@ mod tests {
         for seed in 0u64..100 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
             let dmg = backfire_damage(5, &mut rng);
-            assert!((7..=42).contains(&dmg),
-                "backfire damage d(7,6) should be 7..42, got {}", dmg);
+            assert!(
+                (7..=42).contains(&dmg),
+                "backfire damage d(7,6) should be 7..42, got {}",
+                dmg
+            );
         }
     }
 
@@ -2617,8 +2677,11 @@ mod tests {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
             match self_zap_effect(WandType::SpeedMonster, &target, &mut rng) {
                 SelfZapOutcome::SpeedUp(d) => {
-                    assert!((50..=74).contains(&d),
-                        "speed self-zap should give 50..74 turns, got {}", d);
+                    assert!(
+                        (50..=74).contains(&d),
+                        "speed self-zap should give 50..74 turns, got {}",
+                        d
+                    );
                 }
                 other => panic!("Expected SpeedUp, got {:?}", other),
             }
@@ -2635,8 +2698,11 @@ mod tests {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
             match self_zap_effect(WandType::MakeInvisible, &target, &mut rng) {
                 SelfZapOutcome::Invisible(d) => {
-                    assert!((31..=45).contains(&d),
-                        "invisible self-zap should give 31..45 turns, got {}", d);
+                    assert!(
+                        (31..=45).contains(&d),
+                        "invisible self-zap should give 31..45 turns, got {}",
+                        d
+                    );
                 }
                 other => panic!("Expected Invisible, got {:?}", other),
             }
@@ -2654,8 +2720,11 @@ mod tests {
             ..Default::default()
         };
         let outcome = self_zap_effect(WandType::Sleep, &target, &mut rng);
-        assert_eq!(outcome, SelfZapOutcome::Resisted,
-            "self-zap sleep should be resisted by sleep resistance");
+        assert_eq!(
+            outcome,
+            SelfZapOutcome::Resisted,
+            "self-zap sleep should be resisted by sleep resistance"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2669,8 +2738,11 @@ mod tests {
             ..Default::default()
         };
         let outcome = self_zap_effect(WandType::Striking, &target, &mut rng);
-        assert_eq!(outcome, SelfZapOutcome::Resisted,
-            "self-zap striking should be resisted by magic resistance");
+        assert_eq!(
+            outcome,
+            SelfZapOutcome::Resisted,
+            "self-zap striking should be resisted by magic resistance"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2683,14 +2755,20 @@ mod tests {
         world.dungeon_mut().current_level = map;
 
         let player = world.player();
-        let charges = WandCharges { spe: 4, recharged: 0 };
+        let charges = WandCharges {
+            spe: 4,
+            recharged: 0,
+        };
         let events = break_wand(&world, player, WandType::Death, &charges);
 
         // Expected damage: spe*4 * 4 = 4*4*4 = 64
-        let has_damage = events.iter().any(|e| {
-            matches!(e, EngineEvent::ExtraDamage { amount, .. } if *amount == 64)
-        });
-        assert!(has_damage, "breaking death wand spe=4 should deal 64 damage");
+        let has_damage = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ExtraDamage { amount, .. } if *amount == 64));
+        assert!(
+            has_damage,
+            "breaking death wand spe=4 should deal 64 damage"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2703,10 +2781,15 @@ mod tests {
         world.dungeon_mut().current_level = map;
 
         let player = world.player();
-        let charges = WandCharges { spe: 1, recharged: 0 };
+        let charges = WandCharges {
+            spe: 1,
+            recharged: 0,
+        };
         let events = break_wand(&world, player, WandType::Wishing, &charges);
 
-        let has_damage = events.iter().any(|e| matches!(e, EngineEvent::ExtraDamage { .. }));
+        let has_damage = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ExtraDamage { .. }));
         assert!(!has_damage, "breaking wishing wand should not deal damage");
     }
 
@@ -2719,7 +2802,10 @@ mod tests {
         let trials = 5000u64;
         for seed in 0..trials {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            let mut charges = WandCharges { spe: 3, recharged: 4 };
+            let mut charges = WandCharges {
+                spe: 3,
+                recharged: 4,
+            };
             if recharge_wand(WandType::Fire, &mut charges, false, false, &mut rng)
                 == RechargeResult::Exploded
             {
@@ -2780,8 +2866,11 @@ mod tests {
             let target = TargetProperties::default();
             match self_zap_effect(WandType::Fire, &target, &mut rng) {
                 SelfZapOutcome::Damage(d) => {
-                    assert!((12..=72).contains(&d),
-                        "self-zap fire d(12,6) should be 12..72, got {}", d);
+                    assert!(
+                        (12..=72).contains(&d),
+                        "self-zap fire d(12,6) should be 12..72, got {}",
+                        d
+                    );
                 }
                 other => panic!("Expected Damage, got {:?}", other),
             }
@@ -2802,27 +2891,37 @@ mod tests {
         world.dungeon_mut().current_level = map;
 
         let player = world.player();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         let mut rng = test_rng();
         let events = zap_wand(
-            &world, player, WandType::Light, &mut charges,
+            &world,
+            player,
+            WandType::Light,
+            &mut charges,
             Direction::East, // direction ignored for NODIR
             &mut rng,
         );
 
         // Should contain the wand-light message
-        let has_light = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-light")
-        });
+        let has_light = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-light"));
         assert!(has_light, "Light wand should emit wand-light message");
 
         // Should contain wand-light-cell messages for the 5x5 area
-        let cell_count = events.iter().filter(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-light-cell")
-        }).count();
+        let cell_count = events
+            .iter()
+            .filter(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-light-cell"))
+            .count();
         // 5x5 = 25 cells, but border walls may reduce the in-bounds count.
         // Player at (10,10) in 20x20 map: all 25 cells should be in bounds.
-        assert_eq!(cell_count, 25, "Light wand should illuminate 25 cells (5x5)");
+        assert_eq!(
+            cell_count, 25,
+            "Light wand should illuminate 25 cells (5x5)"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2838,17 +2937,23 @@ mod tests {
         world.dungeon_mut().current_level = map;
 
         let player = world.player();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         let mut rng = test_rng();
         let events = zap_wand(
-            &world, player, WandType::SecretDoorDetection, &mut charges,
+            &world,
+            player,
+            WandType::SecretDoorDetection,
+            &mut charges,
             Direction::East,
             &mut rng,
         );
 
-        let has_detect = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-secret-door-detect")
-        });
+        let has_detect = events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-secret-door-detect"),
+        );
         assert!(has_detect, "Should emit secret door detection message");
 
         // Should reveal the door at (5,5)
@@ -2870,22 +2975,29 @@ mod tests {
         world.dungeon_mut().current_level = map;
 
         let player = world.player();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         let mut rng = test_rng();
         let events = zap_wand(
-            &world, player, WandType::CreateMonster, &mut charges,
+            &world,
+            player,
+            WandType::CreateMonster,
+            &mut charges,
             Direction::East,
             &mut rng,
         );
 
-        let has_msg = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-create-monster")
-        });
+        let has_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-create-monster"));
         assert!(has_msg, "Should emit create-monster message");
 
-        let gen_count = events.iter().filter(|e| {
-            matches!(e, EngineEvent::MonsterGenerated { .. })
-        }).count();
+        let gen_count = events
+            .iter()
+            .filter(|e| matches!(e, EngineEvent::MonsterGenerated { .. }))
+            .count();
         assert!(
             (1..=4).contains(&gen_count),
             "Should generate 1-4 monsters, got {}",
@@ -2909,10 +3021,16 @@ mod tests {
         world.dungeon_mut().current_level = map;
 
         let player = world.player();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         let mut rng = test_rng();
         let events = zap_wand(
-            &world, player, WandType::Opening, &mut charges,
+            &world,
+            player,
+            WandType::Opening,
+            &mut charges,
             Direction::East,
             &mut rng,
         );
@@ -2920,7 +3038,10 @@ mod tests {
         let has_open = events.iter().any(|e| {
             matches!(e, EngineEvent::DoorOpened { position } if position.x == 5 && position.y == 2)
         });
-        assert!(has_open, "Opening wand should open the locked door at (5,2)");
+        assert!(
+            has_open,
+            "Opening wand should open the locked door at (5,2)"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2935,10 +3056,16 @@ mod tests {
         world.dungeon_mut().current_level = map;
 
         let player = world.player();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         let mut rng = test_rng();
         let events = zap_wand(
-            &world, player, WandType::Locking, &mut charges,
+            &world,
+            player,
+            WandType::Locking,
+            &mut charges,
             Direction::East,
             &mut rng,
         );
@@ -2976,30 +3103,40 @@ mod tests {
         world.dungeon_mut().current_level = map;
 
         let player = world.player();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         let mut rng = test_rng();
         let events = zap_wand(
-            &world, player, WandType::Digging, &mut charges,
+            &world,
+            player,
+            WandType::Digging,
+            &mut charges,
             Direction::East,
             &mut rng,
         );
 
         // Should have wand-zap message
-        let has_zap = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-zap")
-        });
+        let has_zap = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-zap"));
         assert!(has_zap, "Digging ray should emit wand-zap");
 
         // Should have dig-cell events for the wall at x=8,9,10
-        let dig_cells = events.iter().filter(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-digging-cell")
-        }).count();
-        assert!(dig_cells > 0, "Digging ray should produce dig-cell events for walls");
+        let dig_cells = events
+            .iter()
+            .filter(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-digging-cell"))
+            .count();
+        assert!(
+            dig_cells > 0,
+            "Digging ray should produce dig-cell events for walls"
+        );
 
         // Should have the summary message
-        let has_digging = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-digging")
-        });
+        let has_digging = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-digging"));
         assert!(has_digging, "Should emit wand-digging when walls are dug");
     }
 
@@ -3016,26 +3153,33 @@ mod tests {
         world.dungeon_mut().current_level = map;
 
         let player = world.player();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         // Use a specific seed and starting position well inside the map
         // so the ray doesn't reach any wall within its range.
         let mut rng = Pcg64Mcg::seed_from_u64(999);
         let events = zap_wand(
-            &world, player, WandType::Digging, &mut charges,
+            &world,
+            player,
+            WandType::Digging,
+            &mut charges,
             Direction::East,
             &mut rng,
         );
 
         // The ray's range is 7..13. Starting at x=5, going east, the
         // first wall is at x=39 which is > 5+13=18, so no walls hit.
-        let dig_cells = events.iter().filter(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-digging-cell")
-        }).count();
+        let dig_cells = events
+            .iter()
+            .filter(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-digging-cell"))
+            .count();
         if dig_cells == 0 {
             // Should emit wand-digging-miss
-            let has_miss = events.iter().any(|e| {
-                matches!(e, EngineEvent::Message { key, .. } if key == "wand-digging-miss")
-            });
+            let has_miss = events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-digging-miss"),
+            );
             assert!(has_miss, "Should emit wand-digging-miss when no walls dug");
         }
     }
@@ -3093,8 +3237,11 @@ mod tests {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
             match zap_updown(WandType::CreateMonster, true, &mut rng) {
                 VerticalZapOutcome::CreateMonster(n) => {
-                    assert!((1..=4).contains(&n),
-                        "Should create 1-4 monsters, got {}", n);
+                    assert!(
+                        (1..=4).contains(&n),
+                        "Should create 1-4 monsters, got {}",
+                        n
+                    );
                 }
                 other => panic!("Expected CreateMonster, got {:?}", other),
             }
@@ -3128,7 +3275,10 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn test_engrave_lightning_electric() {
-        assert_eq!(engrave_with_wand(WandType::Lightning), EngraveEffect::Electric);
+        assert_eq!(
+            engrave_with_wand(WandType::Lightning),
+            EngraveEffect::Electric
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3144,7 +3294,10 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn test_engrave_cancellation_erases() {
-        assert_eq!(engrave_with_wand(WandType::Cancellation), EngraveEffect::Erase);
+        assert_eq!(
+            engrave_with_wand(WandType::Cancellation),
+            EngraveEffect::Erase
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3152,7 +3305,10 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn test_engrave_teleport_erases() {
-        assert_eq!(engrave_with_wand(WandType::Teleportation), EngraveEffect::Erase);
+        assert_eq!(
+            engrave_with_wand(WandType::Teleportation),
+            EngraveEffect::Erase
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3160,7 +3316,10 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn test_engrave_invisible_writing() {
-        assert_eq!(engrave_with_wand(WandType::MakeInvisible), EngraveEffect::Invisible);
+        assert_eq!(
+            engrave_with_wand(WandType::MakeInvisible),
+            EngraveEffect::Invisible
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3168,7 +3327,10 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn test_engrave_nothing_invisible() {
-        assert_eq!(engrave_with_wand(WandType::Nothing), EngraveEffect::Invisible);
+        assert_eq!(
+            engrave_with_wand(WandType::Nothing),
+            EngraveEffect::Invisible
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3176,7 +3338,10 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn test_engrave_polymorph_scrawl() {
-        assert_eq!(engrave_with_wand(WandType::Polymorph), EngraveEffect::Scrawl);
+        assert_eq!(
+            engrave_with_wand(WandType::Polymorph),
+            EngraveEffect::Scrawl
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3207,11 +3372,20 @@ mod tests {
         assert!(ray_destroys_material(WandType::Fire, ObjectMaterial::Paper));
         assert!(ray_destroys_material(WandType::Fire, ObjectMaterial::Wood));
         assert!(ray_destroys_material(WandType::Fire, ObjectMaterial::Cloth));
-        assert!(ray_destroys_material(WandType::Fire, ObjectMaterial::Organic));
+        assert!(ray_destroys_material(
+            WandType::Fire,
+            ObjectMaterial::Organic
+        ));
         assert!(ray_destroys_material(WandType::Fire, ObjectMaterial::Wax));
         // Fire does NOT destroy metal
-        assert!(!ray_destroys_material(WandType::Fire, ObjectMaterial::Metal));
-        assert!(!ray_destroys_material(WandType::Fire, ObjectMaterial::Glass));
+        assert!(!ray_destroys_material(
+            WandType::Fire,
+            ObjectMaterial::Metal
+        ));
+        assert!(!ray_destroys_material(
+            WandType::Fire,
+            ObjectMaterial::Glass
+        ));
     }
 
     // -----------------------------------------------------------------------
@@ -3220,9 +3394,15 @@ mod tests {
     #[test]
     fn test_cold_shatters_glass() {
         assert!(ray_destroys_material(WandType::Cold, ObjectMaterial::Glass));
-        assert!(ray_destroys_material(WandType::Cold, ObjectMaterial::Liquid));
+        assert!(ray_destroys_material(
+            WandType::Cold,
+            ObjectMaterial::Liquid
+        ));
         // Cold does NOT destroy paper
-        assert!(!ray_destroys_material(WandType::Cold, ObjectMaterial::Paper));
+        assert!(!ray_destroys_material(
+            WandType::Cold,
+            ObjectMaterial::Paper
+        ));
     }
 
     // -----------------------------------------------------------------------
@@ -3230,12 +3410,27 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn test_lightning_destroys_metal() {
-        assert!(ray_destroys_material(WandType::Lightning, ObjectMaterial::Metal));
-        assert!(ray_destroys_material(WandType::Lightning, ObjectMaterial::Iron));
-        assert!(ray_destroys_material(WandType::Lightning, ObjectMaterial::Copper));
-        assert!(ray_destroys_material(WandType::Lightning, ObjectMaterial::Gold));
+        assert!(ray_destroys_material(
+            WandType::Lightning,
+            ObjectMaterial::Metal
+        ));
+        assert!(ray_destroys_material(
+            WandType::Lightning,
+            ObjectMaterial::Iron
+        ));
+        assert!(ray_destroys_material(
+            WandType::Lightning,
+            ObjectMaterial::Copper
+        ));
+        assert!(ray_destroys_material(
+            WandType::Lightning,
+            ObjectMaterial::Gold
+        ));
         // Lightning does NOT destroy paper
-        assert!(!ray_destroys_material(WandType::Lightning, ObjectMaterial::Paper));
+        assert!(!ray_destroys_material(
+            WandType::Lightning,
+            ObjectMaterial::Paper
+        ));
     }
 
     // -----------------------------------------------------------------------
@@ -3244,11 +3439,15 @@ mod tests {
     #[test]
     fn test_death_destroys_nothing() {
         for &mat in &[
-            ObjectMaterial::Paper, ObjectMaterial::Metal,
-            ObjectMaterial::Glass, ObjectMaterial::Wood,
+            ObjectMaterial::Paper,
+            ObjectMaterial::Metal,
+            ObjectMaterial::Glass,
+            ObjectMaterial::Wood,
         ] {
-            assert!(!ray_destroys_material(WandType::Death, mat),
-                "Death ray should not destroy objects");
+            assert!(
+                !ray_destroys_material(WandType::Death, mat),
+                "Death ray should not destroy objects"
+            );
         }
     }
 
@@ -3257,12 +3456,24 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn test_destroy_chances() {
-        assert_eq!(ray_destroy_chance(WandType::Fire, ObjectMaterial::Paper), 33);
-        assert_eq!(ray_destroy_chance(WandType::Cold, ObjectMaterial::Glass), 20);
-        assert_eq!(ray_destroy_chance(WandType::Lightning, ObjectMaterial::Metal), 33);
+        assert_eq!(
+            ray_destroy_chance(WandType::Fire, ObjectMaterial::Paper),
+            33
+        );
+        assert_eq!(
+            ray_destroy_chance(WandType::Cold, ObjectMaterial::Glass),
+            20
+        );
+        assert_eq!(
+            ray_destroy_chance(WandType::Lightning, ObjectMaterial::Metal),
+            33
+        );
         // Non-destructible combination
         assert_eq!(ray_destroy_chance(WandType::Fire, ObjectMaterial::Metal), 0);
-        assert_eq!(ray_destroy_chance(WandType::Death, ObjectMaterial::Paper), 0);
+        assert_eq!(
+            ray_destroy_chance(WandType::Death, ObjectMaterial::Paper),
+            0
+        );
     }
 
     // =======================================================================
@@ -3334,9 +3545,9 @@ mod tests {
         let world = GameWorld::new(Position::new(5, 5));
         let player = world.player();
         let events = cancel_monster(player);
-        let has_cancel = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-cancel-monster")
-        });
+        let has_cancel = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-cancel-monster"));
         assert!(has_cancel, "cancel_monster should emit cancel message");
     }
 
@@ -3352,23 +3563,35 @@ mod tests {
         let monster = world.spawn((
             Positioned(Position::new(5, 2)),
             Monster,
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
         ));
         let _ = monster;
 
         let player = world.player();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         let mut rng = test_rng();
         let events = zap_wand(
-            &world, player, WandType::Cancellation, &mut charges,
+            &world,
+            player,
+            WandType::Cancellation,
+            &mut charges,
             Direction::East,
             &mut rng,
         );
 
-        let has_cancel = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-cancel-monster")
-        });
-        assert!(has_cancel, "Cancellation beam should cancel a monster in its path");
+        let has_cancel = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-cancel-monster"));
+        assert!(
+            has_cancel,
+            "Cancellation beam should cancel a monster in its path"
+        );
     }
 
     // =======================================================================
@@ -3386,20 +3609,35 @@ mod tests {
         let _monster = world.spawn((
             Positioned(Position::new(5, 2)),
             Monster,
-            HitPoints { current: 30, max: 30 },
+            HitPoints {
+                current: 30,
+                max: 30,
+            },
         ));
 
         let player = world.player();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         let mut rng = test_rng();
         let events = zap_wand(
-            &world, player, WandType::Striking, &mut charges,
+            &world,
+            player,
+            WandType::Striking,
+            &mut charges,
             Direction::East,
             &mut rng,
         );
 
         let has_damage = events.iter().any(|e| {
-            matches!(e, EngineEvent::ExtraDamage { source: DamageSource::Wand, .. })
+            matches!(
+                e,
+                EngineEvent::ExtraDamage {
+                    source: DamageSource::Wand,
+                    ..
+                }
+            )
         });
         assert!(has_damage, "Striking beam should deal damage to a monster");
     }
@@ -3419,32 +3657,41 @@ mod tests {
         let _monster = world.spawn((
             Positioned(Position::new(5, 5)),
             Monster,
-            HitPoints { current: 50, max: 50 },
+            HitPoints {
+                current: 50,
+                max: 50,
+            },
         ));
 
         let player = world.player();
-        let mut charges = WandCharges { spe: 5, recharged: 0 };
+        let mut charges = WandCharges {
+            spe: 5,
+            recharged: 0,
+        };
         let mut rng = test_rng();
         let events = zap_wand(
-            &world, player, WandType::Fire, &mut charges,
+            &world,
+            player,
+            WandType::Fire,
+            &mut charges,
             Direction::East,
             &mut rng,
         );
 
         // Should contain wand-zap message
-        let has_zap = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-zap")
-        });
+        let has_zap = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-zap"));
         assert!(has_zap, "Ray dispatch should emit wand-zap");
 
         // Depending on zap_hit roll, may or may not hit, but let's check
         // that the event system works (zap_hit uses an RNG)
-        let hit_events = events.iter().any(|e| {
-            matches!(e, EngineEvent::HpChange { .. })
-        });
-        let absorb_events = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wand-ray-absorb")
-        });
+        let hit_events = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::HpChange { .. }));
+        let absorb_events = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-ray-absorb"));
         // Either it hit (HP change) or events are empty after zap message
         // (missed due to zap_hit RNG). Both are valid.
         let _any_interaction = hit_events || absorb_events;
@@ -3482,14 +3729,25 @@ mod tests {
         let mut rng = test_rng();
         let target = TargetProperties::default();
         for &wand in &[
-            WandType::Digging, WandType::Nothing, WandType::Probing,
-            WandType::Opening, WandType::Locking, WandType::UndeadTurning,
-            WandType::Light, WandType::SecretDoorDetection,
-            WandType::CreateMonster, WandType::Wishing, WandType::Enlightenment,
+            WandType::Digging,
+            WandType::Nothing,
+            WandType::Probing,
+            WandType::Opening,
+            WandType::Locking,
+            WandType::UndeadTurning,
+            WandType::Light,
+            WandType::SecretDoorDetection,
+            WandType::CreateMonster,
+            WandType::Wishing,
+            WandType::Enlightenment,
         ] {
             let outcome = self_zap_effect(wand, &target, &mut rng);
-            assert_eq!(outcome, SelfZapOutcome::NoEffect,
-                "{:?} self-zap should be NoEffect", wand);
+            assert_eq!(
+                outcome,
+                SelfZapOutcome::NoEffect,
+                "{:?} self-zap should be NoEffect",
+                wand
+            );
         }
     }
 
@@ -3499,22 +3757,41 @@ mod tests {
     #[test]
     fn test_all_wand_types_classified() {
         let all_wands = [
-            WandType::Light, WandType::SecretDoorDetection,
-            WandType::CreateMonster, WandType::Wishing, WandType::Enlightenment,
-            WandType::Striking, WandType::SlowMonster, WandType::SpeedMonster,
-            WandType::UndeadTurning, WandType::Polymorph, WandType::Cancellation,
-            WandType::Teleportation, WandType::MakeInvisible, WandType::Opening,
-            WandType::Locking, WandType::Probing, WandType::Nothing,
-            WandType::Death, WandType::Fire, WandType::Cold,
-            WandType::Lightning, WandType::Sleep, WandType::MagicMissile,
+            WandType::Light,
+            WandType::SecretDoorDetection,
+            WandType::CreateMonster,
+            WandType::Wishing,
+            WandType::Enlightenment,
+            WandType::Striking,
+            WandType::SlowMonster,
+            WandType::SpeedMonster,
+            WandType::UndeadTurning,
+            WandType::Polymorph,
+            WandType::Cancellation,
+            WandType::Teleportation,
+            WandType::MakeInvisible,
+            WandType::Opening,
+            WandType::Locking,
+            WandType::Probing,
+            WandType::Nothing,
+            WandType::Death,
+            WandType::Fire,
+            WandType::Cold,
+            WandType::Lightning,
+            WandType::Sleep,
+            WandType::MagicMissile,
             WandType::Digging,
         ];
         assert_eq!(all_wands.len(), 24, "Should have all 24 wand types");
         for wand in all_wands {
             let dir = wand.direction();
             assert!(
-                matches!(dir, WandDirection::Nodir | WandDirection::Immediate | WandDirection::Ray),
-                "{:?} should have a valid direction", wand
+                matches!(
+                    dir,
+                    WandDirection::Nodir | WandDirection::Immediate | WandDirection::Ray
+                ),
+                "{:?} should have a valid direction",
+                wand
             );
         }
     }
@@ -3530,7 +3807,10 @@ mod tests {
         let trials = 200u64;
         for seed in 0..trials {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            let mut charges = WandCharges { spe: 0, recharged: 0 };
+            let mut charges = WandCharges {
+                spe: 0,
+                recharged: 0,
+            };
             if let RechargeResult::Success { new_spe } =
                 recharge_wand(WandType::Fire, &mut charges, true, false, &mut rng)
             {
@@ -3538,16 +3818,22 @@ mod tests {
             }
 
             let mut rng2 = Pcg64Mcg::seed_from_u64(seed);
-            let mut charges2 = WandCharges { spe: 0, recharged: 0 };
+            let mut charges2 = WandCharges {
+                spe: 0,
+                recharged: 0,
+            };
             if let RechargeResult::Success { new_spe } =
                 recharge_wand(WandType::Fire, &mut charges2, false, false, &mut rng2)
             {
                 uncursed_total += new_spe as i32;
             }
         }
-        assert!(blessed_total >= uncursed_total,
+        assert!(
+            blessed_total >= uncursed_total,
             "Blessed recharge should give >= charges than uncursed: {} vs {}",
-            blessed_total, uncursed_total);
+            blessed_total,
+            uncursed_total
+        );
     }
 
     // =======================================================================
@@ -3579,7 +3865,12 @@ mod tests {
     fn test_cold_wand_shatters_potions() {
         let mut rng = test_rng();
         let result = wand_hits_object(WandType::Cold, '!', "glass", &mut rng);
-        assert_eq!(result, WandObjectResult::Destroy { reason: "shattered" });
+        assert_eq!(
+            result,
+            WandObjectResult::Destroy {
+                reason: "shattered"
+            }
+        );
     }
 
     #[test]
@@ -3644,10 +3935,10 @@ mod tests {
     fn test_wand_hits_pile_mixed() {
         let mut rng = test_rng();
         let pile: Vec<(char, &str)> = vec![
-            ('?', "paper"),  // scroll — fire burns
-            ('!', "glass"),  // potion — fire ignores
-            ('+', "paper"),  // spellbook — fire burns
-            (')', "iron"),   // weapon — fire ignores
+            ('?', "paper"), // scroll — fire burns
+            ('!', "glass"), // potion — fire ignores
+            ('+', "paper"), // spellbook — fire burns
+            (')', "iron"),  // weapon — fire ignores
         ];
         let results = wand_hits_pile(WandType::Fire, &pile, &mut rng);
         // Should affect indices 0 and 2 (scroll and spellbook)
@@ -3662,9 +3953,9 @@ mod tests {
     fn test_wand_hits_pile_cold_shatters_potions() {
         let mut rng = test_rng();
         let pile: Vec<(char, &str)> = vec![
-            ('!', "glass"),  // potion — cold shatters
-            ('?', "paper"),  // scroll — cold ignores
-            ('!', "glass"),  // potion — cold shatters
+            ('!', "glass"), // potion — cold shatters
+            ('?', "paper"), // scroll — cold ignores
+            ('!', "glass"), // potion — cold shatters
         ];
         let results = wand_hits_pile(WandType::Cold, &pile, &mut rng);
         assert_eq!(results.len(), 2);
@@ -3675,9 +3966,7 @@ mod tests {
     #[test]
     fn test_make_invisible_wand_on_object() {
         let mut rng = test_rng();
-        let result = wand_hits_object(
-            WandType::MakeInvisible, '?', "paper", &mut rng,
-        );
+        let result = wand_hits_object(WandType::MakeInvisible, '?', "paper", &mut rng);
         assert_eq!(result, WandObjectResult::MakeInvisible);
     }
 }

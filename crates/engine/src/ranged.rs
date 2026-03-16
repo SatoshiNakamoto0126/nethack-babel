@@ -13,15 +13,13 @@ use rand::Rng;
 
 use crate::action::{Direction, Position};
 use crate::combat::{
-    DefenderState, SkillLevel, WeaponStats,
-    hitval, strength_damage_bonus, weapon_dam_bonus_armed,
-    weapon_hit_bonus_armed, dmgval,
+    DefenderState, SkillLevel, WeaponStats, dmgval, hitval, strength_damage_bonus,
+    weapon_dam_bonus_armed, weapon_hit_bonus_armed,
 };
 use crate::dungeon::{LevelMap, Terrain};
 use crate::event::{DeathCause, EngineEvent, HpSource};
 use crate::world::{
-    ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints, Monster,
-    Positioned,
+    ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints, Monster, Positioned,
 };
 
 use nethack_babel_data::WeaponSkill;
@@ -52,14 +50,12 @@ pub const LAUNCHER_RANGE: i32 = 18;
 pub fn acurrstr(strength: u8, strength_extra: u8) -> i32 {
     match strength {
         0..=17 => strength as i32,
-        18 => {
-            match strength_extra {
-                0 => 18,
-                1..=31 => 19,
-                32..=81 => 20,
-                82.. => 21,
-            }
-        }
+        18 => match strength_extra {
+            0 => 18,
+            1..=31 => 19,
+            32..=81 => 20,
+            82.. => 21,
+        },
         19..=25 => {
             // STR 19-25 maps to ACURRSTR 22-25 per the spec comment
             // (19->22, 20->23, 21->21 with 18/82+ overlap, but
@@ -242,8 +238,12 @@ pub fn trace_projectile(
         // Check if terrain blocks projectiles (walls, closed doors, stone).
         if let Some(cell) = map.get(pos) {
             match cell.terrain {
-                Terrain::Wall | Terrain::Stone | Terrain::DoorClosed
-                | Terrain::DoorLocked | Terrain::Tree | Terrain::IronBars => {
+                Terrain::Wall
+                | Terrain::Stone
+                | Terrain::DoorClosed
+                | Terrain::DoorLocked
+                | Terrain::Tree
+                | Terrain::IronBars => {
                     break;
                 }
                 _ => {}
@@ -486,11 +486,7 @@ pub enum HitFloorResult {
 }
 
 /// Determine what happens when a thrown object hits the floor at a position.
-pub fn hit_floor(
-    terrain: Terrain,
-    is_fragile: bool,
-    has_trap_hole: bool,
-) -> HitFloorResult {
+pub fn hit_floor(terrain: Terrain, is_fragile: bool, has_trap_hole: bool) -> HitFloorResult {
     if has_trap_hole {
         return HitFloorResult::FellThrough;
     }
@@ -581,8 +577,18 @@ pub fn bresenham_path(
     let mut result = Vec::new();
     let mut dx = dst.x - src.x;
     let mut dy = dst.y - src.y;
-    let x_step = if dx < 0 { dx = -dx; -1i32 } else { 1i32 };
-    let y_step = if dy < 0 { dy = -dy; -1i32 } else { 1i32 };
+    let x_step = if dx < 0 {
+        dx = -dx;
+        -1i32
+    } else {
+        1i32
+    };
+    let y_step = if dy < 0 {
+        dy = -dy;
+        -1i32
+    } else {
+        1i32
+    };
 
     let mut x = src.x;
     let mut y = src.y;
@@ -646,10 +652,12 @@ pub enum HurtleStepResult {
 /// Check whether a hurtle step to the given position is valid.
 pub fn check_hurtle_step(terrain: Terrain) -> HurtleStepResult {
     match terrain {
-        Terrain::Wall | Terrain::Stone | Terrain::DoorClosed
-        | Terrain::DoorLocked | Terrain::IronBars | Terrain::Tree => {
-            HurtleStepResult::Blocked
-        }
+        Terrain::Wall
+        | Terrain::Stone
+        | Terrain::DoorClosed
+        | Terrain::DoorLocked
+        | Terrain::IronBars
+        | Terrain::Tree => HurtleStepResult::Blocked,
         Terrain::Pool | Terrain::Moat | Terrain::Lava | Terrain::Water => {
             HurtleStepResult::HazardTerrain
         }
@@ -672,10 +680,7 @@ pub fn hurtle_path(
         if !map.in_bounds(next) {
             break;
         }
-        let terrain = map
-            .get(next)
-            .map(|c| c.terrain)
-            .unwrap_or(Terrain::Stone);
+        let terrain = map.get(next).map(|c| c.terrain).unwrap_or(Terrain::Stone);
         match check_hurtle_step(terrain) {
             HurtleStepResult::Moved => {
                 path.push(next);
@@ -739,11 +744,7 @@ pub fn gem_accept(
 /// Based on `monmulti()` from mthrowu.c:
 /// - High-level monsters (level >= 12) get extra shots.
 /// - Monsters wielding crossbows are limited to 1 (reload time).
-pub fn monster_multishot(
-    monster_level: u32,
-    is_crossbow: bool,
-    rng: &mut impl Rng,
-) -> u32 {
+pub fn monster_multishot(monster_level: u32, is_crossbow: bool, rng: &mut impl Rng) -> u32 {
     if is_crossbow {
         return 1;
     }
@@ -770,10 +771,7 @@ pub fn monster_multishot(
 /// to `target_pos` in one of the 8 cardinal/diagonal directions.
 ///
 /// Returns `Some(direction)` if lined up, `None` otherwise.
-pub fn lined_up(
-    attacker_pos: Position,
-    target_pos: Position,
-) -> Option<Direction> {
+pub fn lined_up(attacker_pos: Position, target_pos: Position) -> Option<Direction> {
     let dx = target_pos.x - attacker_pos.x;
     let dy = target_pos.y - attacker_pos.y;
 
@@ -914,10 +912,7 @@ pub fn resolve_throw(
             .map(|ac| ac.0)
             .unwrap_or(10);
 
-        let distance = chebyshev_distance(
-            thrower_pos.x, thrower_pos.y,
-            target_pos.x, target_pos.y,
-        );
+        let distance = chebyshev_distance(thrower_pos.x, thrower_pos.y, target_pos.x, target_pos.y);
 
         let params = RangedAttackParams {
             strength: str_val,
@@ -1064,10 +1059,8 @@ pub fn resolve_fire(
                     .map(|ac| ac.0)
                     .unwrap_or(10);
 
-                let distance = chebyshev_distance(
-                    shooter_pos.x, shooter_pos.y,
-                    cell_pos.x, cell_pos.y,
-                );
+                let distance =
+                    chebyshev_distance(shooter_pos.x, shooter_pos.y, cell_pos.x, cell_pos.y);
 
                 let params = RangedAttackParams {
                     strength: str_val,
@@ -1180,10 +1173,7 @@ mod tests {
     use crate::action::Position;
     use crate::combat::{DefenderState, SkillLevel, WeaponStats};
     use crate::dungeon::{LevelMap, Terrain};
-    use crate::world::{
-        ArmorClass, GameWorld, HitPoints,
-        Monster, Positioned,
-    };
+    use crate::world::{ArmorClass, GameWorld, HitPoints, Monster, Positioned};
     use nethack_babel_data::WeaponSkill;
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
@@ -1253,7 +1243,10 @@ mod tests {
 
     #[test]
     fn matching_launcher_crossbow_bolt() {
-        assert!(matching_launcher(WeaponSkill::Crossbow, WeaponSkill::Crossbow));
+        assert!(matching_launcher(
+            WeaponSkill::Crossbow,
+            WeaponSkill::Crossbow
+        ));
     }
 
     #[test]
@@ -1287,7 +1280,10 @@ mod tests {
         let mut rng = test_rng();
         // Unskilled: total = 1 + 0 + 0 + 0 = 1, always returns 1.
         for _ in 0..10 {
-            assert_eq!(calculate_multishot(SkillLevel::Unskilled, 0, 0, &mut rng), 1);
+            assert_eq!(
+                calculate_multishot(SkillLevel::Unskilled, 0, 0, &mut rng),
+                1
+            );
         }
     }
 
@@ -1338,7 +1334,10 @@ mod tests {
         let monster = world.spawn((
             Monster,
             Positioned(Position::new(10, 5)),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             ArmorClass(10),
         ));
 
@@ -1356,7 +1355,10 @@ mod tests {
             matches!(e, EngineEvent::RangedHit { defender, .. } if *defender == monster)
                 || matches!(e, EngineEvent::RangedMiss { defender, .. } if *defender == monster)
         });
-        assert!(has_ranged_event, "projectile should interact with monster in path");
+        assert!(
+            has_ranged_event,
+            "projectile should interact with monster in path"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1371,7 +1373,11 @@ mod tests {
             for y in 0..5 {
                 map.set_terrain(
                     Position::new(x, y),
-                    if x >= 10 { Terrain::Wall } else { Terrain::Floor },
+                    if x >= 10 {
+                        Terrain::Wall
+                    } else {
+                        Terrain::Floor
+                    },
                 );
             }
         }
@@ -1407,7 +1413,8 @@ mod tests {
         let rate = breaks as f64 / trials as f64;
         assert!(
             rate > 0.5 && rate < 0.85,
-            "break rate {} should be ~67%", rate
+            "break rate {} should be ~67%",
+            rate
         );
     }
 
@@ -1425,7 +1432,8 @@ mod tests {
         let rate = breaks as f64 / trials as f64;
         assert!(
             rate > 0.1 && rate < 0.4,
-            "break rate {} should be ~25%", rate
+            "break rate {} should be ~25%",
+            rate
         );
     }
 
@@ -1443,7 +1451,8 @@ mod tests {
         let rate = breaks as f64 / trials as f64;
         assert!(
             rate > 0.65 && rate < 0.95,
-            "break rate {} should be ~80%", rate
+            "break rate {} should be ~80%",
+            rate
         );
     }
 
@@ -1457,7 +1466,7 @@ mod tests {
         let params = RangedAttackParams {
             strength: 18,
             strength_extra: 100, // 18/100 -> STR damage bonus = +7
-            launcher: None,     // thrown, NOT fired through launcher
+            launcher: None,      // thrown, NOT fired through launcher
             is_ammo: false,
             is_throwing_weapon: true,
             projectile: WeaponStats {
@@ -1485,7 +1494,11 @@ mod tests {
             max_dmg = max_dmg.max(d);
         }
         assert!(min_dmg >= 8, "min damage {} should be >= 8 (1+7)", min_dmg);
-        assert!(max_dmg <= 13, "max damage {} should be <= 13 (6+7)", max_dmg);
+        assert!(
+            max_dmg <= 13,
+            "max damage {} should be <= 13 (6+7)",
+            max_dmg
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1532,7 +1545,11 @@ mod tests {
             max_dmg = max_dmg.max(d);
         }
         assert!(min_dmg >= 1, "min damage {} should be >= 1", min_dmg);
-        assert!(max_dmg <= 6, "max damage {} should be <= 6 (no STR bonus)", max_dmg);
+        assert!(
+            max_dmg <= 6,
+            "max damage {} should be <= 6 (no STR bonus)",
+            max_dmg
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1793,22 +1810,34 @@ mod tests {
 
     #[test]
     fn hit_floor_normal_landing() {
-        assert_eq!(hit_floor(Terrain::Floor, false, false), HitFloorResult::Landed);
+        assert_eq!(
+            hit_floor(Terrain::Floor, false, false),
+            HitFloorResult::Landed
+        );
     }
 
     #[test]
     fn hit_floor_falls_through_hole() {
-        assert_eq!(hit_floor(Terrain::Floor, false, true), HitFloorResult::FellThrough);
+        assert_eq!(
+            hit_floor(Terrain::Floor, false, true),
+            HitFloorResult::FellThrough
+        );
     }
 
     #[test]
     fn hit_floor_fragile_shatters() {
-        assert_eq!(hit_floor(Terrain::Floor, true, false), HitFloorResult::Shattered);
+        assert_eq!(
+            hit_floor(Terrain::Floor, true, false),
+            HitFloorResult::Shattered
+        );
     }
 
     #[test]
     fn hit_floor_altar() {
-        assert_eq!(hit_floor(Terrain::Altar, false, false), HitFloorResult::OnAltar);
+        assert_eq!(
+            hit_floor(Terrain::Altar, false, false),
+            HitFloorResult::OnAltar
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1857,12 +1886,7 @@ mod tests {
 
     #[test]
     fn bresenham_straight_east() {
-        let path = bresenham_path(
-            Position::new(0, 0),
-            Position::new(5, 0),
-            20,
-            (0, 0, 20, 20),
-        );
+        let path = bresenham_path(Position::new(0, 0), Position::new(5, 0), 20, (0, 0, 20, 20));
         assert_eq!(path.len(), 5);
         for (i, pos) in path.iter().enumerate() {
             assert_eq!(pos.x, i as i32 + 1);
@@ -1872,12 +1896,7 @@ mod tests {
 
     #[test]
     fn bresenham_diagonal() {
-        let path = bresenham_path(
-            Position::new(0, 0),
-            Position::new(3, 3),
-            20,
-            (0, 0, 20, 20),
-        );
+        let path = bresenham_path(Position::new(0, 0), Position::new(3, 3), 20, (0, 0, 20, 20));
         assert_eq!(path.len(), 3);
         assert_eq!(path[0], Position::new(1, 1));
         assert_eq!(path[2], Position::new(3, 3));
@@ -1885,23 +1904,13 @@ mod tests {
 
     #[test]
     fn bresenham_max_steps_limit() {
-        let path = bresenham_path(
-            Position::new(0, 0),
-            Position::new(10, 0),
-            3,
-            (0, 0, 20, 20),
-        );
+        let path = bresenham_path(Position::new(0, 0), Position::new(10, 0), 3, (0, 0, 20, 20));
         assert_eq!(path.len(), 3);
     }
 
     #[test]
     fn bresenham_stops_at_bounds() {
-        let path = bresenham_path(
-            Position::new(0, 0),
-            Position::new(10, 0),
-            20,
-            (0, 0, 4, 20),
-        );
+        let path = bresenham_path(Position::new(0, 0), Position::new(10, 0), 20, (0, 0, 4, 20));
         assert_eq!(path.len(), 4);
         assert_eq!(path.last().unwrap().x, 4);
     }
@@ -1965,12 +1974,24 @@ mod tests {
     #[test]
     fn hurtle_step_results() {
         assert_eq!(check_hurtle_step(Terrain::Floor), HurtleStepResult::Moved);
-        assert_eq!(check_hurtle_step(Terrain::Corridor), HurtleStepResult::Moved);
+        assert_eq!(
+            check_hurtle_step(Terrain::Corridor),
+            HurtleStepResult::Moved
+        );
         assert_eq!(check_hurtle_step(Terrain::Wall), HurtleStepResult::Blocked);
         assert_eq!(check_hurtle_step(Terrain::Stone), HurtleStepResult::Blocked);
-        assert_eq!(check_hurtle_step(Terrain::Pool), HurtleStepResult::HazardTerrain);
-        assert_eq!(check_hurtle_step(Terrain::Lava), HurtleStepResult::HazardTerrain);
-        assert_eq!(check_hurtle_step(Terrain::IronBars), HurtleStepResult::Blocked);
+        assert_eq!(
+            check_hurtle_step(Terrain::Pool),
+            HurtleStepResult::HazardTerrain
+        );
+        assert_eq!(
+            check_hurtle_step(Terrain::Lava),
+            HurtleStepResult::HazardTerrain
+        );
+        assert_eq!(
+            check_hurtle_step(Terrain::IronBars),
+            HurtleStepResult::Blocked
+        );
         assert_eq!(check_hurtle_step(Terrain::Tree), HurtleStepResult::Blocked);
     }
 
@@ -1995,7 +2016,10 @@ mod tests {
 
     #[test]
     fn non_unicorn_not_applicable() {
-        assert_eq!(gem_accept(false, true, true), GemAcceptResult::NotApplicable);
+        assert_eq!(
+            gem_accept(false, true, true),
+            GemAcceptResult::NotApplicable
+        );
     }
 
     // -----------------------------------------------------------------------

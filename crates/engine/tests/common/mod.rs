@@ -9,7 +9,7 @@ use nethack_babel_engine::event::EngineEvent;
 use nethack_babel_engine::religion::ReligionState;
 use nethack_babel_engine::turn::resolve_turn;
 use nethack_babel_engine::world::{
-    GameWorld, HitPoints, Monster, MovementPoints, Name, Positioned, Speed, NORMAL_SPEED,
+    GameWorld, HitPoints, Monster, MovementPoints, NORMAL_SPEED, Name, Positioned, Speed,
 };
 
 use hecs::Entity;
@@ -33,11 +33,7 @@ pub fn create_test_world(seed: u64) -> (GameWorld, Pcg64) {
 
 /// Wrapper around `resolve_turn` for concise test code.
 #[allow(dead_code)]
-pub fn do_action(
-    world: &mut GameWorld,
-    action: PlayerAction,
-    rng: &mut Pcg64,
-) -> Vec<EngineEvent> {
+pub fn do_action(world: &mut GameWorld, action: PlayerAction, rng: &mut Pcg64) -> Vec<EngineEvent> {
     resolve_turn(world, action, rng)
 }
 
@@ -61,12 +57,7 @@ pub fn set_player_hp(world: &mut GameWorld, current: i32, max: i32) {
 
 /// Place a monster entity at the given position and return its Entity handle.
 #[allow(dead_code)]
-pub fn place_monster(
-    world: &mut GameWorld,
-    pos: Position,
-    name: &str,
-    hp: i32,
-) -> Entity {
+pub fn place_monster(world: &mut GameWorld, pos: Position, name: &str, hp: i32) -> Entity {
     let order = world.next_creation_order();
     world.spawn((
         Monster,

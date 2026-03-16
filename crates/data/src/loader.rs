@@ -14,7 +14,7 @@ use serde::Deserialize;
 
 use crate::schema::{
     ArmorCategory, ArmorInfo, AttackDef, AttackMethod, Color, DamageType, DiceExpr, GenoFlags,
-    Material, MonsterDef, MonsterFlags, MonsterNames, MonsterSize, MonsterSound, MonsterId,
+    Material, MonsterDef, MonsterFlags, MonsterId, MonsterNames, MonsterSize, MonsterSound,
     ObjectClass, ObjectDef, ObjectTypeId, Property, ResistanceSet, SpellDirection, SpellbookInfo,
     StrikeMode, WeaponInfo, WeaponSkill,
 };
@@ -143,10 +143,7 @@ pub fn load_game_data(data_dir: &Path) -> Result<GameData, LoadError> {
 pub fn load_monsters(path: &Path) -> Result<Vec<MonsterDef>, LoadError> {
     let contents = std::fs::read_to_string(path)?;
     let file: TomlMonsterFile = toml::from_str(&contents)?;
-    file.monster
-        .into_iter()
-        .map(convert_monster)
-        .collect()
+    file.monster.into_iter().map(convert_monster).collect()
 }
 
 /// Load object definitions from a TOML file.
@@ -162,10 +159,7 @@ pub fn load_monsters(path: &Path) -> Result<Vec<MonsterDef>, LoadError> {
 pub fn load_objects(path: &Path) -> Result<Vec<ObjectDef>, LoadError> {
     let contents = std::fs::read_to_string(path)?;
     let file: TomlObjectFile = toml::from_str(&contents)?;
-    file.object
-        .into_iter()
-        .map(convert_object)
-        .collect()
+    file.object.into_iter().map(convert_object).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -383,14 +377,8 @@ fn convert_object(o: TomlObject) -> Result<ObjectDef, LoadError> {
 
     // Build weapon info if weapon-specific fields are present
     let weapon = if o.damage_small.is_some() || o.damage_large.is_some() {
-        let ds = o
-            .damage_small
-            .as_deref()
-            .unwrap_or("0d0");
-        let dl = o
-            .damage_large
-            .as_deref()
-            .unwrap_or("0d0");
+        let ds = o.damage_small.as_deref().unwrap_or("0d0");
+        let dl = o.damage_large.as_deref().unwrap_or("0d0");
         let ds_dice = parse_dice_expr(ds)?;
         let dl_dice = parse_dice_expr(dl)?;
 
@@ -603,18 +591,13 @@ fn parse_attack_method(s: &str) -> Result<AttackMethod, LoadError> {
         "Magic" | "MagicMissile" => Ok(AttackMethod::MagicMissile),
         // Also handle attack-type strings that match damage-type names
         // when used as both (e.g., in TOML "type" = "Acid")
-        "Acid" | "Cold" | "Fire" | "Electricity"
-        | "Blind" | "Confuse" | "Corrode" | "Curse"
-        | "Death" | "Decay" | "Digest" | "Disease"
-        | "Disenchant" | "Disintegration" | "DrainCon"
-        | "DrainDex" | "DrainInt" | "DrainLife" | "DrainMana"
-        | "Famine" | "Hallucinate" | "Heal" | "Legs"
-        | "Lycanthropy" | "Paralyze" | "Pestilence"
-        | "Petrify" | "Physical" | "Poison" | "Polymorph"
-        | "RandomBreath" | "Rust" | "SedExtended" | "Seduce"
-        | "Sleep" | "Slime" | "Slow" | "StealAmulet"
-        | "StealGold" | "StealItem" | "Stick" | "Stun"
-        | "Teleport" | "Wrap" | "ClericalSpell" | "MagicSpell" => {
+        "Acid" | "Cold" | "Fire" | "Electricity" | "Blind" | "Confuse" | "Corrode" | "Curse"
+        | "Death" | "Decay" | "Digest" | "Disease" | "Disenchant" | "Disintegration"
+        | "DrainCon" | "DrainDex" | "DrainInt" | "DrainLife" | "DrainMana" | "Famine"
+        | "Hallucinate" | "Heal" | "Legs" | "Lycanthropy" | "Paralyze" | "Pestilence"
+        | "Petrify" | "Physical" | "Poison" | "Polymorph" | "RandomBreath" | "Rust"
+        | "SedExtended" | "Seduce" | "Sleep" | "Slime" | "Slow" | "StealAmulet" | "StealGold"
+        | "StealItem" | "Stick" | "Stun" | "Teleport" | "Wrap" | "ClericalSpell" | "MagicSpell" => {
             // These are damage type names appearing as attack type.
             // In this context, the attack method is AT_NONE (passive).
             Ok(AttackMethod::None)
@@ -702,11 +685,7 @@ fn parse_geno_flags(flags: &[String]) -> Result<GenoFlags, LoadError> {
             "Hell" => GenoFlags::G_HELL,
             "NoHell" => GenoFlags::G_NOHELL,
             "Unique" => GenoFlags::G_UNIQ,
-            _ => {
-                return Err(LoadError::Convert(format!(
-                    "unknown generation flag: {f}"
-                )))
-            }
+            _ => return Err(LoadError::Convert(format!("unknown generation flag: {f}"))),
         };
         result |= flag;
     }
@@ -725,11 +704,7 @@ fn parse_resistance_set(resists: &[String]) -> Result<ResistanceSet, LoadError> 
             "Poison" => ResistanceSet::POISON,
             "Acid" => ResistanceSet::ACID,
             "Petrification" => ResistanceSet::STONE,
-            _ => {
-                return Err(LoadError::Convert(format!(
-                    "unknown resistance: {r}"
-                )))
-            }
+            _ => return Err(LoadError::Convert(format!("unknown resistance: {r}"))),
         };
         result |= flag;
     }
@@ -824,11 +799,7 @@ fn parse_monster_flags(flags: &[String]) -> Result<MonsterFlags, LoadError> {
                 // These are generation flags; skip them in monster flags
                 continue;
             }
-            _ => {
-                return Err(LoadError::Convert(format!(
-                    "unknown monster flag: {f}"
-                )))
-            }
+            _ => return Err(LoadError::Convert(format!("unknown monster flag: {f}"))),
         };
         result |= flag;
     }
@@ -938,9 +909,7 @@ fn parse_armor_category(s: &str) -> Result<ArmorCategory, LoadError> {
         "Boots" => Ok(ArmorCategory::Boots),
         "Cloak" => Ok(ArmorCategory::Cloak),
         "Shirt" => Ok(ArmorCategory::Shirt),
-        _ => Err(LoadError::Convert(format!(
-            "unknown armor category: {s}"
-        ))),
+        _ => Err(LoadError::Convert(format!("unknown armor category: {s}"))),
     }
 }
 
@@ -953,11 +922,7 @@ fn parse_strike_mode(s: &str) -> Result<StrikeMode, LoadError> {
             "Pierce" => StrikeMode::PIERCE,
             "Slash" => StrikeMode::SLASH,
             "Whack" => StrikeMode::WHACK,
-            _ => {
-                return Err(LoadError::Convert(format!(
-                    "unknown strike mode: {part}"
-                )))
-            }
+            _ => return Err(LoadError::Convert(format!("unknown strike mode: {part}"))),
         };
         mode |= flag;
     }
@@ -970,9 +935,7 @@ fn parse_spell_direction(s: &str) -> Result<SpellDirection, LoadError> {
         "nodir" => Ok(SpellDirection::NoDir),
         "immediate" => Ok(SpellDirection::Immediate),
         "ray" => Ok(SpellDirection::Ray),
-        _ => Err(LoadError::Convert(format!(
-            "unknown spell direction: {s}"
-        ))),
+        _ => Err(LoadError::Convert(format!("unknown spell direction: {s}"))),
     }
 }
 
@@ -1197,7 +1160,10 @@ mod tests {
         let monsters = load_monsters(&path).expect("failed to load monsters");
         // Find a monster that has a female name variant
         let has_female = monsters.iter().any(|m| m.names.female.is_some());
-        assert!(has_female, "expected at least one monster with a female name");
+        assert!(
+            has_female,
+            "expected at least one monster with a female name"
+        );
     }
 
     #[test]

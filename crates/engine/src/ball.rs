@@ -64,9 +64,7 @@ pub fn is_punished(world: &GameWorld, player: Entity) -> bool {
 
 /// Get the Punished component if the player is punished.
 pub fn get_punishment(world: &GameWorld, player: Entity) -> Option<Punished> {
-    world
-        .get_component::<Punished>(player)
-        .map(|p| *p)
+    world.get_component::<Punished>(player).map(|p| *p)
 }
 
 // ---------------------------------------------------------------------------
@@ -77,10 +75,7 @@ pub fn get_punishment(world: &GameWorld, player: Entity) -> Option<Punished> {
 ///
 /// Creates two new entities (ball and chain) at the player's position
 /// and attaches the `Punished` component to the player.
-pub fn apply_punishment(
-    world: &mut GameWorld,
-    player: Entity,
-) -> Vec<EngineEvent> {
+pub fn apply_punishment(world: &mut GameWorld, player: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     if is_punished(world, player) {
@@ -94,16 +89,10 @@ pub fn apply_punishment(
     };
 
     // Spawn the iron ball.
-    let ball = world.spawn((
-        IronBall,
-        Positioned(player_pos),
-    ));
+    let ball = world.spawn((IronBall, Positioned(player_pos)));
 
     // Spawn the iron chain.
-    let chain = world.spawn((
-        IronChain,
-        Positioned(player_pos),
-    ));
+    let chain = world.spawn((IronChain, Positioned(player_pos)));
 
     // Attach to player.
     let _ = world.ecs_mut().insert_one(player, Punished { ball, chain });
@@ -118,10 +107,7 @@ pub fn apply_punishment(
 
 /// Remove the iron ball and chain from the player (e.g., via scroll of
 /// remove curse or prayer).
-pub fn remove_punishment(
-    world: &mut GameWorld,
-    player: Entity,
-) -> Vec<EngineEvent> {
+pub fn remove_punishment(world: &mut GameWorld, player: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let punishment = match get_punishment(world, player) {
@@ -153,11 +139,7 @@ pub fn remove_punishment(
 /// Returns `true` if the move is allowed, `false` if the chain is too
 /// short.  The ball drags behind the player: if the player moves away,
 /// the ball is dragged one step closer (handled by `drag_ball`).
-pub fn can_move_with_ball(
-    world: &GameWorld,
-    player: Entity,
-    target_pos: Position,
-) -> bool {
+pub fn can_move_with_ball(world: &GameWorld, player: Entity, target_pos: Position) -> bool {
     let punishment = match get_punishment(world, player) {
         Some(p) => p,
         None => return true, // Not punished, always ok.
@@ -180,10 +162,7 @@ pub fn can_move_with_ball(
 ///
 /// Called after the player moves.  If the ball is more than 1 tile away
 /// from the player's new position, it is dragged one step closer.
-pub fn drag_ball(
-    world: &mut GameWorld,
-    player: Entity,
-) -> Vec<EngineEvent> {
+pub fn drag_ball(world: &mut GameWorld, player: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let punishment = match get_punishment(world, player) {
@@ -339,11 +318,7 @@ pub fn ball_allows_move(
 ///
 /// If the ball is within chain length, the player is pulled down.
 /// Otherwise the chain effectively snaps (player is freed).
-pub fn ball_falls(
-    ball_pos: Position,
-    player_pos: Position,
-    chain_length: i32,
-) -> BallFallResult {
+pub fn ball_falls(ball_pos: Position, player_pos: Position, chain_length: i32) -> BallFallResult {
     if chebyshev_distance(ball_pos, player_pos) <= chain_length {
         BallFallResult::PlayerDraggedDown
     } else {
@@ -526,11 +501,7 @@ mod tests {
         let mut rng = test_rng();
         for _ in 0..100 {
             let dmg = ball_damage(&mut rng);
-            assert!(
-                (1..=25).contains(&dmg),
-                "ball damage {} out of range",
-                dmg
-            );
+            assert!((1..=25).contains(&dmg), "ball damage {} out of range", dmg);
         }
     }
 
@@ -632,10 +603,7 @@ mod tests {
     fn ball_falls_chain_snaps() {
         let ball = Position::new(0, 0);
         let player = Position::new(10, 10);
-        assert_eq!(
-            ball_falls(ball, player, 5),
-            BallFallResult::ChainSnaps
-        );
+        assert_eq!(ball_falls(ball, player, 5), BallFallResult::ChainSnaps);
     }
 
     // -----------------------------------------------------------------------

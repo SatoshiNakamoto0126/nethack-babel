@@ -69,9 +69,7 @@ pub fn is_mounted(world: &GameWorld, player: Entity) -> bool {
 
 /// Get the steed entity if the player is mounted.
 pub fn get_steed(world: &GameWorld, player: Entity) -> Option<Entity> {
-    world
-        .get_component::<MountedOn>(player)
-        .map(|m| m.0)
+    world.get_component::<MountedOn>(player).map(|m| m.0)
 }
 
 // ---------------------------------------------------------------------------
@@ -157,11 +155,7 @@ pub fn mount(
 
 /// Dismount the current steed.  The player stays at their current
 /// position; the steed remains adjacent.
-pub fn dismount(
-    world: &mut GameWorld,
-    player: Entity,
-    _rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+pub fn dismount(world: &mut GameWorld, player: Entity, _rng: &mut impl Rng) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let steed = match get_steed(world, player) {
@@ -202,10 +196,7 @@ pub fn check_thrown(rng: &mut impl Rng, skill: RidingSkill) -> bool {
 }
 
 /// Handle being thrown from the steed (during combat or steed panic).
-pub fn throw_rider(
-    world: &mut GameWorld,
-    player: Entity,
-) -> Vec<EngineEvent> {
+pub fn throw_rider(world: &mut GameWorld, player: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     if let Some(steed) = get_steed(world, player) {
@@ -262,11 +253,7 @@ pub enum CreatureSize {
 ///
 /// Requirements: monster must be tame, player must be humanoid and not
 /// very small or big.
-pub fn can_ride(
-    is_tame: bool,
-    player_is_humanoid: bool,
-    player_size: CreatureSize,
-) -> bool {
+pub fn can_ride(is_tame: bool, player_is_humanoid: bool, player_size: CreatureSize) -> bool {
     is_tame
         && player_is_humanoid
         && !matches!(
@@ -324,9 +311,7 @@ pub fn kick_steed(
     let new_tameness = tameness.saturating_sub(1);
 
     // Check if steed resists (untame or level check fails).
-    if new_tameness == 0
-        || player_level + new_tameness < rng.random_range(1..=15)
-    {
+    if new_tameness == 0 || player_level + new_tameness < rng.random_range(1..=15) {
         return (KickSteedResult::ThrownOff, 0);
     }
 
@@ -416,8 +401,14 @@ pub fn find_landing_spot(
 
     // Check orthogonal first, then diagonal.
     let offsets = [
-        (0, -1), (0, 1), (-1, 0), (1, 0),
-        (-1, -1), (1, -1), (-1, 1), (1, 1),
+        (0, -1),
+        (0, 1),
+        (-1, 0),
+        (1, 0),
+        (-1, -1),
+        (1, -1),
+        (-1, 1),
+        (1, 1),
     ];
 
     for &(dx, dy) in &offsets {
@@ -446,10 +437,7 @@ pub enum PolySteedResult {
 }
 
 /// Determine what happens when a steed polymorphs.
-pub fn poly_steed_check(
-    new_form_is_animal: bool,
-    new_form_size: CreatureSize,
-) -> PolySteedResult {
+pub fn poly_steed_check(new_form_is_animal: bool, new_form_size: CreatureSize) -> PolySteedResult {
     if !new_form_is_animal {
         return PolySteedResult::MustDismount;
     }
@@ -465,10 +453,7 @@ pub fn poly_steed_check(
 
 /// Whether the steed is stuck (e.g., in a bear trap, web, or being
 /// held by a monster) and the rider therefore can't move.
-pub fn steed_is_stuck(
-    steed_trapped: bool,
-    steed_held: bool,
-) -> bool {
+pub fn steed_is_stuck(steed_trapped: bool, steed_held: bool) -> bool {
     steed_trapped || steed_held
 }
 
@@ -504,18 +489,17 @@ mod tests {
         GameWorld::new(Position::new(10, 10))
     }
 
-    fn spawn_tame_steed(
-        world: &mut GameWorld,
-        name: &str,
-        pos: Position,
-    ) -> Entity {
+    fn spawn_tame_steed(world: &mut GameWorld, name: &str, pos: Position) -> Entity {
         world.spawn((
             Monster,
             Tame,
             Positioned(pos),
             Name(name.to_string()),
             Speed(18),
-            HitPoints { current: 30, max: 30 },
+            HitPoints {
+                current: 30,
+                max: 30,
+            },
         ))
     }
 
@@ -551,7 +535,10 @@ mod tests {
             Positioned(Position::new(11, 10)),
             Name("warhorse".to_string()),
             Speed(18),
-            HitPoints { current: 30, max: 30 },
+            HitPoints {
+                current: 30,
+                max: 30,
+            },
         ));
 
         let events = mount(&mut world, player, wild, &mut rng);
@@ -758,9 +745,7 @@ mod tests {
     #[test]
     fn dismount_fall_damage_thrown() {
         let mut rng = test_rng();
-        let (dmg, legs) = dismount_fall_damage(
-            DismountReason::Thrown, false, false, &mut rng,
-        );
+        let (dmg, legs) = dismount_fall_damage(DismountReason::Thrown, false, false, &mut rng);
         assert!(dmg >= 10 && dmg <= 19);
         assert!(legs >= 5 && legs <= 9);
     }
@@ -768,9 +753,7 @@ mod tests {
     #[test]
     fn dismount_no_damage_levitating() {
         let mut rng = test_rng();
-        let (dmg, legs) = dismount_fall_damage(
-            DismountReason::Thrown, true, false, &mut rng,
-        );
+        let (dmg, legs) = dismount_fall_damage(DismountReason::Thrown, true, false, &mut rng);
         assert_eq!(dmg, 0);
         assert_eq!(legs, 0);
     }
@@ -778,9 +761,7 @@ mod tests {
     #[test]
     fn dismount_no_damage_by_choice() {
         let mut rng = test_rng();
-        let (dmg, legs) = dismount_fall_damage(
-            DismountReason::ByChoice, false, false, &mut rng,
-        );
+        let (dmg, legs) = dismount_fall_damage(DismountReason::ByChoice, false, false, &mut rng);
         assert_eq!(dmg, 0);
         assert_eq!(legs, 0);
     }

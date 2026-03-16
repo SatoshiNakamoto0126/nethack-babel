@@ -17,9 +17,7 @@ use crate::dungeon::Terrain;
 use crate::event::EngineEvent;
 use crate::monster_ai::MonsterSpeciesFlags;
 use crate::traps::TrapType;
-use crate::world::{
-    Boulder, GameWorld, HitPoints, Monster, Positioned,
-};
+use crate::world::{Boulder, GameWorld, HitPoints, Monster, Positioned};
 
 // ---------------------------------------------------------------------------
 // Movement result
@@ -843,12 +841,10 @@ fn is_terrain_ok(terrain: Terrain, species: MonsterFlags, flags: MfndPosFlags) -
                 || species.contains(MonsterFlags::AMORPHOUS)
         }
         Terrain::Lava => {
-            flags.contains(MfndPosFlags::ALLOW_LAVA)
-                || species.contains(MonsterFlags::FLY)
+            flags.contains(MfndPosFlags::ALLOW_LAVA) || species.contains(MonsterFlags::FLY)
         }
         Terrain::DoorClosed | Terrain::DoorLocked => {
-            flags.contains(MfndPosFlags::BUSTDOOR)
-                || species.contains(MonsterFlags::AMORPHOUS)
+            flags.contains(MfndPosFlags::BUSTDOOR) || species.contains(MonsterFlags::AMORPHOUS)
         }
         Terrain::IronBars => species.contains(MonsterFlags::AMORPHOUS),
         Terrain::Tree => {
@@ -869,8 +865,8 @@ mod tests {
     use super::*;
     use crate::dungeon::Terrain;
     use crate::world::Speed;
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_rng() -> SmallRng {
         SmallRng::seed_from_u64(42)
@@ -892,7 +888,10 @@ mod tests {
         world.spawn((
             Monster,
             Positioned(pos),
-            HitPoints { current: 10, max: 10 },
+            HitPoints {
+                current: 10,
+                max: 10,
+            },
             Speed(12),
             order,
         ))
@@ -907,11 +906,16 @@ mod tests {
         let entity = world.spawn((
             Monster,
             Positioned(pos),
-            HitPoints { current: 10, max: 10 },
+            HitPoints {
+                current: 10,
+                max: 10,
+            },
             Speed(12),
             order,
         ));
-        let _ = world.ecs_mut().insert_one(entity, MonsterSpeciesFlags(flags));
+        let _ = world
+            .ecs_mut()
+            .insert_one(entity, MonsterSpeciesFlags(flags));
         entity
     }
 
@@ -958,7 +962,12 @@ mod tests {
         let mut world = make_test_world();
         let monster = spawn_test_monster(&mut world, Position::new(10, 10));
 
-        let results = mfndpos(&world, monster, Position::new(10, 10), MfndPosFlags::empty());
+        let results = mfndpos(
+            &world,
+            monster,
+            Position::new(10, 10),
+            MfndPosFlags::empty(),
+        );
 
         // All 8 neighbors should be valid (open floor, no other entities nearby).
         // But player is at (5,5), not adjacent, so no conflict.
@@ -969,12 +978,26 @@ mod tests {
     fn mfndpos_excludes_walls() {
         let mut world = make_test_world();
         // Place walls on 3 sides.
-        world.dungeon_mut().current_level.set_terrain(Position::new(9, 10), Terrain::Wall);
-        world.dungeon_mut().current_level.set_terrain(Position::new(11, 10), Terrain::Wall);
-        world.dungeon_mut().current_level.set_terrain(Position::new(10, 9), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(9, 10), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(11, 10), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(10, 9), Terrain::Wall);
 
         let monster = spawn_test_monster(&mut world, Position::new(10, 10));
-        let results = mfndpos(&world, monster, Position::new(10, 10), MfndPosFlags::empty());
+        let results = mfndpos(
+            &world,
+            monster,
+            Position::new(10, 10),
+            MfndPosFlags::empty(),
+        );
 
         // 3 cardinal walls removed, plus 2 diagonals adjacent to walls
         // Actually walls at (9,10), (11,10), (10,9) block those 3 cardinals.
@@ -989,7 +1012,12 @@ mod tests {
         let monster = spawn_test_monster(&mut world, Position::new(10, 10));
         let _blocker = spawn_test_monster(&mut world, Position::new(11, 10));
 
-        let results = mfndpos(&world, monster, Position::new(10, 10), MfndPosFlags::empty());
+        let results = mfndpos(
+            &world,
+            monster,
+            Position::new(10, 10),
+            MfndPosFlags::empty(),
+        );
 
         // One neighbor blocked by another monster.
         assert_eq!(results.len(), 7);
@@ -1029,12 +1057,7 @@ mod tests {
         let mut world = make_test_world();
         let monster = spawn_test_monster(&mut world, Position::new(5, 6));
 
-        let results = mfndpos(
-            &world,
-            monster,
-            Position::new(5, 6),
-            MfndPosFlags::ALLOW_U,
-        );
+        let results = mfndpos(&world, monster, Position::new(5, 6), MfndPosFlags::ALLOW_U);
 
         let has_player_pos = results.iter().any(|e| e.pos == Position::new(5, 5));
         assert!(has_player_pos);
@@ -1043,15 +1066,20 @@ mod tests {
     #[test]
     fn mfndpos_phasing_through_walls() {
         let mut world = make_test_world();
-        world.dungeon_mut().current_level.set_terrain(Position::new(11, 10), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(11, 10), Terrain::Wall);
 
-        let monster = spawn_monster_with_flags(
-            &mut world,
+        let monster =
+            spawn_monster_with_flags(&mut world, Position::new(10, 10), MonsterFlags::WALLWALK);
+
+        let results = mfndpos(
+            &world,
+            monster,
             Position::new(10, 10),
-            MonsterFlags::WALLWALK,
+            MfndPosFlags::empty(),
         );
-
-        let results = mfndpos(&world, monster, Position::new(10, 10), MfndPosFlags::empty());
 
         // Wall at (11,10) should be accessible for wall-walking monster.
         let has_wall_pos = results.iter().any(|e| e.pos == Position::new(11, 10));
@@ -1146,11 +1174,20 @@ mod tests {
         let center = Position::new(10, 10);
         for &dir in &Direction::PLANAR {
             let wall_pos = center.step(dir);
-            world.dungeon_mut().current_level.set_terrain(wall_pos, Terrain::Wall);
+            world
+                .dungeon_mut()
+                .current_level
+                .set_terrain(wall_pos, Terrain::Wall);
         }
 
         let monster = spawn_test_monster(&mut world, center);
-        let (result, _events) = m_move(&mut world, monster, Some(Position::new(15, 10)), true, &mut rng);
+        let (result, _events) = m_move(
+            &mut world,
+            monster,
+            Some(Position::new(15, 10)),
+            true,
+            &mut rng,
+        );
 
         assert_eq!(result, MoveResult::Nothing);
     }
@@ -1232,13 +1269,13 @@ mod tests {
     fn monster_opens_closed_door() {
         let mut world = make_test_world();
         let door_pos = Position::new(10, 10);
-        world.dungeon_mut().current_level.set_terrain(door_pos, Terrain::DoorClosed);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(door_pos, Terrain::DoorClosed);
 
-        let monster = spawn_monster_with_flags(
-            &mut world,
-            Position::new(9, 10),
-            MonsterFlags::HUMANOID,
-        );
+        let monster =
+            spawn_monster_with_flags(&mut world, Position::new(9, 10), MonsterFlags::HUMANOID);
 
         let events = monster_door_interaction(&mut world, monster, door_pos);
 
@@ -1253,14 +1290,14 @@ mod tests {
     fn animal_cannot_open_door() {
         let mut world = make_test_world();
         let door_pos = Position::new(10, 10);
-        world.dungeon_mut().current_level.set_terrain(door_pos, Terrain::DoorClosed);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(door_pos, Terrain::DoorClosed);
 
         // No HUMANOID flag, no GIANT flag.
-        let monster = spawn_monster_with_flags(
-            &mut world,
-            Position::new(9, 10),
-            MonsterFlags::ANIMAL,
-        );
+        let monster =
+            spawn_monster_with_flags(&mut world, Position::new(9, 10), MonsterFlags::ANIMAL);
 
         let events = monster_door_interaction(&mut world, monster, door_pos);
 
@@ -1273,13 +1310,13 @@ mod tests {
     fn giant_breaks_locked_door() {
         let mut world = make_test_world();
         let door_pos = Position::new(10, 10);
-        world.dungeon_mut().current_level.set_terrain(door_pos, Terrain::DoorLocked);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(door_pos, Terrain::DoorLocked);
 
-        let monster = spawn_monster_with_flags(
-            &mut world,
-            Position::new(9, 10),
-            MonsterFlags::GIANT,
-        );
+        let monster =
+            spawn_monster_with_flags(&mut world, Position::new(9, 10), MonsterFlags::GIANT);
 
         let events = monster_door_interaction(&mut world, monster, door_pos);
 

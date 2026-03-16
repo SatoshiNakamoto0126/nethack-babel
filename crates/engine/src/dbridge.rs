@@ -35,11 +35,7 @@ fn d_fixed(n: u32, s: u32) -> u32 {
 /// Read the terrain at `pos` from the current level.
 #[inline]
 fn level_terrain(world: &GameWorld, pos: Position) -> Option<Terrain> {
-    world
-        .dungeon()
-        .current_level
-        .get(pos)
-        .map(|c| c.terrain)
+    world.dungeon().current_level.get(pos).map(|c| c.terrain)
 }
 
 // ---------------------------------------------------------------------------
@@ -78,10 +74,7 @@ pub fn drawbridge_state(world: &GameWorld, pos: Position) -> Option<DrawbridgeSt
 ///
 /// Returns the events produced.  Does nothing if the tile is not an
 /// open drawbridge.
-pub fn raise_drawbridge(
-    world: &mut GameWorld,
-    pos: Position,
-) -> Vec<EngineEvent> {
+pub fn raise_drawbridge(world: &mut GameWorld, pos: Position) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     // Verify it's an open drawbridge.
@@ -161,10 +154,7 @@ pub fn raise_drawbridge(
 ///
 /// Returns the events produced.  Does nothing if the tile is not a wall
 /// (or raised drawbridge).
-pub fn lower_drawbridge(
-    world: &mut GameWorld,
-    pos: Position,
-) -> Vec<EngineEvent> {
+pub fn lower_drawbridge(world: &mut GameWorld, pos: Position) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let terrain = match level_terrain(world, pos) {
@@ -190,10 +180,7 @@ pub fn lower_drawbridge(
 // ---------------------------------------------------------------------------
 
 /// Toggle the drawbridge at `pos`: if open, raise it; if raised, lower it.
-pub fn toggle_drawbridge(
-    world: &mut GameWorld,
-    pos: Position,
-) -> Vec<EngineEvent> {
+pub fn toggle_drawbridge(world: &mut GameWorld, pos: Position) -> Vec<EngineEvent> {
     let terrain = level_terrain(world, pos);
     match terrain {
         Some(Terrain::Drawbridge) => raise_drawbridge(world, pos),
@@ -277,10 +264,7 @@ pub fn bridge_crush_check(
 ///
 /// Based on NetHack's `e_jumps()`: base 4/10 chance, modified by
 /// dexterity.  Each point above 10 adds +1, each below subtracts 1.
-pub fn entity_jumps_clear(
-    dexterity: i32,
-    rng: &mut impl rand::Rng,
-) -> bool {
+pub fn entity_jumps_clear(dexterity: i32, rng: &mut impl rand::Rng) -> bool {
     let mut chance = 4 + (dexterity - 10); // base 4 out of 10
     chance = chance.clamp(0, 9);
     (rng.random_range(0..10i32)) < chance
@@ -311,10 +295,7 @@ pub fn bridge_terrain_below(bridge_type: &str) -> BridgeUnderTerrain {
 ///
 /// Returns the new state.  `"toggle"` flips; `"lower"` / `"raise"` are
 /// idempotent if the bridge is already in the target state.
-pub fn trigger_bridge(
-    current_state: DrawbridgeState,
-    trigger_type: &str,
-) -> DrawbridgeState {
+pub fn trigger_bridge(current_state: DrawbridgeState, trigger_type: &str) -> DrawbridgeState {
     match (current_state, trigger_type) {
         (DrawbridgeState::Raised, "lower") => DrawbridgeState::Open,
         (DrawbridgeState::Open, "raise") => DrawbridgeState::Raised,
@@ -370,12 +351,7 @@ mod tests {
 
     /// Helper to read terrain in tests.
     fn terrain_at(world: &GameWorld, pos: Position) -> Terrain {
-        world
-            .dungeon()
-            .current_level
-            .get(pos)
-            .unwrap()
-            .terrain
+        world.dungeon().current_level.get(pos).unwrap().terrain
     }
 
     // -----------------------------------------------------------------------
@@ -436,7 +412,10 @@ mod tests {
             Monster,
             Positioned(pos),
             Name("orc".to_string()),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Speed(12),
         ));
 
@@ -447,8 +426,11 @@ mod tests {
             world.get_component::<Monster>(monster).is_none(),
             "monster should be destroyed"
         );
-        assert!(events.iter().any(|e| matches!(e,
-            EngineEvent::EntityDied { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityDied { .. }))
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -463,10 +445,7 @@ mod tests {
         let mut map = LevelMap::new(20, 10);
         for y in 0..10 {
             for x in 0..20 {
-                map.set_terrain(
-                    Position::new(x as i32, y as i32),
-                    Terrain::Floor,
-                );
+                map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
             }
         }
         map.set_terrain(bridge_pos, Terrain::Drawbridge);
@@ -496,9 +475,10 @@ mod tests {
             let mut rng = Pcg64Mcg::seed_from_u64(seed as u64);
             let events = strike_drawbridge(&mut world, pos, &mut rng);
 
-            if events.iter().any(|e| matches!(e,
-                EngineEvent::Message { key, .. } if key == "drawbridge-destroyed"))
-            {
+            if events.iter().any(|e| {
+                matches!(e,
+                EngineEvent::Message { key, .. } if key == "drawbridge-destroyed")
+            }) {
                 destroyed += 1;
             }
         }
@@ -517,10 +497,7 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn bridge_crush_flying_dodges() {
-        let entities = vec![
-            ("bat".to_string(), true),
-            ("orc".to_string(), false),
-        ];
+        let entities = vec![("bat".to_string(), true), ("orc".to_string(), false)];
         let results = bridge_crush_check(&entities);
         assert_eq!(results.len(), 2);
         assert_eq!(
@@ -542,12 +519,13 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn bridge_crush_all_grounded() {
-        let entities = vec![
-            ("orc".to_string(), false),
-            ("troll".to_string(), false),
-        ];
+        let entities = vec![("orc".to_string(), false), ("troll".to_string(), false)];
         let results = bridge_crush_check(&entities);
-        assert!(results.iter().all(|r| matches!(r, BridgeCrushResult::Crushed { .. })));
+        assert!(
+            results
+                .iter()
+                .all(|r| matches!(r, BridgeCrushResult::Crushed { .. }))
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -629,7 +607,10 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn bridge_terrain_below_variants() {
-        assert_eq!(bridge_terrain_below("over_water"), BridgeUnderTerrain::Water);
+        assert_eq!(
+            bridge_terrain_below("over_water"),
+            BridgeUnderTerrain::Water
+        );
         assert_eq!(bridge_terrain_below("over_lava"), BridgeUnderTerrain::Lava);
         assert_eq!(bridge_terrain_below("over_moat"), BridgeUnderTerrain::Moat);
         assert_eq!(bridge_terrain_below("moat"), BridgeUnderTerrain::Moat);

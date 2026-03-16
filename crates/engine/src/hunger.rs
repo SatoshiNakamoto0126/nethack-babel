@@ -8,9 +8,7 @@
 use hecs::Entity;
 use rand::Rng;
 
-use nethack_babel_data::{
-    Material, MonsterDef, MonsterFlags, ObjectDef, ResistanceSet,
-};
+use nethack_babel_data::{Material, MonsterDef, MonsterFlags, ObjectDef, ResistanceSet};
 
 use crate::event::{DeathCause, EngineEvent, HpSource, HungerLevel, StatusEffect};
 use crate::world::{GameWorld, HitPoints, Nutrition};
@@ -126,11 +124,7 @@ pub struct CorpseDef {
 
 impl CorpseDef {
     /// Build a CorpseDef from a MonsterDef with player context.
-    pub fn from_monster_def(
-        mon: &MonsterDef,
-        is_same_race: bool,
-        cannibal_allowed: bool,
-    ) -> Self {
+    pub fn from_monster_def(mon: &MonsterDef, is_same_race: bool, cannibal_allowed: bool) -> Self {
         let flags = mon.flags;
         Self {
             name: mon.names.male.clone(),
@@ -144,8 +138,7 @@ impl CorpseDef {
             // Cockatrice-family: symbol 'c' with stoning touch.
             // In practice this is determined by specific PM_* ids;
             // we approximate via the STONE resistance conveyance.
-            flesh_petrifies: mon.conveys.contains(ResistanceSet::STONE)
-                && mon.symbol == 'c',
+            flesh_petrifies: mon.conveys.contains(ResistanceSet::STONE) && mon.symbol == 'c',
             is_giant: flags.contains(MonsterFlags::GIANT),
             is_domestic: flags.contains(MonsterFlags::DOMESTIC),
             is_same_race,
@@ -155,8 +148,7 @@ impl CorpseDef {
                 && flags.contains(MonsterFlags::TPORT),
             nonrotting: false, // Set by caller based on PM check
             is_vegan: !flags.intersects(
-                MonsterFlags::CARNIVORE | MonsterFlags::HERBIVORE
-                    | MonsterFlags::OMNIVORE,
+                MonsterFlags::CARNIVORE | MonsterFlags::HERBIVORE | MonsterFlags::OMNIVORE,
             ),
             is_vegetarian: !flags.contains(MonsterFlags::CARNIVORE)
                 || flags.contains(MonsterFlags::HERBIVORE),
@@ -342,7 +334,11 @@ pub enum FoodConductClass {
 ///
 /// Based on material: Veggy is vegan, Flesh is meat.
 /// Certain specific items have overrides (eggs = vegetarian, etc.)
-pub fn classify_food_conduct(material: Material, is_corpse: bool, corpse_def: Option<&CorpseDef>) -> FoodConductClass {
+pub fn classify_food_conduct(
+    material: Material,
+    is_corpse: bool,
+    corpse_def: Option<&CorpseDef>,
+) -> FoodConductClass {
     if is_corpse {
         if let Some(cd) = corpse_def {
             if cd.is_vegan {
@@ -361,9 +357,7 @@ pub fn classify_food_conduct(material: Material, is_corpse: bool, corpse_def: Op
         Material::Veggy => FoodConductClass::Vegan,
         Material::Flesh => FoodConductClass::Meat,
         Material::Wax => FoodConductClass::Vegetarian,
-        Material::Leather | Material::Bone | Material::DragonHide => {
-            FoodConductClass::Meat
-        }
+        Material::Leather | Material::Bone | Material::DragonHide => FoodConductClass::Meat,
         _ => FoodConductClass::Vegan,
     }
 }
@@ -481,11 +475,7 @@ pub enum AcidOutcome {
 ///
 /// With acid resistance: no damage.
 /// Without: take rnd(15) damage.
-pub fn check_acid(
-    acidic: bool,
-    has_acid_resistance: bool,
-    rng: &mut impl Rng,
-) -> AcidOutcome {
+pub fn check_acid(acidic: bool, has_acid_resistance: bool, rng: &mut impl Rng) -> AcidOutcome {
     if !acidic {
         return AcidOutcome::NotAcidic;
     }
@@ -510,10 +500,7 @@ pub enum StoningOutcome {
 }
 
 /// Check for petrification from eating cockatrice/chickatrice corpse.
-pub fn check_stoning(
-    flesh_petrifies: bool,
-    has_stone_resistance: bool,
-) -> StoningOutcome {
+pub fn check_stoning(flesh_petrifies: bool, has_stone_resistance: bool) -> StoningOutcome {
     if !flesh_petrifies {
         return StoningOutcome::NotPetrifying;
     }
@@ -565,9 +552,13 @@ pub enum CorpseIntrinsic {
     PoisonResistance,
     DisintegrationResistance,
     /// Temporary acid resistance (d(3,6) turns).
-    AcidResistance { duration: u32 },
+    AcidResistance {
+        duration: u32,
+    },
     /// Temporary stone resistance (d(3,6) turns).
-    StoneResistance { duration: u32 },
+    StoneResistance {
+        duration: u32,
+    },
     Telepathy,
     Teleportitis,
     TeleportControl,
@@ -622,23 +613,26 @@ pub fn corpse_intrinsic_by_name(monster_name: &str) -> Option<(CorpseIntrinsic, 
     match monster_name {
         // Fire resistance
         "red dragon" | "baby red dragon" | "red naga" | "fire ant" | "fire elemental"
-        | "fire vortex" | "salamander" | "hell hound pup" | "hell hound"
-            => Some((CorpseIntrinsic::FireResistance, 33)),
+        | "fire vortex" | "salamander" | "hell hound pup" | "hell hound" => {
+            Some((CorpseIntrinsic::FireResistance, 33))
+        }
         // Cold resistance
-        "white dragon" | "baby white dragon" | "frost giant" | "blue jelly"
-        | "ice troll" | "ice vortex" | "winter wolf cub" | "winter wolf"
-            => Some((CorpseIntrinsic::ColdResistance, 33)),
+        "white dragon" | "baby white dragon" | "frost giant" | "blue jelly" | "ice troll"
+        | "ice vortex" | "winter wolf cub" | "winter wolf" => {
+            Some((CorpseIntrinsic::ColdResistance, 33))
+        }
         // Sleep resistance
-        "orange dragon" | "baby orange dragon" | "elf" | "wood elf" | "Green-elf"
-            => Some((CorpseIntrinsic::SleepResistance, 33)),
+        "orange dragon" | "baby orange dragon" | "elf" | "wood elf" | "Green-elf" => {
+            Some((CorpseIntrinsic::SleepResistance, 33))
+        }
         // Shock resistance
         "blue dragon" | "baby blue dragon" | "electric eel" | "storm giant"
-        | "lightning vortex"
-            => Some((CorpseIntrinsic::ShockResistance, 33)),
+        | "lightning vortex" => Some((CorpseIntrinsic::ShockResistance, 33)),
         // Poison resistance
-        "yellow dragon" | "baby yellow dragon" | "killer bee" | "scorpion"
-        | "pit viper" | "cobra" | "water moccasin" | "garter snake"
-            => Some((CorpseIntrinsic::PoisonResistance, 33)),
+        "yellow dragon" | "baby yellow dragon" | "killer bee" | "scorpion" | "pit viper"
+        | "cobra" | "water moccasin" | "garter snake" => {
+            Some((CorpseIntrinsic::PoisonResistance, 33))
+        }
         // Telepathy
         "floating eye" => Some((CorpseIntrinsic::Telepathy, 100)),
         // Teleportitis
@@ -648,9 +642,9 @@ pub fn corpse_intrinsic_by_name(monster_name: &str) -> Option<(CorpseIntrinsic, 
         // See invisible
         "stalker" | "yellow light" => Some((CorpseIntrinsic::SeeInvisible, 33)),
         // Strength gain (giants)
-        "giant" | "stone giant" | "hill giant" | "fire giant" | "frost giant"
-        | "storm giant" | "titan" | "minotaur"
-            => Some((CorpseIntrinsic::Strength, 50)),
+        "giant" | "stone giant" | "hill giant" | "fire giant" | "titan" | "minotaur" => {
+            Some((CorpseIntrinsic::Strength, 50))
+        }
         _ => None,
     }
 }
@@ -682,7 +676,11 @@ pub fn eat_corpse_effects(
     // Poisonous corpse.
     if corpse.poisonous {
         let poison = check_poison(true, has_poison_res, rng);
-        if let PoisonOutcome::Poisoned { hp_damage, str_loss } = poison {
+        if let PoisonOutcome::Poisoned {
+            hp_damage,
+            str_loss,
+        } = poison
+        {
             effects.negative = Some(CorpseNegativeEffect::Poisoned {
                 hp_damage,
                 str_loss,
@@ -724,8 +722,7 @@ fn corpse_post_effect_by_name(name: &str) -> CorpsePostEffect {
         "stalker" => CorpsePostEffect::Invisibility,
         "yellow light" => CorpsePostEffect::Stun { duration: 30 },
         "giant bat" | "bat" => CorpsePostEffect::Stun { duration: 30 },
-        "chameleon" | "doppelganger" | "genetic engineer"
-            => CorpsePostEffect::PolymorphSelf,
+        "chameleon" | "doppelganger" | "genetic engineer" => CorpsePostEffect::PolymorphSelf,
         "displacer beast" => CorpsePostEffect::Displacement { duration: 30 },
         "disenchanter" => CorpsePostEffect::StripIntrinsic,
         "mind flayer" | "master mind flayer" => CorpsePostEffect::GainIntelligence,
@@ -793,10 +790,7 @@ pub fn tin_description(variety: TinVariety, monster_name: &str) -> String {
 ///
 /// For temporary resistances (STONE, ACID), even if the main check fails,
 /// there is a fallback with lower threshold.
-pub fn check_intrinsic_gain(
-    corpse: &CorpseDef,
-    rng: &mut impl Rng,
-) -> Option<CorpseIntrinsic> {
+pub fn check_intrinsic_gain(corpse: &CorpseDef, rng: &mut impl Rng) -> Option<CorpseIntrinsic> {
     let conveys = corpse.conveys;
     let level = corpse.base_level as i32;
 
@@ -846,10 +840,10 @@ pub fn check_intrinsic_gain(
     let selected = candidates[idx];
 
     // If strength is the only candidate, 50% chance of nothing.
-    if candidates.len() == 1 && selected == CorpseIntrinsic::Strength
-        && rng.random_range(0..2) == 0 {
-            return None;
-        }
+    if candidates.len() == 1 && selected == CorpseIntrinsic::Strength && rng.random_range(0..2) == 0
+    {
+        return None;
+    }
 
     // Check should_givit probability.
     match selected {
@@ -1085,11 +1079,7 @@ pub fn eat_corpse(
     // --- Pre-eating effects (cprefx) ---
 
     // Cannibalism check.
-    if let Some(penalty) = check_cannibalism(
-        corpse.is_same_race,
-        corpse.cannibal_allowed,
-        rng,
-    ) {
+    if let Some(penalty) = check_cannibalism(corpse.is_same_race, corpse.cannibal_allowed, rng) {
         events.push(EngineEvent::msg("eat-cannibal"));
         if penalty.aggravate {
             events.push(EngineEvent::StatusApplied {
@@ -1133,14 +1123,7 @@ pub fn eat_corpse(
         let new_nutrition = old_nutrition + nutrition_gain;
 
         // Choking check.
-        let choke = check_choking(
-            new_nutrition,
-            was_satiated,
-            false,
-            false,
-            false,
-            rng,
-        );
+        let choke = check_choking(new_nutrition, was_satiated, false, false, false, rng);
 
         let final_nutrition = match &choke {
             ChokeOutcome::Vomited { nutrition_lost } => {
@@ -1238,89 +1221,82 @@ pub fn eat_corpse(
         }
 
         // Intrinsic gain.
-        if !died
-            && let Some(intrinsic) = check_intrinsic_gain(corpse, rng) {
-                let (status, msg, duration) = match intrinsic {
-                    CorpseIntrinsic::FireResistance => (
-                        StatusEffect::FireResistance,
-                        "You feel a momentary chill.",
-                        None,
-                    ),
-                    CorpseIntrinsic::ColdResistance => (
-                        StatusEffect::ColdResistance,
-                        "You feel full of hot air.",
-                        None,
-                    ),
-                    CorpseIntrinsic::SleepResistance => (
-                        StatusEffect::SleepResistance,
-                        "You feel wide awake.",
-                        None,
-                    ),
-                    CorpseIntrinsic::ShockResistance => (
-                        StatusEffect::ShockResistance,
-                        "Your health currently feels amplified!",
-                        None,
-                    ),
-                    CorpseIntrinsic::PoisonResistance => (
-                        StatusEffect::PoisonResistance,
-                        "You feel healthy.",
-                        None,
-                    ),
-                    CorpseIntrinsic::DisintegrationResistance => (
-                        StatusEffect::DisintegrationResistance,
-                        "You feel very firm.",
-                        None,
-                    ),
-                    CorpseIntrinsic::AcidResistance { duration: d } => (
-                        StatusEffect::FireResistance, // placeholder
-                        "You feel a burning sensation fade.",
-                        Some(d),
-                    ),
-                    CorpseIntrinsic::StoneResistance { duration: d } => (
-                        StatusEffect::Protected, // placeholder
-                        "You feel limber.",
-                        Some(d),
-                    ),
-                    CorpseIntrinsic::Telepathy => (
-                        StatusEffect::Telepathy,
-                        "You feel a strange mental acuity.",
-                        None,
-                    ),
-                    CorpseIntrinsic::Teleportitis => (
-                        StatusEffect::FastSpeed, // placeholder
-                        "You feel very jumpy.",
-                        None,
-                    ),
-                    CorpseIntrinsic::TeleportControl => (
-                        StatusEffect::FastSpeed, // placeholder
-                        "You feel in control of yourself.",
-                        None,
-                    ),
-                    CorpseIntrinsic::Strength => (
-                        StatusEffect::Protected, // placeholder
-                        "You feel strong!",
-                        None,
-                    ),
-                    CorpseIntrinsic::Invisibility => (
-                        StatusEffect::Invisible,
-                        "You feel rather airy.",
-                        None,
-                    ),
-                    CorpseIntrinsic::SeeInvisible => (
-                        StatusEffect::SeeInvisible,
-                        "You can see through yourself.",
-                        None,
-                    ),
-                };
+        if !died && let Some(intrinsic) = check_intrinsic_gain(corpse, rng) {
+            let (status, msg, duration) = match intrinsic {
+                CorpseIntrinsic::FireResistance => (
+                    StatusEffect::FireResistance,
+                    "You feel a momentary chill.",
+                    None,
+                ),
+                CorpseIntrinsic::ColdResistance => (
+                    StatusEffect::ColdResistance,
+                    "You feel full of hot air.",
+                    None,
+                ),
+                CorpseIntrinsic::SleepResistance => {
+                    (StatusEffect::SleepResistance, "You feel wide awake.", None)
+                }
+                CorpseIntrinsic::ShockResistance => (
+                    StatusEffect::ShockResistance,
+                    "Your health currently feels amplified!",
+                    None,
+                ),
+                CorpseIntrinsic::PoisonResistance => {
+                    (StatusEffect::PoisonResistance, "You feel healthy.", None)
+                }
+                CorpseIntrinsic::DisintegrationResistance => (
+                    StatusEffect::DisintegrationResistance,
+                    "You feel very firm.",
+                    None,
+                ),
+                CorpseIntrinsic::AcidResistance { duration: d } => (
+                    StatusEffect::FireResistance, // placeholder
+                    "You feel a burning sensation fade.",
+                    Some(d),
+                ),
+                CorpseIntrinsic::StoneResistance { duration: d } => (
+                    StatusEffect::Protected, // placeholder
+                    "You feel limber.",
+                    Some(d),
+                ),
+                CorpseIntrinsic::Telepathy => (
+                    StatusEffect::Telepathy,
+                    "You feel a strange mental acuity.",
+                    None,
+                ),
+                CorpseIntrinsic::Teleportitis => (
+                    StatusEffect::FastSpeed, // placeholder
+                    "You feel very jumpy.",
+                    None,
+                ),
+                CorpseIntrinsic::TeleportControl => (
+                    StatusEffect::FastSpeed, // placeholder
+                    "You feel in control of yourself.",
+                    None,
+                ),
+                CorpseIntrinsic::Strength => (
+                    StatusEffect::Protected, // placeholder
+                    "You feel strong!",
+                    None,
+                ),
+                CorpseIntrinsic::Invisibility => {
+                    (StatusEffect::Invisible, "You feel rather airy.", None)
+                }
+                CorpseIntrinsic::SeeInvisible => (
+                    StatusEffect::SeeInvisible,
+                    "You can see through yourself.",
+                    None,
+                ),
+            };
 
-                events.push(EngineEvent::msg(msg));
-                events.push(EngineEvent::StatusApplied {
-                    entity: eater,
-                    status,
-                    duration,
-                    source: None,
-                });
-            }
+            events.push(EngineEvent::msg(msg));
+            events.push(EngineEvent::StatusApplied {
+                entity: eater,
+                status,
+                duration,
+                source: None,
+            });
+        }
     }
 
     // Conduct.
@@ -1476,9 +1452,10 @@ pub fn eat_tin(
 
     // Apply nutrition (only if positive).
     if nutrition > 0
-        && let Some(mut n) = world.get_component_mut::<Nutrition>(eater) {
-            n.0 += nutrition;
-        }
+        && let Some(mut n) = world.get_component_mut::<Nutrition>(eater)
+    {
+        n.0 += nutrition;
+    }
 
     // Greasy tins.
     if tin_is_greasy(variety) {
@@ -1664,11 +1641,7 @@ fn rounddiv(x: i32, y: i32) -> i32 {
         return x;
     }
     let t = x / y;
-    if 2 * (x % y) >= y {
-        t + 1
-    } else {
-        t
-    }
+    if 2 * (x % y) >= y { t + 1 } else { t }
 }
 
 // ---------------------------------------------------------------------------
@@ -1809,9 +1782,7 @@ pub fn check_food_rotten(
     let age_diff = current_turn.saturating_sub(food_age) as i32;
     let threshold = if blessed { 50 } else { 30 };
 
-    if age_diff > threshold
-        && (has_orotten_flag || rng.random_range(0..7) == 0)
-    {
+    if age_diff > threshold && (has_orotten_flag || rng.random_range(0..7) == 0) {
         return true;
     }
 
@@ -2166,9 +2137,7 @@ pub fn violates_conduct(food_type: &str) -> ConductViolation {
         "corpse" | "tin" | "meat ring" | "meat stick" | "huge chunk of meat" => {
             ConductViolation::Vegetarian
         }
-        "egg" | "cream pie" | "candy bar" | "lump of royal jelly" => {
-            ConductViolation::Vegan
-        }
+        "egg" | "cream pie" | "candy bar" | "lump of royal jelly" => ConductViolation::Vegan,
         _ => ConductViolation::None,
     }
 }
@@ -2339,10 +2308,7 @@ mod tests {
         let mut rng = test_rng();
 
         let player = world.player();
-        let initial = world
-            .get_component::<Nutrition>(player)
-            .unwrap()
-            .0;
+        let initial = world.get_component::<Nutrition>(player).unwrap().0;
         assert_eq!(initial, 900);
 
         let food = basic_food("food ration", 800, 5, Material::Veggy);
@@ -2350,10 +2316,7 @@ mod tests {
 
         let result = eat_food(&mut world, player, food_entity, &food, &mut rng);
 
-        let after = world
-            .get_component::<Nutrition>(player)
-            .unwrap()
-            .0;
+        let after = world.get_component::<Nutrition>(player).unwrap().0;
         assert_eq!(after, 900 + 800, "nutrition should increase by food value");
         assert!(result.consumed, "food should be consumed");
         assert!(!result.died, "should not die from normal eating");
@@ -2433,7 +2396,10 @@ mod tests {
         for _ in 0..1000 {
             let outcome = check_poison(true, false, &mut rng);
             match outcome {
-                PoisonOutcome::Poisoned { hp_damage, str_loss } => {
+                PoisonOutcome::Poisoned {
+                    hp_damage,
+                    str_loss,
+                } => {
                     assert!(hp_damage >= 1 && hp_damage <= 15);
                     assert!(str_loss >= 1 && str_loss <= 4);
                     poisoned += 1;
@@ -2462,13 +2428,7 @@ mod tests {
         // Floating eye: level 3, conveys telepathy, chance=1.
         // 3 > rn2(1) is always true, so telepathy is always granted
         // (when telepathy is selected as the candidate).
-        let mut corpse = basic_corpse(
-            "floating eye",
-            3,
-            10,
-            10,
-            ResistanceSet::empty(),
-        );
+        let mut corpse = basic_corpse("floating eye", 3, 10, 10, ResistanceSet::empty());
         corpse.conveys_telepathy = true;
 
         // With only telepathy as candidate, it should always be selected
@@ -2476,16 +2436,11 @@ mod tests {
         let mut gained = 0;
         let trials = 100;
         for _ in 0..trials {
-            if let Some(CorpseIntrinsic::Telepathy) =
-                check_intrinsic_gain(&corpse, &mut rng)
-            {
+            if let Some(CorpseIntrinsic::Telepathy) = check_intrinsic_gain(&corpse, &mut rng) {
                 gained += 1;
             }
         }
-        assert_eq!(
-            gained, trials,
-            "floating eye should always grant telepathy"
-        );
+        assert_eq!(gained, trials, "floating eye should always grant telepathy");
     }
 
     // ── Test 6: Cannibalism penalty ─────────────────────────────────
@@ -2610,11 +2565,7 @@ mod tests {
                 false, // tin_blessed
                 &mut rng,
             );
-            assert!(
-                t == 0 || t == 1,
-                "tin opener should give 0 or 1, got {}",
-                t
-            );
+            assert!(t == 0 || t == 1, "tin opener should give 0 or 1, got {}", t);
             times.push(t);
         }
         // Should see both values.
@@ -2631,14 +2582,10 @@ mod tests {
         for _ in 0..100 {
             let t = tin_opening_time(
                 false, // no opener
-                false,
-                false, // no dagger
+                false, false, // no dagger
                 false, // no pick
                 false, // not strong
-                10,
-                10,
-                false,
-                &mut rng,
+                10, 10, false, &mut rng,
             );
             assert!(
                 t >= 10 && t <= 50,
@@ -2654,15 +2601,8 @@ mod tests {
 
         // Strong hero: always 2 turns.
         let t = tin_opening_time(
-            false,
-            false,
-            false,
-            false,
-            true, // is_strong
-            10,
-            10,
-            false,
-            &mut rng,
+            false, false, false, false, true, // is_strong
+            10, 10, false, &mut rng,
         );
         assert_eq!(t, 2, "strong hero should open tin in 2 turns");
     }
@@ -2681,9 +2621,7 @@ mod tests {
         let mut got_strength = 0;
         let trials = 1000;
         for _ in 0..trials {
-            if let Some(CorpseIntrinsic::Strength) =
-                check_intrinsic_gain(&corpse, &mut rng)
-            {
+            if let Some(CorpseIntrinsic::Strength) = check_intrinsic_gain(&corpse, &mut rng) {
                 got_strength += 1;
             }
         }
@@ -2774,7 +2712,10 @@ mod tests {
         let mut rng = test_rng();
 
         // Blessed: always 600.
-        assert_eq!(tin_nutrition(TinVariety::Spinach, 100, true, false, &mut rng), 600);
+        assert_eq!(
+            tin_nutrition(TinVariety::Spinach, 100, true, false, &mut rng),
+            600
+        );
 
         // Uncursed: 401..600.
         for _ in 0..100 {
@@ -2806,8 +2747,8 @@ mod tests {
         for _ in 0..100 {
             let outcome = check_choking(
                 CHOKING_THRESHOLD + 100,
-                true,  // canchoke
-                true,  // breathless
+                true, // canchoke
+                true, // breathless
                 false,
                 false,
                 &mut rng,
@@ -2839,10 +2780,7 @@ mod tests {
 
         let result = eat_food(&mut world, player, food_entity, &food, &mut rng);
 
-        let after = world
-            .get_component::<Nutrition>(player)
-            .unwrap()
-            .0;
+        let after = world.get_component::<Nutrition>(player).unwrap().0;
         assert_eq!(after, 150);
         assert!(!result.died);
         assert!(!result.conduct.broke_vegan, "apple is vegan");
@@ -2864,13 +2802,7 @@ mod tests {
         let corpse_def = basic_corpse("newt", 1, 10, 20, ResistanceSet::empty());
         let corpse_entity = world.spawn((Nutrition(0),));
 
-        let result = eat_corpse(
-            &mut world,
-            player,
-            corpse_entity,
-            &corpse_def,
-            &mut rng,
-        );
+        let result = eat_corpse(&mut world, player, corpse_entity, &corpse_def, &mut rng);
 
         let after = world.get_component::<Nutrition>(player).unwrap().0;
         assert_eq!(after, 220, "should gain 20 nutrition from newt corpse");
@@ -2926,7 +2858,11 @@ mod tests {
         // Base depletion should be 0 when Slow_digestion active.
         for t in 0..20 {
             let d = compute_hunger_depletion(&ctx, t);
-            assert_eq!(d, 0, "Slow_digestion should suppress base depletion at t={}", t);
+            assert_eq!(
+                d, 0,
+                "Slow_digestion should suppress base depletion at t={}",
+                t
+            );
         }
     }
 
@@ -2937,8 +2873,11 @@ mod tests {
             invulnerable: true,
             ..Default::default()
         };
-        assert_eq!(compute_hunger_depletion(&ctx, 5), 0,
-            "invulnerable (praying) should not deplete hunger");
+        assert_eq!(
+            compute_hunger_depletion(&ctx, 5),
+            0,
+            "invulnerable (praying) should not deplete hunger"
+        );
     }
 
     #[test]
@@ -3066,8 +3005,11 @@ mod tests {
             slow_digestion_from_armor: true,
             ..Default::default()
         };
-        assert_eq!(compute_hunger_depletion(&ctx, 0), 2,
-            "Slow_digestion from armor costs hunger at accessorytime=0");
+        assert_eq!(
+            compute_hunger_depletion(&ctx, 0),
+            2,
+            "Slow_digestion from armor costs hunger at accessorytime=0"
+        );
         assert_eq!(compute_hunger_depletion(&ctx, 2), 1);
     }
 
@@ -3124,14 +3066,20 @@ mod tests {
     fn test_hunger_nmod_small_oeaten() {
         // oeaten=2, reqtime=5: oeaten < reqtime, nmod = reqtime % oeaten = 5 % 2 = 1.
         let result = calc_nmod(5, 2);
-        assert_eq!(result.nmod, 1, "nmod should be positive when oeaten < reqtime");
+        assert_eq!(
+            result.nmod, 1,
+            "nmod should be positive when oeaten < reqtime"
+        );
     }
 
     #[test]
     fn test_hunger_nmod_apple() {
         // Apple: nutrition=50, delay=1. nmod = -(50/1) = -50.
         let result = calc_nmod(1, 50);
-        assert_eq!(result.nmod, -50, "apple nmod should be -50 (all nutrition in one bite)");
+        assert_eq!(
+            result.nmod, -50,
+            "apple nmod should be -50 (all nutrition in one bite)"
+        );
     }
 
     #[test]
@@ -3204,7 +3152,10 @@ mod tests {
     fn test_hunger_racial_food_ration_elf() {
         // Food ration for elf: no modifier (only lembas is special).
         let adjusted = adj_victual_nutrition(160, "food ration", HeroRace::Elf);
-        assert_eq!(adjusted, 160, "elf eating food ration should have no modifier");
+        assert_eq!(
+            adjusted, 160,
+            "elf eating food ration should have no modifier"
+        );
     }
 
     // ── Effective nutrition with racial modifiers ────────────────────
@@ -3219,7 +3170,11 @@ mod tests {
         assert_eq!(nmod.nmod, -400);
         let per_bite = adj_victual_nutrition(400, "lembas wafer", HeroRace::Elf);
         assert_eq!(per_bite, 500);
-        assert_eq!(per_bite * 2, 1000, "elf should get ~1000 effective nutrition from lembas");
+        assert_eq!(
+            per_bite * 2,
+            1000,
+            "elf should get ~1000 effective nutrition from lembas"
+        );
     }
 
     #[test]
@@ -3230,7 +3185,11 @@ mod tests {
         assert_eq!(nmod.nmod, -400);
         let per_bite = adj_victual_nutrition(400, "lembas wafer", HeroRace::Orc);
         assert_eq!(per_bite, 300);
-        assert_eq!(per_bite * 2, 600, "orc should get ~600 effective nutrition from lembas");
+        assert_eq!(
+            per_bite * 2,
+            600,
+            "orc should get ~600 effective nutrition from lembas"
+        );
     }
 
     // ── Tainted corpse tests ────────────────────────────────────────
@@ -3271,7 +3230,10 @@ mod tests {
         let result = check_tainted_corpse(150, 100, true, false, false, 5, &mut rng);
         // rotted = 5, which is NOT > 5 for tainted, but IS > 3 for mildly ill.
         assert!(
-            matches!(result, TaintedOutcome::MildlyIll { .. } | TaintedOutcome::Fresh),
+            matches!(
+                result,
+                TaintedOutcome::MildlyIll { .. } | TaintedOutcome::Fresh
+            ),
             "cursed corpse with rotted=5 should be mildly ill or fresh (rng)"
         );
     }
@@ -3290,7 +3252,11 @@ mod tests {
         let mut rng = test_rng();
         // Nonrotting: always fresh regardless of age.
         let result = check_tainted_corpse(10000, 100, false, false, true, 0, &mut rng);
-        assert_eq!(result, TaintedOutcome::Fresh, "nonrotting corpse is always fresh");
+        assert_eq!(
+            result,
+            TaintedOutcome::Fresh,
+            "nonrotting corpse is always fresh"
+        );
     }
 
     // ── Rotten non-corpse food tests ────────────────────────────────
@@ -3358,15 +3324,27 @@ mod tests {
         for _ in 0..trials {
             match rotten_food_effect(&mut rng) {
                 RottenFoodEffect::Confusion { duration } => {
-                    assert!(duration >= 2 && duration <= 8, "confusion duration {} out of range", duration);
+                    assert!(
+                        duration >= 2 && duration <= 8,
+                        "confusion duration {} out of range",
+                        duration
+                    );
                     confusion += 1;
                 }
                 RottenFoodEffect::Blindness { duration } => {
-                    assert!(duration >= 2 && duration <= 20, "blindness duration {} out of range", duration);
+                    assert!(
+                        duration >= 2 && duration <= 20,
+                        "blindness duration {} out of range",
+                        duration
+                    );
                     blindness += 1;
                 }
                 RottenFoodEffect::Unconscious { duration } => {
-                    assert!(duration >= 1 && duration <= 10, "unconscious duration {} out of range", duration);
+                    assert!(
+                        duration >= 1 && duration <= 10,
+                        "unconscious duration {} out of range",
+                        duration
+                    );
                     unconscious += 1;
                 }
                 RottenFoodEffect::Nothing => nothing += 1,
@@ -3382,14 +3360,26 @@ mod tests {
         let uncon_rate = unconscious as f64 / total;
         let noth_rate = nothing as f64 / total;
 
-        assert!((0.20..=0.30).contains(&conf_rate),
-            "confusion rate {:.3} should be ~25%", conf_rate);
-        assert!((0.13..=0.24).contains(&blind_rate),
-            "blindness rate {:.3} should be ~19%", blind_rate);
-        assert!((0.13..=0.24).contains(&uncon_rate),
-            "unconscious rate {:.3} should be ~19%", uncon_rate);
-        assert!((0.30..=0.45).contains(&noth_rate),
-            "nothing rate {:.3} should be ~37%", noth_rate);
+        assert!(
+            (0.20..=0.30).contains(&conf_rate),
+            "confusion rate {:.3} should be ~25%",
+            conf_rate
+        );
+        assert!(
+            (0.13..=0.24).contains(&blind_rate),
+            "blindness rate {:.3} should be ~19%",
+            blind_rate
+        );
+        assert!(
+            (0.13..=0.24).contains(&uncon_rate),
+            "unconscious rate {:.3} should be ~19%",
+            uncon_rate
+        );
+        assert!(
+            (0.30..=0.45).contains(&noth_rate),
+            "nothing rate {:.3} should be ~37%",
+            noth_rate
+        );
     }
 
     // ── Fainting tests ──────────────────────────────────────────────
@@ -3539,8 +3529,11 @@ mod tests {
                 cure_wounded_legs,
                 ..
             } => {
-                assert!(hp_change >= 1 && hp_change <= 20,
-                    "uncursed royal jelly hp_change {} should be 1..20", hp_change);
+                assert!(
+                    hp_change >= 1 && hp_change <= 20,
+                    "uncursed royal jelly hp_change {} should be 1..20",
+                    hp_change
+                );
                 assert!(cure_wounded_legs);
             }
             _ => panic!("should be RoyalJelly effect"),
@@ -3553,8 +3546,11 @@ mod tests {
         let effect = special_food_effect("lump of royal jelly", true, false, false, &mut rng);
         match effect {
             SpecialFoodEffect::RoyalJelly { hp_change, .. } => {
-                assert!(hp_change >= -20 && hp_change <= -1,
-                    "cursed royal jelly hp_change {} should be -20..-1", hp_change);
+                assert!(
+                    hp_change >= -20 && hp_change <= -1,
+                    "cursed royal jelly hp_change {} should be -20..-1",
+                    hp_change
+                );
             }
             _ => panic!("should be RoyalJelly effect"),
         }
@@ -3571,8 +3567,11 @@ mod tests {
     fn test_hunger_special_eucalyptus_leaf_cursed() {
         let mut rng = test_rng();
         let effect = special_food_effect("eucalyptus leaf", true, false, false, &mut rng);
-        assert_eq!(effect, SpecialFoodEffect::None,
-            "cursed eucalyptus leaf should have no effect");
+        assert_eq!(
+            effect,
+            SpecialFoodEffect::None,
+            "cursed eucalyptus leaf should have no effect"
+        );
     }
 
     #[test]
@@ -3581,8 +3580,11 @@ mod tests {
         let effect = special_food_effect("apple", true, false, false, &mut rng);
         match effect {
             SpecialFoodEffect::FallAsleep { duration } => {
-                assert!(duration >= 20 && duration <= 30,
-                    "cursed apple sleep duration {} should be 20..30", duration);
+                assert!(
+                    duration >= 20 && duration <= 30,
+                    "cursed apple sleep duration {} should be 20..30",
+                    duration
+                );
             }
             _ => panic!("cursed apple should cause sleep"),
         }
@@ -3592,30 +3594,41 @@ mod tests {
     fn test_hunger_special_cursed_apple_with_sleep_resist() {
         let mut rng = test_rng();
         let effect = special_food_effect("apple", true, false, true, &mut rng);
-        assert_eq!(effect, SpecialFoodEffect::None,
-            "sleep-resistant hero should not fall asleep from cursed apple");
+        assert_eq!(
+            effect,
+            SpecialFoodEffect::None,
+            "sleep-resistant hero should not fall asleep from cursed apple"
+        );
     }
 
     #[test]
     fn test_hunger_special_uncursed_apple_no_effect() {
         let mut rng = test_rng();
         let effect = special_food_effect("apple", false, false, false, &mut rng);
-        assert_eq!(effect, SpecialFoodEffect::None,
-            "uncursed apple should have no special effect");
+        assert_eq!(
+            effect,
+            SpecialFoodEffect::None,
+            "uncursed apple should have no special effect"
+        );
     }
 
     // ── Nearly full warning ─────────────────────────────────────────
 
     #[test]
     fn test_hunger_nearly_full_warning() {
-        assert!(should_warn_nearly_full(1500, false),
-            "should warn at 1500");
-        assert!(should_warn_nearly_full(1800, false),
-            "should warn above 1500");
-        assert!(!should_warn_nearly_full(1499, false),
-            "should not warn below 1500");
-        assert!(!should_warn_nearly_full(1500, true),
-            "should not warn with Hunger property");
+        assert!(should_warn_nearly_full(1500, false), "should warn at 1500");
+        assert!(
+            should_warn_nearly_full(1800, false),
+            "should warn above 1500"
+        );
+        assert!(
+            !should_warn_nearly_full(1499, false),
+            "should not warn below 1500"
+        );
+        assert!(
+            !should_warn_nearly_full(1500, true),
+            "should not warn with Hunger property"
+        );
     }
 
     // ── Homemade tin nutrition cap ───────────────────────────────────
@@ -3638,20 +3651,62 @@ mod tests {
     #[test]
     fn test_hunger_tin_variety_nutrition() {
         let mut rng = test_rng();
-        assert_eq!(tin_nutrition(TinVariety::Rotten, 100, false, false, &mut rng), -50);
-        assert_eq!(tin_nutrition(TinVariety::Soup, 100, false, false, &mut rng), 20);
-        assert_eq!(tin_nutrition(TinVariety::FrenchFried, 100, false, false, &mut rng), 40);
-        assert_eq!(tin_nutrition(TinVariety::Pickled, 100, false, false, &mut rng), 40);
-        assert_eq!(tin_nutrition(TinVariety::Boiled, 100, false, false, &mut rng), 50);
-        assert_eq!(tin_nutrition(TinVariety::Smoked, 100, false, false, &mut rng), 50);
-        assert_eq!(tin_nutrition(TinVariety::Dried, 100, false, false, &mut rng), 55);
-        assert_eq!(tin_nutrition(TinVariety::DeepFried, 100, false, false, &mut rng), 60);
-        assert_eq!(tin_nutrition(TinVariety::Szechuan, 100, false, false, &mut rng), 70);
-        assert_eq!(tin_nutrition(TinVariety::Broiled, 100, false, false, &mut rng), 80);
-        assert_eq!(tin_nutrition(TinVariety::StirFried, 100, false, false, &mut rng), 80);
-        assert_eq!(tin_nutrition(TinVariety::Sauteed, 100, false, false, &mut rng), 95);
-        assert_eq!(tin_nutrition(TinVariety::Candied, 100, false, false, &mut rng), 100);
-        assert_eq!(tin_nutrition(TinVariety::Pureed, 100, false, false, &mut rng), 500);
+        assert_eq!(
+            tin_nutrition(TinVariety::Rotten, 100, false, false, &mut rng),
+            -50
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::Soup, 100, false, false, &mut rng),
+            20
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::FrenchFried, 100, false, false, &mut rng),
+            40
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::Pickled, 100, false, false, &mut rng),
+            40
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::Boiled, 100, false, false, &mut rng),
+            50
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::Smoked, 100, false, false, &mut rng),
+            50
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::Dried, 100, false, false, &mut rng),
+            55
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::DeepFried, 100, false, false, &mut rng),
+            60
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::Szechuan, 100, false, false, &mut rng),
+            70
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::Broiled, 100, false, false, &mut rng),
+            80
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::StirFried, 100, false, false, &mut rng),
+            80
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::Sauteed, 100, false, false, &mut rng),
+            95
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::Candied, 100, false, false, &mut rng),
+            100
+        );
+        assert_eq!(
+            tin_nutrition(TinVariety::Pureed, 100, false, false, &mut rng),
+            500
+        );
     }
 
     // ── Greasy tin ──────────────────────────────────────────────────
@@ -3703,8 +3758,10 @@ mod tests {
         match outcome {
             ChokeOutcome::Vomited { nutrition_lost } => {
                 // With Hunger: reduces to 60. Lost = 2500 - 60 = 2440.
-                assert_eq!(nutrition_lost, 2440,
-                    "Hunger property should reduce nutrition to 60");
+                assert_eq!(
+                    nutrition_lost, 2440,
+                    "Hunger property should reduce nutrition to 60"
+                );
             }
             _ => panic!("Hunger property should guarantee survival"),
         }
@@ -3738,8 +3795,11 @@ mod tests {
     #[test]
     fn test_hunger_conduct_wax_is_vegetarian() {
         let class = classify_food_conduct(Material::Wax, false, None);
-        assert_eq!(class, FoodConductClass::Vegetarian,
-            "wax items should be vegetarian (not vegan)");
+        assert_eq!(
+            class,
+            FoodConductClass::Vegetarian,
+            "wax items should be vegetarian (not vegan)"
+        );
     }
 
     #[test]
@@ -3786,9 +3846,17 @@ mod tests {
             let expected = -(100 + 10 * con as i32);
             assert_eq!(threshold, expected, "con={} threshold wrong", con);
             // At threshold: alive (strict <).
-            assert!(!should_starve(threshold, con), "con={} at threshold should survive", con);
+            assert!(
+                !should_starve(threshold, con),
+                "con={} at threshold should survive",
+                con
+            );
             // One below: dead.
-            assert!(should_starve(threshold - 1, con), "con={} below threshold should die", con);
+            assert!(
+                should_starve(threshold - 1, con),
+                "con={} below threshold should die",
+                con
+            );
         }
     }
 
@@ -3929,13 +3997,20 @@ mod tests {
         let mut got_poisoned = false;
         for _ in 0..100 {
             let effects = eat_corpse_effects(&corpse, false, false, &mut rng);
-            if let Some(CorpseNegativeEffect::Poisoned { hp_damage, str_loss }) = effects.negative {
+            if let Some(CorpseNegativeEffect::Poisoned {
+                hp_damage,
+                str_loss,
+            }) = effects.negative
+            {
                 assert!(hp_damage >= 1 && hp_damage <= 15);
                 assert!(str_loss >= 1 && str_loss <= 4);
                 got_poisoned = true;
             }
         }
-        assert!(got_poisoned, "should sometimes be poisoned without resistance");
+        assert!(
+            got_poisoned,
+            "should sometimes be poisoned without resistance"
+        );
     }
 
     #[test]
@@ -4094,7 +4169,11 @@ mod tests {
     fn test_cannibalism_effects_repeat() {
         let effects = cannibalism_effects(false);
         assert_eq!(effects.len(), 2);
-        assert!(!effects.iter().any(|e| matches!(e, CannibalismEffect::AggravateMonsters)));
+        assert!(
+            !effects
+                .iter()
+                .any(|e| matches!(e, CannibalismEffect::AggravateMonsters))
+        );
     }
 
     #[test]
@@ -4102,7 +4181,10 @@ mod tests {
         assert_eq!(violates_conduct("corpse"), ConductViolation::Vegetarian);
         assert_eq!(violates_conduct("tin"), ConductViolation::Vegetarian);
         assert_eq!(violates_conduct("meat stick"), ConductViolation::Vegetarian);
-        assert_eq!(violates_conduct("huge chunk of meat"), ConductViolation::Vegetarian);
+        assert_eq!(
+            violates_conduct("huge chunk of meat"),
+            ConductViolation::Vegetarian
+        );
     }
 
     #[test]
@@ -4110,7 +4192,10 @@ mod tests {
         assert_eq!(violates_conduct("egg"), ConductViolation::Vegan);
         assert_eq!(violates_conduct("cream pie"), ConductViolation::Vegan);
         assert_eq!(violates_conduct("candy bar"), ConductViolation::Vegan);
-        assert_eq!(violates_conduct("lump of royal jelly"), ConductViolation::Vegan);
+        assert_eq!(
+            violates_conduct("lump of royal jelly"),
+            ConductViolation::Vegan
+        );
     }
 
     #[test]
@@ -4122,15 +4207,30 @@ mod tests {
 
     #[test]
     fn test_eat_amulet_effects() {
-        assert_eq!(eat_amulet_effect("amulet of strangulation"), AmuletEatEffect::Choke);
-        assert_eq!(eat_amulet_effect("amulet of unchanging"), AmuletEatEffect::Unchanging);
-        assert_eq!(eat_amulet_effect("amulet of life saving"), AmuletEatEffect::LifeSaving);
+        assert_eq!(
+            eat_amulet_effect("amulet of strangulation"),
+            AmuletEatEffect::Choke
+        );
+        assert_eq!(
+            eat_amulet_effect("amulet of unchanging"),
+            AmuletEatEffect::Unchanging
+        );
+        assert_eq!(
+            eat_amulet_effect("amulet of life saving"),
+            AmuletEatEffect::LifeSaving
+        );
         assert_eq!(
             eat_amulet_effect("cheap plastic imitation of the Amulet of Yendor"),
             AmuletEatEffect::Plastic
         );
-        assert_eq!(eat_amulet_effect("Amulet of Yendor"), AmuletEatEffect::RealAmulet);
-        assert_eq!(eat_amulet_effect("amulet of reflection"), AmuletEatEffect::Nutrition(20));
+        assert_eq!(
+            eat_amulet_effect("Amulet of Yendor"),
+            AmuletEatEffect::RealAmulet
+        );
+        assert_eq!(
+            eat_amulet_effect("amulet of reflection"),
+            AmuletEatEffect::Nutrition(20)
+        );
     }
 
     #[test]
@@ -4152,7 +4252,10 @@ mod tests {
             RingEatEffect::GainIntrinsic("slow_digestion")
         );
         // Unknown ring gives nutrition
-        assert_eq!(eat_ring_effect("ring of adornment"), RingEatEffect::Nutrition(15));
+        assert_eq!(
+            eat_ring_effect("ring of adornment"),
+            RingEatEffect::Nutrition(15)
+        );
     }
 
     #[test]

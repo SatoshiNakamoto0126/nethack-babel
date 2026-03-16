@@ -20,10 +20,10 @@ pub struct FovMap {
 ///   y = origin.y + c * YX[i] + d * YY[i]
 ///
 /// This covers all eight octants of the circle.
-static XX: [i32; 8] = [ 1,  0,  0, -1, -1,  0,  0,  1];
-static XY: [i32; 8] = [ 0,  1, -1,  0,  0, -1,  1,  0];
-static YX: [i32; 8] = [ 0,  1,  1,  0,  0, -1, -1,  0];
-static YY: [i32; 8] = [ 1,  0,  0,  1, -1,  0,  0, -1];
+static XX: [i32; 8] = [1, 0, 0, -1, -1, 0, 0, 1];
+static XY: [i32; 8] = [0, 1, -1, 0, 0, -1, 1, 0];
+static YX: [i32; 8] = [0, 1, 1, 0, 0, -1, -1, 0];
+static YY: [i32; 8] = [1, 0, 0, 1, -1, 0, 0, -1];
 
 impl FovMap {
     /// Create a new FOV map of the given dimensions, with nothing visible.
@@ -88,23 +88,22 @@ impl FovMap {
     /// shadowcasting (Bjorn Bergstrom / roguebasin algorithm).
     ///
     /// `is_opaque` returns true if the tile at (x, y) blocks line of sight.
-    pub fn compute(
-        &mut self,
-        origin: Position,
-        radius: u32,
-        is_opaque: impl Fn(i32, i32) -> bool,
-    ) {
+    pub fn compute(&mut self, origin: Position, radius: u32, is_opaque: impl Fn(i32, i32) -> bool) {
         self.clear();
         self.mark(origin.x, origin.y);
 
         for octant in 0..8 {
             self.cast_light(
-                origin.x, origin.y,
+                origin.x,
+                origin.y,
                 radius as i32,
                 1,
-                1.0, 0.0,
-                XX[octant], XY[octant],
-                YX[octant], YY[octant],
+                1.0,
+                0.0,
+                XX[octant],
+                XY[octant],
+                YX[octant],
+                YY[octant],
                 &is_opaque,
             );
         }
@@ -125,13 +124,16 @@ impl FovMap {
     #[allow(clippy::too_many_arguments)]
     fn cast_light(
         &mut self,
-        ox: i32, oy: i32,
+        ox: i32,
+        oy: i32,
         radius: i32,
         depth: i32,
         start_slope: f64,
         end_slope: f64,
-        xx: i32, xy: i32,
-        yx: i32, yy: i32,
+        xx: i32,
+        xy: i32,
+        yx: i32,
+        yy: i32,
         is_opaque: &impl Fn(i32, i32) -> bool,
     ) {
         if start_slope < end_slope || depth > radius {
@@ -178,10 +180,16 @@ impl FovMap {
                 blocked = true;
                 // Recurse for the visible portion before this wall.
                 self.cast_light(
-                    ox, oy, radius,
+                    ox,
+                    oy,
+                    radius,
                     depth + 1,
-                    start, l_slope,
-                    xx, xy, yx, yy,
+                    start,
+                    l_slope,
+                    xx,
+                    xy,
+                    yx,
+                    yy,
                     is_opaque,
                 );
                 new_start = r_slope;
@@ -192,10 +200,16 @@ impl FovMap {
 
         if !blocked {
             self.cast_light(
-                ox, oy, radius,
+                ox,
+                oy,
+                radius,
                 depth + 1,
-                start, end_slope,
-                xx, xy, yx, yy,
+                start,
+                end_slope,
+                xx,
+                xy,
+                yx,
+                yy,
                 is_opaque,
             );
         }
@@ -397,8 +411,7 @@ mod tests {
 
         // Compute via gen block.
         let gen_cells: HashSet<(i32, i32)> =
-            visible_cells_gen(w, h, origin, radius, |_, _| false)
-                .collect();
+            visible_cells_gen(w, h, origin, radius, |_, _| false).collect();
 
         assert_eq!(
             expected, gen_cells,
@@ -426,8 +439,7 @@ mod tests {
         }
 
         let gen_cells: HashSet<(i32, i32)> =
-            visible_cells_gen(w, h, origin, radius, &is_opaque)
-                .collect();
+            visible_cells_gen(w, h, origin, radius, &is_opaque).collect();
 
         assert_eq!(
             expected, gen_cells,
@@ -438,15 +450,9 @@ mod tests {
     #[test]
     fn visible_cells_gen_yields_origin() {
         let origin = Position::new(10, 10);
-        let mut iter = visible_cells_gen(
-            20, 20, origin, 5, |_, _| false,
-        );
+        let mut iter = visible_cells_gen(20, 20, origin, 5, |_, _| false);
         let first = iter.next();
-        assert_eq!(
-            first,
-            Some((10, 10)),
-            "first yielded cell should be origin"
-        );
+        assert_eq!(first, Some((10, 10)), "first yielded cell should be origin");
     }
 
     // ── Blindness FOV tests ──────────────────────────────────────
@@ -465,7 +471,8 @@ mod tests {
                 assert!(
                     fov.is_visible(10 + dx, 10 + dy),
                     "adjacent ({}, {}) should be visible when blind",
-                    10 + dx, 10 + dy,
+                    10 + dx,
+                    10 + dy,
                 );
             }
         }

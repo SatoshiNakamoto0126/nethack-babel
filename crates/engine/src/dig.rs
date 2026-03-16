@@ -70,7 +70,10 @@ pub fn can_dig(world: &GameWorld, pos: Position, direction: Direction) -> bool {
     let dungeon = world.dungeon();
 
     // No-dig branches.
-    if matches!(dungeon.branch, DungeonBranch::Sokoban | DungeonBranch::Endgame) {
+    if matches!(
+        dungeon.branch,
+        DungeonBranch::Sokoban | DungeonBranch::Endgame
+    ) {
         return false;
     }
 
@@ -176,21 +179,22 @@ pub fn dig(
 
     // Handle continuing a dig in progress.
     if let Some(mut state) = digging_state
-        && state.target_pos == target_pos {
-            state.turns_remaining = state.turns_remaining.saturating_sub(1);
-            if state.turns_remaining == 0 {
-                // Dig complete!
-                events.extend(complete_dig(world, target_pos, dig_target));
-                return (events, None);
-            } else {
-                events.push(EngineEvent::msg_with(
-                    "dig-continue",
-                    vec![("turns", state.turns_remaining.to_string())],
-                ));
-                return (events, Some(state));
-            }
+        && state.target_pos == target_pos
+    {
+        state.turns_remaining = state.turns_remaining.saturating_sub(1);
+        if state.turns_remaining == 0 {
+            // Dig complete!
+            events.extend(complete_dig(world, target_pos, dig_target));
+            return (events, None);
+        } else {
+            events.push(EngineEvent::msg_with(
+                "dig-continue",
+                vec![("turns", state.turns_remaining.to_string())],
+            ));
+            return (events, Some(state));
         }
-        // Player changed target — restart.
+    }
+    // Player changed target — restart.
 
     // Start a new dig.
     let turns = dig_turns(tool, dig_target, rng);
@@ -204,7 +208,7 @@ pub fn dig(
     let new_state = DiggingState {
         target_pos,
         turns_remaining: turns - 1, // first turn is spent starting
-        tool: player, // placeholder; in a real impl this would be the tool entity
+        tool: player,               // placeholder; in a real impl this would be the tool entity
     };
 
     events.push(EngineEvent::msg_with(
@@ -261,11 +265,7 @@ fn complete_dig(
 /// undiggable tile or the map boundary.  No multi-turn delay.
 ///
 /// When aimed downward, digs through the floor (creates hole).
-pub fn dig_ray(
-    world: &mut GameWorld,
-    player: Entity,
-    direction: Direction,
-) -> Vec<EngineEvent> {
+pub fn dig_ray(world: &mut GameWorld, player: Entity, direction: Direction) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let player_pos = match world.get_component::<Positioned>(player) {
@@ -566,10 +566,7 @@ pub fn can_monster_tunnel(terrain: Terrain, can_dig_trees: bool) -> bool {
 }
 
 /// Perform monster tunneling: convert the terrain at the target position.
-pub fn monster_tunnel(
-    world: &mut GameWorld,
-    pos: Position,
-) -> Vec<EngineEvent> {
+pub fn monster_tunnel(world: &mut GameWorld, pos: Position) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     let terrain = world
         .dungeon()
@@ -612,9 +609,7 @@ pub enum FillLiquid {
 
 /// Determine if a hole at `pos` should be filled with liquid from
 /// adjacent tiles.
-pub fn fill_hole_liquid(
-    adjacent_terrain: &[Terrain],
-) -> FillLiquid {
+pub fn fill_hole_liquid(adjacent_terrain: &[Terrain]) -> FillLiquid {
     let mut pool_count = 0u32;
     let mut moat_count = 0u32;
     let mut lava_count = 0u32;
@@ -686,10 +681,7 @@ mod tests {
         let player = world.player();
 
         // Place a wall north of the player.
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
         let wall_pos = Position::new(player_pos.x, player_pos.y - 1);
         world
             .dungeon_mut()
@@ -698,19 +690,22 @@ mod tests {
 
         // Start digging.
         let (events, state) = dig(
-            &mut world, player, Direction::North, ToolType::PickAxe, None, &mut rng,
+            &mut world,
+            player,
+            Direction::North,
+            ToolType::PickAxe,
+            None,
+            &mut rng,
         );
 
         // Should be multi-turn: state should exist.
         assert!(state.is_some(), "should start multi-turn dig");
         let mut current_state = state.unwrap();
         assert_eq!(current_state.target_pos, wall_pos);
-        assert!(
-            events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "dig-start"
-            )),
-        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "dig-start"
+        )),);
 
         // Continue digging until complete.
         while current_state.turns_remaining > 0 {
@@ -726,23 +721,16 @@ mod tests {
                 current_state = s;
             } else {
                 // Dig completed.
-                assert!(
-                    cont_events.iter().any(|e| matches!(
-                        e,
-                        EngineEvent::Message { key, .. } if key == "dig-wall-done"
-                    )),
-                );
+                assert!(cont_events.iter().any(|e| matches!(
+                    e,
+                    EngineEvent::Message { key, .. } if key == "dig-wall-done"
+                )),);
                 break;
             }
         }
 
         // The wall should now be a corridor.
-        let terrain = world
-            .dungeon()
-            .current_level
-            .get(wall_pos)
-            .unwrap()
-            .terrain;
+        let terrain = world.dungeon().current_level.get(wall_pos).unwrap().terrain;
         assert_eq!(
             terrain,
             Terrain::Corridor,
@@ -757,10 +745,7 @@ mod tests {
         let player = world.player();
 
         // Set player's position to a floor tile.
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
         world
             .dungeon_mut()
             .current_level
@@ -768,7 +753,12 @@ mod tests {
 
         // Start digging down.
         let (_, state) = dig(
-            &mut world, player, Direction::Down, ToolType::PickAxe, None, &mut rng,
+            &mut world,
+            player,
+            Direction::Down,
+            ToolType::PickAxe,
+            None,
+            &mut rng,
         );
 
         assert!(state.is_some(), "should start multi-turn dig");
@@ -788,19 +778,15 @@ mod tests {
                 current_state = s;
             } else {
                 // Should have created a hole.
-                assert!(
-                    cont_events.iter().any(|e| matches!(
-                        e,
-                        EngineEvent::Message { key, .. } if key == "dig-floor-hole"
-                    )),
-                );
-                assert!(
-                    cont_events.iter().any(|e| matches!(
-                        e,
-                        EngineEvent::TrapRevealed { trap_type, .. }
-                        if *trap_type == nethack_babel_data::TrapType::Hole
-                    )),
-                );
+                assert!(cont_events.iter().any(|e| matches!(
+                    e,
+                    EngineEvent::Message { key, .. } if key == "dig-floor-hole"
+                )),);
+                assert!(cont_events.iter().any(|e| matches!(
+                    e,
+                    EngineEvent::TrapRevealed { trap_type, .. }
+                    if *trap_type == nethack_babel_data::TrapType::Hole
+                )),);
                 break;
             }
         }
@@ -817,10 +803,7 @@ mod tests {
         set_branch(&mut world, DungeonBranch::Sokoban);
 
         // Place a wall north.
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
         let wall_pos = Position::new(player_pos.x, player_pos.y - 1);
         world
             .dungeon_mut()
@@ -828,24 +811,22 @@ mod tests {
             .set_terrain(wall_pos, Terrain::Wall);
 
         let (events, state) = dig(
-            &mut world, player, Direction::North, ToolType::PickAxe, None, &mut rng,
+            &mut world,
+            player,
+            Direction::North,
+            ToolType::PickAxe,
+            None,
+            &mut rng,
         );
 
         assert!(state.is_none(), "should not start digging in Sokoban");
-        assert!(
-            events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "dig-blocked"
-            )),
-        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "dig-blocked"
+        )),);
 
         // Wall should still be there.
-        let terrain = world
-            .dungeon()
-            .current_level
-            .get(wall_pos)
-            .unwrap()
-            .terrain;
+        let terrain = world.dungeon().current_level.get(wall_pos).unwrap().terrain;
         assert_eq!(terrain, Terrain::Wall, "wall should remain in Sokoban");
     }
 
@@ -857,10 +838,7 @@ mod tests {
 
         set_branch(&mut world, DungeonBranch::Endgame);
 
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
         let wall_pos = Position::new(player_pos.x, player_pos.y - 1);
         world
             .dungeon_mut()
@@ -868,16 +846,19 @@ mod tests {
             .set_terrain(wall_pos, Terrain::Wall);
 
         let (events, state) = dig(
-            &mut world, player, Direction::North, ToolType::PickAxe, None, &mut rng,
+            &mut world,
+            player,
+            Direction::North,
+            ToolType::PickAxe,
+            None,
+            &mut rng,
         );
 
         assert!(state.is_none());
-        assert!(
-            events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "dig-blocked"
-            )),
-        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "dig-blocked"
+        )),);
     }
 
     // ── Multi-turn dig tests ──────────────────────────────────────
@@ -892,10 +873,7 @@ mod tests {
             let mut rng = TestRng::seed_from_u64(seed);
             let player = world.player();
 
-            let player_pos = world
-                .get_component::<Positioned>(player)
-                .unwrap()
-                .0;
+            let player_pos = world.get_component::<Positioned>(player).unwrap().0;
             let wall_pos = Position::new(player_pos.x, player_pos.y - 1);
             world
                 .dungeon_mut()
@@ -917,10 +895,7 @@ mod tests {
             }
         }
 
-        assert!(
-            !total_turns.is_empty(),
-            "should have started some digs"
-        );
+        assert!(!total_turns.is_empty(), "should have started some digs");
 
         let min = *total_turns.iter().min().unwrap();
         let max = *total_turns.iter().max().unwrap();
@@ -939,10 +914,7 @@ mod tests {
         let mut world = test_world();
         let player = world.player();
 
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
 
         // Place a line of walls east of the player.
         for dx in 1..=5 {
@@ -958,25 +930,14 @@ mod tests {
         // All 5 walls should be corridors now.
         for dx in 1..=5 {
             let pos = Position::new(player_pos.x + dx, player_pos.y);
-            let terrain = world
-                .dungeon()
-                .current_level
-                .get(pos)
-                .unwrap()
-                .terrain;
-            assert_eq!(
-                terrain,
-                Terrain::Corridor,
-                "wall at dx={dx} should be dug"
-            );
+            let terrain = world.dungeon().current_level.get(pos).unwrap().terrain;
+            assert_eq!(terrain, Terrain::Corridor, "wall at dx={dx} should be dug");
         }
 
-        assert!(
-            events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "dig-ray"
-            )),
-        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "dig-ray"
+        )),);
     }
 
     #[test]
@@ -984,20 +945,29 @@ mod tests {
         let mut world = test_world();
         let player = world.player();
 
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
 
         // Wall, Wall, Floor, Wall — should stop after 2.
         let pos1 = Position::new(player_pos.x + 1, player_pos.y);
         let pos2 = Position::new(player_pos.x + 2, player_pos.y);
         let pos3 = Position::new(player_pos.x + 3, player_pos.y);
         let pos4 = Position::new(player_pos.x + 4, player_pos.y);
-        world.dungeon_mut().current_level.set_terrain(pos1, Terrain::Wall);
-        world.dungeon_mut().current_level.set_terrain(pos2, Terrain::Wall);
-        world.dungeon_mut().current_level.set_terrain(pos3, Terrain::Floor);
-        world.dungeon_mut().current_level.set_terrain(pos4, Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(pos1, Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(pos2, Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(pos3, Terrain::Floor);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(pos4, Terrain::Wall);
 
         dig_ray(&mut world, player, Direction::East);
 
@@ -1030,12 +1000,10 @@ mod tests {
 
         let events = dig_ray(&mut world, player, Direction::East);
 
-        assert!(
-            events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "dig-blocked"
-            )),
-        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "dig-blocked"
+        )),);
     }
 
     // ── can_dig tests ─────────────────────────────────────────────
@@ -1044,7 +1012,10 @@ mod tests {
     fn test_can_dig_wall() {
         let mut world = test_world();
         let pos = Position::new(41, 10);
-        world.dungeon_mut().current_level.set_terrain(pos, Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(pos, Terrain::Wall);
         assert!(can_dig(&world, pos, Direction::East));
     }
 
@@ -1052,7 +1023,10 @@ mod tests {
     fn test_can_dig_floor_down() {
         let mut world = test_world();
         let pos = Position::new(40, 10);
-        world.dungeon_mut().current_level.set_terrain(pos, Terrain::Floor);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(pos, Terrain::Floor);
         assert!(can_dig(&world, pos, Direction::Down));
     }
 
@@ -1060,7 +1034,10 @@ mod tests {
     fn test_cannot_dig_floor_horizontally() {
         let mut world = test_world();
         let pos = Position::new(41, 10);
-        world.dungeon_mut().current_level.set_terrain(pos, Terrain::Floor);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(pos, Terrain::Floor);
         assert!(!can_dig(&world, pos, Direction::East));
     }
 
@@ -1232,14 +1209,8 @@ mod tests {
 
     #[test]
     fn test_watch_dig_warning_then_hostile() {
-        assert_eq!(
-            watch_dig_reaction(true, true, 0),
-            WatchDigReaction::Warning,
-        );
-        assert_eq!(
-            watch_dig_reaction(true, true, 1),
-            WatchDigReaction::Hostile,
-        );
+        assert_eq!(watch_dig_reaction(true, true, 0), WatchDigReaction::Warning,);
+        assert_eq!(watch_dig_reaction(true, true, 1), WatchDigReaction::Hostile,);
     }
 
     // ── Monster tunnel ────────────────────────────────────────────
@@ -1265,7 +1236,10 @@ mod tests {
     fn test_monster_tunnel_converts_terrain() {
         let mut world = test_world();
         let pos = Position::new(41, 10);
-        world.dungeon_mut().current_level.set_terrain(pos, Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(pos, Terrain::Wall);
 
         let events = monster_tunnel(&mut world, pos);
         assert!(!events.is_empty());

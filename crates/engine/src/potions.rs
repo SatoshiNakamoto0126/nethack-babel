@@ -14,8 +14,7 @@ use nethack_babel_data::{BucStatus, ObjectCore};
 use crate::action::Position;
 use crate::event::{DeathCause, EngineEvent, HpSource, StatusEffect};
 use crate::world::{
-    Attributes, ExperienceLevel, GameWorld, HitPoints, Monster, Nutrition,
-    Positioned, Power,
+    Attributes, ExperienceLevel, GameWorld, HitPoints, Monster, Nutrition, Positioned, Power,
 };
 
 // ---------------------------------------------------------------------------
@@ -232,16 +231,10 @@ pub fn quaff_potion<R: Rng>(
         PotionType::Paralysis => effect_paralysis(world, drinker, &buc, rng),
         PotionType::GainLevel => effect_gain_level(world, drinker, &buc, rng),
         PotionType::GainEnergy => effect_gain_energy(world, drinker, &buc, rng),
-        PotionType::MonsterDetection => {
-            effect_monster_detection(world, drinker, &buc, rng)
-        }
-        PotionType::ObjectDetection => {
-            effect_object_detection(world, drinker, &buc, rng)
-        }
+        PotionType::MonsterDetection => effect_monster_detection(world, drinker, &buc, rng),
+        PotionType::ObjectDetection => effect_object_detection(world, drinker, &buc, rng),
         PotionType::Sickness => effect_sickness(world, drinker, &buc, rng),
-        PotionType::RestoreAbility => {
-            effect_restore_ability(world, drinker, &buc, rng)
-        }
+        PotionType::RestoreAbility => effect_restore_ability(world, drinker, &buc, rng),
         PotionType::Water => effect_water(world, drinker, &buc, rng),
         PotionType::Acid => effect_acid(world, drinker, &buc, rng),
         PotionType::Booze => effect_booze(world, drinker, &buc, rng),
@@ -249,9 +242,7 @@ pub fn quaff_potion<R: Rng>(
         PotionType::Oil => effect_oil(world, drinker, &buc, rng),
         PotionType::Polymorph => effect_polymorph(world, drinker, &buc, rng),
         PotionType::Levitation => effect_levitation(world, drinker, &buc, rng),
-        PotionType::Enlightenment => {
-            effect_enlightenment(world, drinker, &buc, rng)
-        }
+        PotionType::Enlightenment => effect_enlightenment(world, drinker, &buc, rng),
     };
 
     // Consume the potion.
@@ -284,12 +275,7 @@ fn has_poison_resistance(world: &GameWorld, entity: Entity) -> bool {
 
 /// Increase HP by `heal` (capped at max), and increase max HP by
 /// `max_increase`.  Returns the events generated.
-fn healup(
-    world: &mut GameWorld,
-    entity: Entity,
-    heal: i32,
-    max_increase: i32,
-) -> Vec<EngineEvent> {
+fn healup(world: &mut GameWorld, entity: Entity, heal: i32, max_increase: i32) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     if let Some(mut hp) = world.get_component_mut::<HitPoints>(entity) {
         if max_increase > 0 {
@@ -369,7 +355,13 @@ fn effect_extra_healing<R: Rng>(
     let bc = bcsign(buc);
     let ndice = (4 + 2 * bc).max(1) as u32;
     let heal = d(rng, ndice, 8) as i32 + 16;
-    let max_increase = if buc.blessed { 5 } else if buc.cursed { 0 } else { 2 };
+    let max_increase = if buc.blessed {
+        5
+    } else if buc.cursed {
+        0
+    } else {
+        2
+    };
 
     events.extend(healup(world, drinker, heal, max_increase));
 
@@ -434,8 +426,7 @@ fn effect_full_healing<R: Rng>(
 
     // Blessed: restore one lost level.
     if buc.blessed
-        && let Some(mut xlvl) =
-            world.get_component_mut::<ExperienceLevel>(drinker)
+        && let Some(mut xlvl) = world.get_component_mut::<ExperienceLevel>(drinker)
     {
         // In a full implementation, we would check u.ulevelmax and
         // decrement it.  Here we just grant +1 level as an approximation.
@@ -771,9 +762,7 @@ fn effect_gain_level<R: Rng>(
 
     if buc.cursed {
         // Cursed: rise through ceiling.  Simplified as lose a level.
-        if let Some(mut xlvl) =
-            world.get_component_mut::<ExperienceLevel>(drinker)
-        {
+        if let Some(mut xlvl) = world.get_component_mut::<ExperienceLevel>(drinker) {
             if xlvl.0 > 1 {
                 xlvl.0 -= 1;
                 events.push(EngineEvent::LevelUp {
@@ -787,9 +776,7 @@ fn effect_gain_level<R: Rng>(
         }
     } else {
         // Uncursed and blessed: gain one level via pluslvl.
-        if let Some(mut xlvl) =
-            world.get_component_mut::<ExperienceLevel>(drinker)
-        {
+        if let Some(mut xlvl) = world.get_component_mut::<ExperienceLevel>(drinker) {
             xlvl.0 = xlvl.0.saturating_add(1).min(30);
             events.push(EngineEvent::LevelUp {
                 entity: drinker,
@@ -849,13 +836,11 @@ fn effect_gain_energy<R: Rng>(
         });
     }
 
-    events.push(EngineEvent::msg(
-        if buc.cursed {
-            "potion-gain-energy-cursed"
-        } else {
-            "potion-gain-energy"
-        },
-    ));
+    events.push(EngineEvent::msg(if buc.cursed {
+        "potion-gain-energy-cursed"
+    } else {
+        "potion-gain-energy"
+    }));
 
     events
 }
@@ -956,29 +941,23 @@ fn effect_sickness<R: Rng>(
     } else {
         // Uncursed/Cursed: poison damage + attribute loss.
         // Check for poison resistance (simplified: check for marker).
-        let poison_resistant =
-            has_poison_resistance(world, drinker);
+        let poison_resistant = has_poison_resistance(world, drinker);
 
         if !poison_resistant {
             // Lose rn1(4, 3) = [3, 7) from a random attribute.
             let attr_loss = rn1(rng, 4, 3);
-            if let Some(mut attrs) =
-                world.get_component_mut::<Attributes>(drinker)
-            {
+            if let Some(mut attrs) = world.get_component_mut::<Attributes>(drinker) {
                 let attr_idx = rng.random_range(0..6u32);
                 for _ in 0..attr_loss {
                     decrease_attribute(&mut attrs, attr_idx);
                 }
             }
             // Lose rnd(10) + 5*(cursed?1:0) HP.
-            let hp_loss =
-                rnd(rng, 10) as i32 + if buc.cursed { 5 } else { 0 };
+            let hp_loss = rnd(rng, 10) as i32 + if buc.cursed { 5 } else { 0 };
             events.extend(apply_damage(world, drinker, hp_loss));
         } else {
             // Poison resistant: lose 1 from random attribute, 1+rn2(2) HP.
-            if let Some(mut attrs) =
-                world.get_component_mut::<Attributes>(drinker)
-            {
+            if let Some(mut attrs) = world.get_component_mut::<Attributes>(drinker) {
                 let attr_idx = rng.random_range(0..6u32);
                 decrease_attribute(&mut attrs, attr_idx);
             }
@@ -1162,13 +1141,11 @@ fn effect_fruit_juice<R: Rng>(
         nut.0 += nutrition_gain;
     }
 
-    events.push(EngineEvent::msg(
-        if buc.cursed {
-            "potion-fruit-juice-rotten"
-        } else {
-            "potion-fruit-juice"
-        },
-    ));
+    events.push(EngineEvent::msg(if buc.cursed {
+        "potion-fruit-juice-rotten"
+    } else {
+        "potion-fruit-juice"
+    }));
 
     events
 }
@@ -1188,13 +1165,11 @@ fn effect_oil<R: Rng>(
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
-    events.push(EngineEvent::msg(
-        if buc.cursed {
-            "potion-oil-cursed"
-        } else {
-            "potion-oil"
-        },
-    ));
+    events.push(EngineEvent::msg(if buc.cursed {
+        "potion-oil-cursed"
+    } else {
+        "potion-oil"
+    }));
 
     events
 }
@@ -1272,9 +1247,7 @@ fn effect_enlightenment<R: Rng>(
 
     if buc.blessed {
         // Blessed: +1 INT, +1 WIS.
-        if let Some(mut attrs) =
-            world.get_component_mut::<Attributes>(drinker)
-        {
+        if let Some(mut attrs) = world.get_component_mut::<Attributes>(drinker) {
             increase_attribute(&mut attrs, 3); // INT
             increase_attribute(&mut attrs, 4); // WIS
         }
@@ -1333,16 +1306,13 @@ pub fn throw_potion<R: Rng>(
     // Apply vapor effects to affected entities.
     for target in &affected {
         match potion_type {
-            PotionType::Healing | PotionType::ExtraHealing
-            | PotionType::FullHealing => {
+            PotionType::Healing | PotionType::ExtraHealing | PotionType::FullHealing => {
                 let heal = match potion_type {
                     PotionType::Healing => d(rng, 6, 4) as i32 + 8,
                     PotionType::ExtraHealing => d(rng, 6, 8) as i32 + 8,
                     PotionType::FullHealing => {
                         // Heal to max for thrown full healing.
-                        if let Some(hp) =
-                            world.get_component::<HitPoints>(*target)
-                        {
+                        if let Some(hp) = world.get_component::<HitPoints>(*target) {
                             (hp.max - hp.current).max(0)
                         } else {
                             0
@@ -1374,9 +1344,7 @@ pub fn throw_potion<R: Rng>(
                     source: Some(thrower),
                 });
             }
-            PotionType::Sleeping
-                if !has_free_action(world, *target) =>
-            {
+            PotionType::Sleeping if !has_free_action(world, *target) => {
                 let duration = rn1(rng, 10, 25).max(0) as u32;
                 events.push(EngineEvent::StatusApplied {
                     entity: *target,
@@ -1385,9 +1353,7 @@ pub fn throw_potion<R: Rng>(
                     source: Some(thrower),
                 });
             }
-            PotionType::Paralysis
-                if !has_free_action(world, *target) =>
-            {
+            PotionType::Paralysis if !has_free_action(world, *target) => {
                 let duration = d(rng, 4, 6);
                 events.push(EngineEvent::StatusApplied {
                     entity: *target,
@@ -1423,7 +1389,8 @@ pub fn throw_potion<R: Rng>(
             PotionType::Sickness => {
                 // Sickness halves HP (like C do_illness).
                 if !has_poison_resistance(world, *target) {
-                    let hp_current = world.get_component::<HitPoints>(*target)
+                    let hp_current = world
+                        .get_component::<HitPoints>(*target)
                         .map(|hp| hp.current);
                     if let Some(cur) = hp_current {
                         if cur > 2 {
@@ -1445,7 +1412,8 @@ pub fn throw_potion<R: Rng>(
             }
             PotionType::RestoreAbility | PotionType::GainAbility => {
                 // These heal monsters when thrown (like C do_healing).
-                let heal_amount = world.get_component::<HitPoints>(*target)
+                let heal_amount = world
+                    .get_component::<HitPoints>(*target)
                     .map(|hp| (hp.max - hp.current).max(0));
                 if let Some(heal) = heal_amount {
                     if heal > 0 {
@@ -1456,10 +1424,11 @@ pub fn throw_potion<R: Rng>(
             PotionType::Water
                 if buc.blessed
                 // Holy water damages undead.
-                && world.get_component::<Monster>(*target).is_some() => {
-                    let dmg = d(rng, 2, 6) as i32;
-                    events.extend(apply_damage(world, *target, dmg));
-                }
+                && world.get_component::<Monster>(*target).is_some() =>
+            {
+                let dmg = d(rng, 2, 6) as i32;
+                events.extend(apply_damage(world, *target, dmg));
+            }
             _ => {
                 // Other potion types have no splash effect.
             }
@@ -1500,11 +1469,7 @@ fn apply_healing(world: &mut GameWorld, entity: Entity, amount: i32) -> Vec<Engi
 }
 
 /// Apply damage to an entity.  May kill them.
-fn apply_damage(
-    world: &mut GameWorld,
-    entity: Entity,
-    amount: i32,
-) -> Vec<EngineEvent> {
+fn apply_damage(world: &mut GameWorld, entity: Entity, amount: i32) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     if let Some(mut hp) = world.get_component_mut::<HitPoints>(entity) {
         hp.current -= amount;
@@ -1616,14 +1581,13 @@ pub fn potion_splash_category(
         PotionType::Confusion | PotionType::Booze => PotionSplashEffect::Confuse,
         PotionType::Hallucination => PotionSplashEffect::Hallucinate,
         PotionType::Polymorph => PotionSplashEffect::Polymorph,
-        PotionType::Healing | PotionType::ExtraHealing
-        | PotionType::FullHealing => PotionSplashEffect::Heal,
+        PotionType::Healing | PotionType::ExtraHealing | PotionType::FullHealing => {
+            PotionSplashEffect::Heal
+        }
         PotionType::Speed => PotionSplashEffect::Speed,
         PotionType::Invisibility => PotionSplashEffect::MakeInvisible,
         PotionType::Sickness => PotionSplashEffect::Sicken,
-        PotionType::RestoreAbility | PotionType::GainAbility => {
-            PotionSplashEffect::Heal
-        }
+        PotionType::RestoreAbility | PotionType::GainAbility => PotionSplashEffect::Heal,
         _ => PotionSplashEffect::NoEffect,
     }
 }
@@ -1666,11 +1630,7 @@ pub enum DilutionState {
 ///
 /// Mirrors C pattern `(odiluted ? (damage+1)/2 : damage)`.
 pub fn diluted_effect(damage: i32, diluted: bool) -> i32 {
-    if diluted {
-        (damage + 1) / 2
-    } else {
-        damage
-    }
+    if diluted { (damage + 1) / 2 } else { damage }
 }
 
 /// Result of dipping a potion in water (or a fountain).
@@ -1768,9 +1728,11 @@ mod tests {
         let mut rng = make_rng();
 
         // Damage the player and test healing for each BUC.
-        for (buc_status, label) in
-            [(&blessed(), "blessed"), (&uncursed(), "uncursed"), (&cursed(), "cursed")]
-        {
+        for (buc_status, label) in [
+            (&blessed(), "blessed"),
+            (&uncursed(), "uncursed"),
+            (&cursed(), "cursed"),
+        ] {
             let mut world = make_world();
             let player = world.player();
 
@@ -1781,13 +1743,7 @@ mod tests {
             }
 
             let potion = spawn_potion(&mut world, buc_status.clone());
-            let events = quaff_potion(
-                &mut world,
-                player,
-                potion,
-                PotionType::Healing,
-                &mut rng,
-            );
+            let events = quaff_potion(&mut world, player, potion, PotionType::Healing, &mut rng);
 
             // Player should have more HP now.
             let hp = world.get_component::<HitPoints>(player).unwrap();
@@ -1847,22 +1803,18 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Speed,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Speed, &mut rng);
 
-        let has_fast = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::FastSpeed,
-                duration: Some(d),
-                ..
-            } if *d > 0
-        ));
+        let has_fast = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::FastSpeed,
+                    duration: Some(d),
+                    ..
+                } if *d > 0
+            )
+        });
         assert!(has_fast, "speed potion should apply timed FastSpeed");
     }
 
@@ -1880,13 +1832,7 @@ mod tests {
         };
 
         let potion = spawn_potion(&mut world, uncursed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::GainLevel,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::GainLevel, &mut rng);
 
         let after = {
             let xlvl = world.get_component::<ExperienceLevel>(player).unwrap();
@@ -1911,13 +1857,7 @@ mod tests {
         }
 
         let potion = spawn_potion(&mut world, cursed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::GainLevel,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::GainLevel, &mut rng);
 
         let after = {
             let xlvl = world.get_component::<ExperienceLevel>(player).unwrap();
@@ -1941,19 +1881,15 @@ mod tests {
         };
 
         let potion = spawn_potion(&mut world, cursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Sickness,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Sickness, &mut rng);
 
         // Cursed sickness should deal HP damage (rnd(10)+5).
-        let has_damage = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::HpChange { amount, .. } if *amount < 0
-        ));
+        let has_damage = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::HpChange { amount, .. } if *amount < 0
+            )
+        });
         assert!(has_damage, "cursed sickness should deal HP damage");
 
         let hp_after = {
@@ -1962,7 +1898,9 @@ mod tests {
         };
         assert!(
             hp_after < hp_before,
-            "HP should decrease from {} to {}", hp_before, hp_after
+            "HP should decrease from {} to {}",
+            hp_before,
+            hp_after
         );
     }
 
@@ -1975,27 +1913,25 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, blessed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Water,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Water, &mut rng);
 
-        let has_cure = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusRemoved {
-                status: StatusEffect::Sick,
-                ..
-            }
-        ));
+        let has_cure = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusRemoved {
+                    status: StatusEffect::Sick,
+                    ..
+                }
+            )
+        });
         assert!(has_cure, "holy water should cure sickness");
 
-        let has_awe = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("enlightenment")
-        ));
+        let has_awe = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key.contains("enlightenment")
+            )
+        });
         assert!(has_awe, "holy water should produce awe message");
     }
 
@@ -2074,30 +2010,25 @@ mod tests {
         let _ = world.ecs_mut().insert_one(player, FreeAction);
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Paralysis,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Paralysis, &mut rng);
 
-        let has_paralysis = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::Paralyzed,
-                ..
-            }
-        ));
-        assert!(
-            !has_paralysis,
-            "paralysis should be blocked by Free_action"
-        );
+        let has_paralysis = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Paralyzed,
+                    ..
+                }
+            )
+        });
+        assert!(!has_paralysis, "paralysis should be blocked by Free_action");
 
-        let has_resist_msg = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("paralysis")
-        ));
+        let has_resist_msg = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key.contains("paralysis")
+            )
+        });
         assert!(has_resist_msg, "should get resistance message");
     }
 
@@ -2159,14 +2090,8 @@ mod tests {
         let player = world.player();
 
         // Spawn some monsters.
-        let _m1 = world.spawn((
-            Monster,
-            Positioned(Position::new(10, 10)),
-        ));
-        let _m2 = world.spawn((
-            Monster,
-            Positioned(Position::new(20, 20)),
-        ));
+        let _m1 = world.spawn((Monster, Positioned(Position::new(10, 10))));
+        let _m2 = world.spawn((Monster, Positioned(Position::new(20, 20))));
 
         let potion = spawn_potion(&mut world, uncursed());
         let events = quaff_potion(
@@ -2199,21 +2124,17 @@ mod tests {
         let _ = world.ecs_mut().insert_one(player, FreeAction);
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Sleeping,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Sleeping, &mut rng);
 
-        let has_sleep = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::Sleeping,
-                ..
-            }
-        ));
+        let has_sleep = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Sleeping,
+                    ..
+                }
+            )
+        });
         assert!(!has_sleep, "sleeping should be blocked by Free_action");
     }
 
@@ -2232,13 +2153,7 @@ mod tests {
         }
 
         let potion = spawn_potion(&mut world, uncursed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::GainEnergy,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::GainEnergy, &mut rng);
 
         let pw = world.get_component::<Power>(player).unwrap();
         assert!(pw.current > 0, "gain energy should restore Pw");
@@ -2254,21 +2169,17 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Acid,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Acid, &mut rng);
 
-        let has_cure = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusRemoved {
-                status: StatusEffect::Stoning,
-                ..
-            }
-        ));
+        let has_cure = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusRemoved {
+                    status: StatusEffect::Stoning,
+                    ..
+                }
+            )
+        });
         assert!(has_cure, "acid potion should emit Stoning removal");
     }
 
@@ -2284,7 +2195,10 @@ mod tests {
         let monster = world.spawn((
             Monster,
             Positioned(Position::new(41, 10)),
-            HitPoints { current: 5, max: 20 },
+            HitPoints {
+                current: 5,
+                max: 20,
+            },
         ));
 
         let potion = spawn_potion(&mut world, uncursed());
@@ -2302,10 +2216,9 @@ mod tests {
         assert!(hp.current > 5, "thrown healing potion should heal target");
 
         // Potion should be destroyed.
-        let has_destroyed = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::ItemDestroyed { .. }
-        ));
+        let has_destroyed = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ItemDestroyed { .. }));
         assert!(has_destroyed, "thrown potion should be destroyed");
     }
 
@@ -2318,22 +2231,18 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Levitation,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Levitation, &mut rng);
 
-        let has_lev = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::Levitating,
-                duration: Some(d),
-                ..
-            } if *d > 0
-        ));
+        let has_lev = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Levitating,
+                    duration: Some(d),
+                    ..
+                } if *d > 0
+            )
+        });
         assert!(has_lev, "levitation should apply timed Levitating status");
     }
 
@@ -2357,13 +2266,7 @@ mod tests {
         assert_eq!(before, 1);
 
         let potion = spawn_potion(&mut world, cursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::GainLevel,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::GainLevel, &mut rng);
 
         // Level should not change (can't go below 1).
         let after = {
@@ -2373,10 +2276,12 @@ mod tests {
         assert_eq!(after, 1, "level should stay at 1");
 
         // Should emit uneasy message.
-        let has_uneasy = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("uneasy")
-        ));
+        let has_uneasy = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key.contains("uneasy")
+            )
+        });
         assert!(has_uneasy, "should emit uneasy message at level 1");
     }
 
@@ -2390,25 +2295,21 @@ mod tests {
 
         // Set player to level 10.
         {
-            let mut xlvl =
-                world.get_component_mut::<ExperienceLevel>(player).unwrap();
+            let mut xlvl = world.get_component_mut::<ExperienceLevel>(player).unwrap();
             xlvl.0 = 10;
         }
 
         let potion = spawn_potion(&mut world, cursed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::GainLevel,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::GainLevel, &mut rng);
 
         let after = {
             let xlvl = world.get_component::<ExperienceLevel>(player).unwrap();
             xlvl.0
         };
-        assert_eq!(after, 9, "cursed gain level should decrease XL from 10 to 9");
+        assert_eq!(
+            after, 9,
+            "cursed gain level should decrease XL from 10 to 9"
+        );
     }
 
     // ── (b) See invisible: cursed gives no effect ─────────────────────
@@ -2428,13 +2329,15 @@ mod tests {
             &mut rng,
         );
 
-        let has_see_invis = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::SeeInvisible,
-                ..
-            }
-        ));
+        let has_see_invis = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::SeeInvisible,
+                    ..
+                }
+            )
+        });
         assert!(
             !has_see_invis,
             "cursed see invisible should NOT grant see invisible"
@@ -2473,13 +2376,15 @@ mod tests {
         );
 
         // Should also cure blindness.
-        let has_blind_cure = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusRemoved {
-                status: StatusEffect::Blind,
-                ..
-            }
-        ));
+        let has_blind_cure = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusRemoved {
+                    status: StatusEffect::Blind,
+                    ..
+                }
+            )
+        });
         assert!(
             has_blind_cure,
             "blessed see invisible should cure blindness"
@@ -2541,13 +2446,7 @@ mod tests {
         };
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Acid,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Acid, &mut rng);
 
         let hp_after = {
             let hp = world.get_component::<HitPoints>(player).unwrap();
@@ -2560,20 +2459,24 @@ mod tests {
         );
 
         // Should still cure stoning.
-        let has_cure = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusRemoved {
-                status: StatusEffect::Stoning,
-                ..
-            }
-        ));
+        let has_cure = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusRemoved {
+                    status: StatusEffect::Stoning,
+                    ..
+                }
+            )
+        });
         assert!(has_cure, "acid should still cure stoning even if resistant");
 
         // Should emit resist message.
-        let has_resist = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("resist")
-        ));
+        let has_resist = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key.contains("resist")
+            )
+        });
         assert!(has_resist, "should emit acid resist message");
     }
 
@@ -2589,8 +2492,7 @@ mod tests {
             let mut rng_b = Pcg64::seed_from_u64(seed);
             let player_b = world_b.player();
             {
-                let mut hp =
-                    world_b.get_component_mut::<HitPoints>(player_b).unwrap();
+                let mut hp = world_b.get_component_mut::<HitPoints>(player_b).unwrap();
                 hp.current = 100;
                 hp.max = 100;
             }
@@ -2631,13 +2533,7 @@ mod tests {
         };
 
         let potion = spawn_potion(&mut world, blessed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Healing,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::Healing, &mut rng);
 
         let hp = world.get_component::<HitPoints>(player).unwrap();
         // Blessed: max HP should increase by 1 when healed amount exceeds
@@ -2664,13 +2560,7 @@ mod tests {
         };
 
         let potion = spawn_potion(&mut world, cursed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Healing,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::Healing, &mut rng);
 
         let hp = world.get_component::<HitPoints>(player).unwrap();
         assert_eq!(
@@ -2688,21 +2578,17 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Healing,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Healing, &mut rng);
 
-        let cures_blind = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusRemoved {
-                status: StatusEffect::Blind,
-                ..
-            }
-        ));
+        let cures_blind = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusRemoved {
+                    status: StatusEffect::Blind,
+                    ..
+                }
+            )
+        });
         assert!(cures_blind, "uncursed healing should cure blindness");
     }
 
@@ -2713,25 +2599,18 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, cursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Healing,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Healing, &mut rng);
 
-        let cures_blind = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusRemoved {
-                status: StatusEffect::Blind,
-                ..
-            }
-        ));
-        assert!(
-            !cures_blind,
-            "cursed healing should NOT cure blindness"
-        );
+        let cures_blind = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusRemoved {
+                    status: StatusEffect::Blind,
+                    ..
+                }
+            )
+        });
+        assert!(!cures_blind, "cursed healing should NOT cure blindness");
     }
 
     // ── Extra healing: cures hallucination ────────────────────────────
@@ -2751,13 +2630,15 @@ mod tests {
             &mut rng,
         );
 
-        let cures_halluc = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusRemoved {
-                status: StatusEffect::Hallucinating,
-                ..
-            }
-        ));
+        let cures_halluc = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusRemoved {
+                    status: StatusEffect::Hallucinating,
+                    ..
+                }
+            )
+        });
         assert!(
             cures_halluc,
             "extra healing should always cure hallucination"
@@ -2851,8 +2732,7 @@ mod tests {
 
         // Set player to level 5.
         {
-            let mut xlvl =
-                world.get_component_mut::<ExperienceLevel>(player).unwrap();
+            let mut xlvl = world.get_component_mut::<ExperienceLevel>(player).unwrap();
             xlvl.0 = 5;
         }
 
@@ -2871,10 +2751,9 @@ mod tests {
         };
         assert_eq!(after, 6, "blessed full healing should restore a level");
 
-        let has_levelup = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::LevelUp { new_level: 6, .. }
-        ));
+        let has_levelup = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::LevelUp { new_level: 6, .. }));
         assert!(has_levelup, "should emit LevelUp event");
     }
 
@@ -2894,21 +2773,12 @@ mod tests {
         }
 
         let potion = spawn_potion(&mut world, cursed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::GainEnergy,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::GainEnergy, &mut rng);
 
         let pw = world.get_component::<Power>(player).unwrap();
         // Cursed: num = d(1,6) then negated -> max decreases, current decreases
         assert!(pw.max < 5, "cursed gain energy should decrease max Pw");
-        assert!(
-            pw.current >= 0,
-            "current Pw should be clamped to >= 0"
-        );
+        assert!(pw.current >= 0, "current Pw should be clamped to >= 0");
     }
 
     // ── Confusion: duration matches spec ranges ───────────────────────
@@ -2922,13 +2792,7 @@ mod tests {
             let player = world.player();
 
             let potion = spawn_potion(&mut world, blessed());
-            let events = quaff_potion(
-                &mut world,
-                player,
-                potion,
-                PotionType::Confusion,
-                &mut rng,
-            );
+            let events = quaff_potion(&mut world, player, potion, PotionType::Confusion, &mut rng);
 
             let dur = events.iter().find_map(|e| match e {
                 EngineEvent::StatusApplied {
@@ -2957,13 +2821,7 @@ mod tests {
             let player = world.player();
 
             let potion = spawn_potion(&mut world, cursed());
-            let events = quaff_potion(
-                &mut world,
-                player,
-                potion,
-                PotionType::Confusion,
-                &mut rng,
-            );
+            let events = quaff_potion(&mut world, player, potion, PotionType::Confusion, &mut rng);
 
             let dur = events.iter().find_map(|e| match e {
                 EngineEvent::StatusApplied {
@@ -2994,13 +2852,7 @@ mod tests {
             let player = world.player();
 
             let potion = spawn_potion(&mut world, cursed());
-            let events = quaff_potion(
-                &mut world,
-                player,
-                potion,
-                PotionType::Paralysis,
-                &mut rng,
-            );
+            let events = quaff_potion(&mut world, player, potion, PotionType::Paralysis, &mut rng);
 
             let dur = events.iter().find_map(|e| match e {
                 EngineEvent::StatusApplied {
@@ -3029,13 +2881,7 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, cursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Levitation,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Levitation, &mut rng);
 
         let dur = events.iter().find_map(|e| match e {
             EngineEvent::StatusApplied {
@@ -3057,13 +2903,7 @@ mod tests {
             let player = world.player();
 
             let potion = spawn_potion(&mut world, blessed());
-            let events = quaff_potion(
-                &mut world,
-                player,
-                potion,
-                PotionType::Levitation,
-                &mut rng,
-            );
+            let events = quaff_potion(&mut world, player, potion, PotionType::Levitation, &mut rng);
 
             let dur = events.iter().find_map(|e| match e {
                 EngineEvent::StatusApplied {
@@ -3100,16 +2940,23 @@ mod tests {
             &mut rng,
         );
 
-        let has_uneasy = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("uneasy")
-        ));
-        assert!(has_uneasy, "cursed enlightenment should emit uneasy message");
+        let has_uneasy = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key.contains("uneasy")
+            )
+        });
+        assert!(
+            has_uneasy,
+            "cursed enlightenment should emit uneasy message"
+        );
 
-        let has_enlighten = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("enlightenment")
-        ));
+        let has_enlighten = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key.contains("enlightenment")
+            )
+        });
         assert!(
             !has_enlighten,
             "cursed enlightenment should NOT emit enlightenment message"
@@ -3167,13 +3014,7 @@ mod tests {
         };
 
         let potion = spawn_potion(&mut world, blessed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Sickness,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::Sickness, &mut rng);
 
         let hp_after = {
             let hp = world.get_component::<HitPoints>(player).unwrap();
@@ -3201,26 +3042,18 @@ mod tests {
             let player = world.player();
 
             let potion = spawn_potion(&mut world, buc_status);
-            let events = quaff_potion(
-                &mut world,
-                player,
-                potion,
-                PotionType::Sickness,
-                &mut rng,
-            );
+            let events = quaff_potion(&mut world, player, potion, PotionType::Sickness, &mut rng);
 
-            let cures_halluc = events.iter().any(|e| matches!(
-                e,
-                EngineEvent::StatusRemoved {
-                    status: StatusEffect::Hallucinating,
-                    ..
-                }
-            ));
-            assert!(
-                cures_halluc,
-                "{} sickness should cure hallucination",
-                label
-            );
+            let cures_halluc = events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusRemoved {
+                        status: StatusEffect::Hallucinating,
+                        ..
+                    }
+                )
+            });
+            assert!(cures_halluc, "{} sickness should cure hallucination", label);
         }
     }
 
@@ -3241,13 +3074,7 @@ mod tests {
         };
 
         let potion = spawn_potion(&mut world, uncursed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Sickness,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::Sickness, &mut rng);
 
         let hp_after = {
             let hp = world.get_component::<HitPoints>(player).unwrap();
@@ -3280,13 +3107,15 @@ mod tests {
             &mut rng,
         );
 
-        let has_aggravate = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::Aggravate,
-                ..
-            }
-        ));
+        let has_aggravate = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Aggravate,
+                    ..
+                }
+            )
+        });
         assert!(
             has_aggravate,
             "cursed invisibility should aggravate monsters"
@@ -3307,22 +3136,13 @@ mod tests {
         };
 
         let potion = spawn_potion(&mut world, uncursed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Oil,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::Oil, &mut rng);
 
         let hp_after = {
             let hp = world.get_component::<HitPoints>(player).unwrap();
             hp.current
         };
-        assert_eq!(
-            hp_after, hp_before,
-            "unlit oil should cause no HP change"
-        );
+        assert_eq!(hp_after, hp_before, "unlit oil should cause no HP change");
     }
 
     // ── Fruit juice: nutrition varies by BUC ──────────────────────────
@@ -3344,13 +3164,8 @@ mod tests {
             };
 
             let potion = spawn_potion(&mut world, buc_status);
-            let _events = quaff_potion(
-                &mut world,
-                player,
-                potion,
-                PotionType::FruitJuice,
-                &mut rng,
-            );
+            let _events =
+                quaff_potion(&mut world, player, potion, PotionType::FruitJuice, &mut rng);
 
             let nut_after = {
                 let n = world.get_component::<Nutrition>(player).unwrap();
@@ -3375,19 +3190,12 @@ mod tests {
         let player = world.player();
 
         {
-            let mut xlvl =
-                world.get_component_mut::<ExperienceLevel>(player).unwrap();
+            let mut xlvl = world.get_component_mut::<ExperienceLevel>(player).unwrap();
             xlvl.0 = 5;
         }
 
         let potion = spawn_potion(&mut world, blessed());
-        let _events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::GainLevel,
-            &mut rng,
-        );
+        let _events = quaff_potion(&mut world, player, potion, PotionType::GainLevel, &mut rng);
 
         let after = {
             let xlvl = world.get_component::<ExperienceLevel>(player).unwrap();
@@ -3540,13 +3348,7 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
             let player = world.player();
             let potion = spawn_potion(&mut world, blessed());
-            let events = quaff_potion(
-                &mut world,
-                player,
-                potion,
-                PotionType::Speed,
-                &mut rng,
-            );
+            let events = quaff_potion(&mut world, player, potion, PotionType::Speed, &mut rng);
 
             let dur = events.iter().find_map(|e| match e {
                 EngineEvent::StatusApplied {
@@ -3576,13 +3378,7 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
             let player = world.player();
             let potion = spawn_potion(&mut world, blessed());
-            let events = quaff_potion(
-                &mut world,
-                player,
-                potion,
-                PotionType::Sleeping,
-                &mut rng,
-            );
+            let events = quaff_potion(&mut world, player, potion, PotionType::Sleeping, &mut rng);
 
             let dur = events.iter().find_map(|e| match e {
                 EngineEvent::StatusApplied {
@@ -3614,7 +3410,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Monster,
         ));
 
@@ -3628,15 +3427,20 @@ mod tests {
             &mut rng,
         );
 
-        let has_invis = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                entity: e,
-                status: StatusEffect::Invisible,
-                ..
-            } if *e == monster
-        ));
-        assert!(has_invis, "thrown invisibility should apply Invisible status");
+        let has_invis = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    entity: e,
+                    status: StatusEffect::Invisible,
+                    ..
+                } if *e == monster
+            )
+        });
+        assert!(
+            has_invis,
+            "thrown invisibility should apply Invisible status"
+        );
     }
 
     // ── Thrown potion: polymorph applies Polymorphed status ──────
@@ -3650,7 +3454,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Monster,
         ));
 
@@ -3664,14 +3471,16 @@ mod tests {
             &mut rng,
         );
 
-        let has_poly = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                entity: e,
-                status: StatusEffect::Polymorphed,
-                ..
-            } if *e == monster
-        ));
+        let has_poly = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    entity: e,
+                    status: StatusEffect::Polymorphed,
+                    ..
+                } if *e == monster
+            )
+        });
         assert!(has_poly, "thrown polymorph should apply Polymorphed status");
     }
 
@@ -3686,7 +3495,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Monster,
         ));
 
@@ -3701,7 +3513,11 @@ mod tests {
         );
 
         let hp = world.get_component::<HitPoints>(monster).unwrap();
-        assert_eq!(hp.current, 10, "thrown sickness should halve HP: got {}", hp.current);
+        assert_eq!(
+            hp.current, 10,
+            "thrown sickness should halve HP: got {}",
+            hp.current
+        );
     }
 
     // ── Thrown potion: sickness does nothing with poison resistance ──
@@ -3715,7 +3531,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Monster,
             PoisonResistance,
         ));
@@ -3731,7 +3550,10 @@ mod tests {
         );
 
         let hp = world.get_component::<HitPoints>(monster).unwrap();
-        assert_eq!(hp.current, 20, "poison resistance should block thrown sickness");
+        assert_eq!(
+            hp.current, 20,
+            "poison resistance should block thrown sickness"
+        );
     }
 
     // ── Thrown potion: booze causes confusion ────────────────────
@@ -3745,7 +3567,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Monster,
         ));
 
@@ -3759,14 +3584,16 @@ mod tests {
             &mut rng,
         );
 
-        let has_conf = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                entity: e,
-                status: StatusEffect::Confused,
-                ..
-            } if *e == monster
-        ));
+        let has_conf = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    entity: e,
+                    status: StatusEffect::Confused,
+                    ..
+                } if *e == monster
+            )
+        });
         assert!(has_conf, "thrown booze should cause confusion");
     }
 
@@ -3781,7 +3608,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 5, max: 20 },
+            HitPoints {
+                current: 5,
+                max: 20,
+            },
             Monster,
         ));
 
@@ -3796,7 +3626,10 @@ mod tests {
         );
 
         let hp = world.get_component::<HitPoints>(monster).unwrap();
-        assert_eq!(hp.current, 20, "thrown restore ability should heal monster to max HP");
+        assert_eq!(
+            hp.current, 20,
+            "thrown restore ability should heal monster to max HP"
+        );
     }
 
     // ── Ghost from bottle: milky potion releases ghost ──────────
@@ -3822,35 +3655,41 @@ mod tests {
 
             if occupant == PotionOccupant::Ghost {
                 // Should have monster generated event.
-                let has_monster = events.iter().any(|e| matches!(
-                    e,
-                    EngineEvent::MonsterGenerated { .. }
-                ));
+                let has_monster = events
+                    .iter()
+                    .any(|e| matches!(e, EngineEvent::MonsterGenerated { .. }));
                 assert!(has_monster, "ghost should generate a monster");
 
-                let has_msg = events.iter().any(|e| matches!(
-                    e,
-                    EngineEvent::Message { key, .. } if key == "ghost-from-bottle"
-                ));
+                let has_msg = events.iter().any(|e| {
+                    matches!(
+                        e,
+                        EngineEvent::Message { key, .. } if key == "ghost-from-bottle"
+                    )
+                });
                 assert!(has_msg, "should emit ghost-from-bottle message");
 
                 // Ghost should paralyze the drinker.
-                let has_para = events.iter().any(|e| matches!(
-                    e,
-                    EngineEvent::StatusApplied {
-                        entity: e,
-                        status: StatusEffect::Paralyzed,
-                        duration: Some(3),
-                        ..
-                    } if *e == player
-                ));
+                let has_para = events.iter().any(|e| {
+                    matches!(
+                        e,
+                        EngineEvent::StatusApplied {
+                            entity: e,
+                            status: StatusEffect::Paralyzed,
+                            duration: Some(3),
+                            ..
+                        } if *e == player
+                    )
+                });
                 assert!(has_para, "ghost should paralyze drinker for 3 turns");
 
                 found_ghost = true;
                 break;
             }
         }
-        assert!(found_ghost, "milky potion should eventually release a ghost");
+        assert!(
+            found_ghost,
+            "milky potion should eventually release a ghost"
+        );
     }
 
     // ── Djinni from bottle: smoky potion releases djinni ────────
@@ -3873,23 +3712,27 @@ mod tests {
             );
 
             if occupant == PotionOccupant::Djinni {
-                let has_monster = events.iter().any(|e| matches!(
-                    e,
-                    EngineEvent::MonsterGenerated { .. }
-                ));
+                let has_monster = events
+                    .iter()
+                    .any(|e| matches!(e, EngineEvent::MonsterGenerated { .. }));
                 assert!(has_monster, "djinni should generate a monster");
 
-                let has_msg = events.iter().any(|e| matches!(
-                    e,
-                    EngineEvent::Message { key, .. } if key == "djinni-from-bottle"
-                ));
+                let has_msg = events.iter().any(|e| {
+                    matches!(
+                        e,
+                        EngineEvent::Message { key, .. } if key == "djinni-from-bottle"
+                    )
+                });
                 assert!(has_msg, "should emit djinni-from-bottle message");
 
                 found_djinni = true;
                 break;
             }
         }
-        assert!(found_djinni, "smoky potion should eventually release a djinni");
+        assert!(
+            found_djinni,
+            "smoky potion should eventually release a djinni"
+        );
     }
 
     // ── No occupant for non-special appearance ──────────────────
@@ -3900,15 +3743,13 @@ mod tests {
         let player = world.player();
         let mut rng = make_rng();
 
-        let (occupant, events) = check_potion_occupant(
-            &mut world,
-            player,
-            PotionAppearance::Other,
-            0,
-            0,
-            &mut rng,
+        let (occupant, events) =
+            check_potion_occupant(&mut world, player, PotionAppearance::Other, 0, 0, &mut rng);
+        assert_eq!(
+            occupant,
+            PotionOccupant::None,
+            "Other appearance should never have occupant"
         );
-        assert_eq!(occupant, PotionOccupant::None, "Other appearance should never have occupant");
         assert!(events.is_empty(), "no events for non-special appearance");
     }
 
@@ -3957,7 +3798,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 3, max: 20 },
+            HitPoints {
+                current: 3,
+                max: 20,
+            },
             Monster,
         ));
 
@@ -3972,7 +3816,10 @@ mod tests {
         );
 
         let hp = world.get_component::<HitPoints>(monster).unwrap();
-        assert_eq!(hp.current, 20, "thrown gain ability should heal monster to max HP");
+        assert_eq!(
+            hp.current, 20,
+            "thrown gain ability should heal monster to max HP"
+        );
     }
 
     // ── Quaff: Levitation applies status ─────────────────────────
@@ -3984,22 +3831,21 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Levitation,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Levitation, &mut rng);
 
-        let has_lev = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::Levitating,
-                ..
-            }
-        ));
-        assert!(has_lev, "quaffing levitation should apply Levitating status");
+        let has_lev = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Levitating,
+                    ..
+                }
+            )
+        });
+        assert!(
+            has_lev,
+            "quaffing levitation should apply Levitating status"
+        );
     }
 
     // ── Quaff: Oil applies status or message ─────────────────────
@@ -4011,19 +3857,13 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Oil,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Oil, &mut rng);
 
         // Oil potion should produce some event (slippery message or status).
         // At minimum the potion is consumed (ItemDestroyed).
-        let has_destroyed = events.iter().any(|e| matches!(
-            e, EngineEvent::ItemDestroyed { .. }
-        ));
+        let has_destroyed = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ItemDestroyed { .. }));
         assert!(has_destroyed, "quaffing oil should consume the potion");
     }
 
@@ -4036,22 +3876,21 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Polymorph,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Polymorph, &mut rng);
 
-        let has_poly = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::Polymorphed,
-                ..
-            }
-        ));
-        assert!(has_poly, "quaffing polymorph should apply Polymorphed status");
+        let has_poly = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Polymorphed,
+                    ..
+                }
+            )
+        });
+        assert!(
+            has_poly,
+            "quaffing polymorph should apply Polymorphed status"
+        );
     }
 
     // ── Quaff: Water produces message ────────────────────────────
@@ -4063,18 +3902,12 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Water,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Water, &mut rng);
 
         // Potion should be consumed.
-        let has_destroyed = events.iter().any(|e| matches!(
-            e, EngineEvent::ItemDestroyed { .. }
-        ));
+        let has_destroyed = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ItemDestroyed { .. }));
         assert!(has_destroyed, "quaffing water should consume the potion");
     }
 
@@ -4087,13 +3920,7 @@ mod tests {
         let player = world.player();
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::Booze,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::Booze, &mut rng);
 
         // Booze should produce confusion or nutrition events.
         assert!(!events.is_empty(), "quaffing booze should produce events");
@@ -4113,19 +3940,16 @@ mod tests {
         }
 
         let potion = spawn_potion(&mut world, uncursed());
-        let events = quaff_potion(
-            &mut world,
-            player,
-            potion,
-            PotionType::FruitJuice,
-            &mut rng,
-        );
+        let events = quaff_potion(&mut world, player, potion, PotionType::FruitJuice, &mut rng);
 
         // At minimum the potion is consumed.
-        let has_destroyed = events.iter().any(|e| matches!(
-            e, EngineEvent::ItemDestroyed { .. }
-        ));
-        assert!(has_destroyed, "quaffing fruit juice should consume the potion");
+        let has_destroyed = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ItemDestroyed { .. }));
+        assert!(
+            has_destroyed,
+            "quaffing fruit juice should consume the potion"
+        );
     }
 
     // ── Splash category: acid ────────────────────────────────────
@@ -4309,7 +4133,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Monster,
         ));
 
@@ -4342,7 +4169,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Monster,
         ));
 
@@ -4356,14 +4186,16 @@ mod tests {
             &mut rng,
         );
 
-        let has_sleep = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                entity: e,
-                status: StatusEffect::Sleeping,
-                ..
-            } if *e == monster
-        ));
+        let has_sleep = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    entity: e,
+                    status: StatusEffect::Sleeping,
+                    ..
+                } if *e == monster
+            )
+        });
         assert!(has_sleep, "thrown sleeping should apply Sleeping status");
     }
 
@@ -4378,7 +4210,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Monster,
         ));
 
@@ -4392,14 +4227,16 @@ mod tests {
             &mut rng,
         );
 
-        let has_para = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                entity: e,
-                status: StatusEffect::Paralyzed,
-                ..
-            } if *e == monster
-        ));
+        let has_para = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    entity: e,
+                    status: StatusEffect::Paralyzed,
+                    ..
+                } if *e == monster
+            )
+        });
         assert!(has_para, "thrown paralysis should apply Paralyzed status");
     }
 
@@ -4414,7 +4251,10 @@ mod tests {
         let target_pos = Position::new(41, 10);
         let monster = world.spawn((
             Positioned(target_pos),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Monster,
         ));
 
@@ -4428,14 +4268,16 @@ mod tests {
             &mut rng,
         );
 
-        let has_blind = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                entity: e,
-                status: StatusEffect::Blind,
-                ..
-            } if *e == monster
-        ));
+        let has_blind = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    entity: e,
+                    status: StatusEffect::Blind,
+                    ..
+                } if *e == monster
+            )
+        });
         assert!(has_blind, "thrown blindness should apply Blind status");
     }
 

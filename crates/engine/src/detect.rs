@@ -34,11 +34,7 @@ pub fn detect_monsters(world: &GameWorld, player: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     let mut detected: Vec<DetectedMonster> = Vec::new();
 
-    for (entity, (_monster, pos)) in world
-        .ecs()
-        .query::<(&Monster, &Positioned)>()
-        .iter()
-    {
+    for (entity, (_monster, pos)) in world.ecs().query::<(&Monster, &Positioned)>().iter() {
         if entity == player {
             continue;
         }
@@ -92,11 +88,7 @@ pub fn detect_objects(world: &GameWorld, _player: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     let mut detected: Vec<DetectedObject> = Vec::new();
 
-    for (entity, (core, loc)) in world
-        .ecs()
-        .query::<(&ObjectCore, &ObjectLocation)>()
-        .iter()
-    {
+    for (entity, (core, loc)) in world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter() {
         if let ObjectLocation::Floor { x, y } = *loc {
             let pos = Position::new(x as i32, y as i32);
             detected.push(DetectedObject {
@@ -166,15 +158,12 @@ pub fn detect_food(world: &GameWorld, _player: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     let mut count = 0u32;
 
-    for (_entity, (core, loc)) in world
-        .ecs()
-        .query::<(&ObjectCore, &ObjectLocation)>()
-        .iter()
-    {
+    for (_entity, (core, loc)) in world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter() {
         if core.object_class == ObjectClass::Food
-            && let ObjectLocation::Floor { .. } = *loc {
-                count += 1;
-            }
+            && let ObjectLocation::Floor { .. } = *loc
+        {
+            count += 1;
+        }
     }
 
     if count == 0 {
@@ -199,11 +188,7 @@ pub fn detect_food(world: &GameWorld, _player: Entity) -> Vec<EngineEvent> {
 /// Sets `explored = true` on all cells within `radius` Manhattan distance
 /// of the player's position.  Returns a message summarizing the area
 /// revealed.
-pub fn clairvoyance(
-    world: &mut GameWorld,
-    player: Entity,
-    radius: i32,
-) -> Vec<EngineEvent> {
+pub fn clairvoyance(world: &mut GameWorld, player: Entity, radius: i32) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let player_pos = match world.get_component::<Positioned>(player) {
@@ -458,11 +443,7 @@ pub fn detect_gold(world: &GameWorld, _player: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     let mut positions: Vec<Position> = Vec::new();
 
-    for (_entity, (core, loc)) in world
-        .ecs()
-        .query::<(&ObjectCore, &ObjectLocation)>()
-        .iter()
-    {
+    for (_entity, (core, loc)) in world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter() {
         if core.object_class == ObjectClass::Coin {
             if let ObjectLocation::Floor { x, y } = *loc {
                 positions.push(Position::new(x as i32, y as i32));
@@ -515,11 +496,7 @@ pub fn reveal_monsters_in_area(
     let mut events = Vec::new();
     let mut positions = Vec::new();
 
-    for (entity, (_monster, pos)) in world
-        .ecs()
-        .query::<(&Monster, &Positioned)>()
-        .iter()
-    {
+    for (entity, (_monster, pos)) in world.ecs().query::<(&Monster, &Positioned)>().iter() {
         if entity == player {
             continue;
         }
@@ -552,9 +529,7 @@ mod tests {
     use crate::action::Position;
     use crate::traps::{TrapInstance, TrapMap};
     use crate::world::{GameWorld, Monster, Name, Positioned};
-    use nethack_babel_data::{
-        ObjectClass, ObjectCore, ObjectLocation, ObjectTypeId, TrapType,
-    };
+    use nethack_babel_data::{ObjectClass, ObjectCore, ObjectLocation, ObjectTypeId, TrapType};
 
     /// Helper: create a game world with a standard map.
     fn test_world() -> GameWorld {
@@ -563,19 +538,11 @@ mod tests {
 
     /// Spawn a monster entity on the level.
     fn spawn_monster(world: &mut GameWorld, pos: Position, name: &str) -> Entity {
-        world.spawn((
-            Monster,
-            Positioned(pos),
-            Name(name.to_string()),
-        ))
+        world.spawn((Monster, Positioned(pos), Name(name.to_string())))
     }
 
     /// Spawn a floor item entity.
-    fn spawn_floor_item(
-        world: &mut GameWorld,
-        pos: Position,
-        class: ObjectClass,
-    ) -> Entity {
+    fn spawn_floor_item(world: &mut GameWorld, pos: Position, class: ObjectClass) -> Entity {
         let core = ObjectCore {
             otyp: ObjectTypeId(1),
             object_class: class,
@@ -607,11 +574,16 @@ mod tests {
         let events = detect_monsters(&world, player);
 
         // Should have exactly one Message event with count=3.
-        let msg = events.iter().find(|e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-monsters-found"));
+        let msg = events.iter().find(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-monsters-found"),
+        );
         assert!(msg.is_some(), "should emit detect-monsters-found");
 
         if let EngineEvent::Message { args, .. } = msg.unwrap() {
-            let count = args.iter().find(|(k, _)| k == "count").map(|(_, v)| v.as_str());
+            let count = args
+                .iter()
+                .find(|(k, _)| k == "count")
+                .map(|(_, v)| v.as_str());
             assert_eq!(count, Some("3"));
         }
     }
@@ -622,7 +594,9 @@ mod tests {
         let player = world.player();
 
         let events = detect_monsters(&world, player);
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-monsters-none")));
+        assert!(events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-monsters-none")
+        ));
     }
 
     // ── Detect Objects ─────────────────────────────────────────────
@@ -637,11 +611,16 @@ mod tests {
 
         let events = detect_objects(&world, player);
 
-        let msg = events.iter().find(|e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-objects-found"));
+        let msg = events.iter().find(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-objects-found"),
+        );
         assert!(msg.is_some(), "should emit detect-objects-found");
 
         if let EngineEvent::Message { args, .. } = msg.unwrap() {
-            let count = args.iter().find(|(k, _)| k == "count").map(|(_, v)| v.as_str());
+            let count = args
+                .iter()
+                .find(|(k, _)| k == "count")
+                .map(|(_, v)| v.as_str());
             assert_eq!(count, Some("2"));
         }
     }
@@ -652,7 +631,9 @@ mod tests {
         let player = world.player();
 
         let events = detect_objects(&world, player);
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-objects-none")));
+        assert!(events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-objects-none")
+        ));
     }
 
     // ── Detect Traps ───────────────────────────────────────────────
@@ -696,9 +677,7 @@ mod tests {
         // Place a trap that is already detected.
         let mut trap = TrapInstance::new(Position::new(5, 5), TrapType::BearTrap);
         trap.detected = true;
-        world.dungeon_mut().trap_map = TrapMap {
-            traps: vec![trap],
-        };
+        world.dungeon_mut().trap_map = TrapMap { traps: vec![trap] };
 
         let events = detect_traps(&mut world, player);
 
@@ -708,7 +687,11 @@ mod tests {
             .filter(|e| matches!(e, EngineEvent::TrapRevealed { .. }))
             .count();
         assert_eq!(revealed_count, 0);
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-traps-none")));
+        assert!(
+            events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-traps-none")
+            )
+        );
     }
 
     // ── Clairvoyance ───────────────────────────────────────────────
@@ -727,11 +710,7 @@ mod tests {
             for dx in -3..=3_i32 {
                 let x = 40 + dx;
                 let y = 10 + dy;
-                if x >= 0
-                    && y >= 0
-                    && (x as usize) < level.width
-                    && (y as usize) < level.height
-                {
+                if x >= 0 && y >= 0 && (x as usize) < level.width && (y as usize) < level.height {
                     assert!(
                         level.cells[y as usize][x as usize].explored,
                         "cell ({x}, {y}) should be explored"
@@ -747,7 +726,9 @@ mod tests {
         );
 
         // Should have a message.
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "clairvoyance-reveal")));
+        assert!(events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "clairvoyance-reveal")
+        ));
     }
 
     // ── Detect Food ────────────────────────────────────────────────
@@ -764,10 +745,15 @@ mod tests {
 
         let events = detect_food(&world, player);
 
-        let msg = events.iter().find(|e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-food-found"));
+        let msg = events
+            .iter()
+            .find(|e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-food-found"));
         assert!(msg.is_some());
         if let EngineEvent::Message { args, .. } = msg.unwrap() {
-            let count = args.iter().find(|(k, _)| k == "count").map(|(_, v)| v.as_str());
+            let count = args
+                .iter()
+                .find(|(k, _)| k == "count")
+                .map(|(_, v)| v.as_str());
             assert_eq!(count, Some("2"), "should find 2 food items");
         }
     }
@@ -780,7 +766,11 @@ mod tests {
         spawn_floor_item(&mut world, Position::new(5, 5), ObjectClass::Weapon);
 
         let events = detect_food(&world, player);
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-food-none")));
+        assert!(
+            events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-food-none")
+            )
+        );
     }
 
     // ── Dosearch ──────────────────────────────────────────────────
@@ -795,9 +785,10 @@ mod tests {
 
         // Place a trap adjacent to the player (40, 10) -> (41, 10).
         world.dungeon_mut().trap_map = TrapMap {
-            traps: vec![
-                TrapInstance::new(Position::new(41, 10), TrapType::ArrowTrap),
-            ],
+            traps: vec![TrapInstance::new(
+                Position::new(41, 10),
+                TrapType::ArrowTrap,
+            )],
         };
 
         // Search repeatedly with high bonus + luck to ensure it triggers.
@@ -827,9 +818,7 @@ mod tests {
 
         // Place a trap far from the player.
         world.dungeon_mut().trap_map = TrapMap {
-            traps: vec![
-                TrapInstance::new(Position::new(20, 5), TrapType::ArrowTrap),
-            ],
+            traps: vec![TrapInstance::new(Position::new(20, 5), TrapType::ArrowTrap)],
         };
 
         let mut rng = SmallRng::seed_from_u64(42);
@@ -899,10 +888,7 @@ mod tests {
         let (result, events) = crystal_ball_look(&mut world, center, 5, 18, &mut rng);
 
         assert!(!result.failed, "high wisdom should not fail");
-        assert!(
-            !result.revealed.is_empty(),
-            "should reveal some cells"
-        );
+        assert!(!result.revealed.is_empty(), "should reveal some cells");
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "crystal-ball-reveal"
@@ -939,13 +925,18 @@ mod tests {
         spawn_floor_item(&mut world, Position::new(15, 15), ObjectClass::Coin);
 
         let events = detect_gold(&world, player);
-        let msg = events.iter().find(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "detect-gold-found"
-        ));
+        let msg = events.iter().find(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "detect-gold-found"
+            )
+        });
         assert!(msg.is_some(), "should emit detect-gold-found");
         if let EngineEvent::Message { args, .. } = msg.unwrap() {
-            let count = args.iter().find(|(k, _)| k == "count").map(|(_, v)| v.as_str());
+            let count = args
+                .iter()
+                .find(|(k, _)| k == "count")
+                .map(|(_, v)| v.as_str());
             assert_eq!(count, Some("2"));
         }
     }
@@ -971,9 +962,9 @@ mod tests {
         let mut world = test_world();
         let player = world.player();
 
-        spawn_monster(&mut world, Position::new(41, 10), "goblin");   // distance 1
-        spawn_monster(&mut world, Position::new(43, 12), "orc");      // distance 3
-        spawn_monster(&mut world, Position::new(50, 10), "troll");    // distance 10
+        spawn_monster(&mut world, Position::new(41, 10), "goblin"); // distance 1
+        spawn_monster(&mut world, Position::new(43, 12), "orc"); // distance 3
+        spawn_monster(&mut world, Position::new(50, 10), "troll"); // distance 10
 
         let center = Position::new(40, 10);
         let (positions, events) = reveal_monsters_in_area(&world, player, center, 3);

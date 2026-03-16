@@ -228,10 +228,7 @@ impl GameWorld {
                 current: 16,
                 max: 16,
             },
-            Power {
-                current: 4,
-                max: 4,
-            },
+            Power { current: 4, max: 4 },
             ExperienceLevel(1),
             Attributes::default(),
             ArmorClass(10),
@@ -243,7 +240,14 @@ impl GameWorld {
         ));
         // hecs limits spawn tuples to 16 elements, so we insert the
         // remaining components individually.
-        let _ = world.insert_one(player, PlayerCombat { luck: 0, uhitinc: 0, udaminc: 0 });
+        let _ = world.insert_one(
+            player,
+            PlayerCombat {
+                luck: 0,
+                uhitinc: 0,
+                udaminc: 0,
+            },
+        );
         let _ = world.insert_one(player, Name("you".to_string()));
         let _ = world.insert_one(player, CreationOrder(0));
         let _ = world.insert_one(player, StatusEffects::default());

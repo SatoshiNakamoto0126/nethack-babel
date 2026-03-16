@@ -22,9 +22,7 @@ use nethack_babel_data::{BucStatus, LightSource, ObjectCore};
 use crate::action::Position;
 use crate::event::EngineEvent;
 use crate::status::StatusEffects;
-use crate::world::{
-    GameWorld, HitPoints, Monster, Name, Positioned, Tame,
-};
+use crate::world::{GameWorld, HitPoints, Monster, Name, Positioned, Tame};
 
 // ---------------------------------------------------------------------------
 // Tool type classification
@@ -143,18 +141,14 @@ pub fn apply_tool(
     match tool_type {
         ToolType::UnicornHorn => apply_unicorn_horn(world, player, &buc, rng),
         ToolType::Stethoscope => apply_stethoscope(world, player),
-        ToolType::PickAxe | ToolType::Mattock => {
-            apply_pickaxe(world, player, tool_type, rng)
-        }
+        ToolType::PickAxe | ToolType::Mattock => apply_pickaxe(world, player, tool_type, rng),
         ToolType::Key | ToolType::LockPick | ToolType::CreditCard => {
             apply_lock_tool(world, player, tool_type, item, rng)
         }
         ToolType::OilLamp | ToolType::MagicLamp | ToolType::Lantern => {
             apply_lamp(world, player, item, tool_type, &buc, rng)
         }
-        ToolType::MagicWhistle | ToolType::TinWhistle => {
-            apply_whistle(world, player, tool_type)
-        }
+        ToolType::MagicWhistle | ToolType::TinWhistle => apply_whistle(world, player, tool_type),
         ToolType::Mirror => apply_mirror(world, player, rng),
         ToolType::TinningKit => apply_tinning_kit(world, player, rng),
         ToolType::Camera => apply_camera(world, player, rng),
@@ -189,37 +183,27 @@ fn apply_unicorn_horn(
     let blessed = buc.blessed;
 
     // Confusion
-    if crate::status::is_confused(world, player)
-        && (blessed || rng.random_range(0..3) == 0)
-    {
+    if crate::status::is_confused(world, player) && (blessed || rng.random_range(0..3) == 0) {
         events.extend(crate::status::make_confused(world, player, 0));
     }
 
     // Stun
-    if crate::status::is_stunned(world, player)
-        && (blessed || rng.random_range(0..3) == 0)
-    {
+    if crate::status::is_stunned(world, player) && (blessed || rng.random_range(0..3) == 0) {
         events.extend(crate::status::make_stunned(world, player, 0));
     }
 
     // Hallucination
-    if crate::status::is_hallucinating(world, player)
-        && (blessed || rng.random_range(0..3) == 0)
-    {
+    if crate::status::is_hallucinating(world, player) && (blessed || rng.random_range(0..3) == 0) {
         events.extend(crate::status::make_hallucinated(world, player, 0));
     }
 
     // Blindness
-    if crate::status::is_blind(world, player)
-        && (blessed || rng.random_range(0..3) == 0)
-    {
+    if crate::status::is_blind(world, player) && (blessed || rng.random_range(0..3) == 0) {
         events.extend(crate::status::make_blinded(world, player, 0));
     }
 
     // Sickness (both food poisoning and disease)
-    if crate::status::is_sick(world, player)
-        && (blessed || rng.random_range(0..3) == 0)
-    {
+    if crate::status::is_sick(world, player) && (blessed || rng.random_range(0..3) == 0) {
         events.extend(crate::status::cure_sick(
             world,
             player,
@@ -245,10 +229,7 @@ fn apply_unicorn_horn(
 /// - Against self: show stats (HP, AC, level).
 /// - Adjacent monsters: show their HP.
 /// - Through walls: detect monsters in adjacent room.
-fn apply_stethoscope(
-    world: &GameWorld,
-    player: Entity,
-) -> Vec<EngineEvent> {
+fn apply_stethoscope(world: &GameWorld, player: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let player_pos = match world.get_component::<Positioned>(player) {
@@ -484,14 +465,13 @@ fn apply_lamp(
     let mut events = Vec::new();
 
     // Magic lamp special: rubbing chance for djinni.
-    if tool == ToolType::MagicLamp
-        && rng.random_range(0..3) == 0 {
-            events.push(EngineEvent::msg("tool-magic-lamp-djinni"));
-            // In a full implementation this would trigger the wish system.
-            // For now, just emit the event.
-            return events;
-        }
-        // Otherwise just toggle light like a normal lamp.
+    if tool == ToolType::MagicLamp && rng.random_range(0..3) == 0 {
+        events.push(EngineEvent::msg("tool-magic-lamp-djinni"));
+        // In a full implementation this would trigger the wish system.
+        // For now, just emit the event.
+        return events;
+    }
+    // Otherwise just toggle light like a normal lamp.
 
     // Toggle light source.
     let is_lit = world
@@ -535,11 +515,7 @@ fn apply_lamp(
 ///
 /// - Magic whistle: all pets teleport to the player's position.
 /// - Tin whistle: exercise lungs only (cosmetic message).
-fn apply_whistle(
-    world: &mut GameWorld,
-    player: Entity,
-    tool: ToolType,
-) -> Vec<EngineEvent> {
+fn apply_whistle(world: &mut GameWorld, player: Entity, tool: ToolType) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     if tool == ToolType::TinWhistle {
@@ -555,11 +531,7 @@ fn apply_whistle(
 
     // Collect pet entities.
     let mut pets: Vec<Entity> = Vec::new();
-    for (entity, (_tame, _pos)) in world
-        .ecs()
-        .query::<(&Tame, &Positioned)>()
-        .iter()
-    {
+    for (entity, (_tame, _pos)) in world.ecs().query::<(&Tame, &Positioned)>().iter() {
         if entity != player {
             pets.push(entity);
         }
@@ -572,16 +544,19 @@ fn apply_whistle(
 
     // Teleport each pet adjacent to the player.
     let offsets: [(i32, i32); 8] = [
-        (0, -1), (1, -1), (1, 0), (1, 1),
-        (0, 1), (-1, 1), (-1, 0), (-1, -1),
+        (0, -1),
+        (1, -1),
+        (1, 0),
+        (1, 1),
+        (0, 1),
+        (-1, 1),
+        (-1, 0),
+        (-1, -1),
     ];
 
     for (i, pet) in pets.iter().enumerate() {
         let offset = offsets[i % offsets.len()];
-        let new_pos = Position::new(
-            player_pos.x + offset.0,
-            player_pos.y + offset.1,
-        );
+        let new_pos = Position::new(player_pos.x + offset.0, player_pos.y + offset.1);
 
         let old_pos = world
             .get_component::<Positioned>(*pet)
@@ -612,11 +587,7 @@ fn apply_whistle(
 /// - Against an adjacent monster with a gaze attack: reflect the gaze,
 ///   damaging the monster.
 /// - Against self (no adjacent monsters): cosmetic message.
-fn apply_mirror(
-    world: &mut GameWorld,
-    player: Entity,
-    rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+fn apply_mirror(world: &mut GameWorld, player: Entity, rng: &mut impl Rng) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let player_pos = match world.get_component::<Positioned>(player) {
@@ -628,10 +599,7 @@ fn apply_mirror(
     let mut target_entity: Option<Entity> = None;
     let mut target_name = String::new();
 
-    for (entity, (pos, _mon, name)) in world
-        .ecs()
-        .query::<(&Positioned, &Monster, &Name)>()
-        .iter()
+    for (entity, (pos, _mon, name)) in world.ecs().query::<(&Positioned, &Monster, &Name)>().iter()
     {
         if entity == player {
             continue;
@@ -699,17 +667,19 @@ fn apply_tinning_kit(
         .iter()
     {
         if let nethack_babel_data::ObjectLocation::Floor { x, y } = *loc
-            && x as i32 == player_pos.x && y as i32 == player_pos.y {
-                // Check if it's a corpse (food class, name contains "corpse").
-                if core.object_class == nethack_babel_data::ObjectClass::Food {
-                    let item_name = world.entity_name(entity);
-                    if item_name.contains("corpse") {
-                        corpse_entity = Some(entity);
-                        corpse_name = item_name;
-                        break;
-                    }
+            && x as i32 == player_pos.x
+            && y as i32 == player_pos.y
+        {
+            // Check if it's a corpse (food class, name contains "corpse").
+            if core.object_class == nethack_babel_data::ObjectClass::Food {
+                let item_name = world.entity_name(entity);
+                if item_name.contains("corpse") {
+                    corpse_entity = Some(entity);
+                    corpse_name = item_name;
+                    break;
                 }
             }
+        }
     }
 
     match corpse_entity {
@@ -737,11 +707,7 @@ fn apply_tinning_kit(
 // ---------------------------------------------------------------------------
 
 /// Apply a camera: blind all adjacent monsters for d10 turns.
-fn apply_camera(
-    world: &mut GameWorld,
-    player: Entity,
-    rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+fn apply_camera(world: &mut GameWorld, player: Entity, rng: &mut impl Rng) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let player_pos = match world.get_component::<Positioned>(player) {
@@ -752,10 +718,7 @@ fn apply_camera(
     // Find all adjacent monsters.
     let mut targets: Vec<(Entity, String)> = Vec::new();
 
-    for (entity, (pos, _mon, name)) in world
-        .ecs()
-        .query::<(&Positioned, &Monster, &Name)>()
-        .iter()
+    for (entity, (pos, _mon, name)) in world.ecs().query::<(&Positioned, &Monster, &Name)>().iter()
     {
         if entity == player {
             continue;
@@ -801,11 +764,8 @@ mod tests {
     use super::*;
     use crate::action::Position;
     use crate::dungeon::Terrain;
-    use crate::status::{StatusEffects, SICK_NONVOMITABLE, SICK_VOMITABLE};
-    use crate::world::{
-        GameWorld, HitPoints, Monster, Name,
-        Positioned, Speed, Tame,
-    };
+    use crate::status::{SICK_NONVOMITABLE, SICK_VOMITABLE, StatusEffects};
+    use crate::world::{GameWorld, HitPoints, Monster, Name, Positioned, Speed, Tame};
     use nethack_babel_data::{BucStatus, LightSource, ObjectClass, ObjectCore, ObjectLocation};
     use rand::SeedableRng;
 
@@ -821,12 +781,7 @@ mod tests {
     }
 
     /// Spawn a tool item in the world with the given name.
-    fn spawn_tool(
-        world: &mut GameWorld,
-        name: &str,
-        blessed: bool,
-        cursed: bool,
-    ) -> Entity {
+    fn spawn_tool(world: &mut GameWorld, name: &str, blessed: bool, cursed: bool) -> Entity {
         world.spawn((
             ObjectCore {
                 otyp: nethack_babel_data::ObjectTypeId(0),
@@ -862,10 +817,7 @@ mod tests {
         offset: (i32, i32),
         hp: i32,
     ) -> Entity {
-        let player_pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(world.player()).unwrap().0;
         let pos = Position::new(player_pos.x + offset.0, player_pos.y + offset.1);
         world.spawn((
             Monster,
@@ -893,12 +845,7 @@ mod tests {
         crate::status::make_stunned(&mut world, player, 50);
         crate::status::make_hallucinated(&mut world, player, 50);
         crate::status::make_blinded(&mut world, player, 50);
-        crate::status::make_sick(
-            &mut world,
-            player,
-            50,
-            SICK_VOMITABLE | SICK_NONVOMITABLE,
-        );
+        crate::status::make_sick(&mut world, player, 50, SICK_VOMITABLE | SICK_NONVOMITABLE);
 
         let tool = spawn_tool(&mut world, "unicorn horn", true, false);
         let events = apply_tool(&mut world, player, tool, &mut rng);
@@ -927,7 +874,9 @@ mod tests {
 
         // Should have cure-related events.
         assert!(
-            events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-unihorn-cured")),
+            events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-unihorn-cured")
+            ),
             "expected cure message"
         );
     }
@@ -986,10 +935,7 @@ mod tests {
         let player = world.player();
 
         // Place a wall adjacent to the player (north).
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
         let wall_pos = Position::new(player_pos.x, player_pos.y - 1);
         world
             .dungeon_mut()
@@ -1000,12 +946,7 @@ mod tests {
         let events = apply_tool(&mut world, player, tool, &mut rng);
 
         // The wall should now be a corridor.
-        let terrain = world
-            .dungeon()
-            .current_level
-            .get(wall_pos)
-            .unwrap()
-            .terrain;
+        let terrain = world.dungeon().current_level.get(wall_pos).unwrap().terrain;
         assert_eq!(
             terrain,
             Terrain::Corridor,
@@ -1013,7 +954,9 @@ mod tests {
         );
 
         assert!(
-            events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-dig-wall")),
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-dig-wall")),
             "expected dig message"
         );
     }
@@ -1027,10 +970,7 @@ mod tests {
         let player = world.player();
 
         // Place a locked door adjacent (east).
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
         let door_pos = Position::new(player_pos.x + 1, player_pos.y);
         world
             .dungeon_mut()
@@ -1041,12 +981,7 @@ mod tests {
         let events = apply_tool(&mut world, player, tool, &mut rng);
 
         // Key has 100% success rate.
-        let terrain = world
-            .dungeon()
-            .current_level
-            .get(door_pos)
-            .unwrap()
-            .terrain;
+        let terrain = world.dungeon().current_level.get(door_pos).unwrap().terrain;
         assert_eq!(
             terrain,
             Terrain::DoorClosed,
@@ -1054,7 +989,9 @@ mod tests {
         );
 
         assert!(
-            events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-unlock-success")),
+            events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-unlock-success")
+            ),
             "expected unlock success"
         );
     }
@@ -1070,10 +1007,7 @@ mod tests {
             let mut rng = TestRng::seed_from_u64(seed);
             let player = world.player();
 
-            let player_pos = world
-                .get_component::<Positioned>(player)
-                .unwrap()
-                .0;
+            let player_pos = world.get_component::<Positioned>(player).unwrap().0;
             let door_pos = Position::new(player_pos.x + 1, player_pos.y);
             world
                 .dungeon_mut()
@@ -1083,9 +1017,9 @@ mod tests {
             let tool = spawn_tool(&mut world, "lock pick", false, false);
             let events = apply_tool(&mut world, player, tool, &mut rng);
 
-            if events.iter().any(|e| {
-                matches!(e, EngineEvent::Message { key, .. } if key == "tool-unlock-success")
-            }) {
+            if events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-unlock-success"),
+            ) {
                 successes += 1;
             } else {
                 failures += 1;
@@ -1113,25 +1047,23 @@ mod tests {
         // Initially no LightSource — applying should turn it on.
         let events = apply_tool(&mut world, player, tool, &mut rng);
         assert!(
-            events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-lamp-on")),
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-lamp-on")),
             "lamp should turn on"
         );
-        let lit = world
-            .get_component::<LightSource>(tool)
-            .unwrap()
-            .lit;
+        let lit = world.get_component::<LightSource>(tool).unwrap().lit;
         assert!(lit, "lamp should be lit");
 
         // Apply again to turn off.
         let events2 = apply_tool(&mut world, player, tool, &mut rng);
         assert!(
-            events2.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-lamp-off")),
+            events2
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-lamp-off")),
             "lamp should turn off"
         );
-        let lit2 = world
-            .get_component::<LightSource>(tool)
-            .unwrap()
-            .lit;
+        let lit2 = world.get_component::<LightSource>(tool).unwrap().lit;
         assert!(!lit2, "lamp should be unlit");
     }
 
@@ -1170,10 +1102,7 @@ mod tests {
         let mut world = test_world();
         let player = world.player();
 
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
 
         // Spawn a pet far away.
         let pet = world.spawn((
@@ -1181,10 +1110,7 @@ mod tests {
             Tame,
             Positioned(Position::new(70, 15)),
             Name("kitten".to_string()),
-            HitPoints {
-                current: 8,
-                max: 8,
-            },
+            HitPoints { current: 8, max: 8 },
             Speed(12),
         ));
 
@@ -1192,10 +1118,7 @@ mod tests {
         let events = apply_tool(&mut world, player, tool, &mut TestRng::seed_from_u64(0));
 
         // Pet should now be adjacent to the player.
-        let pet_pos = world
-            .get_component::<Positioned>(pet)
-            .unwrap()
-            .0;
+        let pet_pos = world.get_component::<Positioned>(pet).unwrap().0;
         let dx = (pet_pos.x - player_pos.x).abs();
         let dy = (pet_pos.y - player_pos.y).abs();
         assert!(
@@ -1228,9 +1151,9 @@ mod tests {
             let tool = spawn_tool(&mut world, "mirror", false, false);
             let events = apply_tool(&mut world, player, tool, &mut rng);
 
-            if events.iter().any(|e| {
-                matches!(e, EngineEvent::Message { key, .. } if key == "tool-mirror-reflect")
-            }) {
+            if events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-mirror-reflect"),
+            ) {
                 blinded_count += 1;
             }
         }
@@ -1252,7 +1175,9 @@ mod tests {
         let events = apply_tool(&mut world, player, tool, &mut rng);
 
         assert!(
-            events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-mirror-self")),
+            events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-mirror-self")
+            ),
             "expected self-examination message"
         );
     }
@@ -1265,10 +1190,7 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
 
         // Spawn a corpse at the player's position.
         let _corpse = world.spawn((
@@ -1411,22 +1333,13 @@ mod tests {
             classify_tool_by_name("stethoscope"),
             Some(ToolType::Stethoscope)
         );
-        assert_eq!(
-            classify_tool_by_name("pick-axe"),
-            Some(ToolType::PickAxe)
-        );
+        assert_eq!(classify_tool_by_name("pick-axe"), Some(ToolType::PickAxe));
         assert_eq!(
             classify_tool_by_name("dwarvish mattock"),
             Some(ToolType::Mattock)
         );
-        assert_eq!(
-            classify_tool_by_name("skeleton key"),
-            Some(ToolType::Key)
-        );
-        assert_eq!(
-            classify_tool_by_name("lock pick"),
-            Some(ToolType::LockPick)
-        );
+        assert_eq!(classify_tool_by_name("skeleton key"), Some(ToolType::Key));
+        assert_eq!(classify_tool_by_name("lock pick"), Some(ToolType::LockPick));
         assert_eq!(
             classify_tool_by_name("credit card"),
             Some(ToolType::CreditCard)
@@ -1435,10 +1348,7 @@ mod tests {
             classify_tool_by_name("magic lamp"),
             Some(ToolType::MagicLamp)
         );
-        assert_eq!(
-            classify_tool_by_name("oil lamp"),
-            Some(ToolType::OilLamp)
-        );
+        assert_eq!(classify_tool_by_name("oil lamp"), Some(ToolType::OilLamp));
         assert_eq!(
             classify_tool_by_name("brass lantern"),
             Some(ToolType::Lantern)
@@ -1451,10 +1361,7 @@ mod tests {
             classify_tool_by_name("tin whistle"),
             Some(ToolType::TinWhistle)
         );
-        assert_eq!(
-            classify_tool_by_name("mirror"),
-            Some(ToolType::Mirror)
-        );
+        assert_eq!(classify_tool_by_name("mirror"), Some(ToolType::Mirror));
         assert_eq!(
             classify_tool_by_name("tinning kit"),
             Some(ToolType::TinningKit)
@@ -1474,12 +1381,7 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "magic whistle", false, false);
-        let events = apply_tool(
-            &mut world,
-            player,
-            tool,
-            &mut TestRng::seed_from_u64(0),
-        );
+        let events = apply_tool(&mut world, player, tool, &mut TestRng::seed_from_u64(0));
 
         assert!(
             events.iter().any(|e| {
@@ -1497,12 +1399,7 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "tin whistle", false, false);
-        let events = apply_tool(
-            &mut world,
-            player,
-            tool,
-            &mut TestRng::seed_from_u64(0),
-        );
+        let events = apply_tool(&mut world, player, tool, &mut TestRng::seed_from_u64(0));
 
         assert!(
             events.iter().any(|e| {
@@ -1538,10 +1435,7 @@ mod tests {
         let player = world.player();
 
         // Surround the player with floor tiles (nothing to dig).
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
         for dir in crate::action::Direction::PLANAR {
             let pos = player_pos.step(dir);
             world
@@ -1571,10 +1465,7 @@ mod tests {
             let mut rng = TestRng::seed_from_u64(seed);
             let player = world.player();
 
-            let player_pos = world
-                .get_component::<Positioned>(player)
-                .unwrap()
-                .0;
+            let player_pos = world.get_component::<Positioned>(player).unwrap().0;
             let door_pos = Position::new(player_pos.x + 1, player_pos.y);
             world
                 .dungeon_mut()
@@ -1584,9 +1475,9 @@ mod tests {
             let tool = spawn_tool(&mut world, "credit card", false, false);
             let events = apply_tool(&mut world, player, tool, &mut rng);
 
-            if events.iter().any(|e| {
-                matches!(e, EngineEvent::Message { key, .. } if key == "tool-unlock-success")
-            }) {
+            if events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-unlock-success"),
+            ) {
                 successes += 1;
             }
         }
@@ -1639,13 +1530,8 @@ mod tests {
 
         let blind_count = events
             .iter()
-            .filter(|e| {
-                matches!(e, EngineEvent::Message { key, .. } if key == "tool-camera-blind")
-            })
+            .filter(|e| matches!(e, EngineEvent::Message { key, .. } if key == "tool-camera-blind"))
             .count();
-        assert_eq!(
-            blind_count, 2,
-            "expected two camera blind messages"
-        );
+        assert_eq!(blind_count, 2, "expected two camera blind messages");
     }
 }

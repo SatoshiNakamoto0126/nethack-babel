@@ -15,8 +15,8 @@ use crate::action::{Direction, SpellId};
 use crate::event::{DamageSource, DeathCause, EngineEvent, HpSource, StatusEffect};
 use crate::status::StatusEffects;
 use crate::world::{
-    Attributes, ExperienceLevel, GameWorld, HeroSpeed, HeroSpeedBonus, HitPoints,
-    Monster, Positioned, Power,
+    Attributes, ExperienceLevel, GameWorld, HeroSpeed, HeroSpeedBonus, HitPoints, Monster,
+    Positioned, Power,
 };
 
 // ---------------------------------------------------------------------------
@@ -149,9 +149,7 @@ impl SpellType {
             | SpellType::Invisibility => 4,
 
             // Level 5
-            SpellType::CharmMonster
-            | SpellType::MagicMapping
-            | SpellType::Dig => 5,
+            SpellType::CharmMonster | SpellType::MagicMapping | SpellType::Dig => 5,
 
             // Level 6
             SpellType::TurnUndead
@@ -160,8 +158,7 @@ impl SpellType {
             | SpellType::Polymorph => 6,
 
             // Level 7
-            SpellType::FingerOfDeath
-            | SpellType::Cancellation => 7,
+            SpellType::FingerOfDeath | SpellType::Cancellation => 7,
         }
     }
 
@@ -338,9 +335,7 @@ pub fn learn_spell(
 
     // Ensure the player has a SpellBook component.
     if world.get_component::<SpellBook>(player).is_none() {
-        let _ = world
-            .ecs_mut()
-            .insert_one(player, SpellBook::default());
+        let _ = world.ecs_mut().insert_one(player, SpellBook::default());
     }
 
     let mut book = world
@@ -348,11 +343,7 @@ pub fn learn_spell(
         .expect("SpellBook just inserted");
 
     // Check if already known.
-    if let Some(idx) = book
-        .spells
-        .iter()
-        .position(|s| s.spell_type == spell_type)
-    {
+    if let Some(idx) = book.spells.iter().position(|s| s.spell_type == spell_type) {
         book.spells[idx].memory = KEEN + 1;
         events.push(EngineEvent::msg_with(
             "spell-refreshed",
@@ -428,8 +419,7 @@ pub fn spell_success_chance(
     let chance_base = 11 * (intelligence as i32) / 2;
 
     // difficulty based on level
-    let difficulty =
-        ((spell_level as i32) - 1) * 4 - (experience_level as i32 / 3 + 1);
+    let difficulty = ((spell_level as i32) - 1) * 4 - (experience_level as i32 / 3 + 1);
 
     let chance = if difficulty > 0 {
         let sqrt_arg = 900 * difficulty + 2000;
@@ -572,8 +562,7 @@ pub fn cast_spell(
     }
 
     // ── Apply spell effect ─────────────────────────────────────────────
-    let effect_events =
-        apply_spell_effect(world, player, spell_type, direction, rng);
+    let effect_events = apply_spell_effect(world, player, spell_type, direction, rng);
     events.extend(effect_events);
 
     events
@@ -599,30 +588,14 @@ fn spell_backfire(
         }
         4..=6 => {
             // 30%: confusion + stun
-            let mut ev = crate::status::make_confused(
-                world,
-                entity,
-                2 * duration / 3,
-            );
-            ev.extend(crate::status::make_stunned(
-                world,
-                entity,
-                duration / 3,
-            ));
+            let mut ev = crate::status::make_confused(world, entity, 2 * duration / 3);
+            ev.extend(crate::status::make_stunned(world, entity, duration / 3));
             ev
         }
         7..=8 => {
             // 20%: stun + confusion
-            let mut ev = crate::status::make_stunned(
-                world,
-                entity,
-                2 * duration / 3,
-            );
-            ev.extend(crate::status::make_confused(
-                world,
-                entity,
-                duration / 3,
-            ));
+            let mut ev = crate::status::make_stunned(world, entity, 2 * duration / 3);
+            ev.extend(crate::status::make_confused(world, entity, duration / 3));
             ev
         }
         _ => {
@@ -649,29 +622,53 @@ fn apply_spell_effect(
         SpellType::ForceBolt => {
             // 6d6 physical damage, directional beam
             apply_directional_damage(
-                world, caster, direction, 6, 6,
-                DamageSource::Spell, "force bolt", rng,
+                world,
+                caster,
+                direction,
+                6,
+                6,
+                DamageSource::Spell,
+                "force bolt",
+                rng,
             )
         }
         SpellType::MagicMissile => {
             // 6d6 magic damage, ray
             apply_directional_damage(
-                world, caster, direction, 6, 6,
-                DamageSource::Spell, "magic missile", rng,
+                world,
+                caster,
+                direction,
+                6,
+                6,
+                DamageSource::Spell,
+                "magic missile",
+                rng,
             )
         }
         SpellType::Fireball => {
             // 6d6 fire area damage
             apply_area_damage(
-                world, caster, direction, 6, 6,
-                DamageSource::Fire, "fireball", rng,
+                world,
+                caster,
+                direction,
+                6,
+                6,
+                DamageSource::Fire,
+                "fireball",
+                rng,
             )
         }
         SpellType::ConeOfCold => {
             // 6d6 cold area damage
             apply_area_damage(
-                world, caster, direction, 6, 6,
-                DamageSource::Cold, "cone of cold", rng,
+                world,
+                caster,
+                direction,
+                6,
+                6,
+                DamageSource::Cold,
+                "cone of cold",
+                rng,
             )
         }
         SpellType::DrainLife => {
@@ -702,9 +699,7 @@ fn apply_spell_effect(
             events
         }
         SpellType::CureSickness => {
-            let mut events = crate::status::cure_sick(
-                world, caster, crate::status::SICK_ALL,
-            );
+            let mut events = crate::status::cure_sick(world, caster, crate::status::SICK_ALL);
             // Also cure sliming (like C's healup with TRUE)
             if crate::status::is_sliming(world, caster) {
                 events.extend(crate::status::make_slimed(world, caster, 0));
@@ -714,21 +709,15 @@ fn apply_spell_effect(
             }
             events
         }
-        SpellType::RestoreAbility => {
-            apply_restore_ability(world, caster)
-        }
+        SpellType::RestoreAbility => apply_restore_ability(world, caster),
 
         // ── Divination spells ─────────────────────────────────────
         SpellType::Light => {
             // Lights up surrounding area (5x5 around caster)
             vec![EngineEvent::msg("spell-light")]
         }
-        SpellType::DetectMonsters => {
-            apply_detect_monsters(world, caster)
-        }
-        SpellType::DetectFood => {
-            apply_detect_objects(world, caster, "spell-detect-food")
-        }
+        SpellType::DetectMonsters => apply_detect_monsters(world, caster),
+        SpellType::DetectFood => apply_detect_objects(world, caster, "spell-detect-food"),
         SpellType::DetectUnseen => {
             // Reveal invisible monsters and hidden traps
             apply_detect_unseen(world, caster)
@@ -737,9 +726,7 @@ fn apply_spell_effect(
             // Reveal map in vicinity
             vec![EngineEvent::msg("spell-clairvoyance")]
         }
-        SpellType::DetectTreasure => {
-            apply_detect_objects(world, caster, "spell-detect-treasure")
-        }
+        SpellType::DetectTreasure => apply_detect_objects(world, caster, "spell-detect-treasure"),
         SpellType::MagicMapping => {
             // Reveal entire level map
             vec![EngineEvent::msg("spell-magic-mapping")]
@@ -749,55 +736,31 @@ fn apply_spell_effect(
         }
 
         // ── Enchantment spells ────────────────────────────────────
-        SpellType::ConfuseMonster => {
-            apply_confuse_monster(world, caster, direction, rng)
-        }
-        SpellType::Sleep => {
-            apply_sleep(world, caster, direction, rng)
-        }
-        SpellType::SlowMonster => {
-            apply_slow_monster(world, caster, direction)
-        }
-        SpellType::CauseFear => {
-            apply_cause_fear(world, caster, rng)
-        }
-        SpellType::CharmMonster => {
-            apply_charm_monster(world, caster, direction)
-        }
+        SpellType::ConfuseMonster => apply_confuse_monster(world, caster, direction, rng),
+        SpellType::Sleep => apply_sleep(world, caster, direction, rng),
+        SpellType::SlowMonster => apply_slow_monster(world, caster, direction),
+        SpellType::CauseFear => apply_cause_fear(world, caster, rng),
+        SpellType::CharmMonster => apply_charm_monster(world, caster, direction),
 
         // ── Clerical spells ──────────────────────────────────────
-        SpellType::Protection => {
-            apply_protection(world, caster)
-        }
+        SpellType::Protection => apply_protection(world, caster),
         SpellType::RemoveCurse => {
             vec![EngineEvent::msg("spell-remove-curse")]
         }
         SpellType::CreateMonster => {
             vec![EngineEvent::msg("spell-create-monster")]
         }
-        SpellType::TurnUndead => {
-            apply_turn_undead(world, caster, direction, rng)
-        }
+        SpellType::TurnUndead => apply_turn_undead(world, caster, direction, rng),
         SpellType::CreateFamiliar => {
             vec![EngineEvent::msg("spell-create-familiar")]
         }
 
         // ── Escape spells ────────────────────────────────────────
-        SpellType::HasteSelf => {
-            apply_haste_self(world, caster)
-        }
-        SpellType::Invisibility => {
-            apply_invisibility(world, caster)
-        }
-        SpellType::Levitation => {
-            crate::status::make_levitating(world, caster, 150)
-        }
-        SpellType::TeleportAway => {
-            apply_teleport_away(world, caster, direction, rng)
-        }
-        SpellType::Jumping => {
-            apply_jumping(world, caster, direction)
-        }
+        SpellType::HasteSelf => apply_haste_self(world, caster),
+        SpellType::Invisibility => apply_invisibility(world, caster),
+        SpellType::Levitation => crate::status::make_levitating(world, caster, 150),
+        SpellType::TeleportAway => apply_teleport_away(world, caster, direction, rng),
+        SpellType::Jumping => apply_jumping(world, caster, direction),
 
         // ── Matter spells ────────────────────────────────────────
         SpellType::Knock => {
@@ -806,18 +769,10 @@ fn apply_spell_effect(
         SpellType::WizardLock => {
             vec![EngineEvent::msg("spell-wizard-lock")]
         }
-        SpellType::Dig => {
-            apply_dig(world, caster, direction)
-        }
-        SpellType::Polymorph => {
-            apply_polymorph(world, caster, direction, rng)
-        }
-        SpellType::StoneToFlesh => {
-            apply_stone_to_flesh(world, caster, direction)
-        }
-        SpellType::Cancellation => {
-            apply_cancellation(world, caster, direction)
-        }
+        SpellType::Dig => apply_dig(world, caster, direction),
+        SpellType::Polymorph => apply_polymorph(world, caster, direction, rng),
+        SpellType::StoneToFlesh => apply_stone_to_flesh(world, caster, direction),
+        SpellType::Cancellation => apply_cancellation(world, caster, direction),
     }
 }
 
@@ -1029,17 +984,10 @@ fn apply_healing(
 // ---------------------------------------------------------------------------
 
 /// Reveal all monsters on the current level.
-fn apply_detect_monsters(
-    world: &GameWorld,
-    _caster: Entity,
-) -> Vec<EngineEvent> {
+fn apply_detect_monsters(world: &GameWorld, _caster: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     let mut found = 0u32;
-    for (entity, (_positioned, _monster)) in world
-        .ecs()
-        .query::<(&Positioned, &Monster)>()
-        .iter()
-    {
+    for (entity, (_positioned, _monster)) in world.ecs().query::<(&Positioned, &Monster)>().iter() {
         let _ = entity;
         found += 1;
     }
@@ -1096,10 +1044,8 @@ fn apply_sleep(
         // Find a monster at this position.
         let target = {
             let mut found = None;
-            for (entity, (positioned, _monster)) in world
-                .ecs()
-                .query::<(&Positioned, &Monster)>()
-                .iter()
+            for (entity, (positioned, _monster)) in
+                world.ecs().query::<(&Positioned, &Monster)>().iter()
             {
                 if positioned.0 == pos {
                     found = Some(entity);
@@ -1111,9 +1057,7 @@ fn apply_sleep(
 
         if let Some(target) = target {
             let duration = roll_dice(6, 25, rng);
-            if let Some(mut se) =
-                world.get_component_mut::<StatusEffects>(target)
-            {
+            if let Some(mut se) = world.get_component_mut::<StatusEffects>(target) {
                 StatusEffects::incr_timeout(&mut se.paralysis, duration);
             }
             events.push(EngineEvent::StatusApplied {
@@ -1316,10 +1260,7 @@ fn apply_finger_of_death(
 /// Restore drained attributes. In NetHack, this restores all stats
 /// to their natural maximum. Since Attributes doesn't track max values
 /// separately, we ensure no stat is below 10 (base default).
-fn apply_restore_ability(
-    world: &mut GameWorld,
-    caster: Entity,
-) -> Vec<EngineEvent> {
+fn apply_restore_ability(world: &mut GameWorld, caster: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     if let Some(mut attrs) = world.get_component_mut::<Attributes>(caster) {
         let base = 10u8;
@@ -1365,11 +1306,7 @@ fn apply_restore_ability(
 // ---------------------------------------------------------------------------
 
 /// Generic object detection — counts positioned items on the level.
-fn apply_detect_objects(
-    world: &GameWorld,
-    _caster: Entity,
-    msg_key: &str,
-) -> Vec<EngineEvent> {
+fn apply_detect_objects(_world: &GameWorld, _caster: Entity, msg_key: &str) -> Vec<EngineEvent> {
     // Simply emit the detection event; the UI layer handles display.
     vec![EngineEvent::msg(msg_key)]
 }
@@ -1379,18 +1316,12 @@ fn apply_detect_objects(
 // ---------------------------------------------------------------------------
 
 /// Reveal invisible monsters and detect hidden traps in area.
-fn apply_detect_unseen(
-    world: &mut GameWorld,
-    caster: Entity,
-) -> Vec<EngineEvent> {
+fn apply_detect_unseen(world: &mut GameWorld, caster: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     // Count invisible monsters on level
     let mut found = 0u32;
-    for (_entity, (_positioned, _monster)) in world
-        .ecs()
-        .query::<(&Positioned, &Monster)>()
-        .iter()
+    for (_entity, (_positioned, _monster)) in world.ecs().query::<(&Positioned, &Monster)>().iter()
     {
         found += 1;
     }
@@ -1460,10 +1391,8 @@ fn apply_confuse_monster(
 
         let target = {
             let mut found = None;
-            for (entity, (positioned, _monster)) in world
-                .ecs()
-                .query::<(&Positioned, &Monster)>()
-                .iter()
+            for (entity, (positioned, _monster)) in
+                world.ecs().query::<(&Positioned, &Monster)>().iter()
             {
                 if positioned.0 == pos {
                     found = Some(entity);
@@ -1524,10 +1453,8 @@ fn apply_slow_monster(
 
         let target = {
             let mut found = None;
-            for (entity, (positioned, _monster)) in world
-                .ecs()
-                .query::<(&Positioned, &Monster)>()
-                .iter()
+            for (entity, (positioned, _monster)) in
+                world.ecs().query::<(&Positioned, &Monster)>().iter()
             {
                 if positioned.0 == pos {
                     found = Some(entity);
@@ -1559,11 +1486,7 @@ fn apply_slow_monster(
 
 /// Frighten all monsters within 5 squares of the caster.
 /// Each monster has a chance to resist based on magic resistance.
-fn apply_cause_fear(
-    world: &GameWorld,
-    caster: Entity,
-    rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+fn apply_cause_fear(world: &GameWorld, caster: Entity, rng: &mut impl Rng) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     let caster_pos = match world.get_component::<Positioned>(caster) {
         Some(p) => p.0,
@@ -1571,11 +1494,7 @@ fn apply_cause_fear(
     };
 
     let mut affected = 0u32;
-    for (entity, (positioned, _monster)) in world
-        .ecs()
-        .query::<(&Positioned, &Monster)>()
-        .iter()
-    {
+    for (entity, (positioned, _monster)) in world.ecs().query::<(&Positioned, &Monster)>().iter() {
         let dx = (positioned.0.x - caster_pos.x).abs();
         let dy = (positioned.0.y - caster_pos.y).abs();
         if dx <= 5 && dy <= 5 {
@@ -1641,10 +1560,8 @@ fn apply_charm_monster(
 
         let target = {
             let mut found = None;
-            for (entity, (positioned, _monster)) in world
-                .ecs()
-                .query::<(&Positioned, &Monster)>()
-                .iter()
+            for (entity, (positioned, _monster)) in
+                world.ecs().query::<(&Positioned, &Monster)>().iter()
             {
                 if positioned.0 == pos {
                     found = Some(entity);
@@ -1680,10 +1597,7 @@ fn apply_charm_monster(
 /// Grants temporary AC bonus. In NetHack, each cast gives
 /// log2(level)+1 - uspellprot/(4-min(3,natac)) AC improvement.
 /// Simplified: grants 1-5 AC bonus based on caster level.
-fn apply_protection(
-    world: &GameWorld,
-    caster: Entity,
-) -> Vec<EngineEvent> {
+fn apply_protection(world: &GameWorld, caster: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     let xl = world
         .get_component::<ExperienceLevel>(caster)
@@ -1785,10 +1699,7 @@ fn apply_turn_undead(
 // ---------------------------------------------------------------------------
 
 /// Grants the caster temporary speed (VeryFast).
-fn apply_haste_self(
-    world: &mut GameWorld,
-    caster: Entity,
-) -> Vec<EngineEvent> {
+fn apply_haste_self(world: &mut GameWorld, caster: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     // Set hero speed to VeryFast
@@ -1815,10 +1726,7 @@ fn apply_haste_self(
 // ---------------------------------------------------------------------------
 
 /// Makes the caster invisible for a duration.
-fn apply_invisibility(
-    world: &mut GameWorld,
-    caster: Entity,
-) -> Vec<EngineEvent> {
+fn apply_invisibility(world: &mut GameWorld, caster: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     // Set invisible status
@@ -1872,10 +1780,8 @@ fn apply_teleport_away(
             break;
         }
 
-        for (entity, (positioned, _monster)) in world
-            .ecs()
-            .query::<(&Positioned, &Monster)>()
-            .iter()
+        for (entity, (positioned, _monster)) in
+            world.ecs().query::<(&Positioned, &Monster)>().iter()
         {
             if positioned.0 == pos {
                 // Pick a random destination (simplified: random walkable position)
@@ -1883,11 +1789,7 @@ fn apply_teleport_away(
                 let to_x = rng.random_range(1i32..78);
                 let to_y = rng.random_range(1i32..20);
                 let to = crate::action::Position::new(to_x, to_y);
-                events.push(EngineEvent::EntityTeleported {
-                    entity,
-                    from,
-                    to,
-                });
+                events.push(EngineEvent::EntityTeleported { entity, from, to });
                 events.push(EngineEvent::msg("spell-teleport-away-hit"));
                 return events;
             }
@@ -1947,11 +1849,7 @@ fn apply_jumping(
 // ---------------------------------------------------------------------------
 
 /// Dig: tunnels through rock/walls in the given direction.
-fn apply_dig(
-    world: &GameWorld,
-    caster: Entity,
-    direction: Option<Direction>,
-) -> Vec<EngineEvent> {
+fn apply_dig(world: &GameWorld, caster: Entity, direction: Option<Direction>) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     let dir = match direction {
         Some(d) => d,
@@ -2032,10 +1930,8 @@ fn apply_polymorph(
             break;
         }
 
-        for (entity, (positioned, _monster)) in world
-            .ecs()
-            .query::<(&Positioned, &Monster)>()
-            .iter()
+        for (entity, (positioned, _monster)) in
+            world.ecs().query::<(&Positioned, &Monster)>().iter()
         {
             if positioned.0 == pos {
                 events.push(EngineEvent::StatusApplied {
@@ -2100,10 +1996,8 @@ fn apply_stone_to_flesh(
         // Check for a stoning monster
         let target = {
             let mut found = None;
-            for (entity, (positioned, _monster)) in world
-                .ecs()
-                .query::<(&Positioned, &Monster)>()
-                .iter()
+            for (entity, (positioned, _monster)) in
+                world.ecs().query::<(&Positioned, &Monster)>().iter()
             {
                 if positioned.0 == pos {
                     found = Some(entity);
@@ -2168,10 +2062,8 @@ fn apply_cancellation(
 
         let target = {
             let mut found = None;
-            for (entity, (positioned, _monster)) in world
-                .ecs()
-                .query::<(&Positioned, &Monster)>()
-                .iter()
+            for (entity, (positioned, _monster)) in
+                world.ecs().query::<(&Positioned, &Monster)>().iter()
             {
                 if positioned.0 == pos {
                     found = Some(entity);
@@ -2183,9 +2075,7 @@ fn apply_cancellation(
 
         if let Some(target) = target {
             // Cancel all temporary status effects
-            if let Some(mut se) =
-                world.get_component_mut::<StatusEffects>(target)
-            {
+            if let Some(mut se) = world.get_component_mut::<StatusEffects>(target) {
                 se.invisibility = 0;
                 se.see_invisible = 0;
                 se.levitation = 0;
@@ -2223,9 +2113,7 @@ mod tests {
         let mut world = GameWorld::new(Position::new(40, 10));
         let player = world.player();
         // Insert a SpellBook on the player.
-        let _ = world
-            .ecs_mut()
-            .insert_one(player, SpellBook::default());
+        let _ = world.ecs_mut().insert_one(player, SpellBook::default());
 
         // Make a walkable corridor east of the player (positions 40..50, y=10).
         for x in 38..=50 {
@@ -2269,14 +2157,11 @@ mod tests {
     fn test_learn_spell() {
         let (mut world, player, _rng) = setup();
 
-        let (result, events) =
-            learn_spell(&mut world, player, SpellType::MagicMissile);
+        let (result, events) = learn_spell(&mut world, player, SpellType::MagicMissile);
         assert_eq!(result, LearnResult::Learned);
         assert!(!events.is_empty());
 
-        let book = world
-            .get_component::<SpellBook>(player)
-            .expect("SpellBook");
+        let book = world.get_component::<SpellBook>(player).expect("SpellBook");
         assert_eq!(book.count(), 1);
         assert_eq!(book.spells[0].spell_type, SpellType::MagicMissile);
         assert_eq!(book.spells[0].level, 2);
@@ -2293,14 +2178,11 @@ mod tests {
 
         // Drain memory
         {
-            let mut book = world
-                .get_component_mut::<SpellBook>(player)
-                .unwrap();
+            let mut book = world.get_component_mut::<SpellBook>(player).unwrap();
             book.spells[0].memory = 5000;
         }
 
-        let (result, _events) =
-            learn_spell(&mut world, player, SpellType::HealingSpell);
+        let (result, _events) = learn_spell(&mut world, player, SpellType::HealingSpell);
         assert_eq!(result, LearnResult::Refreshed);
 
         let book = world.get_component::<SpellBook>(player).unwrap();
@@ -2348,8 +2230,7 @@ mod tests {
         }
 
         // Try to learn one more.
-        let (result, _events) =
-            learn_spell(&mut world, player, SpellType::FingerOfDeath);
+        let (result, _events) = learn_spell(&mut world, player, SpellType::FingerOfDeath);
         assert_eq!(result, LearnResult::BookFull);
     }
 
@@ -2377,7 +2258,11 @@ mod tests {
         assert!(pw.current < 50);
 
         // Should have PwChange event.
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::PwChange { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::PwChange { .. }))
+        );
     }
 
     // ── test_cast_spell_insufficient_power ───────────────────────────
@@ -2398,10 +2283,12 @@ mod tests {
         );
 
         // Should get "insufficient power" message.
-        let has_insuff = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "spell-insufficient-power"
-        ));
+        let has_insuff = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "spell-insufficient-power"
+            )
+        });
         assert!(has_insuff);
 
         // Power should not change.
@@ -2415,11 +2302,17 @@ mod tests {
     fn test_spell_failure_rate() {
         // High level spell with low INT => high failure
         let pct = spell_success_chance(7, 8, 1, 0);
-        assert!(pct < 20, "level 7 spell with INT 8 should have low success: got {pct}");
+        assert!(
+            pct < 20,
+            "level 7 spell with INT 8 should have low success: got {pct}"
+        );
 
         // Low level spell with high INT => high success
         let pct = spell_success_chance(1, 18, 14, 0);
-        assert!(pct >= 80, "level 1 spell with INT 18 should have high success: got {pct}");
+        assert!(
+            pct >= 80,
+            "level 1 spell with INT 18 should have high success: got {pct}"
+        );
     }
 
     // ── test_spell_failure_rate_armor_penalty ────────────────────────
@@ -2446,9 +2339,7 @@ mod tests {
 
         // Set memory to 0 (forgotten).
         {
-            let mut book = world
-                .get_component_mut::<SpellBook>(player)
-                .unwrap();
+            let mut book = world.get_component_mut::<SpellBook>(player).unwrap();
             book.spells[0].memory = 0;
         }
 
@@ -2461,10 +2352,12 @@ mod tests {
         );
 
         // Should get "forgotten" message.
-        let has_forgotten = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "spell-forgotten"
-        ));
+        let has_forgotten = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "spell-forgotten"
+            )
+        });
         assert!(has_forgotten);
     }
 
@@ -2482,7 +2375,10 @@ mod tests {
             total_max = total_max.max(damage);
         }
         assert!(total_min >= 6, "min d(6,6) should be >= 6: got {total_min}");
-        assert!(total_max <= 36, "max d(6,6) should be <= 36: got {total_max}");
+        assert!(
+            total_max <= 36,
+            "max d(6,6) should be <= 36: got {total_max}"
+        );
     }
 
     // ── test_healing_spell_restores_hp ───────────────────────────────
@@ -2501,19 +2397,15 @@ mod tests {
             hp.current = 5;
         }
 
-        let events = cast_spell(
-            &mut world,
-            player,
-            SpellId(0),
-            None,
-            &mut rng,
-        );
+        let events = cast_spell(&mut world, player, SpellId(0), None, &mut rng);
 
         let hp = world.get_component::<HitPoints>(player).unwrap();
         // Healing spell should restore HP (d(6,4) = 6..24).
         // If the spell succeeded, HP > 5.  If it failed (unlikely with
         // INT 18 level 14), HP stays 5 but we check the event flow worked.
-        let has_pw_change = events.iter().any(|e| matches!(e, EngineEvent::PwChange { .. }));
+        let has_pw_change = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::PwChange { .. }));
         assert!(has_pw_change, "should have PwChange event");
         // With INT 18, level 14, level-1 healing spell, success is very
         // likely.  Check HP increased or at minimum events were generated.
@@ -2527,11 +2419,7 @@ mod tests {
         let (mut world, player, _rng) = setup();
         learn_spell(&mut world, player, SpellType::Light);
 
-        let initial = world
-            .get_component::<SpellBook>(player)
-            .unwrap()
-            .spells[0]
-            .memory;
+        let initial = world.get_component::<SpellBook>(player).unwrap().spells[0].memory;
         assert_eq!(initial, KEEN + 1);
 
         // Tick memory 100 times.
@@ -2539,11 +2427,7 @@ mod tests {
             tick_spell_memory(&mut world, player);
         }
 
-        let after = world
-            .get_component::<SpellBook>(player)
-            .unwrap()
-            .spells[0]
-            .memory;
+        let after = world.get_component::<SpellBook>(player).unwrap().spells[0].memory;
         assert_eq!(after, KEEN + 1 - 100);
     }
 
@@ -2556,9 +2440,7 @@ mod tests {
 
         // Set memory to 3.
         {
-            let mut book = world
-                .get_component_mut::<SpellBook>(player)
-                .unwrap();
+            let mut book = world.get_component_mut::<SpellBook>(player).unwrap();
             book.spells[0].memory = 3;
         }
 
@@ -2567,11 +2449,7 @@ mod tests {
         tick_spell_memory(&mut world, player);
         tick_spell_memory(&mut world, player);
 
-        let mem = world
-            .get_component::<SpellBook>(player)
-            .unwrap()
-            .spells[0]
-            .memory;
+        let mem = world.get_component::<SpellBook>(player).unwrap().spells[0].memory;
         assert_eq!(mem, 0, "memory should not go below 0");
     }
 
@@ -2633,7 +2511,10 @@ mod tests {
         assert_eq!(SpellType::MagicMissile.direction(), SpellDirection::Ray);
         assert_eq!(SpellType::ForceBolt.direction(), SpellDirection::Immediate);
         assert_eq!(SpellType::DetectMonsters.direction(), SpellDirection::Nodir);
-        assert_eq!(SpellType::HealingSpell.direction(), SpellDirection::Immediate);
+        assert_eq!(
+            SpellType::HealingSpell.direction(),
+            SpellDirection::Immediate
+        );
         assert_eq!(SpellType::Sleep.direction(), SpellDirection::Ray);
     }
 
@@ -2656,25 +2537,31 @@ mod tests {
         let player = world.player();
         let mut rng = SmallRng::seed_from_u64(42);
 
-        let events = cast_spell(
-            &mut world,
-            player,
-            SpellId(0),
-            None,
-            &mut rng,
-        );
+        let events = cast_spell(&mut world, player, SpellId(0), None, &mut rng);
 
         // Should produce an error/failure message, not panic
-        let has_error = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. }
-                if key == "spell-no-spellbook"
-                || key == "spell-unknown"
-                || key == "spell-forgotten"
-                || key.contains("spell")
-        ));
-        assert!(has_error, "Casting from empty spellbook should produce an error message, got: {:?}",
-            events.iter().filter_map(|e| if let EngineEvent::Message { key, .. } = e { Some(key.as_str()) } else { None }).collect::<Vec<_>>());
+        let has_error = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. }
+                    if key == "spell-no-spellbook"
+                    || key == "spell-unknown"
+                    || key == "spell-forgotten"
+                    || key.contains("spell")
+            )
+        });
+        assert!(
+            has_error,
+            "Casting from empty spellbook should produce an error message, got: {:?}",
+            events
+                .iter()
+                .filter_map(|e| if let EngineEvent::Message { key, .. } = e {
+                    Some(key.as_str())
+                } else {
+                    None
+                })
+                .collect::<Vec<_>>()
+        );
     }
 
     // ── test_backfire_applies_status ─────────────────────────────────
@@ -2687,9 +2574,7 @@ mod tests {
 
         // Set memory to 0 so casting triggers backfire.
         {
-            let mut book = world
-                .get_component_mut::<SpellBook>(player)
-                .unwrap();
+            let mut book = world.get_component_mut::<SpellBook>(player).unwrap();
             book.spells[0].memory = 0;
         }
 
@@ -2702,11 +2587,13 @@ mod tests {
         );
 
         // Should have status applied (confusion or stun from backfire).
-        let has_status = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied { status, .. }
-                if *status == StatusEffect::Confused || *status == StatusEffect::Stunned
-        ));
+        let has_status = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied { status, .. }
+                    if *status == StatusEffect::Confused || *status == StatusEffect::Stunned
+            )
+        });
         assert!(has_status, "backfire should apply confusion or stun");
     }
 
@@ -2736,7 +2623,10 @@ mod tests {
         let mon = world.ecs_mut().spawn((
             Positioned(Position::new(41, 10)),
             Monster,
-            HitPoints { current: 30, max: 30 },
+            HitPoints {
+                current: 30,
+                max: 30,
+            },
             StatusEffects::default(),
         ));
 
@@ -2746,15 +2636,15 @@ mod tests {
             hp.current = 5;
         }
 
-        let events = apply_drain_life(
-            &mut world, player, Some(Direction::East), &mut rng,
-        );
+        let events = apply_drain_life(&mut world, player, Some(Direction::East), &mut rng);
 
         // Should have damage event on monster.
-        let has_drain = events.iter().any(|e| matches!(
-            e, EngineEvent::ExtraDamage { target, source: DamageSource::Drain, .. }
-            if *target == mon
-        ));
+        let has_drain = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::ExtraDamage { target, source: DamageSource::Drain, .. }
+                if *target == mon
+            )
+        });
         assert!(has_drain, "drain life should damage the target");
 
         // Caster should be healed.
@@ -2771,19 +2661,22 @@ mod tests {
         let mon = world.ecs_mut().spawn((
             Positioned(Position::new(41, 10)),
             Monster,
-            HitPoints { current: 50, max: 50 },
+            HitPoints {
+                current: 50,
+                max: 50,
+            },
             StatusEffects::default(),
         ));
 
-        let events = apply_finger_of_death(
-            &world, player, Some(Direction::East), &mut rng,
-        );
+        let events = apply_finger_of_death(&world, player, Some(Direction::East), &mut rng);
 
         // Should have damage or death event on monster.
-        let has_effect = events.iter().any(|e| matches!(
-            e, EngineEvent::ExtraDamage { target, .. }
-            if *target == mon
-        ));
+        let has_effect = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::ExtraDamage { target, .. }
+                if *target == mon
+            )
+        });
         assert!(has_effect, "finger of death should affect the target");
     }
 
@@ -2806,12 +2699,12 @@ mod tests {
             hp.current = 5;
         }
 
-        let events = cast_spell(
-            &mut world, player, SpellId(0), None, &mut rng,
-        );
+        let events = cast_spell(&mut world, player, SpellId(0), None, &mut rng);
 
         // With high stats, casting should succeed and heal + cure blindness.
-        let has_pw_change = events.iter().any(|e| matches!(e, EngineEvent::PwChange { .. }));
+        let has_pw_change = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::PwChange { .. }));
         assert!(has_pw_change);
     }
 
@@ -2824,9 +2717,15 @@ mod tests {
 
         let events = apply_protection(&world, player);
 
-        let has_protected = events.iter().any(|e| matches!(
-            e, EngineEvent::StatusApplied { status: StatusEffect::Protected, .. }
-        ));
+        let has_protected = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Protected,
+                    ..
+                }
+            )
+        });
         assert!(has_protected, "protection should grant Protected status");
     }
 
@@ -2838,9 +2737,15 @@ mod tests {
 
         let events = apply_haste_self(&mut world, player);
 
-        let has_speed = events.iter().any(|e| matches!(
-            e, EngineEvent::StatusApplied { status: StatusEffect::FastSpeed, .. }
-        ));
+        let has_speed = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::FastSpeed,
+                    ..
+                }
+            )
+        });
         assert!(has_speed, "haste self should grant FastSpeed status");
 
         // Check HeroSpeedBonus component.
@@ -2856,9 +2761,15 @@ mod tests {
 
         let events = apply_invisibility(&mut world, player);
 
-        let has_invis = events.iter().any(|e| matches!(
-            e, EngineEvent::StatusApplied { status: StatusEffect::Invisible, .. }
-        ));
+        let has_invis = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Invisible,
+                    ..
+                }
+            )
+        });
         assert!(has_invis, "invisibility should apply Invisible status");
 
         // Check status effect timer.
@@ -2875,17 +2786,20 @@ mod tests {
         let _mon = world.ecs_mut().spawn((
             Positioned(Position::new(41, 10)),
             Monster,
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             StatusEffects::default(),
         ));
 
-        let events = apply_confuse_monster(
-            &mut world, player, Some(Direction::East), &mut rng,
-        );
+        let events = apply_confuse_monster(&mut world, player, Some(Direction::East), &mut rng);
 
-        let has_msg = events.iter().any(|e| matches!(
-            e, EngineEvent::Message { key, .. } if key.contains("confuse")
-        ));
+        let has_msg = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::Message { key, .. } if key.contains("confuse")
+            )
+        });
         assert!(has_msg, "confuse monster should produce a message");
     }
 
@@ -2898,18 +2812,21 @@ mod tests {
         let mon = world.ecs_mut().spawn((
             Positioned(Position::new(41, 10)),
             Monster,
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             StatusEffects::default(),
         ));
 
-        let events = apply_slow_monster(
-            &mut world, player, Some(Direction::East),
-        );
+        let events = apply_slow_monster(&mut world, player, Some(Direction::East));
 
-        let has_slow = events.iter().any(|e| matches!(
-            e, EngineEvent::StatusApplied { entity, status: StatusEffect::SlowSpeed, .. }
-            if *entity == mon
-        ));
+        let has_slow = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::StatusApplied { entity, status: StatusEffect::SlowSpeed, .. }
+                if *entity == mon
+            )
+        });
         assert!(has_slow, "slow monster should apply SlowSpeed to target");
     }
 
@@ -2924,7 +2841,10 @@ mod tests {
             world.ecs_mut().spawn((
                 Positioned(Position::new(40 + dx, 10)),
                 Monster,
-                HitPoints { current: 10, max: 10 },
+                HitPoints {
+                    current: 10,
+                    max: 10,
+                },
                 StatusEffects::default(),
             ));
         }
@@ -2932,9 +2852,11 @@ mod tests {
         let events = apply_cause_fear(&world, player, &mut rng);
 
         // At least some should be affected (75% chance each).
-        let has_msg = events.iter().any(|e| matches!(
-            e, EngineEvent::Message { key, .. } if key.contains("cause-fear")
-        ));
+        let has_msg = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::Message { key, .. } if key.contains("cause-fear")
+            )
+        });
         assert!(has_msg, "cause fear should produce a message");
     }
 
@@ -2946,9 +2868,15 @@ mod tests {
 
         let events = apply_detect_unseen(&mut world, player);
 
-        let has_see_invis = events.iter().any(|e| matches!(
-            e, EngineEvent::StatusApplied { status: StatusEffect::SeeInvisible, .. }
-        ));
+        let has_see_invis = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::SeeInvisible,
+                    ..
+                }
+            )
+        });
         assert!(has_see_invis, "detect unseen should grant see invisible");
     }
 
@@ -2971,9 +2899,11 @@ mod tests {
         assert_eq!(attrs.strength, 10, "strength should be restored to base");
         assert_eq!(attrs.dexterity, 10, "dexterity should be restored to base");
 
-        let has_restored = events.iter().any(|e| matches!(
-            e, EngineEvent::Message { key, .. } if key.contains("restored")
-        ));
+        let has_restored = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::Message { key, .. } if key.contains("restored")
+            )
+        });
         assert!(has_restored, "should emit restored message");
     }
 
@@ -2986,9 +2916,11 @@ mod tests {
         // All stats are at default 10, nothing to restore.
         let events = apply_restore_ability(&mut world, player);
 
-        let has_nothing = events.iter().any(|e| matches!(
-            e, EngineEvent::Message { key, .. } if key.contains("nothing")
-        ));
+        let has_nothing = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::Message { key, .. } if key.contains("nothing")
+            )
+        });
         assert!(has_nothing, "should emit nothing-to-restore message");
     }
 
@@ -3000,9 +2932,9 @@ mod tests {
 
         let events = apply_jumping(&world, player, Some(Direction::East));
 
-        let has_moved = events.iter().any(|e| matches!(
-            e, EngineEvent::EntityMoved { .. }
-        ));
+        let has_moved = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityMoved { .. }));
         assert!(has_moved, "jumping should move the caster");
     }
 
@@ -3015,19 +2947,25 @@ mod tests {
         let mon = world.ecs_mut().spawn((
             Positioned(Position::new(41, 10)),
             Monster,
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             StatusEffects::default(),
         ));
 
-        let events = apply_teleport_away(
-            &world, player, Some(Direction::East), &mut rng,
-        );
+        let events = apply_teleport_away(&world, player, Some(Direction::East), &mut rng);
 
-        let has_teleport = events.iter().any(|e| matches!(
-            e, EngineEvent::EntityTeleported { entity, .. }
-            if *entity == mon
-        ));
-        assert!(has_teleport, "teleport away should teleport the target monster");
+        let has_teleport = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::EntityTeleported { entity, .. }
+                if *entity == mon
+            )
+        });
+        assert!(
+            has_teleport,
+            "teleport away should teleport the target monster"
+        );
     }
 
     // ── test_polymorph_applies_status ──────────────────────────────
@@ -3039,19 +2977,25 @@ mod tests {
         let mon = world.ecs_mut().spawn((
             Positioned(Position::new(41, 10)),
             Monster,
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             StatusEffects::default(),
         ));
 
-        let events = apply_polymorph(
-            &world, player, Some(Direction::East), &mut rng,
-        );
+        let events = apply_polymorph(&world, player, Some(Direction::East), &mut rng);
 
-        let has_poly = events.iter().any(|e| matches!(
-            e, EngineEvent::StatusApplied { entity, status: StatusEffect::Polymorphed, .. }
-            if *entity == mon
-        ));
-        assert!(has_poly, "polymorph should apply Polymorphed status to target");
+        let has_poly = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::StatusApplied { entity, status: StatusEffect::Polymorphed, .. }
+                if *entity == mon
+            )
+        });
+        assert!(
+            has_poly,
+            "polymorph should apply Polymorphed status to target"
+        );
     }
 
     // ── test_cancellation_removes_status ────────────────────────────
@@ -3063,7 +3007,10 @@ mod tests {
         let mon = world.ecs_mut().spawn((
             Positioned(Position::new(41, 10)),
             Monster,
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             StatusEffects {
                 invisibility: 100,
                 levitation: 50,
@@ -3071,18 +3018,16 @@ mod tests {
             },
         ));
 
-        let events = apply_cancellation(
-            &mut world, player, Some(Direction::East),
-        );
+        let events = apply_cancellation(&mut world, player, Some(Direction::East));
 
         // Check status was cleared.
         let se = world.get_component::<StatusEffects>(mon).unwrap();
         assert_eq!(se.invisibility, 0, "cancellation should clear invisibility");
         assert_eq!(se.levitation, 0, "cancellation should clear levitation");
 
-        let has_removed = events.iter().any(|e| matches!(
-            e, EngineEvent::StatusRemoved { .. }
-        ));
+        let has_removed = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::StatusRemoved { .. }));
         assert!(has_removed, "cancellation should emit StatusRemoved");
     }
 
@@ -3143,9 +3088,7 @@ mod tests {
                 _ => Some(Direction::East),
             };
 
-            let events = apply_spell_effect(
-                &mut world, player, spell_type, dir, &mut rng,
-            );
+            let events = apply_spell_effect(&mut world, player, spell_type, dir, &mut rng);
             assert!(
                 !events.is_empty(),
                 "spell {:?} should produce at least one event",

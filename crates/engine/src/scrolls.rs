@@ -9,7 +9,9 @@
 use hecs::Entity;
 use rand::Rng;
 
-use nethack_babel_data::{BucStatus, Enchantment, Erosion, ObjectClass, ObjectCore, ObjectLocation};
+use nethack_babel_data::{
+    BucStatus, Enchantment, Erosion, ObjectClass, ObjectCore, ObjectLocation,
+};
 
 use crate::action::Position;
 use crate::event::{DamageCause, DamageSource, EngineEvent, HpSource, StatusEffect};
@@ -145,53 +147,27 @@ pub fn read_scroll<R: Rng>(
 
     let mut events = match scroll_type {
         ScrollType::Identify => effect_identify(world, reader, &buc, confused, rng),
-        ScrollType::EnchantWeapon => {
-            effect_enchant_weapon(world, reader, &buc, confused, rng)
-        }
-        ScrollType::EnchantArmor => {
-            effect_enchant_armor(world, reader, &buc, confused, rng)
-        }
-        ScrollType::RemoveCurse => {
-            effect_remove_curse(world, reader, &buc, confused, rng)
-        }
-        ScrollType::Teleportation => {
-            effect_teleportation(world, reader, &buc, confused, rng)
-        }
-        ScrollType::GoldDetection => {
-            effect_gold_detection(world, reader, &buc, confused, rng)
-        }
-        ScrollType::FoodDetection => {
-            effect_food_detection(world, reader, &buc, confused, rng)
-        }
-        ScrollType::ConfuseMonster => {
-            effect_confuse_monster(world, reader, &buc, confused, rng)
-        }
-        ScrollType::ScareMonster => {
-            effect_scare_monster(world, reader, &buc, confused, rng)
-        }
+        ScrollType::EnchantWeapon => effect_enchant_weapon(world, reader, &buc, confused, rng),
+        ScrollType::EnchantArmor => effect_enchant_armor(world, reader, &buc, confused, rng),
+        ScrollType::RemoveCurse => effect_remove_curse(world, reader, &buc, confused, rng),
+        ScrollType::Teleportation => effect_teleportation(world, reader, &buc, confused, rng),
+        ScrollType::GoldDetection => effect_gold_detection(world, reader, &buc, confused, rng),
+        ScrollType::FoodDetection => effect_food_detection(world, reader, &buc, confused, rng),
+        ScrollType::ConfuseMonster => effect_confuse_monster(world, reader, &buc, confused, rng),
+        ScrollType::ScareMonster => effect_scare_monster(world, reader, &buc, confused, rng),
         ScrollType::BlankPaper => effect_blank_paper(world, reader, &buc, confused, rng),
         ScrollType::Fire => effect_fire(world, reader, &buc, confused, rng),
         ScrollType::Earth => effect_earth(world, reader, &buc, confused, rng),
-        ScrollType::Punishment => {
-            effect_punishment(world, reader, &buc, confused, rng)
-        }
-        ScrollType::StinkingCloud => {
-            effect_stinking_cloud(world, reader, &buc, confused, rng)
-        }
+        ScrollType::Punishment => effect_punishment(world, reader, &buc, confused, rng),
+        ScrollType::StinkingCloud => effect_stinking_cloud(world, reader, &buc, confused, rng),
         ScrollType::Amnesia => effect_amnesia(world, reader, &buc, confused, rng),
-        ScrollType::DestroyArmor => {
-            effect_destroy_armor(world, reader, &buc, confused, rng)
-        }
-        ScrollType::CreateMonster => {
-            effect_create_monster(world, reader, &buc, confused, rng)
-        }
+        ScrollType::DestroyArmor => effect_destroy_armor(world, reader, &buc, confused, rng),
+        ScrollType::CreateMonster => effect_create_monster(world, reader, &buc, confused, rng),
         ScrollType::Taming => effect_taming(world, reader, &buc, confused, rng),
         ScrollType::Genocide => effect_genocide(world, reader, &buc, confused, rng),
         ScrollType::Light => effect_light(world, reader, &buc, confused, rng),
         ScrollType::Charging => effect_charging(world, reader, &buc, confused, rng),
-        ScrollType::MagicMapping => {
-            effect_magic_mapping(world, reader, &buc, confused, rng)
-        }
+        ScrollType::MagicMapping => effect_magic_mapping(world, reader, &buc, confused, rng),
         ScrollType::Mail => effect_mail(world, reader, &buc, confused, rng),
     };
 
@@ -370,17 +346,16 @@ fn effect_enchant_weapon<R: Rng>(
         .unwrap_or(0);
 
     // Evaporation check: if spe > 5 and amount >= 0, 2/3 chance to evaporate.
-    if ((current_spe > 5 && amount >= 0) || (current_spe < -5 && amount < 0))
-        && rn2(rng, 3) != 0 {
-            // Weapon evaporates!
-            events.push(EngineEvent::msg("scroll-enchant-weapon-evaporate"));
-            let _ = world.despawn(weapon_entity);
-            events.push(EngineEvent::ItemDestroyed {
-                item: weapon_entity,
-                cause: DamageCause::Disenchant,
-            });
-            return events;
-        }
+    if ((current_spe > 5 && amount >= 0) || (current_spe < -5 && amount < 0)) && rn2(rng, 3) != 0 {
+        // Weapon evaporates!
+        events.push(EngineEvent::msg("scroll-enchant-weapon-evaporate"));
+        let _ = world.despawn(weapon_entity);
+        events.push(EngineEvent::ItemDestroyed {
+            item: weapon_entity,
+            cause: DamageCause::Disenchant,
+        });
+        return events;
+    }
 
     // Apply enchantment.
     if let Some(mut ench) = world.get_component_mut::<Enchantment>(weapon_entity) {
@@ -395,16 +370,26 @@ fn effect_enchant_weapon<R: Rng>(
     // If positive enchantment and weapon was cursed, uncurse it.
     if amount > 0
         && let Some(mut item_buc) = world.get_component_mut::<BucStatus>(weapon_entity)
-            && item_buc.cursed {
-                item_buc.cursed = false;
-            }
+        && item_buc.cursed
+    {
+        item_buc.cursed = false;
+    }
 
     let new_spe = world
         .get_component::<Enchantment>(weapon_entity)
         .map(|e| e.spe)
         .unwrap_or(0);
 
-    events.push(EngineEvent::msg_with("scroll-enchant-weapon", vec![("weapon", "weapon".to_string()), ("color", if amount >= 0 { "blue" } else { "purple" }.to_string())]));
+    events.push(EngineEvent::msg_with(
+        "scroll-enchant-weapon",
+        vec![
+            ("weapon", "weapon".to_string()),
+            (
+                "color",
+                if amount >= 0 { "blue" } else { "purple" }.to_string(),
+            ),
+        ],
+    ));
 
     // Warning vibration at high enchantment.
     if new_spe > 5 {
@@ -463,16 +448,15 @@ fn effect_enchant_armor<R: Rng>(
     let threshold: i8 = 3;
 
     // Evaporation check: if spe > threshold and rn2(spe) != 0.
-    if current_spe > threshold
-        && rn2(rng, current_spe as u32) != 0 {
-            events.push(EngineEvent::msg("scroll-enchant-armor-evaporate"));
-            let _ = world.despawn(armor_entity);
-            events.push(EngineEvent::ItemDestroyed {
-                item: armor_entity,
-                cause: DamageCause::Disenchant,
-            });
-            return events;
-        }
+    if current_spe > threshold && rn2(rng, current_spe as u32) != 0 {
+        events.push(EngineEvent::msg("scroll-enchant-armor-evaporate"));
+        let _ = world.despawn(armor_entity);
+        events.push(EngineEvent::ItemDestroyed {
+            item: armor_entity,
+            cause: DamageCause::Disenchant,
+        });
+        return events;
+    }
 
     // Blessed: also repair erosion (matches C NetHack behavior).
     if buc.blessed {
@@ -520,7 +504,16 @@ fn effect_enchant_armor<R: Rng>(
         .map(|e| e.spe)
         .unwrap_or(0);
 
-    events.push(EngineEvent::msg_with("scroll-enchant-armor", vec![("armor", "armor".to_string()), ("color", if amount >= 0 { "silver" } else { "black" }.to_string())]));
+    events.push(EngineEvent::msg_with(
+        "scroll-enchant-armor",
+        vec![
+            ("armor", "armor".to_string()),
+            (
+                "color",
+                if amount >= 0 { "silver" } else { "black" }.to_string(),
+            ),
+        ],
+    ));
 
     // Warning vibration.
     if new_spe > threshold {
@@ -548,9 +541,7 @@ fn effect_remove_curse<R: Rng>(
         for item_entity in &items {
             if rn2(rng, 2) == 0 {
                 // 50% chance to affect each item.
-                if let Some(mut item_buc) =
-                    world.get_component_mut::<BucStatus>(*item_entity)
-                {
+                if let Some(mut item_buc) = world.get_component_mut::<BucStatus>(*item_entity) {
                     if rn2(rng, 2) == 0 {
                         item_buc.cursed = true;
                         item_buc.blessed = false;
@@ -575,12 +566,12 @@ fn effect_remove_curse<R: Rng>(
         let items = collect_inventory_items(world, reader);
         let mut count = 0;
         for item_entity in &items {
-            if let Some(mut item_buc) =
-                world.get_component_mut::<BucStatus>(*item_entity)
-                && item_buc.cursed {
-                    item_buc.cursed = false;
-                    count += 1;
-                }
+            if let Some(mut item_buc) = world.get_component_mut::<BucStatus>(*item_entity)
+                && item_buc.cursed
+            {
+                item_buc.cursed = false;
+                count += 1;
+            }
         }
         if count > 0 {
             events.push(EngineEvent::msg("scroll-remove-curse"));
@@ -592,12 +583,12 @@ fn effect_remove_curse<R: Rng>(
         let worn_items = collect_worn_wielded_items(world, reader);
         let mut count = 0;
         for item_entity in &worn_items {
-            if let Some(mut item_buc) =
-                world.get_component_mut::<BucStatus>(*item_entity)
-                && item_buc.cursed {
-                    item_buc.cursed = false;
-                    count += 1;
-                }
+            if let Some(mut item_buc) = world.get_component_mut::<BucStatus>(*item_entity)
+                && item_buc.cursed
+            {
+                item_buc.cursed = false;
+                count += 1;
+            }
         }
         if count > 0 {
             events.push(EngineEvent::msg("scroll-remove-curse"));
@@ -892,15 +883,9 @@ fn effect_fire<R: Rng>(
         // Fire resistant: no damage, "pretty fire in your hands"
         // Not fire resistant: 1 HP damage
         let has_fire_res = crate::status::has_intrinsic_fire_res(world, reader)
-            || crate::worn::has_worn_property(
-                world,
-                reader,
-                nethack_babel_data::Property::FireRes,
-            );
+            || crate::worn::has_worn_property(world, reader, nethack_babel_data::Property::FireRes);
         events.push(EngineEvent::msg("scroll-fire-confused"));
-        if !has_fire_res
-            && let Some(mut hp) = world.get_component_mut::<HitPoints>(reader)
-        {
+        if !has_fire_res && let Some(mut hp) = world.get_component_mut::<HitPoints>(reader) {
             hp.current -= 1;
             events.push(EngineEvent::HpChange {
                 entity: reader,
@@ -926,15 +911,16 @@ fn effect_fire<R: Rng>(
 
     // Apply damage to reader (explosion centered on self for non-blessed).
     if !buc.blessed
-        && let Some(mut hp) = world.get_component_mut::<HitPoints>(reader) {
-            hp.current -= total_dam;
-            events.push(EngineEvent::HpChange {
-                entity: reader,
-                amount: -total_dam,
-                new_hp: hp.current,
-                source: HpSource::Environment,
-            });
-        }
+        && let Some(mut hp) = world.get_component_mut::<HitPoints>(reader)
+    {
+        hp.current -= total_dam;
+        events.push(EngineEvent::HpChange {
+            entity: reader,
+            amount: -total_dam,
+            new_hp: hp.current,
+            source: HpSource::Environment,
+        });
+    }
 
     // Damage nearby monsters.
     let reader_pos = world
@@ -1332,7 +1318,10 @@ fn effect_genocide<R: Rng>(
                 let monster = world.spawn((
                     Monster,
                     Positioned(spawn_pos),
-                    HitPoints { current: 10, max: 10 },
+                    HitPoints {
+                        current: 10,
+                        max: 10,
+                    },
                 ));
                 events.push(EngineEvent::MonsterGenerated {
                     entity: monster,
@@ -1357,7 +1346,10 @@ fn effect_genocide<R: Rng>(
                 let monster = world.spawn((
                     Monster,
                     Positioned(spawn_pos),
-                    HitPoints { current: 10, max: 10 },
+                    HitPoints {
+                        current: 10,
+                        max: 10,
+                    },
                 ));
                 events.push(EngineEvent::MonsterGenerated {
                     entity: monster,
@@ -1692,11 +1684,7 @@ mod tests {
         ))
     }
 
-    fn spawn_weapon_in_inventory(
-        world: &mut GameWorld,
-        spe: i8,
-        buc: BucStatus,
-    ) -> Entity {
+    fn spawn_weapon_in_inventory(world: &mut GameWorld, spe: i8, buc: BucStatus) -> Entity {
         world.spawn((
             ObjectCore {
                 otyp: ObjectTypeId(300),
@@ -1720,11 +1708,7 @@ mod tests {
         ))
     }
 
-    fn spawn_armor_in_inventory(
-        world: &mut GameWorld,
-        spe: i8,
-        buc: BucStatus,
-    ) -> Entity {
+    fn spawn_armor_in_inventory(world: &mut GameWorld, spe: i8, buc: BucStatus) -> Entity {
         world.spawn((
             ObjectCore {
                 otyp: ObjectTypeId(400),
@@ -1810,7 +1794,10 @@ mod tests {
                 break;
             }
         }
-        assert!(found_all, "blessed identify should sometimes identify all items (rn2(5)==0)");
+        assert!(
+            found_all,
+            "blessed identify should sometimes identify all items (rn2(5)==0)"
+        );
     }
 
     // ── Test: Uncursed identify identifies 1 item ──────────────
@@ -1838,7 +1825,10 @@ mod tests {
             .iter()
             .filter(|e| matches!(e, EngineEvent::ItemIdentified { .. }))
             .count();
-        assert_eq!(identify_count, 1, "uncursed identify should identify 1 item");
+        assert_eq!(
+            identify_count, 1,
+            "uncursed identify should identify 1 item"
+        );
     }
 
     // ── Test: Enchant weapon increases spe ──────────────────────
@@ -1885,8 +1875,7 @@ mod tests {
         for seed in 0..100u64 {
             let mut test_world = make_world();
             let test_player = test_world.player();
-            let test_weapon =
-                spawn_weapon_in_inventory(&mut test_world, 6, uncursed());
+            let test_weapon = spawn_weapon_in_inventory(&mut test_world, 6, uncursed());
             let test_scroll = spawn_scroll(&mut test_world, uncursed());
             let mut rng = Pcg64::seed_from_u64(seed);
 
@@ -1899,10 +1888,10 @@ mod tests {
                 &mut rng,
             );
 
-            let has_destroy = events
-                .iter()
-                .any(|e| matches!(e, EngineEvent::ItemDestroyed { item, .. }
-                    if *item == test_weapon));
+            let has_destroy = events.iter().any(|e| {
+                matches!(e, EngineEvent::ItemDestroyed { item, .. }
+                    if *item == test_weapon)
+            });
             if has_destroy {
                 evaporated = true;
             } else {
@@ -2044,11 +2033,7 @@ mod tests {
 
         // Verify some cells are unexplored initially.
         assert!(
-            !world
-                .dungeon()
-                .current_level
-                .cells[5][5]
-                .explored,
+            !world.dungeon().current_level.cells[5][5].explored,
             "cell should be unexplored initially"
         );
 
@@ -2080,10 +2065,7 @@ mod tests {
         let mut rng = make_rng();
         let player = world.player();
 
-        let _old_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let _old_pos = world.get_component::<Positioned>(player).unwrap().0;
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
@@ -2095,17 +2077,17 @@ mod tests {
             &mut rng,
         );
 
-        let _new_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let _new_pos = world.get_component::<Positioned>(player).unwrap().0;
 
         // With high probability the player moved (could be same spot with
         // very low probability, but the teleport event should still fire).
         let has_teleport_event = events
             .iter()
             .any(|e| matches!(e, EngineEvent::EntityTeleported { .. }));
-        assert!(has_teleport_event, "teleportation should emit EntityTeleported");
+        assert!(
+            has_teleport_event,
+            "teleportation should emit EntityTeleported"
+        );
     }
 
     // ── Test: Confused enchant weapon makes erodeproof ──────────
@@ -2120,7 +2102,10 @@ mod tests {
 
         // Verify not erodeproof initially.
         let erosion = world.get_component::<Erosion>(weapon).unwrap();
-        assert!(!erosion.erodeproof, "weapon should not be erodeproof initially");
+        assert!(
+            !erosion.erodeproof,
+            "weapon should not be erodeproof initially"
+        );
         drop(erosion);
 
         let scroll = spawn_scroll(&mut world, uncursed());
@@ -2208,7 +2193,10 @@ mod tests {
 
         // First pickup: blessed -> becomes uncursed, spe stays 0.
         let (survived, _events) = scare_monster_pickup(&mut world, scroll);
-        assert!(survived, "blessed scare monster should survive first pickup");
+        assert!(
+            survived,
+            "blessed scare monster should survive first pickup"
+        );
         let buc = world.get_component::<BucStatus>(scroll).unwrap();
         assert!(!buc.blessed, "should no longer be blessed after pickup");
         assert!(!buc.cursed, "should be uncursed after pickup");
@@ -2219,7 +2207,10 @@ mod tests {
 
         // Second pickup: uncursed, spe=0 -> spe becomes 1.
         let (survived, _events) = scare_monster_pickup(&mut world, scroll);
-        assert!(survived, "uncursed spe=0 scare monster should survive pickup");
+        assert!(
+            survived,
+            "uncursed spe=0 scare monster should survive pickup"
+        );
         let ench = world.get_component::<Enchantment>(scroll).unwrap();
         assert_eq!(ench.spe, 1, "spe should become 1 after second pickup");
         drop(ench);
@@ -2227,7 +2218,9 @@ mod tests {
         // Third pickup: spe=1 -> crumbles to dust.
         let (survived, events) = scare_monster_pickup(&mut world, scroll);
         assert!(!survived, "spe=1 scare monster should crumble on pickup");
-        let has_destroy = events.iter().any(|e| matches!(e, EngineEvent::ItemDestroyed { .. }));
+        let has_destroy = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ItemDestroyed { .. }));
         assert!(has_destroy, "should emit ItemDestroyed when crumbling");
     }
 
@@ -2491,10 +2484,7 @@ mod tests {
         let player = world.player();
 
         // Damage player initially to full HP.
-        let original_hp = world
-            .get_component::<HitPoints>(player)
-            .unwrap()
-            .current;
+        let original_hp = world.get_component::<HitPoints>(player).unwrap().current;
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let _events = read_scroll(
@@ -2506,10 +2496,7 @@ mod tests {
             &mut rng,
         );
 
-        let new_hp = world
-            .get_component::<HitPoints>(player)
-            .unwrap()
-            .current;
+        let new_hp = world.get_component::<HitPoints>(player).unwrap().current;
 
         assert!(
             new_hp < original_hp,
@@ -2573,7 +2560,10 @@ mod tests {
             EngineEvent::Message { key, .. } => key.contains("scroll-genocide-guilty"),
             _ => false,
         });
-        assert!(has_guilty, "blessed punishment should say 'you feel guilty'");
+        assert!(
+            has_guilty,
+            "blessed punishment should say 'you feel guilty'"
+        );
     }
 
     // ── Test: Identify BUC matrix (spec test vectors 1-8) ───────
@@ -2588,11 +2578,16 @@ mod tests {
         let mut rng = make_rng();
 
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Identify, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Identify,
+            false,
+            &mut rng,
         );
 
-        let identify_count = events.iter()
+        let identify_count = events
+            .iter()
             .filter(|e| matches!(e, EngineEvent::ItemIdentified { .. }))
             .count();
         assert_eq!(identify_count, 0, "cursed identify should identify 0 items");
@@ -2609,14 +2604,22 @@ mod tests {
             let mut rng = make_rng();
 
             let events = read_scroll(
-                &mut world, player, scroll,
-                ScrollType::Identify, true, &mut rng,
+                &mut world,
+                player,
+                scroll,
+                ScrollType::Identify,
+                true,
+                &mut rng,
             );
 
-            let identify_count = events.iter()
+            let identify_count = events
+                .iter()
                 .filter(|e| matches!(e, EngineEvent::ItemIdentified { .. }))
                 .count();
-            assert_eq!(identify_count, 0, "confused identify should identify 0 items");
+            assert_eq!(
+                identify_count, 0,
+                "confused identify should identify 0 items"
+            );
         }
     }
 
@@ -2635,11 +2638,16 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
 
             let events = read_scroll(
-                &mut world, player, scroll,
-                ScrollType::Identify, false, &mut rng,
+                &mut world,
+                player,
+                scroll,
+                ScrollType::Identify,
+                false,
+                &mut rng,
             );
 
-            let count = events.iter()
+            let count = events
+                .iter()
                 .filter(|e| matches!(e, EngineEvent::ItemIdentified { .. }))
                 .count();
             if count == 1 {
@@ -2648,8 +2656,16 @@ mod tests {
                 more_count += 1;
             }
         }
-        assert!(one_count > more_count, "uncursed identify should mostly identify 1 item (got {} vs {})", one_count, more_count);
-        assert!(more_count > 0, "uncursed identify should sometimes identify more than 1 item");
+        assert!(
+            one_count > more_count,
+            "uncursed identify should mostly identify 1 item (got {} vs {})",
+            one_count,
+            more_count
+        );
+        assert!(
+            more_count > 0,
+            "uncursed identify should sometimes identify more than 1 item"
+        );
     }
 
     // ── Test: Enchant weapon at spe >= 9 has diminishing returns ──
@@ -2667,8 +2683,12 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
 
             let _events = read_scroll(
-                &mut world, player, scroll,
-                ScrollType::EnchantWeapon, false, &mut rng,
+                &mut world,
+                player,
+                scroll,
+                ScrollType::EnchantWeapon,
+                false,
+                &mut rng,
             );
 
             // Check if weapon still exists (might have evaporated).
@@ -2681,7 +2701,10 @@ mod tests {
             }
         }
         // At spe=10, rn2(10)==0 has 10% chance, so one_count should be much less.
-        assert!(zero_count > one_count, "at spe>=9, +0 should be more common than +1");
+        assert!(
+            zero_count > one_count,
+            "at spe>=9, +0 should be more common than +1"
+        );
     }
 
     // ── Test: Genocide confused + uncursed kills hero ─────────────
@@ -2695,11 +2718,17 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Genocide, true, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Genocide,
+            true,
+            &mut rng,
         );
 
-        let has_death = events.iter().any(|e| matches!(e, EngineEvent::EntityDied { .. }));
+        let has_death = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityDied { .. }));
         assert!(has_death, "confused uncursed genocide should kill the hero");
     }
 
@@ -2715,18 +2744,31 @@ mod tests {
         let _before = world.query::<Monster>().iter().count();
         let scroll = spawn_scroll(&mut world, cursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Genocide, true, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Genocide,
+            true,
+            &mut rng,
         );
 
-        let has_death = events.iter().any(|e| matches!(e, EngineEvent::EntityDied { .. }));
-        assert!(!has_death, "confused cursed genocide should NOT kill the hero");
+        let has_death = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityDied { .. }));
+        assert!(
+            !has_death,
+            "confused cursed genocide should NOT kill the hero"
+        );
 
-        let generated = events.iter()
+        let generated = events
+            .iter()
             .filter(|e| matches!(e, EngineEvent::MonsterGenerated { .. }))
             .count();
-        assert!(generated >= 4 && generated <= 6,
-            "confused cursed genocide should create 4-6 monsters, got {}", generated);
+        assert!(
+            generated >= 4 && generated <= 6,
+            "confused cursed genocide should create 4-6 monsters, got {}",
+            generated
+        );
     }
 
     // ── Test: Genocide blessed is unaffected by confusion ─────────
@@ -2740,15 +2782,22 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, blessed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Genocide, true, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Genocide,
+            true,
+            &mut rng,
         );
 
         let has_class_prompt = events.iter().any(|e| match e {
             EngineEvent::Message { key, .. } => key.contains("scroll-genocide-prompt-class"),
             _ => false,
         });
-        assert!(has_class_prompt, "blessed genocide should prompt for class even when confused");
+        assert!(
+            has_class_prompt,
+            "blessed genocide should prompt for class even when confused"
+        );
     }
 
     // ── Test: Stinking cloud BUC values ──────────────────────────
@@ -2767,19 +2816,28 @@ mod tests {
 
             let scroll = spawn_scroll(&mut world, buc_status);
             let events = read_scroll(
-                &mut world, player, scroll,
-                ScrollType::StinkingCloud, false, &mut rng,
+                &mut world,
+                player,
+                scroll,
+                ScrollType::StinkingCloud,
+                false,
+                &mut rng,
             );
 
             let has_params = events.iter().any(|e| match e {
                 EngineEvent::Message { key, args } => {
                     key.contains("scroll-stinking-cloud")
-                        && args.iter().any(|(k, v)| k == "cloudsize" && v == expected_size)
+                        && args
+                            .iter()
+                            .any(|(k, v)| k == "cloudsize" && v == expected_size)
                         && args.iter().any(|(k, v)| k == "damage" && v == expected_dmg)
                 }
                 _ => false,
             });
-            assert!(has_params, "stinking cloud should have correct size/damage params");
+            assert!(
+                has_params,
+                "stinking cloud should have correct size/damage params"
+            );
         }
     }
 
@@ -2793,14 +2851,27 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, blessed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::ConfuseMonster, true, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::ConfuseMonster,
+            true,
+            &mut rng,
         );
 
-        let has_cure = events.iter().any(|e| matches!(
-            e, EngineEvent::StatusRemoved { status: StatusEffect::Confused, .. }
-        ));
-        assert!(has_cure, "blessed confuse monster while confused should cure confusion");
+        let has_cure = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusRemoved {
+                    status: StatusEffect::Confused,
+                    ..
+                }
+            )
+        });
+        assert!(
+            has_cure,
+            "blessed confuse monster while confused should cure confusion"
+        );
     }
 
     // ── Test: Destroy armor — cursed on cursed armor disenchants ──
@@ -2816,20 +2887,36 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, cursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::DestroyArmor, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::DestroyArmor,
+            false,
+            &mut rng,
         );
 
         // Armor should still exist (not destroyed).
         let ench = world.get_component::<Enchantment>(armor);
-        assert!(ench.is_some(), "cursed scroll on cursed armor should NOT destroy it");
+        assert!(
+            ench.is_some(),
+            "cursed scroll on cursed armor should NOT destroy it"
+        );
         assert_eq!(ench.unwrap().spe, 1, "spe should decrease from 2 to 1");
 
         // Should also stun the reader.
-        let has_stun = events.iter().any(|e| matches!(
-            e, EngineEvent::StatusApplied { status: StatusEffect::Stunned, .. }
-        ));
-        assert!(has_stun, "cursed destroy armor on cursed armor should stun reader");
+        let has_stun = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Stunned,
+                    ..
+                }
+            )
+        });
+        assert!(
+            has_stun,
+            "cursed destroy armor on cursed armor should stun reader"
+        );
     }
 
     // ── Test: Destroy armor — confused cursed protects ────────────
@@ -2844,13 +2931,20 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, cursed());
         let _events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::DestroyArmor, true, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::DestroyArmor,
+            true,
+            &mut rng,
         );
 
         // Armor should be erodeproof now.
         let erosion = world.get_component::<Erosion>(armor).unwrap();
-        assert!(erosion.erodeproof, "confused cursed destroy armor should SET erodeproof");
+        assert!(
+            erosion.erodeproof,
+            "confused cursed destroy armor should SET erodeproof"
+        );
     }
 
     // ── Test: Charging confused BUC energy recharge ───────────────
@@ -2863,16 +2957,29 @@ mod tests {
         let player = world.player();
 
         // Give the player some energy.
-        let _ = world.ecs_mut().insert_one(player, Power { current: 30, max: 50 });
+        let _ = world.ecs_mut().insert_one(
+            player,
+            Power {
+                current: 30,
+                max: 50,
+            },
+        );
 
         let scroll = spawn_scroll(&mut world, cursed());
         let _events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Charging, true, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Charging,
+            true,
+            &mut rng,
         );
 
         let pw = world.get_component::<Power>(player).unwrap();
-        assert_eq!(pw.current, 0, "confused cursed charging should drain all energy");
+        assert_eq!(
+            pw.current, 0,
+            "confused cursed charging should drain all energy"
+        );
     }
 
     #[test]
@@ -2882,17 +2989,31 @@ mod tests {
         let mut rng = make_rng();
         let player = world.player();
 
-        let _ = world.ecs_mut().insert_one(player, Power { current: 10, max: 50 });
+        let _ = world.ecs_mut().insert_one(
+            player,
+            Power {
+                current: 10,
+                max: 50,
+            },
+        );
 
         let scroll = spawn_scroll(&mut world, blessed());
         let _events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Charging, true, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Charging,
+            true,
+            &mut rng,
         );
 
         let pw = world.get_component::<Power>(player).unwrap();
         // Should be at max (50) or raised above if gain > remaining.
-        assert!(pw.current >= 50, "confused blessed charging should restore to at least max (got {})", pw.current);
+        assert!(
+            pw.current >= 50,
+            "confused blessed charging should restore to at least max (got {})",
+            pw.current
+        );
     }
 
     // ── Test: Scare monster cursed crumbles immediately ───────────
@@ -2912,7 +3033,11 @@ mod tests {
                 inv_letter: None,
                 artifact: None,
             },
-            BucStatus { cursed: true, blessed: false, bknown: false },
+            BucStatus {
+                cursed: true,
+                blessed: false,
+                bknown: false,
+            },
             Enchantment { spe: 0 },
             ObjectLocation::Floor { x: 5, y: 5 },
         ));
@@ -2931,14 +3056,21 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Teleportation, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Teleportation,
+            false,
+            &mut rng,
         );
 
-        let has_teleport = events.iter().any(|e| matches!(
-            e, EngineEvent::EntityTeleported { .. }
-        ));
-        assert!(has_teleport, "uncursed teleportation should teleport the player");
+        let has_teleport = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityTeleported { .. }));
+        assert!(
+            has_teleport,
+            "uncursed teleportation should teleport the player"
+        );
     }
 
     // ── Test: Cursed teleportation → level teleport down ─────────
@@ -2951,14 +3083,24 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, cursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Teleportation, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Teleportation,
+            false,
+            &mut rng,
         );
 
-        let has_level_change = events.iter().any(|e| matches!(
-            e, EngineEvent::LevelChanged { .. } | EngineEvent::EntityTeleported { .. }
-        ));
-        assert!(has_level_change, "cursed teleportation should cause level teleport or regular teleport");
+        let has_level_change = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::LevelChanged { .. } | EngineEvent::EntityTeleported { .. }
+            )
+        });
+        assert!(
+            has_level_change,
+            "cursed teleportation should cause level teleport or regular teleport"
+        );
     }
 
     // ── Test: Gold detection detects gold ─────────────────────────
@@ -2971,8 +3113,12 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::GoldDetection, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::GoldDetection,
+            false,
+            &mut rng,
         );
 
         let has_detect = events.iter().any(|e| matches!(
@@ -2991,14 +3137,21 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::GoldDetection, true, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::GoldDetection,
+            true,
+            &mut rng,
         );
 
         let has_trap_detect = events.iter().any(|e| matches!(
             e, EngineEvent::Message { key, .. } if key.contains("trap") || key.contains("detect")
         ));
-        assert!(has_trap_detect, "confused gold detection should detect traps");
+        assert!(
+            has_trap_detect,
+            "confused gold detection should detect traps"
+        );
     }
 
     // ── Test: Food detection detects food ─────────────────────────
@@ -3011,8 +3164,12 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::FoodDetection, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::FoodDetection,
+            false,
+            &mut rng,
         );
 
         let has_detect = events.iter().any(|e| matches!(
@@ -3031,13 +3188,17 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::FoodDetection, true, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::FoodDetection,
+            true,
+            &mut rng,
         );
 
-        let has_msg = events.iter().any(|e| matches!(
-            e, EngineEvent::Message { .. }
-        ));
+        let has_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { .. }));
         assert!(has_msg, "confused food detection should emit a message");
     }
 
@@ -3051,8 +3212,12 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Earth, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Earth,
+            false,
+            &mut rng,
         );
 
         let has_earth = events.iter().any(|e| matches!(
@@ -3071,8 +3236,12 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, blessed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Earth, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Earth,
+            false,
+            &mut rng,
         );
 
         // Blessed should produce events (more boulders or different effect).
@@ -3089,13 +3258,19 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Mail, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Mail,
+            false,
+            &mut rng,
         );
 
-        let has_mail = events.iter().any(|e| matches!(
-            e, EngineEvent::Message { key, .. } if key.contains("mail")
-        ));
+        let has_mail = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::Message { key, .. } if key.contains("mail")
+            )
+        });
         assert!(has_mail, "mail scroll should produce a mail message");
     }
 
@@ -3109,13 +3284,19 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, cursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Light, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Light,
+            false,
+            &mut rng,
         );
 
-        let has_dark = events.iter().any(|e| matches!(
-            e, EngineEvent::Message { key, .. } if key.contains("dark") || key.contains("light")
-        ));
+        let has_dark = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::Message { key, .. } if key.contains("dark") || key.contains("light")
+            )
+        });
         assert!(has_dark, "cursed light scroll should create darkness");
     }
 
@@ -3129,13 +3310,19 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, blessed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Light, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Light,
+            false,
+            &mut rng,
         );
 
-        let has_light = events.iter().any(|e| matches!(
-            e, EngineEvent::Message { key, .. } if key.contains("light") || key.contains("glow")
-        ));
+        let has_light = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::Message { key, .. } if key.contains("light") || key.contains("glow")
+            )
+        });
         assert!(has_light, "blessed light should illuminate area");
     }
 
@@ -3156,8 +3343,12 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, blessed());
         let _events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::EnchantArmor, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::EnchantArmor,
+            false,
+            &mut rng,
         );
 
         // Check that enchantment increased.
@@ -3166,7 +3357,10 @@ mod tests {
 
         // Check erosion was repaired.
         let ero = world.get_component::<Erosion>(armor).unwrap();
-        assert_eq!(ero.eroded, 0, "blessed enchant armor should fix rust erosion");
+        assert_eq!(
+            ero.eroded, 0,
+            "blessed enchant armor should fix rust erosion"
+        );
         assert_eq!(ero.eroded2, 0, "blessed enchant armor should fix corrosion");
     }
 
@@ -3182,12 +3376,20 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, cursed());
         let _events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::EnchantArmor, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::EnchantArmor,
+            false,
+            &mut rng,
         );
 
         let ench = world.get_component::<Enchantment>(armor).unwrap();
-        assert!(ench.spe < 3, "cursed enchant armor should decrease spe: got {}", ench.spe);
+        assert!(
+            ench.spe < 3,
+            "cursed enchant armor should decrease spe: got {}",
+            ench.spe
+        );
     }
 
     // ── Test: Blessed remove curse uncurses all inventory ─────────
@@ -3204,8 +3406,12 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, blessed());
         let _events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::RemoveCurse, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::RemoveCurse,
+            false,
+            &mut rng,
         );
 
         // Check that all items are no longer cursed.
@@ -3235,8 +3441,12 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, blessed());
         let _events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::EnchantWeapon, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::EnchantWeapon,
+            false,
+            &mut rng,
         );
 
         let ench = world.get_component::<Enchantment>(weapon).unwrap();
@@ -3258,18 +3468,28 @@ mod tests {
         let _near = world.spawn((
             Positioned(Position::new(41, 10)),
             crate::world::Monster,
-            HitPoints { current: 10, max: 10 },
+            HitPoints {
+                current: 10,
+                max: 10,
+            },
         ));
         let _far = world.spawn((
             Positioned(Position::new(43, 10)),
             crate::world::Monster,
-            HitPoints { current: 10, max: 10 },
+            HitPoints {
+                current: 10,
+                max: 10,
+            },
         ));
 
         let scroll = spawn_scroll(&mut world, blessed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Taming, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Taming,
+            false,
+            &mut rng,
         );
 
         // Blessed should produce taming events.
@@ -3286,8 +3506,12 @@ mod tests {
 
         let scroll_c = spawn_scroll(&mut world_c, cursed());
         let events_c = read_scroll(
-            &mut world_c, player, scroll_c,
-            ScrollType::CreateMonster, false, &mut rng_c,
+            &mut world_c,
+            player,
+            scroll_c,
+            ScrollType::CreateMonster,
+            false,
+            &mut rng_c,
         );
 
         let mut world_u = make_world();
@@ -3296,16 +3520,27 @@ mod tests {
 
         let scroll_u = spawn_scroll(&mut world_u, uncursed());
         let events_u = read_scroll(
-            &mut world_u, player_u, scroll_u,
-            ScrollType::CreateMonster, false, &mut rng_u,
+            &mut world_u,
+            player_u,
+            scroll_u,
+            ScrollType::CreateMonster,
+            false,
+            &mut rng_u,
         );
 
-        let monsters_c = events_c.iter().filter(|e| matches!(e, EngineEvent::MonsterGenerated { .. })).count();
-        let monsters_u = events_u.iter().filter(|e| matches!(e, EngineEvent::MonsterGenerated { .. })).count();
+        let monsters_c = events_c
+            .iter()
+            .filter(|e| matches!(e, EngineEvent::MonsterGenerated { .. }))
+            .count();
+        let monsters_u = events_u
+            .iter()
+            .filter(|e| matches!(e, EngineEvent::MonsterGenerated { .. }))
+            .count();
         assert!(
             monsters_c >= monsters_u,
             "cursed create monster should spawn >= uncursed: {} vs {}",
-            monsters_c, monsters_u
+            monsters_c,
+            monsters_u
         );
     }
 
@@ -3319,8 +3554,12 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, cursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Amnesia, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Amnesia,
+            false,
+            &mut rng,
         );
 
         let has_forget = events.iter().any(|e| matches!(
@@ -3345,14 +3584,20 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, cursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Fire, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Fire,
+            false,
+            &mut rng,
         );
 
         // Cursed fire should damage the reader.
-        let has_damage = events.iter().any(|e| matches!(
-            e, EngineEvent::HpChange { amount, .. } if *amount < 0
-        ));
+        let has_damage = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::HpChange { amount, .. } if *amount < 0
+            )
+        });
         assert!(has_damage, "cursed fire scroll should damage the reader");
     }
 
@@ -3382,15 +3627,25 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Charging, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Charging,
+            false,
+            &mut rng,
         );
 
         // Should produce charging-related events.
-        let has_charge = events.iter().any(|e| matches!(
-            e, EngineEvent::ItemCharged { .. } | EngineEvent::Message { .. }
-        ));
-        assert!(has_charge, "uncursed charging should recharge or produce message");
+        let has_charge = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::ItemCharged { .. } | EngineEvent::Message { .. }
+            )
+        });
+        assert!(
+            has_charge,
+            "uncursed charging should recharge or produce message"
+        );
     }
 
     // ── Test: Magic mapping cursed → amnesia ─────────────────────
@@ -3403,14 +3658,21 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, cursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::MagicMapping, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::MagicMapping,
+            false,
+            &mut rng,
         );
 
         let has_amnesia = events.iter().any(|e| matches!(
             e, EngineEvent::Message { key, .. } if key.contains("amnesia") || key.contains("forget") || key.contains("mapping")
         ));
-        assert!(has_amnesia, "cursed magic mapping should cause amnesia or produce message");
+        assert!(
+            has_amnesia,
+            "cursed magic mapping should cause amnesia or produce message"
+        );
     }
 
     // ── Test: Genocide normal kills a species ─────────────────────
@@ -3423,13 +3685,19 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Genocide, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Genocide,
+            false,
+            &mut rng,
         );
 
-        let has_geno = events.iter().any(|e| matches!(
-            e, EngineEvent::Message { key, .. } if key.contains("genocide")
-        ));
+        let has_geno = events.iter().any(|e| {
+            matches!(
+                e, EngineEvent::Message { key, .. } if key.contains("genocide")
+            )
+        });
         assert!(has_geno, "uncursed genocide should emit genocide message");
     }
 
@@ -3445,8 +3713,12 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::DestroyArmor, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::DestroyArmor,
+            false,
+            &mut rng,
         );
 
         let has_destroy = events.iter().any(|e| matches!(
@@ -3468,8 +3740,12 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::StinkingCloud, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::StinkingCloud,
+            false,
+            &mut rng,
         );
 
         let has_cloud = events.iter().any(|e| matches!(
@@ -3488,16 +3764,28 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::ConfuseMonster, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::ConfuseMonster,
+            false,
+            &mut rng,
         );
 
         // Should set the player's next-melee-confuse flag.
-        let has_confuse = events.iter().any(|e| matches!(
-            e, EngineEvent::StatusApplied { status: StatusEffect::Confused, .. }
-                | EngineEvent::Message { .. }
-        ));
-        assert!(has_confuse, "confuse monster should set confuse flag or emit message");
+        let has_confuse = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Confused,
+                    ..
+                } | EngineEvent::Message { .. }
+            )
+        });
+        assert!(
+            has_confuse,
+            "confuse monster should set confuse flag or emit message"
+        );
     }
 
     // ── Test: Punishment cursed applies ball and chain ────────────
@@ -3510,12 +3798,19 @@ mod tests {
 
         let scroll = spawn_scroll(&mut world, cursed());
         let events = read_scroll(
-            &mut world, player, scroll,
-            ScrollType::Punishment, false, &mut rng,
+            &mut world,
+            player,
+            scroll,
+            ScrollType::Punishment,
+            false,
+            &mut rng,
         );
 
         // Should produce punishment event or message.
-        assert!(!events.is_empty(), "cursed punishment should produce events");
+        assert!(
+            !events.is_empty(),
+            "cursed punishment should produce events"
+        );
     }
 
     // ── Test: Scare monster uncursed survives pickup ─────────────
@@ -3535,12 +3830,19 @@ mod tests {
                 inv_letter: None,
                 artifact: None,
             },
-            BucStatus { cursed: false, blessed: false, bknown: false },
+            BucStatus {
+                cursed: false,
+                blessed: false,
+                bknown: false,
+            },
             Enchantment { spe: 0 },
             ObjectLocation::Floor { x: 5, y: 5 },
         ));
 
         let (survived, _events) = scare_monster_pickup(&mut world, scroll);
-        assert!(survived, "uncursed scare monster with spe=0 should survive first pickup");
+        assert!(
+            survived,
+            "uncursed scare monster with spe=0 should survive first pickup"
+        );
     }
 }

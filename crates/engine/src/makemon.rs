@@ -8,8 +8,8 @@ use hecs::Entity;
 use rand::Rng;
 
 use nethack_babel_data::{
-    GenoFlags, MonsterDef, MonsterFlags, MonsterId, ObjectClass, ObjectCore,
-    ObjectLocation, ObjectTypeId,
+    GenoFlags, MonsterDef, MonsterFlags, MonsterId, ObjectClass, ObjectCore, ObjectLocation,
+    ObjectTypeId,
 };
 
 use crate::action::Position;
@@ -17,8 +17,8 @@ use crate::dungeon::Terrain;
 use crate::event::EngineEvent;
 use crate::status::{Intrinsics, StatusEffects};
 use crate::world::{
-    ArmorClass, Boulder, CreationOrder, DisplaySymbol, GameWorld, HitPoints,
-    Monster, MovementPoints, Name, Positioned, Speed, NORMAL_SPEED,
+    ArmorClass, Boulder, DisplaySymbol, GameWorld, HitPoints, Monster, MovementPoints,
+    NORMAL_SPEED, Name, Positioned, Speed,
 };
 
 // ---------------------------------------------------------------------------
@@ -164,10 +164,7 @@ pub fn goodpos(
                 }
                 // Swimming monsters can traverse water.
                 if d.flags.contains(MonsterFlags::SWIM) {
-                    return matches!(
-                        cell.terrain,
-                        Terrain::Pool | Terrain::Moat | Terrain::Water
-                    );
+                    return matches!(cell.terrain, Terrain::Pool | Terrain::Moat | Terrain::Water);
                 }
                 // Phase through walls.
                 if d.flags.contains(MonsterFlags::WALLWALK) {
@@ -222,11 +219,7 @@ pub fn goodpos(
 /// Find a valid position for a monster near the given coordinates.
 ///
 /// Searches in expanding rings up to distance 10 from `near`.
-pub fn enexto(
-    world: &GameWorld,
-    near: Position,
-    monster_def: &MonsterDef,
-) -> Option<Position> {
+pub fn enexto(world: &GameWorld, near: Position, monster_def: &MonsterDef) -> Option<Position> {
     let flags = GoodPosFlags::AVOID_MONSTER;
 
     // Check the target position first.
@@ -688,10 +681,11 @@ fn rnd(n: u32, rng: &mut impl Rng) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::CreationOrder;
     use arrayvec::ArrayVec;
     use nethack_babel_data::*;
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_rng() -> SmallRng {
         SmallRng::seed_from_u64(42)
@@ -1004,10 +998,7 @@ mod tests {
     #[test]
     fn goodpos_avoids_existing_monster() {
         let mut world = make_test_world();
-        let _mon = world.spawn((
-            Monster,
-            Positioned(Position::new(10, 10)),
-        ));
+        let _mon = world.spawn((Monster, Positioned(Position::new(10, 10))));
 
         // Without AVOID_MONSTER, position is accepted.
         assert!(goodpos(
@@ -1034,10 +1025,7 @@ mod tests {
         let def = test_monster_def(1, "ant", 2, 12);
 
         // Place a monster at (10, 10) so enexto needs to find a neighbor.
-        let _mon = world.spawn((
-            Monster,
-            Positioned(Position::new(10, 10)),
-        ));
+        let _mon = world.spawn((Monster, Positioned(Position::new(10, 10))));
 
         let pos = enexto(&world, Position::new(10, 10), &def);
         assert!(pos.is_some());

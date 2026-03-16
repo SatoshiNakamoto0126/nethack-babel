@@ -516,7 +516,13 @@ mod tests {
     use nethack_babel_data::schema::*;
 
     fn make_mon(flags: MonsterFlags) -> MonsterDef {
-        make_mon_full(flags, ResistanceSet::empty(), MonsterSize::Medium, 'h', MonsterSound::Silent)
+        make_mon_full(
+            flags,
+            ResistanceSet::empty(),
+            MonsterSize::Medium,
+            'h',
+            MonsterSound::Silent,
+        )
     }
 
     fn make_mon_full(
@@ -735,13 +741,19 @@ mod tests {
     #[test]
     fn test_verysmall() {
         let tiny = make_mon_full(
-            MonsterFlags::empty(), ResistanceSet::empty(),
-            MonsterSize::Tiny, 'h', MonsterSound::Silent,
+            MonsterFlags::empty(),
+            ResistanceSet::empty(),
+            MonsterSize::Tiny,
+            'h',
+            MonsterSound::Silent,
         );
         assert!(verysmall(&tiny));
         let small = make_mon_full(
-            MonsterFlags::empty(), ResistanceSet::empty(),
-            MonsterSize::Small, 'h', MonsterSound::Silent,
+            MonsterFlags::empty(),
+            ResistanceSet::empty(),
+            MonsterSize::Small,
+            'h',
+            MonsterSound::Silent,
         );
         assert!(!verysmall(&small));
     }
@@ -749,13 +761,19 @@ mod tests {
     #[test]
     fn test_bigmonst() {
         let large = make_mon_full(
-            MonsterFlags::empty(), ResistanceSet::empty(),
-            MonsterSize::Large, 'h', MonsterSound::Silent,
+            MonsterFlags::empty(),
+            ResistanceSet::empty(),
+            MonsterSize::Large,
+            'h',
+            MonsterSound::Silent,
         );
         assert!(bigmonst(&large));
         let medium = make_mon_full(
-            MonsterFlags::empty(), ResistanceSet::empty(),
-            MonsterSize::Medium, 'h', MonsterSound::Silent,
+            MonsterFlags::empty(),
+            ResistanceSet::empty(),
+            MonsterSize::Medium,
+            'h',
+            MonsterSound::Silent,
         );
         assert!(!bigmonst(&medium));
     }
@@ -765,15 +783,21 @@ mod tests {
     #[test]
     fn test_resistances() {
         let fire_mon = make_mon_full(
-            MonsterFlags::empty(), ResistanceSet::FIRE,
-            MonsterSize::Medium, 'h', MonsterSound::Silent,
+            MonsterFlags::empty(),
+            ResistanceSet::FIRE,
+            MonsterSize::Medium,
+            'h',
+            MonsterSound::Silent,
         );
         assert!(resists_fire(&fire_mon));
         assert!(!resists_cold(&fire_mon));
 
         let cold_mon = make_mon_full(
-            MonsterFlags::empty(), ResistanceSet::COLD,
-            MonsterSize::Medium, 'h', MonsterSound::Silent,
+            MonsterFlags::empty(),
+            ResistanceSet::COLD,
+            MonsterSize::Medium,
+            'h',
+            MonsterSound::Silent,
         );
         assert!(resists_cold(&cold_mon));
         assert!(!resists_fire(&cold_mon));
@@ -781,7 +805,9 @@ mod tests {
         let multi = make_mon_full(
             MonsterFlags::empty(),
             ResistanceSet::SLEEP | ResistanceSet::SHOCK | ResistanceSet::POISON,
-            MonsterSize::Medium, 'h', MonsterSound::Silent,
+            MonsterSize::Medium,
+            'h',
+            MonsterSound::Silent,
         );
         assert!(resists_sleep(&multi));
         assert!(resists_electricity(&multi));
@@ -796,7 +822,9 @@ mod tests {
         let mon = make_mon_full(
             MonsterFlags::empty(),
             ResistanceSet::DISINTEGRATE | ResistanceSet::ACID | ResistanceSet::STONE,
-            MonsterSize::Medium, 'h', MonsterSound::Silent,
+            MonsterSize::Medium,
+            'h',
+            MonsterSound::Silent,
         );
         assert!(resists_disintegration(&mon));
         assert!(resists_acid(&mon));
@@ -865,8 +893,11 @@ mod tests {
 
         // Very small
         let tiny = make_mon_full(
-            MonsterFlags::empty(), ResistanceSet::empty(),
-            MonsterSize::Tiny, 'h', MonsterSound::Silent,
+            MonsterFlags::empty(),
+            ResistanceSet::empty(),
+            MonsterSize::Tiny,
+            'h',
+            MonsterSound::Silent,
         );
         assert!(cant_wield(&tiny));
 
@@ -914,14 +945,20 @@ mod tests {
     #[test]
     fn test_is_silent() {
         let silent = make_mon_full(
-            MonsterFlags::empty(), ResistanceSet::empty(),
-            MonsterSize::Medium, 'h', MonsterSound::Silent,
+            MonsterFlags::empty(),
+            ResistanceSet::empty(),
+            MonsterSize::Medium,
+            'h',
+            MonsterSound::Silent,
         );
         assert!(is_silent(&silent));
 
         let noisy = make_mon_full(
-            MonsterFlags::empty(), ResistanceSet::empty(),
-            MonsterSize::Medium, 'h', MonsterSound::Bark,
+            MonsterFlags::empty(),
+            ResistanceSet::empty(),
+            MonsterSize::Medium,
+            'h',
+            MonsterSound::Bark,
         );
         assert!(!is_silent(&noisy));
     }

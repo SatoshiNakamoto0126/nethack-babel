@@ -17,9 +17,7 @@ use rand::Rng;
 
 use crate::event::{DeathCause, EngineEvent, HpSource};
 use crate::role::Role;
-use crate::world::{
-    Attributes, ExperienceLevel, GameWorld, HitPoints, Power,
-};
+use crate::world::{Attributes, ExperienceLevel, GameWorld, HitPoints, Power};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -304,10 +302,7 @@ pub fn pluslvl(
         lvl.0 = new_level;
     }
 
-    events.push(EngineEvent::LevelUp {
-        entity,
-        new_level,
-    });
+    events.push(EngineEvent::LevelUp { entity, new_level });
 
     if incremental {
         events.push(EngineEvent::msg_with(
@@ -345,11 +340,7 @@ pub fn pluslvl(
 ///
 /// `drainer`: if Some, the name of the entity causing the drain.
 /// Level drain at level 1 with a drainer is fatal.
-pub fn losexp(
-    world: &mut GameWorld,
-    entity: Entity,
-    drainer: Option<&str>,
-) -> Vec<EngineEvent> {
+pub fn losexp(world: &mut GameWorld, entity: Entity, drainer: Option<&str>) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let current_level = match world.get_component::<ExperienceLevel>(entity) {
@@ -487,12 +478,12 @@ mod tests {
     #[test]
     fn newuexp_table() {
         assert_eq!(newuexp(0), 0);
-        assert_eq!(newuexp(1), 20);        // 10 * 2^1 = 20
-        assert_eq!(newuexp(2), 40);        // 10 * 2^2 = 40
-        assert_eq!(newuexp(5), 320);       // 10 * 2^5 = 320
-        assert_eq!(newuexp(9), 5120);      // 10 * 2^9 = 5120
-        assert_eq!(newuexp(10), 10_000);   // 10000 * 2^0
-        assert_eq!(newuexp(14), 160_000);  // 10000 * 2^4
+        assert_eq!(newuexp(1), 20); // 10 * 2^1 = 20
+        assert_eq!(newuexp(2), 40); // 10 * 2^2 = 40
+        assert_eq!(newuexp(5), 320); // 10 * 2^5 = 320
+        assert_eq!(newuexp(9), 5120); // 10 * 2^9 = 5120
+        assert_eq!(newuexp(10), 10_000); // 10000 * 2^0
+        assert_eq!(newuexp(14), 160_000); // 10000 * 2^4
         assert_eq!(newuexp(19), 5_120_000);
         assert_eq!(newuexp(20), 10_000_000); // 10000000 * 1
         assert_eq!(newuexp(30), 110_000_000); // 10000000 * 11
@@ -736,10 +727,9 @@ mod tests {
         // Already level 1.
         let events = losexp(&mut world, player, Some("vampire"));
 
-        let died = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::EntityDied { .. }
-        ));
+        let died = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityDied { .. }));
         assert!(died, "losing level at 1 with drainer should be fatal");
     }
 
@@ -752,11 +742,13 @@ mod tests {
 
         let events = losexp(&mut world, player, None);
 
-        let died = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::EntityDied { .. }
-        ));
-        assert!(!died, "losing level at 1 without drainer should NOT be fatal");
+        let died = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityDied { .. }));
+        assert!(
+            !died,
+            "losing level at 1 without drainer should NOT be fatal"
+        );
     }
 
     // --- Test 14: gain_experience triggers level-up ---
@@ -846,10 +838,12 @@ mod tests {
         // Level up to 3 should trigger new rank for most roles.
         let events = pluslvl(&mut world, player, true, Role::Wizard, &mut rng);
 
-        let has_title_msg = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "exper-new-title"
-        ));
+        let has_title_msg = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "exper-new-title"
+            )
+        });
         assert!(has_title_msg, "leveling from 2 to 3 should change title");
     }
 }

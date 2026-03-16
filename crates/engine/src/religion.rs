@@ -265,12 +265,7 @@ pub fn adjust_luck(state: &mut ReligionState, delta: i8) {
 /// - Cursed luckstone: negative luck does NOT recover (positive still
 ///   decays).
 /// - Uncursed luckstone: no decay in either direction.
-pub fn luck_timeout(
-    state: &mut ReligionState,
-    current_turn: u32,
-    base_luck: i8,
-    has_amulet: bool,
-) {
+pub fn luck_timeout(state: &mut ReligionState, current_turn: u32, base_luck: i8, has_amulet: bool) {
     let period = if has_amulet || state.god_anger > 0 {
         300u32
     } else {
@@ -548,8 +543,7 @@ pub struct CorpseOffering {
 ///
 /// Returns 0 if the corpse is too old (> 50 turns) and not an acid blob.
 pub fn sacrifice_value(offering: &CorpseOffering, current_turn: u32) -> i32 {
-    let fresh = offering.is_acid_blob
-        || current_turn <= offering.creation_turn + 50;
+    let fresh = offering.is_acid_blob || current_turn <= offering.creation_turn + 50;
     if !fresh {
         return 0;
     }
@@ -659,9 +653,7 @@ pub fn sacrifice<R: Rng>(
 
     // Cross-aligned altar sacrifice
     if altar_alignment != state.alignment {
-        return sacrifice_cross_aligned(
-            state, value, altar_alignment, rng, events,
-        );
+        return sacrifice_cross_aligned(state, value, altar_alignment, rng, events);
     }
 
     // Same-alignment altar, normal sacrifice
@@ -760,13 +752,11 @@ fn sacrifice_own_altar<R: Rng>(
         if bestow_artifact_check(state, num_existing_artifacts, rng) {
             state.god_gifts += 1;
             let nart = num_existing_artifacts;
-            state.bless_cooldown =
-                rnz(rng, 300 + 50 * nart as i32, state.experience_level);
+            state.bless_cooldown = rnz(rng, 300 + 50 * nart as i32, state.experience_level);
             events.push(EngineEvent::msg("sacrifice-gift"));
         } else {
             // Luck increase from sacrifice
-            let luck_increase = (value * LUCKMAX as i32 / (MAXVALUE * 2))
-                .max(0) as i8;
+            let luck_increase = (value * LUCKMAX as i32 / (MAXVALUE * 2)).max(0) as i8;
             let effective = if state.luck >= value as i8 {
                 0
             } else if state.luck + luck_increase > value as i8 {
@@ -798,8 +788,7 @@ pub fn bestow_artifact_check<R: Rng>(
     if state.experience_level <= 2 || state.effective_luck() < 0 {
         return false;
     }
-    let denom =
-        6 + 2 * state.god_gifts as u32 * num_existing_artifacts;
+    let denom = 6 + 2 * state.god_gifts as u32 * num_existing_artifacts;
     rng.random_range(0..denom) == 0
 }
 
@@ -840,9 +829,7 @@ pub enum PrayerType {
 /// - If ualign.type != p_aligntyp (but not opposite): halve record
 /// - If same: use record as-is
 pub fn prayer_alignment(state: &ReligionState, prayer_target: Alignment) -> i32 {
-    if state.alignment != Alignment::Neutral
-        && state.alignment as i8 == -(prayer_target as i8)
-    {
+    if state.alignment != Alignment::Neutral && state.alignment as i8 == -(prayer_target as i8) {
         // Diametrically opposed alignment — negate
         -state.alignment_record
     } else if state.alignment != prayer_target {
@@ -953,13 +940,14 @@ fn maybe_undead_override(
     if state.is_undead
         && !state.in_gehennom
         && let Some(align) = p_aligntyp
-        && align == Alignment::Lawful {
-            return PrayerType::UndeadDanger;
-        }
-        // Neutral: 10% chance of danger — we can't roll here in a
-        // pure function, so we return the base type and let the caller
-        // handle the random check. For deterministic evaluation we
-        // skip this (the `pray()` function handles it).
+        && align == Alignment::Lawful
+    {
+        return PrayerType::UndeadDanger;
+    }
+    // Neutral: 10% chance of danger — we can't roll here in a
+    // pure function, so we return the base type and let the caller
+    // handle the random check. For deterministic evaluation we
+    // skip this (the `pray()` function handles it).
     base_ptype
 }
 
@@ -990,9 +978,7 @@ pub fn pray<R: Rng>(
     rng: &mut R,
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
-    let prayer_type = evaluate_prayer(
-        state, on_altar, altar_alignment, trouble, is_moloch_altar,
-    );
+    let prayer_type = evaluate_prayer(state, on_altar, altar_alignment, trouble, is_moloch_altar);
 
     match prayer_type {
         PrayerType::Success => {
@@ -1008,8 +994,13 @@ pub fn pray<R: Rng>(
             } else {
                 // On own altar: bless water, revive pets (simplified)
                 events.extend(pleased(
-                    state, player_entity, trouble, troubles, on_altar,
-                    false, rng,
+                    state,
+                    player_entity,
+                    trouble,
+                    troubles,
+                    on_altar,
+                    false,
+                    rng,
                 ));
             }
         }
@@ -1024,13 +1015,16 @@ pub fn pray<R: Rng>(
             } else {
                 // Cross-aligned altar: attempt to curse water (simplified),
                 // then pleased with penalty
-                let _alignment = prayer_alignment(
-                    state,
-                    altar_alignment.unwrap_or(state.alignment),
-                );
+                let _alignment =
+                    prayer_alignment(state, altar_alignment.unwrap_or(state.alignment));
                 events.extend(pleased(
-                    state, player_entity, trouble, troubles, on_altar,
-                    true, rng,
+                    state,
+                    player_entity,
+                    trouble,
+                    troubles,
+                    on_altar,
+                    true,
+                    rng,
                 ));
             }
         }
@@ -1092,8 +1086,14 @@ pub fn pray_simple<R: Rng>(
     rng: &mut R,
 ) -> Vec<EngineEvent> {
     pray(
-        state, player_entity, on_altar, altar_alignment,
-        Trouble::None, &[], false, rng,
+        state,
+        player_entity,
+        on_altar,
+        altar_alignment,
+        Trouble::None,
+        &[],
+        false,
+        rng,
     )
 }
 
@@ -1145,9 +1145,7 @@ fn pleased<R: Rng>(
             action = action.min(3);
         }
         if state.alignment_record < STRIDENT {
-            action = if state.alignment_record > 0
-                || rng.random_range(0..2u32) == 0
-            {
+            action = if state.alignment_record > 0 || rng.random_range(0..2u32) == 0 {
                 1
             } else {
                 0
@@ -1297,11 +1295,9 @@ fn pleased<R: Rng>(
     state.bless_cooldown = rnz(rng, 350, state.experience_level);
 
     // Kick on butt: extra cooldown for demigod/crowned
-    let kick_on_butt =
-        (if state.demigod { 1 } else { 0 }) + (if state.crowned { 1 } else { 0 });
+    let kick_on_butt = (if state.demigod { 1 } else { 0 }) + (if state.crowned { 1 } else { 0 });
     if kick_on_butt > 0 {
-        state.bless_cooldown += kick_on_butt
-            * rnz(rng, 1000, state.experience_level);
+        state.bless_cooldown += kick_on_butt * rnz(rng, 1000, state.experience_level);
     }
 
     events.push(EngineEvent::msg("pray-pleased"));
@@ -1352,17 +1348,15 @@ fn fix_trouble(player_entity: Entity, trouble: Trouble) -> EngineEvent {
             entity: player_entity,
             status: StatusEffect::Hallucinating,
         },
-        _ => EngineEvent::msg_with("pray-fix-trouble", vec![
-            ("trouble", format!("{:?}", trouble)),
-        ]),
+        _ => EngineEvent::msg_with(
+            "pray-fix-trouble",
+            vec![("trouble", format!("{:?}", trouble))],
+        ),
     }
 }
 
 /// Effects of praying too soon.
-fn prayer_too_soon<R: Rng>(
-    state: &mut ReligionState,
-    rng: &mut R,
-) -> Vec<EngineEvent> {
+fn prayer_too_soon<R: Rng>(state: &mut ReligionState, rng: &mut R) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     state.bless_cooldown += rnz(rng, 250, state.experience_level);
     adjust_luck(state, -3);
@@ -1431,11 +1425,7 @@ fn prayer_angry_for<R: Rng>(
         }
         7 | 8 => {
             // Summon hostile minions
-            let result = crate::minion::summon_angry_minion(
-                resp_god,
-                state.experience_level,
-                rng,
-            );
+            let result = crate::minion::summon_angry_minion(resp_god, state.experience_level, rng);
             events.push(EngineEvent::msg_with(
                 "pray-angry-summon",
                 vec![
@@ -1531,17 +1521,16 @@ pub fn crowning<R: Rng>(
         Alignment::Neutral => "the Envoy of Balance",
         Alignment::Chaotic => "chosen to steal souls",
     };
-    events.push(EngineEvent::msg_with("crown-msg", vec![
-        ("title", title.to_string()),
-    ]));
+    events.push(EngineEvent::msg_with(
+        "crown-msg",
+        vec![("title", title.to_string())],
+    ));
 
     // Increase cooldown for crowning (kick_on_butt mechanism)
     // kick_on_butt = (demigod ? 1 : 0) + (crowned ? 1 : 0), max 2
     // Since we just set crowned=true, crowned is always 1 here
-    let kick_on_butt =
-        1 + if state.demigod { 1i32 } else { 0 };
-    state.bless_cooldown += kick_on_butt
-        * rnz(rng, 1000, state.experience_level);
+    let kick_on_butt = 1 + if state.demigod { 1i32 } else { 0 };
+    state.bless_cooldown += kick_on_butt * rnz(rng, 1000, state.experience_level);
 
     events
 }
@@ -1571,12 +1560,7 @@ pub fn alignment_name(alignment: Alignment) -> &'static str {
 /// Check whether HP is critically low (NetHack's `critically_low_hp`).
 ///
 /// `level` is the experience level (1..30).
-pub fn critically_low_hp(
-    current_hp: i32,
-    max_hp: i32,
-    level: u8,
-    only_if_injured: bool,
-) -> bool {
+pub fn critically_low_hp(current_hp: i32, max_hp: i32, level: u8, only_if_injured: bool) -> bool {
     if only_if_injured && current_hp >= max_hp {
         return false;
     }
@@ -1703,13 +1687,7 @@ mod tests {
         state.current_hp = 30; // not full, so healing triggers
 
         let mut rng = make_rng();
-        let events = pray_simple(
-            &mut state,
-            dummy_entity(),
-            false,
-            None,
-            &mut rng,
-        );
+        let events = pray_simple(&mut state, dummy_entity(), false, None, &mut rng);
 
         // Should have healed to full and set cooldown
         assert_eq!(state.current_hp, state.max_hp);
@@ -1733,13 +1711,7 @@ mod tests {
         state.bless_cooldown = 100; // still cooling down
 
         let mut rng = make_rng();
-        let events = pray_simple(
-            &mut state,
-            dummy_entity(),
-            false,
-            None,
-            &mut rng,
-        );
+        let events = pray_simple(&mut state, dummy_entity(), false, None, &mut rng);
 
         // Cooldown should have increased
         assert!(state.bless_cooldown > 100);
@@ -1798,13 +1770,7 @@ mod tests {
         };
 
         let mut rng = make_rng();
-        let events = sacrifice(
-            &mut state,
-            &offering,
-            Alignment::Neutral,
-            0,
-            &mut rng,
-        );
+        let events = sacrifice(&mut state, &offering, Alignment::Neutral, 0, &mut rng);
 
         // alignment_record should have improved
         assert!(state.alignment_record > -5);
@@ -1834,13 +1800,7 @@ mod tests {
         };
 
         let mut rng = make_rng();
-        let events = sacrifice(
-            &mut state,
-            &offering,
-            Alignment::Neutral,
-            0,
-            &mut rng,
-        );
+        let events = sacrifice(&mut state, &offering, Alignment::Neutral, 0, &mut rng);
 
         assert!(state.god_anger < 10);
         assert!(events.iter().any(|e| matches!(
@@ -2164,18 +2124,9 @@ mod tests {
         assert_eq!(god_name(roles::VALKYRIE, Alignment::Chaotic), "Loki");
 
         // Female deity — underscore stripped
-        assert_eq!(
-            god_name(roles::HEALER, Alignment::Lawful),
-            "Athena"
-        );
-        assert_eq!(
-            god_title(roles::HEALER, Alignment::Lawful),
-            "goddess"
-        );
-        assert_eq!(
-            god_title(roles::VALKYRIE, Alignment::Lawful),
-            "god"
-        );
+        assert_eq!(god_name(roles::HEALER, Alignment::Lawful), "Athena");
+        assert_eq!(god_title(roles::HEALER, Alignment::Lawful), "goddess");
+        assert_eq!(god_title(roles::VALKYRIE, Alignment::Lawful), "god");
     }
 
     #[test]
@@ -2260,9 +2211,7 @@ mod tests {
         // Spec test vector #1: major trouble, ublesscnt=201 → too early
         let mut state = make_state();
         state.bless_cooldown = 201;
-        let ptype = evaluate_prayer(
-            &state, false, None, Trouble::Stoned, false,
-        );
+        let ptype = evaluate_prayer(&state, false, None, Trouble::Stoned, false);
         assert_eq!(ptype, PrayerType::TooSoon);
     }
 
@@ -2271,9 +2220,7 @@ mod tests {
         // Spec test vector #2: major trouble, ublesscnt=200 → NOT too early
         let mut state = make_state();
         state.bless_cooldown = 200;
-        let ptype = evaluate_prayer(
-            &state, false, None, Trouble::Stoned, false,
-        );
+        let ptype = evaluate_prayer(&state, false, None, Trouble::Stoned, false);
         assert_ne!(ptype, PrayerType::TooSoon);
     }
 
@@ -2282,9 +2229,7 @@ mod tests {
         // Spec test vector #3: minor trouble, ublesscnt=101 → too early
         let mut state = make_state();
         state.bless_cooldown = 101;
-        let ptype = evaluate_prayer(
-            &state, false, None, Trouble::Punished, false,
-        );
+        let ptype = evaluate_prayer(&state, false, None, Trouble::Punished, false);
         assert_eq!(ptype, PrayerType::TooSoon);
     }
 
@@ -2293,9 +2238,7 @@ mod tests {
         // Spec test vector #4: minor trouble, ublesscnt=100 → NOT too early
         let mut state = make_state();
         state.bless_cooldown = 100;
-        let ptype = evaluate_prayer(
-            &state, false, None, Trouble::Punished, false,
-        );
+        let ptype = evaluate_prayer(&state, false, None, Trouble::Punished, false);
         assert_ne!(ptype, PrayerType::TooSoon);
     }
 
@@ -2304,9 +2247,7 @@ mod tests {
         // Spec test vector #5: no trouble, ublesscnt=1 → too early
         let mut state = make_state();
         state.bless_cooldown = 1;
-        let ptype = evaluate_prayer(
-            &state, false, None, Trouble::None, false,
-        );
+        let ptype = evaluate_prayer(&state, false, None, Trouble::None, false);
         assert_eq!(ptype, PrayerType::TooSoon);
     }
 
@@ -2315,9 +2256,7 @@ mod tests {
         // Spec test vector #6: no trouble, ublesscnt=0 → not too early
         let mut state = make_state();
         state.bless_cooldown = 0;
-        let ptype = evaluate_prayer(
-            &state, false, None, Trouble::None, false,
-        );
+        let ptype = evaluate_prayer(&state, false, None, Trouble::None, false);
         assert_ne!(ptype, PrayerType::TooSoon);
     }
 
@@ -2331,8 +2270,14 @@ mod tests {
         state.alignment_record = 20;
         let mut rng = make_rng();
         let events = pray(
-            &mut state, dummy_entity(), false, None,
-            Trouble::None, &[], false, &mut rng,
+            &mut state,
+            dummy_entity(),
+            false,
+            None,
+            Trouble::None,
+            &[],
+            false,
+            &mut rng,
         );
         assert!(events.iter().any(|e| matches!(
             e,
@@ -2348,8 +2293,14 @@ mod tests {
         let old_record = state.alignment_record;
         let mut rng = make_rng();
         let events = pray(
-            &mut state, dummy_entity(), true, None,
-            Trouble::None, &[], true, &mut rng,
+            &mut state,
+            dummy_entity(),
+            true,
+            None,
+            Trouble::None,
+            &[],
+            true,
+            &mut rng,
         );
         // Should have lost 2 alignment
         assert_eq!(state.alignment_record, old_record - 2);
@@ -2366,9 +2317,7 @@ mod tests {
         let mut state = make_state();
         state.is_demon = true;
         // On a lawful altar
-        let ptype = evaluate_prayer(
-            &state, true, Some(Alignment::Lawful), Trouble::None, false,
-        );
+        let ptype = evaluate_prayer(&state, true, Some(Alignment::Lawful), Trouble::None, false);
         assert_eq!(ptype, PrayerType::DemonRejected);
     }
 
@@ -2377,9 +2326,7 @@ mod tests {
         let mut state = make_state();
         state.is_demon = true;
         // On a chaotic altar — still rejected per the known bug
-        let ptype = evaluate_prayer(
-            &state, true, Some(Alignment::Chaotic), Trouble::None, false,
-        );
+        let ptype = evaluate_prayer(&state, true, Some(Alignment::Chaotic), Trouble::None, false);
         assert_eq!(ptype, PrayerType::DemonRejected);
     }
 
@@ -2388,9 +2335,7 @@ mod tests {
         let mut state = make_state();
         state.is_demon = true;
         // Neutral altar is the only one that works (known bug)
-        let ptype = evaluate_prayer(
-            &state, true, Some(Alignment::Neutral), Trouble::None, false,
-        );
+        let ptype = evaluate_prayer(&state, true, Some(Alignment::Neutral), Trouble::None, false);
         assert_ne!(ptype, PrayerType::DemonRejected);
     }
 
@@ -2402,9 +2347,7 @@ mod tests {
         state.is_undead = true;
         state.in_gehennom = false;
         // On lawful altar → always dangerous
-        let ptype = evaluate_prayer(
-            &state, true, Some(Alignment::Lawful), Trouble::None, false,
-        );
+        let ptype = evaluate_prayer(&state, true, Some(Alignment::Lawful), Trouble::None, false);
         assert_eq!(ptype, PrayerType::UndeadDanger);
     }
 
@@ -2414,9 +2357,7 @@ mod tests {
         state.is_undead = true;
         state.in_gehennom = true;
         // In Gehennom, undead override does NOT apply
-        let ptype = evaluate_prayer(
-            &state, true, Some(Alignment::Lawful), Trouble::None, false,
-        );
+        let ptype = evaluate_prayer(&state, true, Some(Alignment::Lawful), Trouble::None, false);
         assert_ne!(ptype, PrayerType::UndeadDanger);
     }
 
@@ -2456,10 +2397,11 @@ mod tests {
         state.bless_cooldown = 0;
         state.alignment_record = 10;
         let mut rng = make_rng();
-        let _events = pray_simple(
-            &mut state, dummy_entity(), false, None, &mut rng,
+        let _events = pray_simple(&mut state, dummy_entity(), false, None, &mut rng);
+        assert!(
+            state.bless_cooldown > 0,
+            "cooldown should be set after prayer"
         );
-        assert!(state.bless_cooldown > 0, "cooldown should be set after prayer");
     }
 
     // --- Anti-automation (spec 2.2) ---
@@ -2472,14 +2414,22 @@ mod tests {
         state.alignment_record = 10;
         let mut rng = make_rng();
         let _events = pray(
-            &mut state, dummy_entity(), false, None,
-            Trouble::None, &[], false, &mut rng,
+            &mut state,
+            dummy_entity(),
+            false,
+            None,
+            Trouble::None,
+            &[],
+            false,
+            &mut rng,
         );
         // Extra cooldown: (200000 - 100000) / 100 = 1000
         // Plus the rnz(350) base cooldown
-        assert!(state.bless_cooldown > 1000,
+        assert!(
+            state.bless_cooldown > 1000,
             "bless_cooldown should be > 1000, was {}",
-            state.bless_cooldown);
+            state.bless_cooldown
+        );
     }
 
     // --- pleased() effect priority chain (spec 2.8) ---
@@ -2493,21 +2443,35 @@ mod tests {
         let mut rng = Pcg64::seed_from_u64(42);
         let troubles = vec![Trouble::Sick, Trouble::Hungry];
         let events = pray(
-            &mut state, dummy_entity(), false, None,
-            Trouble::Sick, &troubles, false, &mut rng,
+            &mut state,
+            dummy_entity(),
+            false,
+            None,
+            Trouble::Sick,
+            &troubles,
+            false,
+            &mut rng,
         );
         // Should fix at least the major trouble
-        let has_fix = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusRemoved { status: StatusEffect::Sick, .. }
-        ) || matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("fix-trouble")
-        ));
-        assert!(has_fix || events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("pray-pleased")
-        )));
+        let has_fix = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusRemoved {
+                    status: StatusEffect::Sick,
+                    ..
+                }
+            ) || matches!(
+                e,
+                EngineEvent::Message { key, .. } if key.contains("fix-trouble")
+            )
+        });
+        assert!(
+            has_fix
+                || events.iter().any(|e| matches!(
+                    e,
+                    EngineEvent::Message { key, .. } if key.contains("pray-pleased")
+                ))
+        );
     }
 
     #[test]
@@ -2520,9 +2484,14 @@ mod tests {
         let _old_record = state.alignment_record;
         let mut rng = make_rng();
         let events = pray(
-            &mut state, dummy_entity(), true,
+            &mut state,
+            dummy_entity(),
+            true,
             Some(Alignment::Lawful),
-            Trouble::None, &[], false, &mut rng,
+            Trouble::None,
+            &[],
+            false,
+            &mut rng,
         );
         // Cross-aligned prayer: penalty applied
         assert!(events.iter().any(|e| matches!(
@@ -2544,9 +2513,11 @@ mod tests {
         assert!(state.crowned);
         // kick_on_butt = 1 (crowned) + 1 (demigod) = 2
         // cooldown should be > 2 * rnz(1000, ...) which is large
-        assert!(state.bless_cooldown > 500,
+        assert!(
+            state.bless_cooldown > 500,
             "crowned demigod cooldown too low: {}",
-            state.bless_cooldown);
+            state.bless_cooldown
+        );
     }
 
     #[test]
@@ -2688,9 +2659,7 @@ mod tests {
             unicorn_alignment: Some(Alignment::Chaotic),
             is_undead_monster: false,
         };
-        let value = eval_offering(
-            &mut state, &offering, Alignment::Neutral, 1000,
-        );
+        let value = eval_offering(&mut state, &offering, Alignment::Neutral, 1000);
         assert_eq!(value, 9, "should be difficulty+1+3 = 9");
         assert_eq!(state.alignment_record, 10, "should gain 5 alignment");
     }
@@ -2722,14 +2691,14 @@ mod tests {
                 unicorn_alignment: None,
                 is_undead_monster: false,
             };
-            let events = sacrifice(
-                &mut s, &offering, Alignment::Chaotic, 0, &mut rng,
-            );
-            if events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. }
-                    if key.contains("altar-convert")
-            )) {
+            let events = sacrifice(&mut s, &offering, Alignment::Chaotic, 0, &mut rng);
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::Message { key, .. }
+                        if key.contains("altar-convert")
+                )
+            }) {
                 successes += 1;
             }
         }
@@ -2764,9 +2733,7 @@ mod tests {
             is_undead_monster: false,
         };
         let mut rng = make_rng();
-        let _events = sacrifice(
-            &mut state, &offering, Alignment::Lawful, 0, &mut rng,
-        );
+        let _events = sacrifice(&mut state, &offering, Alignment::Lawful, 0, &mut rng);
         assert_eq!(state.alignment, Alignment::Lawful, "should have converted");
         assert!(state.has_converted, "should be marked as converted");
         // Luck penalty of -3
@@ -2793,9 +2760,7 @@ mod tests {
             is_undead_monster: false,
         };
         let mut rng = make_rng();
-        let _events = sacrifice(
-            &mut state, &offering, Alignment::Lawful, 0, &mut rng,
-        );
+        let _events = sacrifice(&mut state, &offering, Alignment::Lawful, 0, &mut rng);
         // Should NOT have converted
         assert_eq!(state.alignment, Alignment::Neutral);
         // Heavy penalties
@@ -2892,9 +2857,7 @@ mod tests {
             is_undead_monster: false,
         };
         let mut rng = make_rng();
-        let _events = sacrifice(
-            &mut state, &offering, Alignment::Neutral, 0, &mut rng,
-        );
+        let _events = sacrifice(&mut state, &offering, Alignment::Neutral, 0, &mut rng);
         assert_eq!(state.alignment_record, old_record - 5);
         assert_eq!(state.god_anger, 3);
         assert_eq!(state.luck, old_luck - 5);
@@ -2919,9 +2882,7 @@ mod tests {
             is_undead_monster: false,
         };
         let mut rng = make_rng();
-        let _events = sacrifice(
-            &mut state, &offering, Alignment::Chaotic, 0, &mut rng,
-        );
+        let _events = sacrifice(&mut state, &offering, Alignment::Chaotic, 0, &mut rng);
         // Chaotic: +5 alignment for same-race sacrifice
         assert!(state.alignment_record > old_record);
     }
@@ -2946,9 +2907,7 @@ mod tests {
             is_undead_monster: false,
         };
         let mut rng = make_rng();
-        let events = sacrifice(
-            &mut state, &offering, Alignment::Neutral, 0, &mut rng,
-        );
+        let events = sacrifice(&mut state, &offering, Alignment::Neutral, 0, &mut rng);
         assert_eq!(state.alignment_record, old_record - 3);
         assert!(events.iter().any(|e| matches!(
             e,
@@ -3121,11 +3080,12 @@ mod tests {
         state.luck = -1;
         state.luck_bonus = 0;
         state.bless_cooldown = 0;
-        let ptype = evaluate_prayer(
-            &state, false, None, Trouble::None, false,
+        let ptype = evaluate_prayer(&state, false, None, Trouble::None, false);
+        assert_eq!(
+            ptype,
+            PrayerType::Punished,
+            "negative effective luck should cause Punished"
         );
-        assert_eq!(ptype, PrayerType::Punished,
-            "negative effective luck should cause Punished");
     }
 
     #[test]
@@ -3134,11 +3094,12 @@ mod tests {
         state.luck = -1;
         state.luck_bonus = 3; // luckstone makes effective = 2
         state.bless_cooldown = 0;
-        let ptype = evaluate_prayer(
-            &state, false, None, Trouble::None, false,
+        let ptype = evaluate_prayer(&state, false, None, Trouble::None, false);
+        assert_ne!(
+            ptype,
+            PrayerType::Punished,
+            "positive effective luck (with stone) should not be Punished"
         );
-        assert_ne!(ptype, PrayerType::Punished,
-            "positive effective luck (with stone) should not be Punished");
     }
 
     // --- Alignment limit (spec 1.2) ---
@@ -3159,8 +3120,10 @@ mod tests {
         state.turn = 1000; // ALIGNLIM = 15
         state.alignment_record = 20;
         adjust_alignment(&mut state, 1);
-        assert_eq!(state.alignment_record, 15,
-            "should be capped at ALIGNLIM=15");
+        assert_eq!(
+            state.alignment_record, 15,
+            "should be capped at ALIGNLIM=15"
+        );
     }
 
     // --- Alignment abuse tracking ---
@@ -3255,9 +3218,7 @@ mod tests {
         state.luck_bonus = 0;
         state.blessed_amount = 5;
         let mut rng = make_rng();
-        let _events = prayer_angry_for(
-            &mut state, dummy_entity(), Alignment::Lawful, &mut rng,
-        );
+        let _events = prayer_angry_for(&mut state, dummy_entity(), Alignment::Lawful, &mut rng);
         // blessed_amount should be zeroed
         assert_eq!(state.blessed_amount, 0);
         // Cooldown should be set
@@ -3273,9 +3234,7 @@ mod tests {
         state.luck_bonus = 0;
         state.blessed_amount = 3;
         let mut rng = make_rng();
-        let _events = prayer_angry_for(
-            &mut state, dummy_entity(), Alignment::Neutral, &mut rng,
-        );
+        let _events = prayer_angry_for(&mut state, dummy_entity(), Alignment::Neutral, &mut rng);
         assert_eq!(state.blessed_amount, 0);
         assert!(state.bless_cooldown > 0);
     }
@@ -3289,17 +3248,26 @@ mod tests {
         let mut sum_lucky: i64 = 0;
         let mut sum_neutral: i64 = 0;
         for _ in 0..n {
-            sum_lucky += rnl(&mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
-                             100, 10) as i64;
-            sum_neutral += rnl(&mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
-                               100, 0) as i64;
+            sum_lucky += rnl(
+                &mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
+                100,
+                10,
+            ) as i64;
+            sum_neutral += rnl(
+                &mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
+                100,
+                0,
+            ) as i64;
         }
         // With positive luck, the average should be lower than neutral.
         let avg_lucky = sum_lucky as f64 / n as f64;
         let avg_neutral = sum_neutral as f64 / n as f64;
-        assert!(avg_lucky < avg_neutral,
+        assert!(
+            avg_lucky < avg_neutral,
             "positive luck avg ({:.1}) should be lower than neutral ({:.1})",
-            avg_lucky, avg_neutral);
+            avg_lucky,
+            avg_neutral
+        );
     }
 
     #[test]
@@ -3309,16 +3277,25 @@ mod tests {
         let mut sum_unlucky: i64 = 0;
         let mut sum_neutral: i64 = 0;
         for _ in 0..n {
-            sum_unlucky += rnl(&mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
-                               100, -10) as i64;
-            sum_neutral += rnl(&mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
-                                100, 0) as i64;
+            sum_unlucky += rnl(
+                &mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
+                100,
+                -10,
+            ) as i64;
+            sum_neutral += rnl(
+                &mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
+                100,
+                0,
+            ) as i64;
         }
         let avg_unlucky = sum_unlucky as f64 / n as f64;
         let avg_neutral = sum_neutral as f64 / n as f64;
-        assert!(avg_unlucky > avg_neutral,
+        assert!(
+            avg_unlucky > avg_neutral,
             "negative luck avg ({:.1}) should be higher than neutral ({:.1})",
-            avg_unlucky, avg_neutral);
+            avg_unlucky,
+            avg_neutral
+        );
     }
 
     #[test]
@@ -3337,9 +3314,17 @@ mod tests {
         let mut rng = Pcg64::seed_from_u64(999);
         for _ in 0..500 {
             let val = rnl(&mut rng, 10, 13);
-            assert!(val >= 0 && val < 10, "rnl with luck 13 should be in [0,10), got {}", val);
+            assert!(
+                val >= 0 && val < 10,
+                "rnl with luck 13 should be in [0,10), got {}",
+                val
+            );
             let val = rnl(&mut rng, 10, -13);
-            assert!(val >= 0 && val < 10, "rnl with luck -13 should be in [0,10), got {}", val);
+            assert!(
+                val >= 0 && val < 10,
+                "rnl with luck -13 should be in [0,10), got {}",
+                val
+            );
         }
     }
 
@@ -3352,17 +3337,23 @@ mod tests {
         let mut sum_small_luck: i64 = 0;
         let mut sum_big_luck: i64 = 0;
         for _ in 0..n {
-            sum_small_luck += rnl(&mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
-                                  10, 3) as i64;
-            sum_big_luck += rnl(&mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
-                                10, 10) as i64;
+            sum_small_luck +=
+                rnl(&mut Pcg64::seed_from_u64(rng.random_range(0..10000)), 10, 3) as i64;
+            sum_big_luck += rnl(
+                &mut Pcg64::seed_from_u64(rng.random_range(0..10000)),
+                10,
+                10,
+            ) as i64;
         }
         // Bigger luck should have lower average.
         let avg_small = sum_small_luck as f64 / n as f64;
         let avg_big = sum_big_luck as f64 / n as f64;
-        assert!(avg_big <= avg_small,
+        assert!(
+            avg_big <= avg_small,
             "bigger luck ({:.1}) should have lower-or-equal avg than small luck ({:.1})",
-            avg_big, avg_small);
+            avg_big,
+            avg_small
+        );
     }
 
     #[test]
@@ -3388,9 +3379,12 @@ mod tests {
                 pass_unlucky += 1;
             }
         }
-        assert!(pass_lucky > pass_unlucky,
+        assert!(
+            pass_lucky > pass_unlucky,
             "lucky passes ({}) should exceed unlucky passes ({})",
-            pass_lucky, pass_unlucky);
+            pass_lucky,
+            pass_unlucky
+        );
     }
 
     // --- Luck adjust and timeout ---
@@ -3482,17 +3476,19 @@ mod tests {
             is_undead_monster: false,
         };
         let mut rng = make_rng();
-        let _events = sacrifice(
-            &mut state, &offering, Alignment::Neutral, 0, &mut rng,
-        );
+        let _events = sacrifice(&mut state, &offering, Alignment::Neutral, 0, &mut rng);
         // Neutral: reduction = value * 300 / MAXVALUE = 21 * 300 / 24 = 262
-        assert!(state.bless_cooldown < 500,
+        assert!(
+            state.bless_cooldown < 500,
             "cooldown should have decreased, was {}",
-            state.bless_cooldown);
+            state.bless_cooldown
+        );
         // 500 - 262 = 238 (approx)
-        assert!(state.bless_cooldown < 250 && state.bless_cooldown > 200,
+        assert!(
+            state.bless_cooldown < 250 && state.bless_cooldown > 200,
             "cooldown should be ~238, was {}",
-            state.bless_cooldown);
+            state.bless_cooldown
+        );
     }
 
     #[test]
@@ -3516,13 +3512,13 @@ mod tests {
             is_undead_monster: false,
         };
         let mut rng = make_rng();
-        let _events = sacrifice(
-            &mut state, &offering, Alignment::Chaotic, 0, &mut rng,
-        );
+        let _events = sacrifice(&mut state, &offering, Alignment::Chaotic, 0, &mut rng);
         // Chaotic: reduction = 21 * 500 / 24 = 437
         // 500 - 437 = 63
-        assert!(state.bless_cooldown < 100,
+        assert!(
+            state.bless_cooldown < 100,
             "chaotic cooldown should be ~63, was {}",
-            state.bless_cooldown);
+            state.bless_cooldown
+        );
     }
 }

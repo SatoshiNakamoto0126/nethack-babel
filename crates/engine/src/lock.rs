@@ -65,7 +65,11 @@ pub fn pick_lock(
         .unwrap_or(3);
 
     // Check for a locked door at target_pos.
-    let terrain = world.dungeon().current_level.get(target_pos).map(|c| c.terrain);
+    let terrain = world
+        .dungeon()
+        .current_level
+        .get(target_pos)
+        .map(|c| c.terrain);
     if terrain == Some(Terrain::DoorLocked) {
         return pick_lock_door(world, target_pos, tool, skill, rng);
     }
@@ -98,7 +102,9 @@ fn pick_lock_door(
             .current_level
             .set_terrain(target_pos, Terrain::DoorClosed);
         events.push(EngineEvent::msg("lock-pick-success"));
-        events.push(EngineEvent::DoorClosed { position: target_pos });
+        events.push(EngineEvent::DoorClosed {
+            position: target_pos,
+        });
     } else {
         events.push(EngineEvent::msg("lock-pick-fail"));
         events.extend(maybe_break_lockpick(tool, rng));
@@ -153,10 +159,8 @@ fn maybe_break_lockpick(tool: ToolType, rng: &mut impl Rng) -> Vec<EngineEvent> 
 
 /// Find a locked container entity at the given position.
 fn find_locked_container_at(world: &GameWorld, pos: Position) -> Option<Entity> {
-    for (entity, (_container, positioned)) in world
-        .ecs()
-        .query::<(&Container, &Positioned)>()
-        .iter()
+    for (entity, (_container, positioned)) in
+        world.ecs().query::<(&Container, &Positioned)>().iter()
     {
         if positioned.0 == pos && _container.locked {
             return Some(entity);
@@ -191,7 +195,11 @@ pub fn force_lock(
         .unwrap_or(10);
 
     // Check for a locked door.
-    let terrain = world.dungeon().current_level.get(target_pos).map(|c| c.terrain);
+    let terrain = world
+        .dungeon()
+        .current_level
+        .get(target_pos)
+        .map(|c| c.terrain);
     if terrain == Some(Terrain::DoorLocked) {
         let success = rn2(rng, strength) > 10;
         if success {
@@ -200,7 +208,9 @@ pub fn force_lock(
                 .current_level
                 .set_terrain(target_pos, Terrain::DoorOpen);
             events.push(EngineEvent::msg("lock-force-success"));
-            events.push(EngineEvent::DoorBroken { position: target_pos });
+            events.push(EngineEvent::DoorBroken {
+                position: target_pos,
+            });
         } else {
             events.push(EngineEvent::msg("lock-force-fail"));
         }
@@ -247,14 +257,20 @@ pub fn lock_door(
         return events;
     }
 
-    let terrain = world.dungeon().current_level.get(target_pos).map(|c| c.terrain);
+    let terrain = world
+        .dungeon()
+        .current_level
+        .get(target_pos)
+        .map(|c| c.terrain);
     if terrain == Some(Terrain::DoorClosed) {
         world
             .dungeon_mut()
             .current_level
             .set_terrain(target_pos, Terrain::DoorLocked);
         events.push(EngineEvent::msg("lock-door-locked"));
-        events.push(EngineEvent::DoorLocked { position: target_pos });
+        events.push(EngineEvent::DoorLocked {
+            position: target_pos,
+        });
     } else if terrain == Some(Terrain::DoorLocked) {
         events.push(EngineEvent::msg("lock-already-locked"));
     } else {
@@ -288,10 +304,7 @@ mod tests {
 
     /// Place a locked door east of the player.
     fn place_locked_door(world: &mut GameWorld) -> Position {
-        let player_pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(world.player()).unwrap().0;
         let door_pos = Position::new(player_pos.x + 1, player_pos.y);
         world
             .dungeon_mut()
@@ -302,10 +315,7 @@ mod tests {
 
     /// Place a closed door east of the player.
     fn place_closed_door(world: &mut GameWorld) -> Position {
-        let player_pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(world.player()).unwrap().0;
         let door_pos = Position::new(player_pos.x + 1, player_pos.y);
         world
             .dungeon_mut()
@@ -325,16 +335,9 @@ mod tests {
             let player = world.player();
             let door_pos = place_locked_door(&mut world);
 
-            let events = pick_lock(
-                &mut world, player, door_pos, ToolType::Key, &mut rng,
-            );
+            let events = pick_lock(&mut world, player, door_pos, ToolType::Key, &mut rng);
 
-            let terrain = world
-                .dungeon()
-                .current_level
-                .get(door_pos)
-                .unwrap()
-                .terrain;
+            let terrain = world.dungeon().current_level.get(door_pos).unwrap().terrain;
             assert_eq!(
                 terrain,
                 Terrain::DoorClosed,
@@ -361,14 +364,14 @@ mod tests {
             let player = world.player();
             let door_pos = place_locked_door(&mut world);
 
-            let events = pick_lock(
-                &mut world, player, door_pos, ToolType::LockPick, &mut rng,
-            );
+            let events = pick_lock(&mut world, player, door_pos, ToolType::LockPick, &mut rng);
 
-            if events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "lock-pick-success"
-            )) {
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::Message { key, .. } if key == "lock-pick-success"
+                )
+            }) {
                 successes += 1;
             }
         }
@@ -393,14 +396,14 @@ mod tests {
             let player = world.player();
             let door_pos = place_locked_door(&mut world);
 
-            let events = pick_lock(
-                &mut world, player, door_pos, ToolType::LockPick, &mut rng,
-            );
+            let events = pick_lock(&mut world, player, door_pos, ToolType::LockPick, &mut rng);
 
-            if events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "lock-lockpick-breaks"
-            )) {
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::Message { key, .. } if key == "lock-lockpick-breaks"
+                )
+            }) {
                 breaks += 1;
             }
         }
@@ -411,10 +414,7 @@ mod tests {
             breaks > 0,
             "lockpick should break at least once in {trials} trials"
         );
-        assert!(
-            breaks < 100,
-            "lockpick breaks ({breaks}) too frequent"
-        );
+        assert!(breaks < 100, "lockpick breaks ({breaks}) too frequent");
     }
 
     // ── Force lock tests ──────────────────────────────────────────
@@ -439,10 +439,12 @@ mod tests {
             let door_pos = place_locked_door(&mut world);
             let events = force_lock(&mut world, player, door_pos, &mut rng);
 
-            if events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "lock-force-success"
-            )) {
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::Message { key, .. } if key == "lock-force-success"
+                )
+            }) {
                 successes += 1;
             }
         }
@@ -465,12 +467,7 @@ mod tests {
 
             let events = force_lock(&mut world, player, door_pos, &mut rng);
 
-            let terrain = world
-                .dungeon()
-                .current_level
-                .get(door_pos)
-                .unwrap()
-                .terrain;
+            let terrain = world.dungeon().current_level.get(door_pos).unwrap().terrain;
             assert_eq!(
                 terrain,
                 Terrain::DoorLocked,
@@ -496,20 +493,17 @@ mod tests {
 
         let events = lock_door(&mut world, player, door_pos, ToolType::Key);
 
-        let terrain = world
-            .dungeon()
-            .current_level
-            .get(door_pos)
-            .unwrap()
-            .terrain;
-        assert_eq!(terrain, Terrain::DoorLocked, "closed door should become locked");
-
-        assert!(
-            events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "lock-door-locked"
-            )),
+        let terrain = world.dungeon().current_level.get(door_pos).unwrap().terrain;
+        assert_eq!(
+            terrain,
+            Terrain::DoorLocked,
+            "closed door should become locked"
         );
+
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "lock-door-locked"
+        )),);
     }
 
     #[test]
@@ -520,20 +514,17 @@ mod tests {
 
         let events = lock_door(&mut world, player, door_pos, ToolType::LockPick);
 
-        let terrain = world
-            .dungeon()
-            .current_level
-            .get(door_pos)
-            .unwrap()
-            .terrain;
-        assert_eq!(terrain, Terrain::DoorClosed, "lockpick should not lock a door");
-
-        assert!(
-            events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "lock-need-key"
-            )),
+        let terrain = world.dungeon().current_level.get(door_pos).unwrap().terrain;
+        assert_eq!(
+            terrain,
+            Terrain::DoorClosed,
+            "lockpick should not lock a door"
         );
+
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "lock-need-key"
+        )),);
     }
 
     #[test]
@@ -544,15 +535,11 @@ mod tests {
 
         // Target a position with no locked door or container (default stone).
         let empty_pos = Position::new(50, 10);
-        let events = pick_lock(
-            &mut world, player, empty_pos, ToolType::Key, &mut rng,
-        );
+        let events = pick_lock(&mut world, player, empty_pos, ToolType::Key, &mut rng);
 
-        assert!(
-            events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "lock-no-target"
-            )),
-        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "lock-no-target"
+        )),);
     }
 }

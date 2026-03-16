@@ -67,11 +67,7 @@ pub fn worm_length(world: &GameWorld, worm: Entity) -> usize {
 /// closest to the head takes the old head position.
 ///
 /// Returns events describing the move.
-pub fn move_worm(
-    world: &mut GameWorld,
-    worm: Entity,
-    new_head_pos: Position,
-) -> Vec<EngineEvent> {
+pub fn move_worm(world: &mut GameWorld, worm: Entity, new_head_pos: Position) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let old_head_pos = match world.get_component::<Positioned>(worm) {
@@ -93,15 +89,16 @@ pub fn move_worm(
     // Shift tail segments: old head position becomes segments[0],
     // each subsequent segment takes the position of its predecessor.
     if let Some(mut ws) = world.get_component_mut::<WormSegments>(worm)
-        && !ws.segments.is_empty() {
-            // Walk from the tail tip toward the head, shifting each
-            // segment to the position of the one in front of it.
-            let len = ws.segments.len();
-            for i in (1..len).rev() {
-                ws.segments[i] = ws.segments[i - 1];
-            }
-            ws.segments[0] = old_head_pos;
+        && !ws.segments.is_empty()
+    {
+        // Walk from the tail tip toward the head, shifting each
+        // segment to the position of the one in front of it.
+        let len = ws.segments.len();
+        for i in (1..len).rev() {
+            ws.segments[i] = ws.segments[i - 1];
         }
+        ws.segments[0] = old_head_pos;
+    }
 
     events
 }
@@ -123,10 +120,8 @@ pub fn grow_worm(world: &mut GameWorld, worm: Entity) -> Vec<EngineEvent> {
             .get_component::<Positioned>(worm)
             .map(|p| p.0)
             .unwrap_or(Position::new(0, 0));
-        ws.map(|w| {
-            w.segments.last().copied().unwrap_or(head_pos)
-        })
-        .unwrap_or(head_pos)
+        ws.map(|w| w.segments.last().copied().unwrap_or(head_pos))
+            .unwrap_or(head_pos)
     };
 
     if let Some(mut ws) = world.get_component_mut::<WormSegments>(worm) {
@@ -339,11 +334,7 @@ pub enum WormHitResult {
 /// If damage is sufficient (>= 5), the worm is cut at that segment.
 /// If the worm's effective HP (approximated as `length * 4`) is exceeded
 /// by total damage, the worm is killed.
-pub fn hit_worm_segment(
-    worm: &mut WormBody,
-    segment_pos: Position,
-    damage: i32,
-) -> WormHitResult {
+pub fn hit_worm_segment(worm: &mut WormBody, segment_pos: Position, damage: i32) -> WormHitResult {
     // Find the segment index.
     let idx = worm.segments.iter().position(|&p| p == segment_pos);
 
@@ -405,11 +396,7 @@ pub fn worm_tail_pos(world: &GameWorld, worm: Entity) -> Option<Position> {
 
 /// Cut a worm entity at a specific segment index, removing segments
 /// at and beyond that index. Returns the positions of removed segments.
-pub fn cut_worm_at(
-    world: &mut GameWorld,
-    worm: Entity,
-    segment_idx: usize,
-) -> Vec<Position> {
+pub fn cut_worm_at(world: &mut GameWorld, worm: Entity, segment_idx: usize) -> Vec<Position> {
     if let Some(mut ws) = world.get_component_mut::<WormSegments>(worm) {
         if segment_idx < ws.segments.len() {
             let removed = ws.segments.split_off(segment_idx);
@@ -505,7 +492,11 @@ mod tests {
         let events = hit_worm_tail(&mut world, worm, 2, 5);
         assert_eq!(worm_length(&world, worm), 3); // head + 2
         // Should have ExtraDamage and tail-severed messages.
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::ExtraDamage { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::ExtraDamage { .. }))
+        );
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "worm-tail-severed"
@@ -520,7 +511,11 @@ mod tests {
 
         // Deal lethal damage.
         let events = hit_worm_tail(&mut world, worm, 0, 999);
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::EntityDied { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityDied { .. }))
+        );
     }
 
     // ── WormBody standalone tests ──

@@ -12,14 +12,9 @@ use rand::Rng;
 use nethack_babel_data::{AttackDef, AttackMethod, DamageType};
 
 use crate::action::Position;
-use crate::combat::{
-    resolve_monster_attack_slot,
-    MonsterAttacks, MonsterResistances,
-};
+use crate::combat::{MonsterAttacks, MonsterResistances, resolve_monster_attack_slot};
 use crate::event::{DeathCause, EngineEvent, HpSource};
-use crate::world::{
-    ArmorClass, ExperienceLevel, GameWorld, HitPoints, Positioned, Tame,
-};
+use crate::world::{ArmorClass, ExperienceLevel, GameWorld, HitPoints, Positioned, Tame};
 
 // ---------------------------------------------------------------------------
 // Monster-vs-monster melee resolution
@@ -68,9 +63,8 @@ pub fn resolve_monster_vs_monster(
                 break;
             }
 
-            let slot_events = resolve_monster_attack_slot(
-                world, attacker, defender, attack, i, rng,
-            );
+            let slot_events =
+                resolve_monster_attack_slot(world, attacker, defender, attack, i, rng);
             events.extend(slot_events);
         }
     } else {
@@ -106,9 +100,7 @@ pub fn resolve_monster_vs_monster(
             });
 
             let attacker_name = world.entity_name(attacker);
-            let new_hp = if let Some(mut hp) =
-                world.get_component_mut::<HitPoints>(defender)
-            {
+            let new_hp = if let Some(mut hp) = world.get_component_mut::<HitPoints>(defender) {
                 hp.current -= damage;
                 events.push(EngineEvent::HpChange {
                     entity: defender,
@@ -142,9 +134,9 @@ pub fn resolve_monster_vs_monster(
 ///
 /// Scans the event list for an `EntityDied` event matching `defender`.
 pub fn defender_died(events: &[EngineEvent], defender: Entity) -> bool {
-    events.iter().any(|e| {
-        matches!(e, EngineEvent::EntityDied { entity, .. } if *entity == defender)
-    })
+    events
+        .iter()
+        .any(|e| matches!(e, EngineEvent::EntityDied { entity, .. } if *entity == defender))
 }
 
 // ---------------------------------------------------------------------------
@@ -156,11 +148,7 @@ pub fn defender_died(events: &[EngineEvent], defender: Entity) -> bool {
 /// A monster flees from a stronger opponent when its HP is critically low
 /// (below 1/4 of max) and the attacker's level is significantly higher.
 /// Matches C NetHack's `mflee` logic for monster-vs-monster.
-pub fn should_monster_flee_from(
-    world: &GameWorld,
-    defender: Entity,
-    attacker: Entity,
-) -> bool {
+pub fn should_monster_flee_from(world: &GameWorld, defender: Entity, attacker: Entity) -> bool {
     let (def_hp, def_max) = match world.get_component::<HitPoints>(defender) {
         Some(hp) => (hp.current, hp.max),
         None => return false,
@@ -208,14 +196,13 @@ pub fn resolve_mhitm_attack_slot(
     let mut events = Vec::new();
 
     // Delegate to the shared combat resolution.
-    let slot_events = resolve_monster_attack_slot(
-        world, attacker, defender, attack, attack_index, rng,
-    );
+    let slot_events =
+        resolve_monster_attack_slot(world, attacker, defender, attack, attack_index, rng);
 
     // Check if the attacker was killed (e.g., exploding attack).
-    let attacker_died = slot_events.iter().any(|e| {
-        matches!(e, EngineEvent::EntityDied { entity, .. } if *entity == attacker)
-    });
+    let attacker_died = slot_events
+        .iter()
+        .any(|e| matches!(e, EngineEvent::EntityDied { entity, .. } if *entity == attacker));
 
     events.extend(slot_events);
 
@@ -228,9 +215,13 @@ pub fn resolve_mhitm_attack_slot(
     // Only applies if the attack method is melee contact.
     let is_contact = matches!(
         attack.method,
-        AttackMethod::Claw | AttackMethod::Bite | AttackMethod::Kick
-        | AttackMethod::Butt | AttackMethod::Hug | AttackMethod::Touch
-        | AttackMethod::Tentacle
+        AttackMethod::Claw
+            | AttackMethod::Bite
+            | AttackMethod::Kick
+            | AttackMethod::Butt
+            | AttackMethod::Hug
+            | AttackMethod::Touch
+            | AttackMethod::Tentacle
     );
 
     if is_contact {
@@ -242,18 +233,16 @@ pub fn resolve_mhitm_attack_slot(
             .map(|ma| ma.0.clone())
             .unwrap_or_default();
 
-        let has_acid_passive = defender_attacks.iter().any(|a| {
-            a.method == AttackMethod::None && a.damage_type == DamageType::Acid
-        });
+        let has_acid_passive = defender_attacks
+            .iter()
+            .any(|a| a.method == AttackMethod::None && a.damage_type == DamageType::Acid);
 
         if has_acid_passive {
             let acid_dmg = rng.random_range(1..=4i32);
             // Check if attacker resists acid.
             let resists = world
                 .get_component::<MonsterResistances>(attacker)
-                .is_some_and(|r| {
-                    r.0.contains(nethack_babel_data::ResistanceSet::ACID)
-                });
+                .is_some_and(|r| r.0.contains(nethack_babel_data::ResistanceSet::ACID));
             if !resists && acid_dmg > 0 {
                 let attacker_name = world.entity_name(attacker);
                 let defender_name = world.entity_name(defender);
@@ -280,9 +269,9 @@ pub fn resolve_mhitm_attack_slot(
         }
 
         // Stoning passive: cockatrice-like monsters.
-        let has_stone_passive = defender_attacks.iter().any(|a| {
-            a.method == AttackMethod::None && a.damage_type == DamageType::Stone
-        });
+        let has_stone_passive = defender_attacks
+            .iter()
+            .any(|a| a.method == AttackMethod::None && a.damage_type == DamageType::Stone);
 
         if has_stone_passive {
             // Monster-vs-monster stoning: apply stone status to attacker.
@@ -344,9 +333,7 @@ pub fn resolve_monster_vs_monster_full(
                 break;
             }
 
-            let slot_events = resolve_mhitm_attack_slot(
-                world, attacker, defender, attack, i, rng,
-            );
+            let slot_events = resolve_mhitm_attack_slot(world, attacker, defender, attack, i, rng);
             events.extend(slot_events);
         }
     } else {
@@ -446,12 +433,11 @@ mod tests {
     use crate::dungeon::Terrain;
     use crate::pets::PetState;
     use crate::world::{
-        ArmorClass, Attributes, ExperienceLevel, GameWorld,
-        HitPoints, Monster, MovementPoints, Name, Positioned, Speed, Tame,
-        NORMAL_SPEED,
+        ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints, Monster, MovementPoints,
+        NORMAL_SPEED, Name, Positioned, Speed, Tame,
     };
-    use rand_pcg::Pcg64;
     use rand::SeedableRng;
+    use rand_pcg::Pcg64;
 
     fn test_rng() -> Pcg64 {
         Pcg64::seed_from_u64(54321)
@@ -470,11 +456,20 @@ mod tests {
         world
     }
 
-    fn spawn_monster(world: &mut GameWorld, pos: Position, name: &str, hp: i32, level: u8) -> Entity {
+    fn spawn_monster(
+        world: &mut GameWorld,
+        pos: Position,
+        name: &str,
+        hp: i32,
+        level: u8,
+    ) -> Entity {
         world.spawn((
             Monster,
             Positioned(pos),
-            HitPoints { current: hp, max: hp },
+            HitPoints {
+                current: hp,
+                max: hp,
+            },
             ArmorClass(10),
             Attributes::default(),
             ExperienceLevel(level),
@@ -490,7 +485,10 @@ mod tests {
             Monster,
             Tame,
             Positioned(pos),
-            HitPoints { current: hp, max: hp },
+            HitPoints {
+                current: hp,
+                max: hp,
+            },
             ArmorClass(10),
             Attributes::default(),
             ExperienceLevel(3),
@@ -515,12 +513,17 @@ mod tests {
 
         // Should have either a hit or miss event.
         let has_combat = events.iter().any(|e| {
-            matches!(e, EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. })
+            matches!(
+                e,
+                EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+            )
         });
         assert!(has_combat, "should produce a combat event");
 
         // If hit, defender HP should have decreased.
-        let hit = events.iter().any(|e| matches!(e, EngineEvent::MeleeHit { .. }));
+        let hit = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::MeleeHit { .. }));
         if hit {
             let hp = world.get_component::<HitPoints>(defender).unwrap();
             assert!(hp.current < 20, "defender HP should decrease on hit");
@@ -547,16 +550,17 @@ mod tests {
             }
 
             let mut rng = Pcg64::seed_from_u64(seed);
-            let events = resolve_monster_vs_monster(
-                &mut world, attacker, defender, &mut rng,
-            );
+            let events = resolve_monster_vs_monster(&mut world, attacker, defender, &mut rng);
 
             if defender_died(&events, defender) {
                 died = true;
                 break;
             }
         }
-        assert!(died, "high-level attacker should eventually kill 1-HP defender");
+        assert!(
+            died,
+            "high-level attacker should eventually kill 1-HP defender"
+        );
     }
 
     // ── Test: pet attacks adjacent hostile ───────────────────────
@@ -571,22 +575,24 @@ mod tests {
         let pet = spawn_pet(&mut world, pet_pos, "little dog", 15);
         let hostile = spawn_monster(&mut world, hostile_pos, "goblin", 10, 1);
 
-        let target = find_pet_combat_target(
-            &world, pet, pet_pos, player_pos, false,
-        );
+        let target = find_pet_combat_target(&world, pet, pet_pos, player_pos, false);
 
         assert_eq!(target, Some(hostile), "pet should target adjacent hostile");
 
         // Now resolve combat.
         let mut rng = test_rng();
-        let events = resolve_monster_vs_monster(
-            &mut world, pet, hostile, &mut rng,
-        );
+        let events = resolve_monster_vs_monster(&mut world, pet, hostile, &mut rng);
 
         let has_combat = events.iter().any(|e| {
-            matches!(e, EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. })
+            matches!(
+                e,
+                EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+            )
         });
-        assert!(has_combat, "pet should produce combat events against hostile");
+        assert!(
+            has_combat,
+            "pet should produce combat events against hostile"
+        );
     }
 
     // ── Test: pet ignores peaceful (tame) monsters ──────────────
@@ -601,9 +607,7 @@ mod tests {
         // Spawn another tame monster adjacent.
         let _ally = spawn_pet(&mut world, Position::new(10, 8), "kitten", 10);
 
-        let target = find_pet_combat_target(
-            &world, pet, pet_pos, player_pos, false,
-        );
+        let target = find_pet_combat_target(&world, pet, pet_pos, player_pos, false);
 
         assert!(target.is_none(), "pet should not target tame allies");
     }
@@ -621,19 +625,13 @@ mod tests {
 
         // Place a hostile at (11,8) -- adjacent to pet but NOT to player
         // (Chebyshev distance 3 from player).
-        let _far_hostile = spawn_monster(
-            &mut world, Position::new(11, 8), "goblin", 10, 1,
-        );
+        let _far_hostile = spawn_monster(&mut world, Position::new(11, 8), "goblin", 10, 1);
 
         // Place a hostile at (9,8) -- adjacent to pet AND to player
         // (Chebyshev distance 1 from player).
-        let near_hostile = spawn_monster(
-            &mut world, Position::new(9, 8), "orc", 10, 1,
-        );
+        let near_hostile = spawn_monster(&mut world, Position::new(9, 8), "orc", 10, 1);
 
-        let target = find_pet_combat_target(
-            &world, pet, pet_pos, player_pos, false,
-        );
+        let target = find_pet_combat_target(&world, pet, pet_pos, player_pos, false);
 
         // Should prefer the one adjacent to the player (score 100 vs 50).
         assert_eq!(
@@ -647,15 +645,13 @@ mod tests {
 
     #[test]
     fn test_monster_vs_monster_with_attacks() {
-        use nethack_babel_data::{AttackDef, AttackMethod, DamageType, DiceExpr};
         use crate::combat::MonsterAttacks;
+        use nethack_babel_data::{AttackDef, AttackMethod, DamageType, DiceExpr};
 
         let mut world = make_test_world();
         let mut rng = test_rng();
 
-        let attacker = spawn_monster(
-            &mut world, Position::new(5, 5), "wolf", 20, 5,
-        );
+        let attacker = spawn_monster(&mut world, Position::new(5, 5), "wolf", 20, 5);
 
         // Give the attacker a bite attack: AT_BITE, AD_PHYS, 2d6.
         let mut attacks = arrayvec::ArrayVec::new();
@@ -664,21 +660,25 @@ mod tests {
             damage_type: DamageType::Physical,
             dice: DiceExpr { count: 2, sides: 6 },
         });
-        let _ = world.ecs_mut().insert_one(attacker, MonsterAttacks(attacks));
+        let _ = world
+            .ecs_mut()
+            .insert_one(attacker, MonsterAttacks(attacks));
 
-        let defender = spawn_monster(
-            &mut world, Position::new(6, 5), "rat", 20, 1,
-        );
+        let defender = spawn_monster(&mut world, Position::new(6, 5), "rat", 20, 1);
 
-        let events = resolve_monster_vs_monster(
-            &mut world, attacker, defender, &mut rng,
-        );
+        let events = resolve_monster_vs_monster(&mut world, attacker, defender, &mut rng);
 
         // Should have produced combat events using the attack array.
         let has_combat = events.iter().any(|e| {
-            matches!(e, EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. })
+            matches!(
+                e,
+                EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+            )
         });
-        assert!(has_combat, "should produce combat events with MonsterAttacks");
+        assert!(
+            has_combat,
+            "should produce combat events with MonsterAttacks"
+        );
     }
 
     // ── Test: should_monster_flee_from ────────────────────────────
@@ -735,20 +735,16 @@ mod tests {
 
     #[test]
     fn test_mhitm_passive_acid_damages_attacker() {
-        use nethack_babel_data::{AttackDef, AttackMethod, DamageType, DiceExpr};
         use crate::combat::MonsterAttacks;
+        use nethack_babel_data::{AttackDef, AttackMethod, DamageType, DiceExpr};
 
         let mut world = make_test_world();
         let mut rng = test_rng();
 
-        let attacker = spawn_monster(
-            &mut world, Position::new(5, 5), "goblin", 30, 3,
-        );
+        let attacker = spawn_monster(&mut world, Position::new(5, 5), "goblin", 30, 3);
 
         // Defender is an acidic blob with a passive acid "attack".
-        let defender = spawn_monster(
-            &mut world, Position::new(6, 5), "acid blob", 20, 2,
-        );
+        let defender = spawn_monster(&mut world, Position::new(6, 5), "acid blob", 20, 2);
 
         // Give defender a passive acid attack (AT_NONE, AD_ACID).
         let mut def_attacks = arrayvec::ArrayVec::new();
@@ -757,7 +753,9 @@ mod tests {
             damage_type: DamageType::Acid,
             dice: DiceExpr { count: 1, sides: 4 },
         });
-        let _ = world.ecs_mut().insert_one(defender, MonsterAttacks(def_attacks));
+        let _ = world
+            .ecs_mut()
+            .insert_one(defender, MonsterAttacks(def_attacks));
 
         // Attacker's claw attack (contact).
         let attack = AttackDef {
@@ -766,9 +764,8 @@ mod tests {
             dice: DiceExpr { count: 1, sides: 6 },
         };
 
-        let events = resolve_mhitm_attack_slot(
-            &mut world, attacker, defender, &attack, 0, &mut rng,
-        );
+        let events =
+            resolve_mhitm_attack_slot(&mut world, attacker, defender, &attack, 0, &mut rng);
 
         // Attacker should have taken passive acid damage.
         let attacker_hp = world.get_component::<HitPoints>(attacker).unwrap();
@@ -783,23 +780,24 @@ mod tests {
             matches!(e, EngineEvent::HpChange { entity, amount, .. }
                 if *entity == attacker && *amount < 0)
         });
-        assert!(attacker_damaged, "should have HpChange for attacker from acid");
+        assert!(
+            attacker_damaged,
+            "should have HpChange for attacker from acid"
+        );
     }
 
     // ── Test: resolve_monster_vs_monster_full ─────────────────────
 
     #[test]
     fn test_full_round_stops_if_attacker_dies() {
-        use nethack_babel_data::{AttackDef, AttackMethod, DamageType, DiceExpr};
         use crate::combat::MonsterAttacks;
+        use nethack_babel_data::{AttackDef, AttackMethod, DamageType, DiceExpr};
 
         let mut world = make_test_world();
         let mut rng = test_rng();
 
         // Attacker has 1 HP — will die from passive acid.
-        let attacker = spawn_monster(
-            &mut world, Position::new(5, 5), "weak goblin", 1, 1,
-        );
+        let attacker = spawn_monster(&mut world, Position::new(5, 5), "weak goblin", 1, 1);
         if let Some(mut hp) = world.get_component_mut::<HitPoints>(attacker) {
             hp.max = 1;
         }
@@ -816,23 +814,23 @@ mod tests {
             damage_type: DamageType::Physical,
             dice: DiceExpr { count: 2, sides: 6 },
         });
-        let _ = world.ecs_mut().insert_one(attacker, MonsterAttacks(atk_attacks));
+        let _ = world
+            .ecs_mut()
+            .insert_one(attacker, MonsterAttacks(atk_attacks));
 
         // Defender is acidic — contact will splash acid.
-        let defender = spawn_monster(
-            &mut world, Position::new(6, 5), "acid blob", 50, 5,
-        );
+        let defender = spawn_monster(&mut world, Position::new(6, 5), "acid blob", 50, 5);
         let mut def_attacks = arrayvec::ArrayVec::new();
         def_attacks.push(AttackDef {
             method: AttackMethod::None,
             damage_type: DamageType::Acid,
             dice: DiceExpr { count: 3, sides: 6 },
         });
-        let _ = world.ecs_mut().insert_one(defender, MonsterAttacks(def_attacks));
+        let _ = world
+            .ecs_mut()
+            .insert_one(defender, MonsterAttacks(def_attacks));
 
-        let events = resolve_monster_vs_monster_full(
-            &mut world, attacker, defender, &mut rng,
-        );
+        let events = resolve_monster_vs_monster_full(&mut world, attacker, defender, &mut rng);
 
         // After the round, the attacker should be dead (HP <= 0).
         let atk_hp = world.get_component::<HitPoints>(attacker).unwrap();
@@ -856,34 +854,33 @@ mod tests {
 
     #[test]
     fn test_full_round_basic_combat() {
-        use nethack_babel_data::{AttackDef, AttackMethod, DamageType, DiceExpr};
         use crate::combat::MonsterAttacks;
+        use nethack_babel_data::{AttackDef, AttackMethod, DamageType, DiceExpr};
 
         let mut world = make_test_world();
         let mut rng = test_rng();
 
-        let attacker = spawn_monster(
-            &mut world, Position::new(5, 5), "wolf", 30, 5,
-        );
+        let attacker = spawn_monster(&mut world, Position::new(5, 5), "wolf", 30, 5);
         let mut attacks = arrayvec::ArrayVec::new();
         attacks.push(AttackDef {
             method: AttackMethod::Bite,
             damage_type: DamageType::Physical,
             dice: DiceExpr { count: 2, sides: 6 },
         });
-        let _ = world.ecs_mut().insert_one(attacker, MonsterAttacks(attacks));
+        let _ = world
+            .ecs_mut()
+            .insert_one(attacker, MonsterAttacks(attacks));
 
-        let defender = spawn_monster(
-            &mut world, Position::new(6, 5), "rat", 30, 1,
-        );
+        let defender = spawn_monster(&mut world, Position::new(6, 5), "rat", 30, 1);
 
-        let events = resolve_monster_vs_monster_full(
-            &mut world, attacker, defender, &mut rng,
-        );
+        let events = resolve_monster_vs_monster_full(&mut world, attacker, defender, &mut rng);
 
         // Should produce combat events.
         let has_combat = events.iter().any(|e| {
-            matches!(e, EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. })
+            matches!(
+                e,
+                EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+            )
         });
         assert!(has_combat, "full round should produce combat events");
     }

@@ -18,71 +18,194 @@ use serde::{Deserialize, Serialize};
 
 /// Potion color pool.
 const POTION_COLORS: &[&str] = &[
-    "ruby", "pink", "orange", "yellow", "emerald", "dark green",
-    "cyan", "sky blue", "brilliant blue", "magenta", "purple-red",
-    "puce", "milky", "swirly", "bubbly", "smoky", "cloudy",
-    "effervescent", "black", "golden", "brown", "fizzy",
-    "dark", "white", "murky", "clear",
+    "ruby",
+    "pink",
+    "orange",
+    "yellow",
+    "emerald",
+    "dark green",
+    "cyan",
+    "sky blue",
+    "brilliant blue",
+    "magenta",
+    "purple-red",
+    "puce",
+    "milky",
+    "swirly",
+    "bubbly",
+    "smoky",
+    "cloudy",
+    "effervescent",
+    "black",
+    "golden",
+    "brown",
+    "fizzy",
+    "dark",
+    "white",
+    "murky",
+    "clear",
 ];
 
 /// Scroll label pool.
 const SCROLL_LABELS: &[&str] = &[
-    "ZELGO MER", "JUYED AWK YACC", "NR 9", "XIXAXA XOXAXA XUXAXA",
-    "PRATYAVAYAH", "DAIYEN FANSEN", "HAPAX LEGOMENON",
-    "ELBIB YLANSEN", "KERNOD WEL", "ELAM EANSEN",
-    "NIHIL ESTNE", "FOOBIE BLETCH", "TEMOV", "GARVEN DEH",
-    "READ ME", "ETAOIN SHRDLU", "LOREM IPSUM", "FNORD",
-    "KO BANSEN", "DUAM XNAHT", "STRC PRANSEN",
-    "HACKEM MUCHE", "VELOX NEB", "PRIRUTSENIE",
-    "ANDOVA BEGARIN", "KIRJE", "VE FORBRULL",
-    "VERR ULL SUULL", "THARR", "YUM YUM",
-    "AQUE BRAGH", "HZLRC ANSEN",
+    "ZELGO MER",
+    "JUYED AWK YACC",
+    "NR 9",
+    "XIXAXA XOXAXA XUXAXA",
+    "PRATYAVAYAH",
+    "DAIYEN FANSEN",
+    "HAPAX LEGOMENON",
+    "ELBIB YLANSEN",
+    "KERNOD WEL",
+    "ELAM EANSEN",
+    "NIHIL ESTNE",
+    "FOOBIE BLETCH",
+    "TEMOV",
+    "GARVEN DEH",
+    "READ ME",
+    "ETAOIN SHRDLU",
+    "LOREM IPSUM",
+    "FNORD",
+    "KO BANSEN",
+    "DUAM XNAHT",
+    "STRC PRANSEN",
+    "HACKEM MUCHE",
+    "VELOX NEB",
+    "PRIRUTSENIE",
+    "ANDOVA BEGARIN",
+    "KIRJE",
+    "VE FORBRULL",
+    "VERR ULL SUULL",
+    "THARR",
+    "YUM YUM",
+    "AQUE BRAGH",
+    "HZLRC ANSEN",
 ];
 
 /// Ring material pool.
 const RING_MATERIALS: &[&str] = &[
-    "wooden", "granite", "opal", "clay", "coral", "black onyx",
-    "moonstone", "tiger eye", "jade", "bronze", "agate",
-    "topaz", "sapphire", "ruby", "diamond", "pearl",
-    "iron", "brass", "copper", "twisted", "steel",
-    "wire", "engagement", "shiny", "gold", "silver",
+    "wooden",
+    "granite",
+    "opal",
+    "clay",
+    "coral",
+    "black onyx",
+    "moonstone",
+    "tiger eye",
+    "jade",
+    "bronze",
+    "agate",
+    "topaz",
+    "sapphire",
+    "ruby",
+    "diamond",
+    "pearl",
+    "iron",
+    "brass",
+    "copper",
+    "twisted",
+    "steel",
+    "wire",
+    "engagement",
+    "shiny",
+    "gold",
+    "silver",
 ];
 
 /// Wand material pool.
 const WAND_MATERIALS: &[&str] = &[
-    "glass", "balsa", "crystal", "maple", "pine", "oak",
-    "ebony", "marble", "tin", "brass", "copper", "silver",
-    "platinum", "iridium", "zinc", "aluminum", "uranium",
-    "iron", "steel", "hexagonal", "short", "runed",
-    "long", "curved", "forked", "spiked", "jeweled",
+    "glass",
+    "balsa",
+    "crystal",
+    "maple",
+    "pine",
+    "oak",
+    "ebony",
+    "marble",
+    "tin",
+    "brass",
+    "copper",
+    "silver",
+    "platinum",
+    "iridium",
+    "zinc",
+    "aluminum",
+    "uranium",
+    "iron",
+    "steel",
+    "hexagonal",
+    "short",
+    "runed",
+    "long",
+    "curved",
+    "forked",
+    "spiked",
+    "jeweled",
 ];
 
 /// Spellbook color pool.
 const SPELLBOOK_COLORS: &[&str] = &[
-    "parchment", "vellum", "ragged", "dog eared", "mottled",
-    "stained", "cloth", "leather", "white", "pink", "red",
-    "orange", "yellow", "velvet", "light green", "dark green",
-    "turquoise", "cyan", "light blue", "dark blue", "indigo",
-    "magenta", "purple", "violet", "tan", "plaid",
-    "light brown", "dark brown", "gray", "wrinkled", "dusty",
-    "bronze", "copper", "silver", "gold", "glittering",
-    "shining", "dull", "thin", "thick",
+    "parchment",
+    "vellum",
+    "ragged",
+    "dog eared",
+    "mottled",
+    "stained",
+    "cloth",
+    "leather",
+    "white",
+    "pink",
+    "red",
+    "orange",
+    "yellow",
+    "velvet",
+    "light green",
+    "dark green",
+    "turquoise",
+    "cyan",
+    "light blue",
+    "dark blue",
+    "indigo",
+    "magenta",
+    "purple",
+    "violet",
+    "tan",
+    "plaid",
+    "light brown",
+    "dark brown",
+    "gray",
+    "wrinkled",
+    "dusty",
+    "bronze",
+    "copper",
+    "silver",
+    "gold",
+    "glittering",
+    "shining",
+    "dull",
+    "thin",
+    "thick",
 ];
 
 /// Amulet shape pool.
 const AMULET_SHAPES: &[&str] = &[
-    "circular", "spherical", "oval", "triangular", "pyramidal",
-    "square", "concave", "hexagonal", "octagonal",
+    "circular",
+    "spherical",
+    "oval",
+    "triangular",
+    "pyramidal",
+    "square",
+    "concave",
+    "hexagonal",
+    "octagonal",
 ];
 
 /// Default gem color names (before identification).
 /// Gems share color-based descriptions — multiple gem types can appear
 /// as the same color, unlike other shuffled classes.
 const GEM_DESCRIPTIONS: &[&str] = &[
-    "white", "white", "red", "red",
-    "orange", "orange", "yellow", "yellow",
-    "green", "green", "blue", "blue",
-    "violet", "violet", "black", "black",
+    "white", "white", "red", "red", "orange", "orange", "yellow", "yellow", "green", "green",
+    "blue", "blue", "violet", "violet", "black", "black",
 ];
 
 // -----------------------------------------------------------------------
@@ -244,12 +367,12 @@ mod tests {
         let mut rng = make_rng(42);
         let table = AppearanceTable::new(&mut rng);
         // Counts are min(requested, pool_size).
-        assert_eq!(table.potion_colors.len(), 26);    // min(26, 26)
-        assert_eq!(table.scroll_labels.len(), 23);    // min(23, 32)
-        assert_eq!(table.ring_materials.len(), 26);   // min(28, 26)
-        assert_eq!(table.wand_materials.len(), 24);   // min(24, 27)
+        assert_eq!(table.potion_colors.len(), 26); // min(26, 26)
+        assert_eq!(table.scroll_labels.len(), 23); // min(23, 32)
+        assert_eq!(table.ring_materials.len(), 26); // min(28, 26)
+        assert_eq!(table.wand_materials.len(), 24); // min(24, 27)
         assert_eq!(table.spellbook_colors.len(), 40); // min(44, 40)
-        assert_eq!(table.amulet_shapes.len(), 9);     // min(9, 9)
+        assert_eq!(table.amulet_shapes.len(), 9); // min(9, 9)
         assert_eq!(table.gem_appearances.len(), GEM_DESCRIPTIONS.len());
     }
 

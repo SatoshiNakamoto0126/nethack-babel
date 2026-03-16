@@ -5,18 +5,16 @@
 
 use proptest::prelude::*;
 
-use nethack_babel_engine::combat::roll_dice;
-use nethack_babel_engine::conduct::{calculate_score, ConductState, ScoreInput};
-use nethack_babel_engine::world::Encumbrance;
-use nethack_babel_engine::hunger::{
-    HUNGRY_THRESHOLD, NOT_HUNGRY_THRESHOLD, SATIATED_THRESHOLD,
-};
-use nethack_babel_engine::identification::{an, just_an, makeplural, makesingular};
-use nethack_babel_engine::religion::rnl;
-use nethack_babel_engine::inventory::encumbrance_level;
 use nethack_babel_engine::action::Position;
 use nethack_babel_engine::ball::chebyshev_distance;
-use nethack_babel_engine::wands::{recharge_wand, RechargeResult, WandCharges, WandType};
+use nethack_babel_engine::combat::roll_dice;
+use nethack_babel_engine::conduct::{ConductState, ScoreInput, calculate_score};
+use nethack_babel_engine::hunger::{HUNGRY_THRESHOLD, NOT_HUNGRY_THRESHOLD, SATIATED_THRESHOLD};
+use nethack_babel_engine::identification::{an, just_an, makeplural, makesingular};
+use nethack_babel_engine::inventory::encumbrance_level;
+use nethack_babel_engine::religion::rnl;
+use nethack_babel_engine::wands::{RechargeResult, WandCharges, WandType, recharge_wand};
+use nethack_babel_engine::world::Encumbrance;
 
 use nethack_babel_data::DiceExpr;
 
@@ -582,8 +580,7 @@ fn wand_recharge_buc_matrix() {
                     recharged: 0,
                 };
                 let mut rng = Pcg64::seed_from_u64(seed);
-                let result =
-                    recharge_wand(*wand_type, &mut charges, blessed, cursed, &mut rng);
+                let result = recharge_wand(*wand_type, &mut charges, blessed, cursed, &mut rng);
 
                 match result {
                     RechargeResult::Stripped => {
@@ -607,7 +604,10 @@ fn wand_recharge_buc_matrix() {
                         assert!(
                             new_spe >= 1,
                             "Successful recharge should give >= 1 spe: wand={:?} buc={} spe={} seed={}",
-                            wand_type, buc_label, new_spe, seed,
+                            wand_type,
+                            buc_label,
+                            new_spe,
+                            seed,
                         );
                     }
                     RechargeResult::Exploded => {
@@ -628,10 +628,10 @@ fn wand_recharge_buc_matrix() {
 #[test]
 fn dice_distribution_covers_range() {
     let cases: &[(u8, u8)] = &[
-        (1, 6),   // 1d6
-        (2, 6),   // 2d6
-        (1, 20),  // 1d20
-        (3, 4),   // 3d4
+        (1, 6),  // 1d6
+        (2, 6),  // 2d6
+        (1, 20), // 1d20
+        (3, 4),  // 3d4
     ];
 
     for &(count, sides) in cases {

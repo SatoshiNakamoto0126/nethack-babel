@@ -250,11 +250,7 @@ pub fn place_trap(trap_map: &mut TrapMap, pos: Position, trap_type: TrapType) ->
 /// Check whether an entity avoids a trap entirely.
 ///
 /// Returns `true` if the trap is bypassed (no effect).
-pub fn avoid_trap<R: Rng>(
-    rng: &mut R,
-    info: &TrapEntityInfo,
-    trap: &TrapInstance,
-) -> bool {
+pub fn avoid_trap<R: Rng>(rng: &mut R, info: &TrapEntityInfo, trap: &TrapInstance) -> bool {
     let tt = trap.trap_type;
 
     // Flying/levitation bypasses floor-trigger traps
@@ -271,9 +267,10 @@ pub fn avoid_trap<R: Rng>(
     if trap.detected
         && !matches!(tt, TrapType::AntiMagic)
         && !is_undestroyable(tt)
-        && rn2(rng, 5) == 0 {
-            return true;
-        }
+        && rn2(rng, 5) == 0
+    {
+        return true;
+    }
 
     false
 }
@@ -733,14 +730,14 @@ fn trigger_web<R: Rng>(
 /// Calculate web trapping duration based on STR.
 fn web_duration_by_str<R: Rng>(rng: &mut R, strength: u8) -> u32 {
     match strength {
-        0..=3 => rn1(rng, 6, 6),    // 6..11
-        4..=5 => rn1(rng, 6, 4),    // 4..9
-        6..=8 => rn1(rng, 4, 4),    // 4..7
-        9..=11 => rn1(rng, 4, 2),   // 2..5
-        12..=14 => rn1(rng, 2, 2),  // 2..3
-        15..=17 => rnd(rng, 2),     // 1..2
-        18..=68 => 1,               // standard 18
-        _ => 0,                     // 69+ (gauntlets + 18/**): instant tear
+        0..=3 => rn1(rng, 6, 6),   // 6..11
+        4..=5 => rn1(rng, 6, 4),   // 4..9
+        6..=8 => rn1(rng, 4, 4),   // 4..7
+        9..=11 => rn1(rng, 4, 2),  // 2..5
+        12..=14 => rn1(rng, 2, 2), // 2..3
+        15..=17 => rnd(rng, 2),    // 1..2
+        18..=68 => 1,              // standard 18
+        _ => 0,                    // 69+ (gauntlets + 18/**): instant tear
     }
 }
 
@@ -996,27 +993,33 @@ pub fn detect_trap<R: Rng>(
     let fund = fund.min(5);
 
     for &(dx, dy) in &[
-        (-1, -1), (0, -1), (1, -1),
-        (-1,  0),          (1,  0),
-        (-1,  1), (0,  1), (1,  1),
+        (-1, -1),
+        (0, -1),
+        (1, -1),
+        (-1, 0),
+        (1, 0),
+        (-1, 1),
+        (0, 1),
+        (1, 1),
     ] {
         let adj = Position::new(player_pos.x + dx, player_pos.y + dy);
 
         // Find trap at adjacent position
         if let Some(trap) = trap_map.trap_at_mut(adj)
-            && !trap.detected {
-                // Base probability: rnl(8 - fund) == 0 means found.
-                // With fund=0, that's rnl(8)==0 => ~1/8 base chance.
-                let threshold = (8 - fund).max(1);
-                if rnl(rng, threshold, luck) == 0 {
-                    trap.detected = true;
-                    events.push(EngineEvent::TrapRevealed {
-                        position: adj,
-                        trap_type: trap.trap_type,
-                    });
-                    events.push(EngineEvent::msg("search-trap"));
-                }
+            && !trap.detected
+        {
+            // Base probability: rnl(8 - fund) == 0 means found.
+            // With fund=0, that's rnl(8)==0 => ~1/8 base chance.
+            let threshold = (8 - fund).max(1);
+            if rnl(rng, threshold, luck) == 0 {
+                trap.detected = true;
+                events.push(EngineEvent::TrapRevealed {
+                    position: adj,
+                    trap_type: trap.trap_type,
+                });
+                events.push(EngineEvent::msg("search-trap"));
             }
+        }
     }
 
     events
@@ -1327,9 +1330,14 @@ pub fn trap_chain_reaction<R: Rng>(
 
     // Collect adjacent positions first (avoid borrow conflict).
     let deltas: [(i32, i32); 8] = [
-        (-1, -1), (0, -1), (1, -1),
-        (-1,  0),          (1,  0),
-        (-1,  1), (0,  1), (1,  1),
+        (-1, -1),
+        (0, -1),
+        (1, -1),
+        (-1, 0),
+        (1, 0),
+        (-1, 1),
+        (0, 1),
+        (1, 1),
     ];
     let adj_positions: Vec<Position> = deltas
         .iter()
@@ -1360,11 +1368,7 @@ pub fn trap_chain_reaction<R: Rng>(
 /// Mirrors the effect of a scroll of detect traps or the detect-traps
 /// spell.  Sets `detected = true` on all trap instances in range and
 /// emits `TrapRevealed` events.
-pub fn detect_traps(
-    center: Position,
-    radius: i32,
-    trap_map: &mut TrapMap,
-) -> Vec<EngineEvent> {
+pub fn detect_traps(center: Position, radius: i32, trap_map: &mut TrapMap) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     for trap in trap_map.traps.iter_mut() {
@@ -1451,7 +1455,10 @@ pub enum MonsterTrapResult {
     /// Monster is stuck in a trap (bear trap, web).
     Trapped { duration: u32 },
     /// Monster took damage from a trap.
-    Damaged { damage: i32, damage_type: &'static str },
+    Damaged {
+        damage: i32,
+        damage_type: &'static str,
+    },
     /// Monster was teleported on the same level.
     Teleported,
     /// Monster was teleported to a different level.
@@ -1511,10 +1518,7 @@ pub fn monster_hits_trap<R: Rng>(
 }
 
 /// Classify trap events into a `MonsterTrapResult`.
-fn classify_monster_trap_result(
-    trap_type: TrapType,
-    events: &[EngineEvent],
-) -> MonsterTrapResult {
+fn classify_monster_trap_result(trap_type: TrapType, events: &[EngineEvent]) -> MonsterTrapResult {
     match trap_type {
         TrapType::Pit | TrapType::SpikedPit => {
             let damage = sum_trap_damage(events);
@@ -1529,8 +1533,12 @@ fn classify_monster_trap_result(
             }
         }
         TrapType::TeleportTrap | TrapType::MagicPortal => {
-            if events.iter().any(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
-                || events.iter().any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
+                || events
+                    .iter()
+                    .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
             {
                 MonsterTrapResult::Teleported
             } else {
@@ -1538,7 +1546,10 @@ fn classify_monster_trap_result(
             }
         }
         TrapType::LevelTeleport | TrapType::Hole | TrapType::TrapDoor => {
-            if events.iter().any(|e| matches!(e, EngineEvent::LevelChanged { .. })) {
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+            {
                 MonsterTrapResult::LevelTeleported
             } else {
                 MonsterTrapResult::Resists
@@ -1554,30 +1565,42 @@ fn classify_monster_trap_result(
         TrapType::FireTrap => {
             let damage = sum_trap_damage(events);
             if damage > 0 {
-                MonsterTrapResult::Damaged { damage, damage_type: "fire" }
+                MonsterTrapResult::Damaged {
+                    damage,
+                    damage_type: "fire",
+                }
             } else {
                 MonsterTrapResult::Resists
             }
         }
-        TrapType::AntiMagic => {
-            MonsterTrapResult::Drained
-        }
-        TrapType::RustTrap => {
-            MonsterTrapResult::ArmorDamaged
-        }
-        TrapType::SqueakyBoard => {
-            MonsterTrapResult::AlertsPlayer
-        }
-        TrapType::ArrowTrap | TrapType::DartTrap | TrapType::RockTrap
-        | TrapType::RollingBoulderTrap | TrapType::Landmine => {
+        TrapType::AntiMagic => MonsterTrapResult::Drained,
+        TrapType::RustTrap => MonsterTrapResult::ArmorDamaged,
+        TrapType::SqueakyBoard => MonsterTrapResult::AlertsPlayer,
+        TrapType::ArrowTrap
+        | TrapType::DartTrap
+        | TrapType::RockTrap
+        | TrapType::RollingBoulderTrap
+        | TrapType::Landmine => {
             let damage = sum_trap_damage(events);
-            MonsterTrapResult::Damaged { damage, damage_type: "physical" }
+            MonsterTrapResult::Damaged {
+                damage,
+                damage_type: "physical",
+            }
         }
         TrapType::PolyTrap => {
-            if events.iter().any(|e| matches!(
-                e, EngineEvent::StatusApplied { status: StatusEffect::Polymorphed, .. }
-            )) {
-                MonsterTrapResult::Damaged { damage: 0, damage_type: "polymorph" }
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        status: StatusEffect::Polymorphed,
+                        ..
+                    }
+                )
+            }) {
+                MonsterTrapResult::Damaged {
+                    damage: 0,
+                    damage_type: "polymorph",
+                }
             } else {
                 MonsterTrapResult::Resists
             }
@@ -1586,7 +1609,10 @@ fn classify_monster_trap_result(
         _ => {
             let damage = sum_trap_damage(events);
             if damage > 0 {
-                MonsterTrapResult::Damaged { damage, damage_type: "physical" }
+                MonsterTrapResult::Damaged {
+                    damage,
+                    damage_type: "physical",
+                }
             } else {
                 MonsterTrapResult::NoEffect
             }
@@ -1596,19 +1622,30 @@ fn classify_monster_trap_result(
 
 /// Sum all HpChange amounts from Trap source in an event list.
 fn sum_trap_damage(events: &[EngineEvent]) -> i32 {
-    events.iter().filter_map(|e| {
-        if let EngineEvent::HpChange { amount, source: HpSource::Trap, .. } = e {
-            Some(-*amount) // damage is negative amount
-        } else {
-            None
-        }
-    }).sum()
+    events
+        .iter()
+        .filter_map(|e| {
+            if let EngineEvent::HpChange {
+                amount,
+                source: HpSource::Trap,
+                ..
+            } = e
+            {
+                Some(-*amount) // damage is negative amount
+            } else {
+                None
+            }
+        })
+        .sum()
 }
 
 /// Find the duration of any StatusApplied event.
 fn find_status_duration(events: &[EngineEvent]) -> Option<u32> {
     events.iter().find_map(|e| {
-        if let EngineEvent::StatusApplied { duration: Some(d), .. } = e {
+        if let EngineEvent::StatusApplied {
+            duration: Some(d), ..
+        } = e
+        {
             Some(*d)
         } else {
             None
@@ -1683,7 +1720,11 @@ mod tests {
         let events = trigger_trap(&mut rng, &info, &mut trap);
 
         // Should contain TrapTriggered and HpChange
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::TrapTriggered { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::TrapTriggered { .. }))
+        );
         let hp_change = events.iter().find_map(|e| {
             if let EngineEvent::HpChange { amount, source, .. } = e {
                 if *source == HpSource::Trap {
@@ -1697,7 +1738,11 @@ mod tests {
         });
         assert!(hp_change.is_some(), "Arrow trap should deal HP damage");
         let dmg = -hp_change.unwrap();
-        assert!(dmg >= 1 && dmg <= 6, "d(1,6) damage should be 1..6, got {}", dmg);
+        assert!(
+            dmg >= 1 && dmg <= 6,
+            "d(1,6) damage should be 1..6, got {}",
+            dmg
+        );
     }
 
     // -------------------------------------------------------------------
@@ -1715,7 +1760,10 @@ mod tests {
             let events = trigger_trap(&mut rng, &info, &mut trap);
 
             if let Some(dur) = events.iter().find_map(|e| {
-                if let EngineEvent::StatusApplied { duration: Some(d), .. } = e {
+                if let EngineEvent::StatusApplied {
+                    duration: Some(d), ..
+                } = e
+                {
                     Some(*d)
                 } else {
                     None
@@ -1725,8 +1773,16 @@ mod tests {
                 max_dur = max_dur.max(dur);
             }
         }
-        assert!(min_dur >= 4, "Bear trap min duration should be >= 4, got {}", min_dur);
-        assert!(max_dur <= 7, "Bear trap max duration should be <= 7, got {}", max_dur);
+        assert!(
+            min_dur >= 4,
+            "Bear trap min duration should be >= 4, got {}",
+            min_dur
+        );
+        assert!(
+            max_dur <= 7,
+            "Bear trap max duration should be <= 7, got {}",
+            max_dur
+        );
         // With 200 seeds, both extremes should appear.
         assert_eq!(min_dur, 4, "Should hit min duration 4");
         assert_eq!(max_dur, 7, "Should hit max duration 7");
@@ -1760,8 +1816,14 @@ mod tests {
                 max_dmg = max_dmg.max(dmg);
             }
         }
-        assert!(min_dmg >= 1 && min_dmg <= 6, "Pit min damage should be in 1..6");
-        assert!(max_dmg >= 1 && max_dmg <= 6, "Pit max damage should be in 1..6");
+        assert!(
+            min_dmg >= 1 && min_dmg <= 6,
+            "Pit min damage should be in 1..6"
+        );
+        assert!(
+            max_dmg >= 1 && max_dmg <= 6,
+            "Pit max damage should be in 1..6"
+        );
     }
 
     // -------------------------------------------------------------------
@@ -1777,17 +1839,27 @@ mod tests {
         let events = trigger_trap(&mut rng, &info, &mut trap);
 
         // Should NOT have a Sleeping status applied
-        let has_sleep = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied { status: StatusEffect::Sleeping, .. }
-        ));
-        assert!(!has_sleep, "Sleep-resistant entity should not be put to sleep");
+        let has_sleep = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Sleeping,
+                    ..
+                }
+            )
+        });
+        assert!(
+            !has_sleep,
+            "Sleep-resistant entity should not be put to sleep"
+        );
 
         // Should have the "enveloped in gas" message
-        let has_msg = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("sleeping-gas")
-        ));
+        let has_msg = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key.contains("sleeping-gas")
+            )
+        });
         assert!(has_msg, "Should get gas cloud message");
     }
 
@@ -1816,7 +1888,11 @@ mod tests {
         assert!(hp_change.is_some(), "Fire trap should deal damage");
         let dmg = -hp_change.unwrap();
         // d(2,4) = 2..8 for non-resistant
-        assert!(dmg >= 2 && dmg <= 8, "Fire trap d(2,4) damage should be 2..8, got {}", dmg);
+        assert!(
+            dmg >= 2 && dmg <= 8,
+            "Fire trap d(2,4) damage should be 2..8, got {}",
+            dmg
+        );
     }
 
     // -------------------------------------------------------------------
@@ -1830,15 +1906,18 @@ mod tests {
 
         let events = trigger_trap(&mut rng, &info, &mut trap);
 
-        let teleported = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::EntityTeleported { .. }
-        ));
-        assert!(teleported, "Teleport trap should produce EntityTeleported event");
+        let teleported = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityTeleported { .. }));
+        assert!(
+            teleported,
+            "Teleport trap should produce EntityTeleported event"
+        );
 
         // The new position should differ from the original (with high probability)
-        if let Some(EngineEvent::EntityTeleported { from, to, .. }) =
-            events.iter().find(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
+        if let Some(EngineEvent::EntityTeleported { from, to, .. }) = events
+            .iter()
+            .find(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
         {
             assert_eq!(*from, info.pos);
             // to should be within map bounds
@@ -1893,7 +1972,10 @@ mod tests {
                 0, // no search bonus
             );
 
-            if events.iter().any(|e| matches!(e, EngineEvent::TrapRevealed { .. })) {
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::TrapRevealed { .. }))
+            {
                 found = true;
                 break;
             }
@@ -1909,7 +1991,11 @@ mod tests {
         // Low STR (3): duration 6..11
         let mut rng = test_rng();
         let dur_low = web_duration_by_str(&mut rng, 3);
-        assert!(dur_low >= 6 && dur_low <= 11, "STR 3 web duration should be 6..11, got {}", dur_low);
+        assert!(
+            dur_low >= 6 && dur_low <= 11,
+            "STR 3 web duration should be 6..11, got {}",
+            dur_low
+        );
 
         // High STR (18): duration 1
         let dur_high = web_duration_by_str(&mut rng, 18);
@@ -1917,7 +2003,10 @@ mod tests {
 
         // Very high STR (69+): instant tear
         let dur_max = web_duration_by_str(&mut rng, 69);
-        assert_eq!(dur_max, 0, "STR 69+ web duration should be 0 (instant tear)");
+        assert_eq!(
+            dur_max, 0,
+            "STR 69+ web duration should be 0 (instant tear)"
+        );
     }
 
     // -------------------------------------------------------------------
@@ -1945,14 +2034,20 @@ mod tests {
         });
         assert!(hp_change.is_some(), "Landmine should deal damage");
         let dmg = -hp_change.unwrap();
-        assert!(dmg >= 1 && dmg <= 16, "Landmine damage rnd(16) should be 1..16, got {}", dmg);
+        assert!(
+            dmg >= 1 && dmg <= 16,
+            "Landmine damage rnd(16) should be 1..16, got {}",
+            dmg
+        );
 
         // Should have level change (fallthrough)
-        let has_level_change = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::LevelChanged { .. }
-        ));
-        assert!(has_level_change, "Landmine should cause level change (fallthrough)");
+        let has_level_change = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::LevelChanged { .. }));
+        assert!(
+            has_level_change,
+            "Landmine should cause level change (fallthrough)"
+        );
     }
 
     // -------------------------------------------------------------------
@@ -1967,17 +2062,21 @@ mod tests {
         let events = trigger_trap(&mut rng, &info, &mut trap);
 
         // Should have the squeak message
-        let has_squeak = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("squeaky-board")
-        ));
+        let has_squeak = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key.contains("squeaky-board")
+            )
+        });
         assert!(has_squeak, "Squeaky board should produce a squeak message");
 
         // Should have the wake message
-        let has_wake = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key.contains("squeaky-board")
-        ));
+        let has_wake = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key.contains("squeaky-board")
+            )
+        });
         assert!(has_wake, "Squeaky board should produce a wake message");
     }
 
@@ -1998,41 +2097,47 @@ mod tests {
             let mut spiked = TrapInstance::new(Position::new(10, 5), TrapType::SpikedPit);
             let events = trigger_trap(&mut rng, &info, &mut spiked);
             // Sum all trap HP damage (may include poison too)
-            let total: i32 = events.iter().filter_map(|e| {
-                if let EngineEvent::HpChange { amount, source, .. } = e {
-                    if *source == HpSource::Trap {
-                        Some(-*amount)
+            let total: i32 = events
+                .iter()
+                .filter_map(|e| {
+                    if let EngineEvent::HpChange { amount, source, .. } = e {
+                        if *source == HpSource::Trap {
+                            Some(-*amount)
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
-                } else {
-                    None
-                }
-            }).sum();
+                })
+                .sum();
             spiked_damages.push(total);
 
             // Regular pit
             let mut rng2 = Pcg64::seed_from_u64(seed);
             let mut regular = TrapInstance::new(Position::new(10, 5), TrapType::Pit);
             let events2 = trigger_trap(&mut rng2, &info, &mut regular);
-            let total2: i32 = events2.iter().filter_map(|e| {
-                if let EngineEvent::HpChange { amount, source, .. } = e {
-                    if *source == HpSource::Trap {
-                        Some(-*amount)
+            let total2: i32 = events2
+                .iter()
+                .filter_map(|e| {
+                    if let EngineEvent::HpChange { amount, source, .. } = e {
+                        if *source == HpSource::Trap {
+                            Some(-*amount)
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
-                } else {
-                    None
-                }
-            }).sum();
+                })
+                .sum();
             regular_damages.push(total2);
         }
 
-        let spiked_avg: f64 = spiked_damages.iter().map(|d| *d as f64).sum::<f64>()
-            / spiked_damages.len() as f64;
-        let regular_avg: f64 = regular_damages.iter().map(|d| *d as f64).sum::<f64>()
-            / regular_damages.len() as f64;
+        let spiked_avg: f64 =
+            spiked_damages.iter().map(|d| *d as f64).sum::<f64>() / spiked_damages.len() as f64;
+        let regular_avg: f64 =
+            regular_damages.iter().map(|d| *d as f64).sum::<f64>() / regular_damages.len() as f64;
 
         assert!(
             spiked_avg > regular_avg,
@@ -2101,7 +2206,12 @@ mod tests {
             let events = trigger_trap(&mut rng, &info, &mut trap);
 
             if let Some(dur) = events.iter().find_map(|e| {
-                if let EngineEvent::StatusApplied { status: StatusEffect::Sleeping, duration: Some(d), .. } = e {
+                if let EngineEvent::StatusApplied {
+                    status: StatusEffect::Sleeping,
+                    duration: Some(d),
+                    ..
+                } = e
+                {
                     Some(*d)
                 } else {
                     None
@@ -2111,8 +2221,16 @@ mod tests {
                 max_dur = max_dur.max(dur);
             }
         }
-        assert!(min_dur >= 1, "Sleep duration min should be >= 1, got {}", min_dur);
-        assert!(max_dur <= 25, "Sleep duration max should be <= 25, got {}", max_dur);
+        assert!(
+            min_dur >= 1,
+            "Sleep duration min should be >= 1, got {}",
+            min_dur
+        );
+        assert!(
+            max_dur <= 25,
+            "Sleep duration max should be <= 25, got {}",
+            max_dur
+        );
     }
 
     // -------------------------------------------------------------------
@@ -2135,7 +2253,11 @@ mod tests {
         });
         assert!(pw_drain.is_some(), "Anti-magic should drain power");
         let drain = -pw_drain.unwrap();
-        assert!(drain >= 2 && drain <= 12, "d(2,6) drain should be 2..12, got {}", drain);
+        assert!(
+            drain >= 2 && drain <= 12,
+            "d(2,6) drain should be 2..12, got {}",
+            drain
+        );
     }
 
     // -------------------------------------------------------------------
@@ -2255,10 +2377,9 @@ mod tests {
             let mut trap = TrapInstance::new(Position::new(10, 5), tt);
             let events = trigger_trap(&mut rng, &info, &mut trap);
 
-            let has_triggered = events.iter().any(|e| matches!(
-                e,
-                EngineEvent::TrapTriggered { .. }
-            ));
+            let has_triggered = events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::TrapTriggered { .. }));
             assert!(
                 has_triggered,
                 "TrapType::{:?} should produce TrapTriggered event",
@@ -2280,7 +2401,12 @@ mod tests {
             let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::BearTrap);
             let events = trigger_trap(&mut rng, &info, &mut trap);
             if let Some(dmg) = events.iter().find_map(|e| {
-                if let EngineEvent::HpChange { amount, source: HpSource::Trap, .. } = e {
+                if let EngineEvent::HpChange {
+                    amount,
+                    source: HpSource::Trap,
+                    ..
+                } = e
+                {
                     Some(-*amount)
                 } else {
                     None
@@ -2290,8 +2416,16 @@ mod tests {
                 max_dmg = max_dmg.max(dmg);
             }
         }
-        assert!(min_dmg >= 2, "Bear trap min damage should be >= 2, got {}", min_dmg);
-        assert!(max_dmg <= 8, "Bear trap max damage should be <= 8, got {}", max_dmg);
+        assert!(
+            min_dmg >= 2,
+            "Bear trap min damage should be >= 2, got {}",
+            min_dmg
+        );
+        assert!(
+            max_dmg <= 8,
+            "Bear trap max damage should be <= 8, got {}",
+            max_dmg
+        );
         assert_eq!(min_dmg, 2, "Should hit min bear trap damage 2");
         assert_eq!(max_dmg, 8, "Should hit max bear trap damage 8");
     }
@@ -2307,7 +2441,12 @@ mod tests {
             let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::RockTrap);
             let events = trigger_trap(&mut rng, &info, &mut trap);
             if let Some(dmg) = events.iter().find_map(|e| {
-                if let EngineEvent::HpChange { amount, source: HpSource::Trap, .. } = e {
+                if let EngineEvent::HpChange {
+                    amount,
+                    source: HpSource::Trap,
+                    ..
+                } = e
+                {
                     Some(-*amount)
                 } else {
                     None
@@ -2317,8 +2456,16 @@ mod tests {
                 max_dmg = max_dmg.max(dmg);
             }
         }
-        assert!(min_dmg >= 2, "Rock trap min damage should be >= 2, got {}", min_dmg);
-        assert!(max_dmg <= 12, "Rock trap max damage should be <= 12, got {}", max_dmg);
+        assert!(
+            min_dmg >= 2,
+            "Rock trap min damage should be >= 2, got {}",
+            min_dmg
+        );
+        assert!(
+            max_dmg <= 12,
+            "Rock trap max damage should be <= 12, got {}",
+            max_dmg
+        );
     }
 
     #[test]
@@ -2332,7 +2479,12 @@ mod tests {
             let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::Landmine);
             let events = trigger_trap(&mut rng, &info, &mut trap);
             if let Some(dmg) = events.iter().find_map(|e| {
-                if let EngineEvent::HpChange { amount, source: HpSource::Trap, .. } = e {
+                if let EngineEvent::HpChange {
+                    amount,
+                    source: HpSource::Trap,
+                    ..
+                } = e
+                {
                     Some(-*amount)
                 } else {
                     None
@@ -2370,7 +2522,10 @@ mod tests {
                 0, // neutral luck
                 0, // no search bonus
             );
-            if events.iter().any(|e| matches!(e, EngineEvent::TrapRevealed { .. })) {
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::TrapRevealed { .. }))
+            {
                 detect_count += 1;
             }
         }
@@ -2393,15 +2548,11 @@ mod tests {
         trap.detected = true;
         trap_map.traps.push(trap);
 
-        let events = detect_trap(
-            &mut rng,
-            &mut trap_map,
-            Position::new(10, 5),
-            0,
-            0,
-        );
+        let events = detect_trap(&mut rng, &mut trap_map, Position::new(10, 5), 0, 0);
         assert!(
-            !events.iter().any(|e| matches!(e, EngineEvent::TrapRevealed { .. })),
+            !events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::TrapRevealed { .. })),
             "Already-detected trap should not be re-revealed"
         );
     }
@@ -2454,10 +2605,7 @@ mod tests {
         for seed in 0..1000 {
             let mut rng = Pcg64::seed_from_u64(seed);
             let info = test_entity_info();
-            let mut trap = TrapInstance::new(
-                Position::new(10, 5),
-                TrapType::VibratingSquare,
-            );
+            let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::VibratingSquare);
             trap.detected = true;
             assert!(
                 !avoid_trap(&mut rng, &info, &trap),
@@ -2486,22 +2634,22 @@ mod tests {
         // Test the full STR -> duration mapping from the spec.
         let cases: &[(u8, u32, u32)] = &[
             // (str, min_dur, max_dur)
-            (3,  6, 11),
-            (4,  4,  9),
-            (5,  4,  9),
-            (6,  4,  7),
-            (8,  4,  7),
-            (9,  2,  5),
-            (11, 2,  5),
-            (12, 2,  3),
-            (14, 2,  3),
-            (15, 1,  2),
-            (17, 1,  2),
-            (18, 1,  1),
-            (50, 1,  1),
-            (68, 1,  1),
-            (69, 0,  0),  // instant tear
-            (100, 0, 0),  // instant tear
+            (3, 6, 11),
+            (4, 4, 9),
+            (5, 4, 9),
+            (6, 4, 7),
+            (8, 4, 7),
+            (9, 2, 5),
+            (11, 2, 5),
+            (12, 2, 3),
+            (14, 2, 3),
+            (15, 1, 2),
+            (17, 1, 2),
+            (18, 1, 1),
+            (50, 1, 1),
+            (68, 1, 1),
+            (69, 0, 0),  // instant tear
+            (100, 0, 0), // instant tear
         ];
 
         for &(str_val, expected_min, expected_max) in cases {
@@ -2516,12 +2664,16 @@ mod tests {
             assert!(
                 min_dur >= expected_min,
                 "STR {}: min duration should be >= {}, got {}",
-                str_val, expected_min, min_dur
+                str_val,
+                expected_min,
+                min_dur
             );
             assert!(
                 max_dur <= expected_max,
                 "STR {}: max duration should be <= {}, got {}",
-                str_val, expected_max, max_dur
+                str_val,
+                expected_max,
+                max_dur
             );
         }
     }
@@ -2539,7 +2691,13 @@ mod tests {
             let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::SpikedPit);
             let events = trigger_trap(&mut rng, &info, &mut trap);
             let has_poison = events.iter().any(|e| {
-                matches!(e, EngineEvent::HpChange { source: HpSource::Poison, .. })
+                matches!(
+                    e,
+                    EngineEvent::HpChange {
+                        source: HpSource::Poison,
+                        ..
+                    }
+                )
             });
             if has_poison {
                 poison_count += 1;
@@ -2567,9 +2725,9 @@ mod tests {
             let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::DartTrap);
             let events = trigger_trap(&mut rng, &info, &mut trap);
             // Poisoned dart emits either "poison" or "poison-resist" message.
-            let has_poison_msg = events.iter().any(|e| {
-                matches!(e, EngineEvent::Message { key, .. } if key.contains("poison"))
-            });
+            let has_poison_msg = events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("poison")));
             if has_poison_msg {
                 poison_count += 1;
             }
@@ -2598,7 +2756,13 @@ mod tests {
             trap.detected = true;
             let events = trigger_trap(&mut rng, &info, &mut trap);
             let has_hp_change = events.iter().any(|e| {
-                matches!(e, EngineEvent::HpChange { source: HpSource::Trap, .. })
+                matches!(
+                    e,
+                    EngineEvent::HpChange {
+                        source: HpSource::Trap,
+                        ..
+                    }
+                )
             });
             if !has_hp_change {
                 depleted += 1;
@@ -2625,9 +2789,9 @@ mod tests {
             let info = test_entity_info();
             let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::MagicTrap);
             let events = trigger_trap(&mut rng, &info, &mut trap);
-            let has_pw_gain = events.iter().any(|e| {
-                matches!(e, EngineEvent::PwChange { amount, .. } if *amount > 0)
-            });
+            let has_pw_gain = events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::PwChange { amount, .. } if *amount > 0));
             if has_pw_gain {
                 explosion_count += 1;
             }
@@ -2651,10 +2815,9 @@ mod tests {
         let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::LevelTeleport);
         let events = trigger_trap(&mut rng, &info, &mut trap);
 
-        let has_level_change = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::LevelChanged { .. }
-        ));
+        let has_level_change = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::LevelChanged { .. }));
         assert!(
             !has_level_change,
             "Level teleport should be blocked by magic resistance"
@@ -2671,10 +2834,15 @@ mod tests {
         let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::PolyTrap);
         let events = trigger_trap(&mut rng, &info, &mut trap);
 
-        let has_poly = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied { status: StatusEffect::Polymorphed, .. }
-        ));
+        let has_poly = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Polymorphed,
+                    ..
+                }
+            )
+        });
         assert!(
             !has_poly,
             "Polymorph trap should be blocked by magic resistance"
@@ -2694,7 +2862,10 @@ mod tests {
             let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::Pit);
             let events = trigger_trap(&mut rng, &info, &mut trap);
             if let Some(dur) = events.iter().find_map(|e| {
-                if let EngineEvent::StatusApplied { duration: Some(d), .. } = e {
+                if let EngineEvent::StatusApplied {
+                    duration: Some(d), ..
+                } = e
+                {
                     Some(*d)
                 } else {
                     None
@@ -2704,8 +2875,16 @@ mod tests {
                 max_dur = max_dur.max(dur);
             }
         }
-        assert!(min_dur >= 2, "Pit duration min should be >= 2, got {}", min_dur);
-        assert!(max_dur <= 7, "Pit duration max should be <= 7, got {}", max_dur);
+        assert!(
+            min_dur >= 2,
+            "Pit duration min should be >= 2, got {}",
+            min_dur
+        );
+        assert!(
+            max_dur <= 7,
+            "Pit duration max should be <= 7, got {}",
+            max_dur
+        );
         assert_eq!(min_dur, 2, "Should hit pit duration 2");
         assert_eq!(max_dur, 7, "Should hit pit duration 7");
     }
@@ -2743,11 +2922,7 @@ mod tests {
             TrapType::TrapDoor,
         ];
         for &tt in &floor_triggers {
-            assert!(
-                is_floor_trigger(tt),
-                "{:?} should be a floor trigger",
-                tt
-            );
+            assert!(is_floor_trigger(tt), "{:?} should be a floor trigger", tt);
         }
 
         // Types >= 15 are NOT floor triggers.
@@ -2822,8 +2997,16 @@ mod tests {
                 max_drain = max_drain.max(drain);
             }
         }
-        assert!(min_drain >= 2, "AM drain min should be >= 2, got {}", min_drain);
-        assert!(max_drain <= 12, "AM drain max should be <= 12, got {}", max_drain);
+        assert!(
+            min_drain >= 2,
+            "AM drain min should be >= 2, got {}",
+            min_drain
+        );
+        assert!(
+            max_drain <= 12,
+            "AM drain max should be <= 12, got {}",
+            max_drain
+        );
     }
 
     // ── Anti-magic physical damage with MR ──────────────────────
@@ -2838,10 +3021,15 @@ mod tests {
             info.magic_resistant = true;
             let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::AntiMagic);
             let events = trigger_trap(&mut rng, &info, &mut trap);
-            if events.iter().any(|e| matches!(
-                e,
-                EngineEvent::HpChange { source: HpSource::Trap, .. }
-            )) {
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::HpChange {
+                        source: HpSource::Trap,
+                        ..
+                    }
+                )
+            }) {
                 has_phys = true;
                 break;
             }
@@ -2862,10 +3050,7 @@ mod tests {
         for seed in 0..2000 {
             let mut rng = Pcg64::seed_from_u64(seed);
             let info = test_entity_info();
-            let mut trap = TrapInstance::new(
-                Position::new(10, 5),
-                TrapType::SleepingGasTrap,
-            );
+            let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::SleepingGasTrap);
             let events = trigger_trap(&mut rng, &info, &mut trap);
             if let Some(dur) = events.iter().find_map(|e| {
                 if let EngineEvent::StatusApplied {
@@ -2909,8 +3094,16 @@ mod tests {
         let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::ArrowTrap);
 
         let events = monster_trigger_trap(&mut rng, &info, &mut trap);
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::TrapTriggered { .. })));
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::HpChange { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::TrapTriggered { .. }))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::HpChange { .. }))
+        );
     }
 
     #[test]
@@ -2932,7 +3125,10 @@ mod tests {
         let mut trap = TrapInstance::new(Position::new(10, 5), TrapType::BearTrap);
 
         let events = monster_trigger_trap(&mut rng, &info, &mut trap);
-        assert!(events.is_empty(), "amorphous monster should avoid bear trap");
+        assert!(
+            events.is_empty(),
+            "amorphous monster should avoid bear trap"
+        );
     }
 
     #[test]
@@ -2981,7 +3177,10 @@ mod tests {
                 break;
             }
         }
-        assert!(saw_disarm, "high DEX should eventually succeed at disarming");
+        assert!(
+            saw_disarm,
+            "high DEX should eventually succeed at disarming"
+        );
     }
 
     #[test]
@@ -2999,10 +3198,12 @@ mod tests {
             let (events, disarmed) = disarm_trap(&mut rng, &info, &mut trap);
             if !disarmed {
                 saw_trigger = true;
-                assert!(events.iter().any(|e| matches!(
-                    e,
-                    EngineEvent::TrapTriggered { .. }
-                )), "failed disarm should trigger trap");
+                assert!(
+                    events
+                        .iter()
+                        .any(|e| matches!(e, EngineEvent::TrapTriggered { .. })),
+                    "failed disarm should trigger trap"
+                );
                 break;
             }
         }
@@ -3029,7 +3230,11 @@ mod tests {
 
         let (events, triggered) = trigger_trap_at(&mut rng, &info, &mut trap_map);
         assert!(triggered, "should trigger the arrow trap");
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::TrapTriggered { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::TrapTriggered { .. }))
+        );
     }
 
     #[test]
@@ -3048,7 +3253,10 @@ mod tests {
     fn convert_landmine_to_pit_works() {
         let mut trap_map = TrapMap::new();
         place_trap(&mut trap_map, Position::new(5, 5), TrapType::Landmine);
-        assert_eq!(trap_map.trap_at(Position::new(5, 5)).unwrap().trap_type, TrapType::Landmine);
+        assert_eq!(
+            trap_map.trap_at(Position::new(5, 5)).unwrap().trap_type,
+            TrapType::Landmine
+        );
 
         convert_landmine_to_pit(&mut trap_map, Position::new(5, 5));
         let trap = trap_map.trap_at(Position::new(5, 5)).unwrap();
@@ -3153,10 +3361,15 @@ mod tests {
         // Should trigger the two landmines.
         let landmine_triggers = events
             .iter()
-            .filter(|e| matches!(
-                e,
-                EngineEvent::TrapTriggered { trap_type: TrapType::Landmine, .. }
-            ))
+            .filter(|e| {
+                matches!(
+                    e,
+                    EngineEvent::TrapTriggered {
+                        trap_type: TrapType::Landmine,
+                        ..
+                    }
+                )
+            })
             .count();
         assert!(
             landmine_triggers >= 2,
@@ -3195,10 +3408,11 @@ mod tests {
         assert!(!trap_map.trap_at(Position::new(50, 50)).unwrap().detected);
 
         assert_eq!(events.len(), 2, "should reveal exactly 2 traps");
-        assert!(events.iter().all(|e| matches!(
-            e,
-            EngineEvent::TrapRevealed { .. }
-        )));
+        assert!(
+            events
+                .iter()
+                .all(|e| matches!(e, EngineEvent::TrapRevealed { .. }))
+        );
     }
 
     #[test]
@@ -3208,7 +3422,10 @@ mod tests {
         trap_map.trap_at_mut(Position::new(5, 5)).unwrap().detected = true;
 
         let events = detect_traps(Position::new(5, 5), 5, &mut trap_map);
-        assert!(events.is_empty(), "already-detected trap should not emit event");
+        assert!(
+            events.is_empty(),
+            "already-detected trap should not emit event"
+        );
     }
 
     #[test]
@@ -3216,7 +3433,12 @@ mod tests {
         let mut rng = test_rng();
         let mut trap_map = TrapMap::new();
 
-        let events = create_trap(&mut rng, &mut trap_map, Position::new(8, 8), TrapType::BearTrap);
+        let events = create_trap(
+            &mut rng,
+            &mut trap_map,
+            Position::new(8, 8),
+            TrapType::BearTrap,
+        );
         let trap = trap_map.trap_at(Position::new(8, 8));
         assert!(trap.is_some());
         assert_eq!(trap.unwrap().trap_type, TrapType::BearTrap);
@@ -3229,10 +3451,19 @@ mod tests {
         let mut trap_map = TrapMap::new();
         place_trap(&mut trap_map, Position::new(8, 8), TrapType::ArrowTrap);
 
-        create_trap(&mut rng, &mut trap_map, Position::new(8, 8), TrapType::FireTrap);
+        create_trap(
+            &mut rng,
+            &mut trap_map,
+            Position::new(8, 8),
+            TrapType::FireTrap,
+        );
 
         let trap = trap_map.trap_at(Position::new(8, 8)).unwrap();
-        assert_eq!(trap.trap_type, TrapType::FireTrap, "should have replaced arrow with fire");
+        assert_eq!(
+            trap.trap_type,
+            TrapType::FireTrap,
+            "should have replaced arrow with fire"
+        );
     }
 
     #[test]
@@ -3270,8 +3501,11 @@ mod tests {
         let (result, events) = monster_hits_trap(&mut rng, &info, &mut trap);
         match result {
             MonsterTrapResult::Trapped { duration } => {
-                assert!(duration >= 4 && duration <= 7,
-                    "bear trap duration should be 4..7, got {}", duration);
+                assert!(
+                    duration >= 4 && duration <= 7,
+                    "bear trap duration should be 4..7, got {}",
+                    duration
+                );
             }
             _ => panic!("expected Trapped, got {:?}", result),
         }
@@ -3286,9 +3520,15 @@ mod tests {
 
         let (result, _events) = monster_hits_trap(&mut rng, &info, &mut trap);
         match result {
-            MonsterTrapResult::Damaged { damage, damage_type } => {
-                assert!(damage >= 2 && damage <= 8,
-                    "fire trap d(2,4) should be 2..8, got {}", damage);
+            MonsterTrapResult::Damaged {
+                damage,
+                damage_type,
+            } => {
+                assert!(
+                    damage >= 2 && damage <= 8,
+                    "fire trap d(2,4) should be 2..8, got {}",
+                    damage
+                );
                 assert_eq!(damage_type, "fire");
             }
             _ => panic!("expected Damaged, got {:?}", result),
@@ -3322,8 +3562,16 @@ mod tests {
                 max_dmg = max_dmg.max(damage);
             }
         }
-        assert!(min_dmg >= 3, "rolling boulder min should be >= 3, got {}", min_dmg);
-        assert!(max_dmg <= 30, "rolling boulder max should be <= 30, got {}", max_dmg);
+        assert!(
+            min_dmg >= 3,
+            "rolling boulder min should be >= 3, got {}",
+            min_dmg
+        );
+        assert!(
+            max_dmg <= 30,
+            "rolling boulder max should be <= 30, got {}",
+            max_dmg
+        );
     }
 
     #[test]
@@ -3335,8 +3583,11 @@ mod tests {
         let (result, _) = monster_hits_trap(&mut rng, &info, &mut trap);
         match result {
             MonsterTrapResult::FallsAsleep { duration } => {
-                assert!(duration >= 1 && duration <= 25,
-                    "sleep duration should be 1..25, got {}", duration);
+                assert!(
+                    duration >= 1 && duration <= 25,
+                    "sleep duration should be 1..25, got {}",
+                    duration
+                );
             }
             _ => panic!("expected FallsAsleep, got {:?}", result),
         }
@@ -3381,9 +3632,15 @@ mod tests {
 
         let (result, _) = monster_hits_trap(&mut rng, &info, &mut trap);
         match result {
-            MonsterTrapResult::Damaged { damage, damage_type } => {
-                assert!(damage >= 1 && damage <= 6,
-                    "arrow d(1,6) should be 1..6, got {}", damage);
+            MonsterTrapResult::Damaged {
+                damage,
+                damage_type,
+            } => {
+                assert!(
+                    damage >= 1 && damage <= 6,
+                    "arrow d(1,6) should be 1..6, got {}",
+                    damage
+                );
                 assert_eq!(damage_type, "physical");
             }
             _ => panic!("expected Damaged, got {:?}", result),
@@ -3399,8 +3656,11 @@ mod tests {
         let (result, _) = monster_hits_trap(&mut rng, &info, &mut trap);
         match result {
             MonsterTrapResult::Falls { damage } => {
-                assert!(damage >= 1 && damage <= 6,
-                    "pit fall damage should be 1..6, got {}", damage);
+                assert!(
+                    damage >= 1 && damage <= 6,
+                    "pit fall damage should be 1..6, got {}",
+                    damage
+                );
             }
             _ => panic!("expected Falls, got {:?}", result),
         }

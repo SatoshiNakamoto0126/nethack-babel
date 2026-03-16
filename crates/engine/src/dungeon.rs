@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::action::Position;
 use crate::engrave::EngravingMap;
+use crate::region::GasCloud;
 use crate::traps::TrapMap;
 
 // Re-export TerrainType from the canonical data crate definition.
@@ -80,7 +81,10 @@ impl Terrain {
     /// Whether the terrain blocks line of sight.
     #[inline]
     pub fn is_opaque(self) -> bool {
-        matches!(self, Terrain::Stone | Terrain::Wall | Terrain::Tree | Terrain::DoorClosed)
+        matches!(
+            self,
+            Terrain::Stone | Terrain::Wall | Terrain::Tree | Terrain::DoorClosed
+        )
     }
 
     /// Whether a creature can walk onto this terrain (ignoring levitation,
@@ -226,10 +230,7 @@ impl LevelMap {
     /// Whether a position is inside the map boundaries.
     #[inline]
     pub fn in_bounds(&self, pos: Position) -> bool {
-        pos.x >= 0
-            && pos.y >= 0
-            && (pos.x as usize) < self.width
-            && (pos.y as usize) < self.height
+        pos.x >= 0 && pos.y >= 0 && (pos.x as usize) < self.width && (pos.y as usize) < self.height
     }
 
     /// Return `(width, height)` as a tuple.
@@ -391,9 +392,7 @@ pub fn absolute_depth(
     match branch {
         DungeonBranch::Main => local_depth,
         DungeonBranch::Mines => mines_entrance_depth + local_depth - 1,
-        DungeonBranch::Sokoban => {
-            mines_entrance_depth + sokoban_entrance_depth + local_depth - 2
-        }
+        DungeonBranch::Sokoban => mines_entrance_depth + sokoban_entrance_depth + local_depth - 2,
         DungeonBranch::Quest => {
             // Quest entrance is around depth 13-15.
             // Base: Oracle level (~5-9) + 6-8 = ~11-17.  Simplified: 14 + level - 1.
@@ -415,12 +414,12 @@ pub fn absolute_depth(
 /// Maximum depth within a branch (canonical level count).
 pub fn branch_max_depth(branch: DungeonBranch) -> i32 {
     match branch {
-        DungeonBranch::Main => 29,       // 25 + up to 4 random
-        DungeonBranch::Mines => 10,      // 8 + up to 2
+        DungeonBranch::Main => 29,  // 25 + up to 4 random
+        DungeonBranch::Mines => 10, // 8 + up to 2
         DungeonBranch::Sokoban => 4,
-        DungeonBranch::Quest => 7,       // 5 + up to 2
+        DungeonBranch::Quest => 7, // 5 + up to 2
         DungeonBranch::FortLudios => 1,
-        DungeonBranch::Gehennom => 25,   // 20 + up to 5
+        DungeonBranch::Gehennom => 25, // 20 + up to 5
         DungeonBranch::VladsTower => 3,
         DungeonBranch::Endgame => 6,
     }
@@ -461,7 +460,12 @@ impl DungeonLevel {
 
     /// Convert to absolute dungeon depth.
     pub fn absolute_depth(&self, mines_entrance_depth: i32, sokoban_entrance_depth: i32) -> i32 {
-        absolute_depth(self.branch, self.depth, mines_entrance_depth, sokoban_entrance_depth)
+        absolute_depth(
+            self.branch,
+            self.depth,
+            mines_entrance_depth,
+            sokoban_entrance_depth,
+        )
     }
 }
 
@@ -638,10 +642,21 @@ pub struct DungeonState {
     pub topology: DungeonTopology,
     /// Flags for the current level (no_dig, no_teleport, etc.).
     pub current_level_flags: CurrentLevelFlags,
+    /// Player annotations keyed by (branch, depth), equivalent to NetHack's
+    /// per-level notes set by `#annotate`.
+    pub level_annotations: HashMap<(DungeonBranch, i32), String>,
+    /// Player "called" names for item classes, keyed by class character.
+    pub called_item_classes: HashMap<char, String>,
     /// Vault rooms on the current level (for guard spawning).
     pub vault_rooms: Vec<crate::vault::VaultRoom>,
     /// Whether a vault guard is currently active on this level.
     pub vault_guard_present: bool,
+    /// Active gas clouds on the current level.
+    pub gas_clouds: Vec<GasCloud>,
+    /// Runtime autopickup toggle (wired from CLI options).
+    pub autopickup_enabled: bool,
+    /// Runtime autopickup object classes (wired from CLI options).
+    pub autopickup_classes: Vec<nethack_babel_data::ObjectClass>,
 }
 
 impl DungeonState {
@@ -670,8 +685,13 @@ impl DungeonState {
             max_depth_value: None,
             topology,
             current_level_flags: CurrentLevelFlags::default(),
+            level_annotations: HashMap::new(),
+            called_item_classes: HashMap::new(),
             vault_rooms: Vec::new(),
             vault_guard_present: false,
+            gas_clouds: Vec::new(),
+            autopickup_enabled: true,
+            autopickup_classes: Vec::new(),
         }
     }
 
@@ -692,9 +712,20 @@ impl DungeonState {
             max_depth_value: None,
             topology: DungeonTopology::default(),
             current_level_flags: CurrentLevelFlags::default(),
+            level_annotations: HashMap::new(),
+            called_item_classes: HashMap::new(),
             vault_rooms: Vec::new(),
             vault_guard_present: false,
+            gas_clouds: Vec::new(),
+            autopickup_enabled: true,
+            autopickup_classes: Vec::new(),
         }
+    }
+
+    /// Configure runtime autopickup behavior.
+    pub fn set_autopickup(&mut self, enabled: bool, classes: Vec<nethack_babel_data::ObjectClass>) {
+        self.autopickup_enabled = enabled;
+        self.autopickup_classes = classes;
     }
 
     /// Save the current level and its monsters into the cache.
@@ -730,6 +761,53 @@ impl DungeonState {
     /// Whether the player has previously entered this (branch, depth).
     pub fn was_visited(&self, branch: DungeonBranch, depth: i32) -> bool {
         self.visited_set.contains(&(branch, depth))
+    }
+
+    /// Set or clear an annotation for a specific level.
+    ///
+    /// Empty/whitespace-only text clears the annotation.
+    pub fn set_level_annotation(&mut self, branch: DungeonBranch, depth: i32, text: String) {
+        let key = (branch, depth);
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            self.level_annotations.remove(&key);
+        } else {
+            self.level_annotations.insert(key, trimmed.to_string());
+        }
+    }
+
+    /// Set or clear annotation for the current level.
+    pub fn set_current_level_annotation(&mut self, text: String) {
+        self.set_level_annotation(self.branch, self.depth, text);
+    }
+
+    /// Get annotation for a level, if any.
+    pub fn level_annotation(&self, branch: DungeonBranch, depth: i32) -> Option<&str> {
+        self.level_annotations
+            .get(&(branch, depth))
+            .map(String::as_str)
+    }
+
+    /// Get annotation for current level, if any.
+    pub fn current_level_annotation(&self) -> Option<&str> {
+        self.level_annotation(self.branch, self.depth)
+    }
+
+    /// Set or clear a "called" name for an item class.
+    ///
+    /// Empty/whitespace-only text clears the called name.
+    pub fn set_called_item_class(&mut self, class: char, name: String) {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            self.called_item_classes.remove(&class);
+        } else {
+            self.called_item_classes.insert(class, trimmed.to_string());
+        }
+    }
+
+    /// Get the called name for an item class, if present.
+    pub fn called_item_class(&self, class: char) -> Option<&str> {
+        self.called_item_classes.get(&class).map(String::as_str)
     }
 
     /// Check if descending at the current branch+depth should enter a
@@ -874,8 +952,8 @@ impl Default for DungeonState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand_pcg::Pcg64;
     use rand::SeedableRng;
+    use rand_pcg::Pcg64;
 
     #[test]
     fn test_cache_and_restore_level() {
@@ -957,16 +1035,10 @@ mod tests {
         }
 
         // Depth 2 should NOT enter Mines even if mines entrance is 3.
-        assert_eq!(
-            check_branch_entrance(DungeonBranch::Main, 2, 3, 3),
-            None,
-        );
+        assert_eq!(check_branch_entrance(DungeonBranch::Main, 2, 3, 3), None,);
 
         // Depth 4 with mines entrance at 3 should NOT enter Mines.
-        assert_eq!(
-            check_branch_entrance(DungeonBranch::Main, 4, 3, 3),
-            None,
-        );
+        assert_eq!(check_branch_entrance(DungeonBranch::Main, 4, 3, 3), None,);
     }
 
     #[test]
@@ -999,10 +1071,7 @@ mod tests {
         assert_eq!(result, Some((DungeonBranch::Gehennom, 5)));
 
         // Depth 25 is the Castle, not yet Gehennom.
-        assert_eq!(
-            check_branch_entrance(DungeonBranch::Main, 25, 3, 3),
-            None,
-        );
+        assert_eq!(check_branch_entrance(DungeonBranch::Main, 25, 3, 3), None,);
     }
 
     #[test]
@@ -1138,10 +1207,7 @@ mod tests {
 
         // Reverse lookup.
         let dest = ds.find_portal(DungeonBranch::FortLudios, 1, Position::new(40, 10));
-        assert_eq!(
-            dest,
-            Some((DungeonBranch::Main, 15, Position::new(10, 5))),
-        );
+        assert_eq!(dest, Some((DungeonBranch::Main, 15, Position::new(10, 5))),);
 
         // Non-existent portal.
         assert_eq!(
@@ -1205,7 +1271,12 @@ mod tests {
         // Vlad's Tower goes upward.
         let bottom = absolute_depth(DungeonBranch::VladsTower, 1, 3, 3);
         let top = absolute_depth(DungeonBranch::VladsTower, 3, 3, 3);
-        assert!(bottom > top, "bottom ({}) should be deeper than top ({})", bottom, top);
+        assert!(
+            bottom > top,
+            "bottom ({}) should be deeper than top ({})",
+            bottom,
+            top
+        );
         assert_eq!(bottom, 35);
         assert_eq!(top, 33);
     }
@@ -1507,7 +1578,10 @@ mod tests {
 
         // Fort Ludios portal.
         let dest = ds.find_portal(DungeonBranch::Main, 18, Position::new(30, 8));
-        assert_eq!(dest, Some((DungeonBranch::FortLudios, 1, Position::new(40, 10))));
+        assert_eq!(
+            dest,
+            Some((DungeonBranch::FortLudios, 1, Position::new(40, 10)))
+        );
 
         // Wrong position.
         let dest = ds.find_portal(DungeonBranch::Main, 10, Position::new(6, 5));
@@ -1521,21 +1595,29 @@ mod tests {
         let mut ds = DungeonState::with_entrance_depths(3, 3);
 
         // Cache Main:1
-        ds.current_level.set_terrain(Position::new(1, 1), Terrain::Floor);
+        ds.current_level
+            .set_terrain(Position::new(1, 1), Terrain::Floor);
         ds.cache_current_level(vec![]);
 
         // Move to depth 2 and cache it too.
         ds.current_level = LevelMap::new_standard();
         ds.depth = 2;
-        ds.current_level.set_terrain(Position::new(2, 2), Terrain::Altar);
+        ds.current_level
+            .set_terrain(Position::new(2, 2), Terrain::Altar);
         ds.cache_current_level(vec![]);
 
         // Verify both are cached.
         let (map1, _) = ds.load_cached_level(DungeonBranch::Main, 1).unwrap();
-        assert_eq!(map1.get(Position::new(1, 1)).unwrap().terrain, Terrain::Floor);
+        assert_eq!(
+            map1.get(Position::new(1, 1)).unwrap().terrain,
+            Terrain::Floor
+        );
 
         let (map2, _) = ds.load_cached_level(DungeonBranch::Main, 2).unwrap();
-        assert_eq!(map2.get(Position::new(2, 2)).unwrap().terrain, Terrain::Altar);
+        assert_eq!(
+            map2.get(Position::new(2, 2)).unwrap().terrain,
+            Terrain::Altar
+        );
     }
 
     // ── DungeonTopology tests ───────────────────────────────────
@@ -1545,12 +1627,21 @@ mod tests {
         use rand::SeedableRng;
         let mut rng = Pcg64::seed_from_u64(42);
         let topo = DungeonTopology::new(&mut rng);
-        assert!((5..=9).contains(&topo.oracle_depth),
-            "oracle_depth {} out of range 5..=9", topo.oracle_depth);
-        assert!((15..=18).contains(&topo.rogue_depth),
-            "rogue_depth {} out of range 15..=18", topo.rogue_depth);
-        assert!((10..=13).contains(&topo.bigroom_depth),
-            "bigroom_depth {} out of range 10..=13", topo.bigroom_depth);
+        assert!(
+            (5..=9).contains(&topo.oracle_depth),
+            "oracle_depth {} out of range 5..=9",
+            topo.oracle_depth
+        );
+        assert!(
+            (15..=18).contains(&topo.rogue_depth),
+            "rogue_depth {} out of range 15..=18",
+            topo.rogue_depth
+        );
+        assert!(
+            (10..=13).contains(&topo.bigroom_depth),
+            "bigroom_depth {} out of range 10..=13",
+            topo.bigroom_depth
+        );
     }
 
     #[test]
@@ -1578,8 +1669,12 @@ mod tests {
             }
         }
         // Expect ~50% with generous margin.
-        assert!(has_count > 50 && has_count < 150,
-            "Expected ~50% has_bigroom, got {}/{}", has_count, trials);
+        assert!(
+            has_count > 50 && has_count < 150,
+            "Expected ~50% has_bigroom, got {}/{}",
+            has_count,
+            trials
+        );
     }
 
     #[test]
@@ -1613,10 +1708,7 @@ mod tests {
             Some(SpecialLevelId::OracleLevel),
         );
         // Not at depth 7 (the default).
-        assert_eq!(
-            ds.check_topology_special(&DungeonBranch::Main, 7),
-            None,
-        );
+        assert_eq!(ds.check_topology_special(&DungeonBranch::Main, 7), None,);
     }
 
     #[test]
@@ -1628,10 +1720,7 @@ mod tests {
             ds.check_topology_special(&DungeonBranch::Main, 17),
             Some(SpecialLevelId::Rogue),
         );
-        assert_eq!(
-            ds.check_topology_special(&DungeonBranch::Main, 16),
-            None,
-        );
+        assert_eq!(ds.check_topology_special(&DungeonBranch::Main, 16), None,);
     }
 
     #[test]
@@ -1646,10 +1735,7 @@ mod tests {
         );
         // With bigroom disabled, depth 12 should be None.
         ds.topology = DungeonTopology::fixed(7, 16, 12, false);
-        assert_eq!(
-            ds.check_topology_special(&DungeonBranch::Main, 12),
-            None,
-        );
+        assert_eq!(ds.check_topology_special(&DungeonBranch::Main, 12), None,);
     }
 
     #[test]
@@ -1769,8 +1855,10 @@ mod tests {
         // All 4 Sokoban levels are special.
         for d in 1..=4 {
             assert!(
-                ds.check_topology_special(&DungeonBranch::Sokoban, d).is_some(),
-                "Sokoban depth {} should be special", d,
+                ds.check_topology_special(&DungeonBranch::Sokoban, d)
+                    .is_some(),
+                "Sokoban depth {} should be special",
+                d,
             );
         }
     }
@@ -1797,7 +1885,9 @@ mod tests {
             assert_eq!(
                 ds.check_topology_special(&DungeonBranch::Gehennom, *depth),
                 Some(*expected_id),
-                "Gehennom depth {} should be {:?}", depth, expected_id,
+                "Gehennom depth {} should be {:?}",
+                depth,
+                expected_id,
             );
         }
         // Non-special depths in Gehennom.
@@ -1805,7 +1895,8 @@ mod tests {
             assert_eq!(
                 ds.check_topology_special(&DungeonBranch::Gehennom, depth),
                 None,
-                "Gehennom depth {} should not be special", depth,
+                "Gehennom depth {} should not be special",
+                depth,
             );
         }
     }

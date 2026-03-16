@@ -12,16 +12,10 @@ use rand::Rng;
 
 use nethack_babel_data::{AttackDef, AttackMethod, DamageType, ResistanceSet};
 
-use crate::combat::{
-    apply_damage_type, roll_dice, Engulfed, MonsterAttacks,
-};
-use crate::event::{
-    DamageSource, DeathCause, EngineEvent, HpSource, PassiveEffect,
-};
+use crate::combat::{Engulfed, MonsterAttacks, apply_damage_type, roll_dice};
+use crate::event::{DamageSource, DeathCause, EngineEvent, HpSource, PassiveEffect};
 use crate::status::{self, Intrinsics};
-use crate::world::{
-    ArmorClass, ExperienceLevel, GameWorld, HitPoints,
-};
+use crate::world::{ArmorClass, ExperienceLevel, GameWorld, HitPoints};
 
 // ---------------------------------------------------------------------------
 // Public data types
@@ -82,11 +76,7 @@ pub struct MonsterFlags {
 ///
 /// AC convention: 10 = unarmored (easy to hit), negative = well armored
 /// (hard to hit).  Natural 20 always hits; natural 1 always misses.
-pub fn monster_hit_chance(
-    monster_level: u8,
-    player_ac: i32,
-    rng: &mut impl Rng,
-) -> bool {
+pub fn monster_hit_chance(monster_level: u8, player_ac: i32, rng: &mut impl Rng) -> bool {
     let roll = rng.random_range(1..=20);
     // Natural 20 always hits; natural 1 always misses.
     if roll >= 20 {
@@ -106,10 +96,7 @@ pub fn monster_hit_chance(
 // ---------------------------------------------------------------------------
 
 /// Roll physical damage from a monster attack's dice expression.
-fn resolve_physical_damage(
-    attack: &AttackDef,
-    rng: &mut impl Rng,
-) -> i32 {
+fn resolve_physical_damage(attack: &AttackDef, rng: &mut impl Rng) -> i32 {
     roll_dice(attack.dice, rng).max(0)
 }
 
@@ -187,9 +174,15 @@ pub fn resolve_monster_attack(
     rng: &mut impl Rng,
 ) -> AttackResult {
     match params.attack.method {
-        AttackMethod::Claw | AttackMethod::Bite | AttackMethod::Kick
-        | AttackMethod::Butt | AttackMethod::Sting | AttackMethod::Touch
-        | AttackMethod::Tentacle | AttackMethod::Weapon | AttackMethod::Hug => {
+        AttackMethod::Claw
+        | AttackMethod::Bite
+        | AttackMethod::Kick
+        | AttackMethod::Butt
+        | AttackMethod::Sting
+        | AttackMethod::Touch
+        | AttackMethod::Tentacle
+        | AttackMethod::Weapon
+        | AttackMethod::Hug => {
             // Standard melee: hit check + damage type dispatch.
             if !monster_hit_chance(params.monster_level, params.player_ac, rng) {
                 return AttackResult::miss(params.attacker, params.defender);
@@ -202,9 +195,7 @@ pub fn resolve_monster_attack(
             gulpmu(world, params.attacker, params.defender, &params.attack, rng)
         }
 
-        AttackMethod::Gaze => {
-            gazemu(world, params.attacker, params.defender, &params.attack, rng)
-        }
+        AttackMethod::Gaze => gazemu(world, params.attacker, params.defender, &params.attack, rng),
 
         AttackMethod::Breath | AttackMethod::Spit => {
             // Breath/spit: auto-hit, roll dice, apply damage type.
@@ -239,15 +230,13 @@ pub fn resolve_monster_attack(
         }
 
         // Passive (AT_NONE) and boom (AT_BOOM) are not active attacks.
-        AttackMethod::None | AttackMethod::Boom => {
-            AttackResult {
-                events: vec![],
-                damage: 0,
-                hit: false,
-                fatal: false,
-                attacker_died: false,
-            }
-        }
+        AttackMethod::None | AttackMethod::Boom => AttackResult {
+            events: vec![],
+            damage: 0,
+            hit: false,
+            fatal: false,
+            attacker_died: false,
+        },
     }
 }
 
@@ -260,11 +249,7 @@ pub fn resolve_monster_attack(
 /// Iterates through the monster's `MonsterAttacks` component, resolving
 /// each slot in order.  Stops early if the defender dies or the attacker
 /// dies (e.g., from passive damage or explosion).
-pub fn mattacku(
-    world: &mut GameWorld,
-    attacker: Entity,
-    rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+pub fn mattacku(world: &mut GameWorld, attacker: Entity, rng: &mut impl Rng) -> Vec<EngineEvent> {
     let mut all_events = Vec::new();
     let defender = world.player();
 
@@ -385,9 +370,13 @@ pub fn gulpmu(
 
     // Apply engulf component.
     let duration = (rng.random_range(1..=(monster_level + 5).max(1)) as u32).max(2);
-    let _ = world
-        .ecs_mut()
-        .insert_one(defender, Engulfed { by: attacker, turns_remaining: duration });
+    let _ = world.ecs_mut().insert_one(
+        defender,
+        Engulfed {
+            by: attacker,
+            turns_remaining: duration,
+        },
+    );
 
     let mut events = Vec::new();
     let attacker_name = world.entity_name(attacker);
@@ -660,7 +649,10 @@ mod tests {
     ) -> Entity {
         let entity = world.spawn((
             Monster,
-            HitPoints { current: hp, max: hp },
+            HitPoints {
+                current: hp,
+                max: hp,
+            },
             ExperienceLevel(level),
             ArmorClass(ac),
             Name("test monster".to_string()),
@@ -794,7 +786,10 @@ mod tests {
         };
 
         let result = resolve_special_damage(&mut world, &params, 8, &mut rng);
-        assert!(result.damage > 0, "fire should deal damage without resistance");
+        assert!(
+            result.damage > 0,
+            "fire should deal damage without resistance"
+        );
     }
 
     // --- Test 6: Poison damage with resistance ---
@@ -825,11 +820,19 @@ mod tests {
         // Poison still deals base damage but won't cause extra poison effect.
         let result = resolve_special_damage(&mut world, &params, 4, &mut rng);
         // No ExtraDamage with Poison source should appear.
-        let has_poison_extra = result.events.iter().any(|e| matches!(
-            e,
-            EngineEvent::ExtraDamage { source: DamageSource::Poison, .. }
-        ));
-        assert!(!has_poison_extra, "poison resistance should block extra poison damage");
+        let has_poison_extra = result.events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::ExtraDamage {
+                    source: DamageSource::Poison,
+                    ..
+                }
+            )
+        });
+        assert!(
+            !has_poison_extra,
+            "poison resistance should block extra poison damage"
+        );
     }
 
     // --- Test 7: Poison damage without resistance can cause extra damage ---
@@ -854,10 +857,15 @@ mod tests {
                 player_ac: 10,
             };
             let result = resolve_special_damage(&mut world, &params, 4, &mut rng);
-            if result.events.iter().any(|e| matches!(
-                e,
-                EngineEvent::ExtraDamage { source: DamageSource::Poison, .. }
-            )) {
+            if result.events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::ExtraDamage {
+                        source: DamageSource::Poison,
+                        ..
+                    }
+                )
+            }) {
                 found_poison_extra = true;
                 break;
             }
@@ -866,7 +874,10 @@ mod tests {
                 hp.current = hp.max;
             }
         }
-        assert!(found_poison_extra, "poison without resistance should eventually trigger");
+        assert!(
+            found_poison_extra,
+            "poison without resistance should eventually trigger"
+        );
     }
 
     // --- Test 8: Stoning initiates countdown ---
@@ -892,10 +903,15 @@ mod tests {
                 player_ac: 10,
             };
             let result = resolve_special_damage(&mut world, &params, 0, &mut rng);
-            if result.events.iter().any(|e| matches!(
-                e,
-                EngineEvent::StatusApplied { status: StatusEffect::Stoning, .. }
-            )) {
+            if result.events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        status: StatusEffect::Stoning,
+                        ..
+                    }
+                )
+            }) {
                 stoned = true;
                 break;
             }
@@ -920,14 +936,23 @@ mod tests {
         // status module directly.
         let events = status::make_slimed(&mut world, defender, status::SLIMING_INITIAL);
 
-        let has_slime_status = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied { status: StatusEffect::Slimed, .. }
-        ));
+        let has_slime_status = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Slimed,
+                    ..
+                }
+            )
+        });
         assert!(has_slime_status, "sliming should apply Slimed status");
 
         let st = world.get_component::<StatusEffects>(defender).unwrap();
-        assert_eq!(st.sliming, status::SLIMING_INITIAL, "sliming countdown should be set");
+        assert_eq!(
+            st.sliming,
+            status::SLIMING_INITIAL,
+            "sliming countdown should be set"
+        );
     }
 
     // --- Test 10: DrainLife reduces level ---
@@ -998,7 +1023,10 @@ mod tests {
 
         let result = resolve_special_damage(&mut world, &params, 5, &mut rng);
         // The default path returns base_damage as hp_damage.
-        assert!(result.damage > 0, "gold steal should deal physical damage (stub)");
+        assert!(
+            result.damage > 0,
+            "gold steal should deal physical damage (stub)"
+        );
     }
 
     // --- Test 12: Paralysis applies status ---
@@ -1023,10 +1051,15 @@ mod tests {
                 player_ac: 10,
             };
             let result = resolve_special_damage(&mut world, &params, 3, &mut rng);
-            if result.events.iter().any(|e| matches!(
-                e,
-                EngineEvent::StatusApplied { status: StatusEffect::Paralyzed, .. }
-            )) {
+            if result.events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        status: StatusEffect::Paralyzed,
+                        ..
+                    }
+                )
+            }) {
                 paralyzed = true;
                 break;
             }
@@ -1056,15 +1089,26 @@ mod tests {
 
         let events = passiveum(&mut world, attacker, defender, &flags, &mut rng);
 
-        let has_acid_passive = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::PassiveAttack { effect: PassiveEffect::AcidSplash { .. }, .. }
-        ));
-        assert!(has_acid_passive, "acidic defender should splash acid on attacker");
+        let has_acid_passive = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::PassiveAttack {
+                    effect: PassiveEffect::AcidSplash { .. },
+                    ..
+                }
+            )
+        });
+        assert!(
+            has_acid_passive,
+            "acidic defender should splash acid on attacker"
+        );
 
         // Attacker should have taken damage.
         let attacker_hp = world.get_component::<HitPoints>(attacker).unwrap();
-        assert!(attacker_hp.current < 20, "attacker should lose HP from acid");
+        assert!(
+            attacker_hp.current < 20,
+            "attacker should lose HP from acid"
+        );
     }
 
     // --- Test 14: Engulfment digest damage ---
@@ -1097,7 +1141,10 @@ mod tests {
             // Remove engulfed component if present.
             let _ = world.ecs_mut().remove_one::<Engulfed>(defender);
         }
-        assert!(engulfed, "engulfment should eventually succeed and deal damage");
+        assert!(
+            engulfed,
+            "engulfment should eventually succeed and deal damage"
+        );
     }
 
     // --- Test 15: Multiple attacks in sequence via mattacku ---
@@ -1138,10 +1185,7 @@ mod tests {
             hits + misses >= 1,
             "three attack slots should produce at least one hit or miss",
         );
-        assert!(
-            hits + misses <= 3,
-            "should not exceed 3 attacks",
-        );
+        assert!(hits + misses <= 3, "should not exceed 3 attacks",);
     }
 
     // --- Test 16: Monster death from passive damage ---
@@ -1163,10 +1207,12 @@ mod tests {
         let events = passiveum(&mut world, attacker, defender, &flags, &mut rng);
 
         // Monster with 1 HP should die from acid splash (1-4 damage).
-        let died = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::EntityDied { entity, .. } if *entity == attacker
-        ));
+        let died = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::EntityDied { entity, .. } if *entity == attacker
+            )
+        });
         assert!(died, "monster with 1 HP should die from passive acid");
     }
 
@@ -1206,7 +1252,10 @@ mod tests {
         let mut rng = TestRng::seed_from_u64(42);
 
         let events = mattacku(&mut world, attacker, &mut rng);
-        assert!(events.is_empty(), "monster with no attacks should produce no events");
+        assert!(
+            events.is_empty(),
+            "monster with no attacks should produce no events"
+        );
     }
 
     // --- Test 19: Sleep attack with resistance ---
@@ -1236,11 +1285,20 @@ mod tests {
                 player_ac: 10,
             };
             let _result = resolve_special_damage(&mut world, &params, 3, &mut rng);
-            let has_sleep = _result.events.iter().any(|e| matches!(
-                e,
-                EngineEvent::StatusApplied { status: StatusEffect::Sleeping, .. }
-            ));
-            assert!(!has_sleep, "sleep resistance should block sleep (seed {})", seed);
+            let has_sleep = _result.events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        status: StatusEffect::Sleeping,
+                        ..
+                    }
+                )
+            });
+            assert!(
+                !has_sleep,
+                "sleep resistance should block sleep (seed {})",
+                seed
+            );
         }
     }
 }

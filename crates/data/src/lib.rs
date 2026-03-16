@@ -12,5 +12,5 @@ pub mod loader;
 pub mod schema;
 
 pub use components::*;
-pub use loader::{load_game_data, load_monsters, load_objects, GameData, LoadError};
+pub use loader::{GameData, LoadError, load_game_data, load_monsters, load_objects};
 pub use schema::*;

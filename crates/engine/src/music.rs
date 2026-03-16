@@ -161,28 +161,14 @@ pub fn play_instrument(
         InstrumentType::WoodenFlute | InstrumentType::WoodenHarp => {
             play_charm_snakes(world, player, player_pos)
         }
-        InstrumentType::MagicFlute => {
-            play_magic_flute(world, player, player_pos, charges, rng)
-        }
-        InstrumentType::MagicHarp => {
-            play_magic_harp(world, player, player_pos, charges)
-        }
+        InstrumentType::MagicFlute => play_magic_flute(world, player, player_pos, charges, rng),
+        InstrumentType::MagicHarp => play_magic_harp(world, player, player_pos, charges),
         InstrumentType::Bugle => play_bugle(world, player_pos),
-        InstrumentType::LeatherDrum => {
-            play_leather_drum(world, player, player_pos, rng)
-        }
-        InstrumentType::DrumOfEarthquake => {
-            play_earthquake(world, player_pos, charges, rng)
-        }
-        InstrumentType::TooledHorn => {
-            (vec![EngineEvent::msg("play-horn-noise")], false)
-        }
-        InstrumentType::FrostHorn => {
-            play_horn_ray(world, player_pos, charges, "frost-horn-ray")
-        }
-        InstrumentType::FireHorn => {
-            play_horn_ray(world, player_pos, charges, "fire-horn-ray")
-        }
+        InstrumentType::LeatherDrum => play_leather_drum(world, player, player_pos, rng),
+        InstrumentType::DrumOfEarthquake => play_earthquake(world, player_pos, charges, rng),
+        InstrumentType::TooledHorn => (vec![EngineEvent::msg("play-horn-noise")], false),
+        InstrumentType::FrostHorn => play_horn_ray(world, player_pos, charges, "frost-horn-ray"),
+        InstrumentType::FireHorn => play_horn_ray(world, player_pos, charges, "fire-horn-ray"),
     }
 }
 
@@ -213,8 +199,10 @@ fn play_charm_snakes(
             && world.get_component::<Tame>(entity).is_none()
         {
             let name = world.entity_name(entity);
-            if name.contains("snake") || name.contains("cobra")
-                || name.contains("naga") || name.contains("serpent")
+            if name.contains("snake")
+                || name.contains("cobra")
+                || name.contains("naga")
+                || name.contains("serpent")
             {
                 snakes_to_tame.push(entity);
             }
@@ -256,9 +244,7 @@ fn play_magic_flute(
         if entity == player {
             continue;
         }
-        if chebyshev(player_pos, pos.0) <= 1
-            && world.get_component::<Monster>(entity).is_some()
-        {
+        if chebyshev(player_pos, pos.0) <= 1 && world.get_component::<Monster>(entity).is_some() {
             targets.push(entity);
         }
     }
@@ -323,10 +309,7 @@ fn play_magic_harp(
 }
 
 /// Bugle: wake all sleeping monsters on the level.
-fn play_bugle(
-    world: &mut GameWorld,
-    _player_pos: Position,
-) -> (Vec<EngineEvent>, bool) {
+fn play_bugle(world: &mut GameWorld, _player_pos: Position) -> (Vec<EngineEvent>, bool) {
     let mut events = Vec::new();
     events.push(EngineEvent::msg("play-bugle"));
 
@@ -361,9 +344,7 @@ fn play_leather_drum(
         if entity == player {
             continue;
         }
-        if chebyshev(player_pos, pos.0) <= 1
-            && world.get_component::<Monster>(entity).is_some()
-        {
+        if chebyshev(player_pos, pos.0) <= 1 && world.get_component::<Monster>(entity).is_some() {
             targets.push(entity);
         }
     }
@@ -614,17 +595,8 @@ mod tests {
     }
 
     /// Helper: spawn a monster entity at a position with a given name.
-    fn spawn_monster(
-        world: &mut GameWorld,
-        name: &str,
-        pos: Position,
-    ) -> Entity {
-        world.spawn((
-            Monster,
-            Positioned(pos),
-            Name(name.to_string()),
-            Speed(12),
-        ))
+    fn spawn_monster(world: &mut GameWorld, name: &str, pos: Position) -> Entity {
+        world.spawn((Monster, Positioned(pos), Name(name.to_string()), Speed(12)))
     }
 
     // -----------------------------------------------------------------------
@@ -668,11 +640,15 @@ mod tests {
         );
 
         assert!(!charge_used, "wooden flute uses no charges");
-        assert!(world.get_component::<Tame>(snake).is_some(),
-            "snake should be tamed");
-        assert!(events.iter().any(|e| matches!(e,
+        assert!(
+            world.get_component::<Tame>(snake).is_some(),
+            "snake should be tamed"
+        );
+        assert!(
+            events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "snake-charmed")),
-            "should emit snake-charmed message");
+            "should emit snake-charmed message"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -696,10 +672,12 @@ mod tests {
         );
 
         assert!(charge_used, "magic flute should use a charge");
-        assert!(events.iter().any(|e| matches!(e,
+        assert!(
+            events.iter().any(|e| matches!(e,
             EngineEvent::StatusApplied { entity, status: StatusEffect::Sleeping, .. }
             if *entity == adj)),
-            "adjacent monster should be put to sleep");
+            "adjacent monster should be put to sleep"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -736,19 +714,23 @@ mod tests {
         let _m1 = spawn_monster(&mut world, "goblin", Position::new(5, 5));
         let _m2 = spawn_monster(&mut world, "orc", Position::new(15, 15));
 
-        let (events, charge_used) = play_instrument(
-            &mut world,
-            player,
-            InstrumentType::Bugle,
-            None,
-            &mut rng,
-        );
+        let (events, charge_used) =
+            play_instrument(&mut world, player, InstrumentType::Bugle, None, &mut rng);
 
         assert!(!charge_used);
         // Should emit StatusRemoved for both monsters.
-        let wake_count = events.iter().filter(|e| matches!(e,
-            EngineEvent::StatusRemoved { status: StatusEffect::Sleeping, .. }
-        )).count();
+        let wake_count = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusRemoved {
+                        status: StatusEffect::Sleeping,
+                        ..
+                    }
+                )
+            })
+            .count();
         assert_eq!(wake_count, 2, "bugle should wake both monsters");
     }
 
@@ -762,9 +744,13 @@ mod tests {
         let mut rng = test_rng();
 
         // Place some walls near the player (at 10,10).
-        world.dungeon_mut().current_level
+        world
+            .dungeon_mut()
+            .current_level
             .set_terrain(Position::new(12, 10), Terrain::Wall);
-        world.dungeon_mut().current_level
+        world
+            .dungeon_mut()
+            .current_level
             .set_terrain(Position::new(13, 10), Terrain::Wall);
 
         let (events, charge_used) = play_instrument(
@@ -777,10 +763,18 @@ mod tests {
 
         assert!(charge_used);
         // The walls at (12,10) and (13,10) should now be floor.
-        let t1 = world.dungeon().current_level
-            .get(Position::new(12, 10)).unwrap().terrain;
-        let t2 = world.dungeon().current_level
-            .get(Position::new(13, 10)).unwrap().terrain;
+        let t1 = world
+            .dungeon()
+            .current_level
+            .get(Position::new(12, 10))
+            .unwrap()
+            .terrain;
+        let t2 = world
+            .dungeon()
+            .current_level
+            .get(Position::new(13, 10))
+            .unwrap()
+            .terrain;
         assert_eq!(t1, Terrain::Floor, "wall should be collapsed");
         assert_eq!(t2, Terrain::Floor, "wall should be collapsed");
         assert!(events.iter().any(|e| matches!(e,
@@ -818,10 +812,14 @@ mod tests {
         );
 
         assert!(charge_used);
-        assert!(world.get_component::<Tame>(adj).is_some(),
-            "adjacent monster should be tamed");
-        assert!(world.get_component::<Tame>(far).is_none(),
-            "far monster should not be tamed");
+        assert!(
+            world.get_component::<Tame>(adj).is_some(),
+            "adjacent monster should be tamed"
+        );
+        assert!(
+            world.get_component::<Tame>(far).is_none(),
+            "far monster should not be tamed"
+        );
         assert!(events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "monster-tamed")));
     }
@@ -1028,9 +1026,7 @@ mod tests {
         let mut found = false;
         for seed in 0..200u64 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            if let Some(msg) =
-                ambient_sounds(5, "Dungeons", true, false, &mut rng)
-            {
+            if let Some(msg) = ambient_sounds(5, "Dungeons", true, false, &mut rng) {
                 assert!(
                     msg.contains("shoplifters")
                         || msg.contains("cash register")
@@ -1053,9 +1049,7 @@ mod tests {
         let mut found = false;
         for seed in 0..200u64 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            if let Some(msg) =
-                ambient_sounds(5, "Dungeons", false, true, &mut rng)
-            {
+            if let Some(msg) = ambient_sounds(5, "Dungeons", false, true, &mut rng) {
                 assert!(
                     msg.contains("prayer") || msg.contains("chant"),
                     "temple sound should be thematic: {}",
@@ -1076,9 +1070,7 @@ mod tests {
         let mut found = false;
         for seed in 0..200u64 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            if let Some(msg) =
-                ambient_sounds(20, "Dungeons", false, false, &mut rng)
-            {
+            if let Some(msg) = ambient_sounds(20, "Dungeons", false, false, &mut rng) {
                 assert!(
                     msg.contains("crunching")
                         || msg.contains("hollow")
@@ -1103,13 +1095,9 @@ mod tests {
         let mut found = false;
         for seed in 0..200u64 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            if let Some(msg) =
-                ambient_sounds(3, "Dungeons", false, false, &mut rng)
-            {
+            if let Some(msg) = ambient_sounds(3, "Dungeons", false, false, &mut rng) {
                 assert!(
-                    msg.contains("door")
-                        || msg.contains("water")
-                        || msg.contains("moving"),
+                    msg.contains("door") || msg.contains("water") || msg.contains("moving"),
                     "shallow dungeon sound should be thematic: {}",
                     msg
                 );
@@ -1117,7 +1105,10 @@ mod tests {
                 break;
             }
         }
-        assert!(found, "should eventually get a shallow dungeon ambient sound");
+        assert!(
+            found,
+            "should eventually get a shallow dungeon ambient sound"
+        );
     }
 
     // -----------------------------------------------------------------------

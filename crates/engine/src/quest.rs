@@ -145,11 +145,7 @@ impl QuestState {
 /// - Positive alignment record (> 0)
 ///
 /// Returns `true` if the player meets both criteria.
-pub fn check_quest_eligibility(
-    _role: Role,
-    level: u8,
-    alignment_record: i32,
-) -> bool {
+pub fn check_quest_eligibility(_role: Role, level: u8, alignment_record: i32) -> bool {
     level >= 14 && alignment_record > 0
 }
 
@@ -419,10 +415,7 @@ pub struct QuestTextContext {
 /// Expand quest text placeholders (`%p`, `%c`, `%l`, `%n`, etc.)
 ///
 /// Mirrors `convert_arg()` from `questpgr.c`.
-pub fn expand_quest_placeholder(
-    placeholder: char,
-    ctx: &QuestTextContext,
-) -> String {
+pub fn expand_quest_placeholder(placeholder: char, ctx: &QuestTextContext) -> String {
     match placeholder {
         'p' => ctx.player_name.clone(),
         'c' => ctx.role_name.clone(),
@@ -612,9 +605,7 @@ pub fn resolve_encounter(
                 quest_state.assign();
                 events.push(EngineEvent::msg_with(
                     key,
-                    vec![
-                        ("leader", quest_leader_for_role(role).to_string()),
-                    ],
+                    vec![("leader", quest_leader_for_role(role).to_string())],
                 ));
                 events.push(EngineEvent::msg("quest-assigned"));
             } else {
@@ -656,9 +647,7 @@ pub fn resolve_encounter(
         QuestEncounterType::Guardian => {
             events.push(EngineEvent::msg_with(
                 key,
-                vec![
-                    ("guardian", quest_guardian_for_role(role).to_string()),
-                ],
+                vec![("guardian", quest_guardian_for_role(role).to_string())],
             ));
         }
         QuestEncounterType::NemesisFirst
@@ -666,18 +655,14 @@ pub fn resolve_encounter(
         | QuestEncounterType::NemesisWithArtifact => {
             events.push(EngineEvent::msg_with(
                 key,
-                vec![
-                    ("nemesis", quest_nemesis_for_role(role).to_string()),
-                ],
+                vec![("nemesis", quest_nemesis_for_role(role).to_string())],
             ));
         }
         QuestEncounterType::NemesisDead => {
             quest_state.nemesis_stinky = true;
             events.push(EngineEvent::msg_with(
                 key,
-                vec![
-                    ("nemesis", quest_nemesis_for_role(role).to_string()),
-                ],
+                vec![("nemesis", quest_nemesis_for_role(role).to_string())],
             ));
         }
     }
@@ -780,10 +765,7 @@ mod tests {
         for &role in &Role::ALL {
             let name = quest_artifact_for_role(role);
             assert!(!name.is_empty(), "{:?} should have an artifact", role);
-            assert!(
-                names.insert(name),
-                "duplicate artifact name: {name}"
-            );
+            assert!(names.insert(name), "duplicate artifact name: {name}");
         }
         assert_eq!(names.len(), 13, "should have 13 unique artifacts");
     }
@@ -810,20 +792,14 @@ mod tests {
         for &role in &Role::ALL {
             let name = quest_nemesis_for_role(role);
             assert!(!name.is_empty(), "{:?} should have a nemesis", role);
-            assert!(
-                names.insert(name),
-                "duplicate nemesis name: {name}"
-            );
+            assert!(names.insert(name), "duplicate nemesis name: {name}");
         }
         assert_eq!(names.len(), 13, "should have 13 unique nemeses");
     }
 
     #[test]
     fn test_quest_nemesis_valkyrie() {
-        assert_eq!(
-            quest_nemesis_for_role(Role::Valkyrie),
-            "Lord Surtur"
-        );
+        assert_eq!(quest_nemesis_for_role(Role::Valkyrie), "Lord Surtur");
     }
 
     #[test]
@@ -849,10 +825,7 @@ mod tests {
 
     #[test]
     fn test_quest_leader_wizard() {
-        assert_eq!(
-            quest_leader_for_role(Role::Wizard),
-            "Neferet the Green"
-        );
+        assert_eq!(quest_leader_for_role(Role::Wizard), "Neferet the Green");
     }
 
     // ── Quest state transitions ───────────────────────────────────
@@ -1241,9 +1214,9 @@ mod tests {
         assert!(qs.leader_met);
         assert_eq!(qs.status, QuestStatus::NotStarted);
         assert_eq!(qs.times_rejected, 1);
-        let has_reject = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "quest-leader-reject")
-        });
+        let has_reject = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "quest-leader-reject"));
         assert!(has_reject);
     }
 
@@ -1314,17 +1287,8 @@ mod tests {
 
     #[test]
     fn test_quest_alignment_per_role() {
-        assert_eq!(
-            quest_alignment_for_role(Role::Knight),
-            Alignment::Lawful,
-        );
-        assert_eq!(
-            quest_alignment_for_role(Role::Rogue),
-            Alignment::Chaotic,
-        );
-        assert_eq!(
-            quest_alignment_for_role(Role::Healer),
-            Alignment::Neutral,
-        );
+        assert_eq!(quest_alignment_for_role(Role::Knight), Alignment::Lawful,);
+        assert_eq!(quest_alignment_for_role(Role::Rogue), Alignment::Chaotic,);
+        assert_eq!(quest_alignment_for_role(Role::Healer), Alignment::Neutral,);
     }
 }

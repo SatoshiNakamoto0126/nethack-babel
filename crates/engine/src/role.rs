@@ -94,13 +94,7 @@ pub enum Race {
 
 impl Race {
     /// All races in canonical order.
-    pub const ALL: [Race; 5] = [
-        Race::Human,
-        Race::Elf,
-        Race::Dwarf,
-        Race::Gnome,
-        Race::Orc,
-    ];
+    pub const ALL: [Race; 5] = [Race::Human, Race::Elf, Race::Dwarf, Race::Gnome, Race::Orc];
 
     /// Convert a `RaceId` to a `Race`.
     pub fn from_id(id: RaceId) -> Option<Race> {
@@ -961,26 +955,11 @@ fn role_titles(role: Role) -> [&'static str; 9] {
             "Marksman",
         ],
         Role::Rogue => [
-            "Footpad",
-            "Cutpurse",
-            "Rogue",
-            "Pilferer",
-            "Robber",
-            "Burglar",
-            "Filcher",
-            "Magsman",
+            "Footpad", "Cutpurse", "Rogue", "Pilferer", "Robber", "Burglar", "Filcher", "Magsman",
             "Thief",
         ],
         Role::Samurai => [
-            "Hatamoto",
-            "Ronin",
-            "Ninja",
-            "Joshu",
-            "Ryoshu",
-            "Kokushu",
-            "Daimyo",
-            "Kuge",
-            "Shogun",
+            "Hatamoto", "Ronin", "Ninja", "Joshu", "Ryoshu", "Kokushu", "Daimyo", "Kuge", "Shogun",
         ],
         Role::Tourist => [
             "Rambler",
@@ -1098,14 +1077,7 @@ fn role_titles_female(role: Role) -> [&'static str; 9] {
         ],
         // Samurai: Kunoichi differs
         Role::Samurai => [
-            "Hatamoto",
-            "Ronin",
-            "Kunoichi",
-            "Joshu",
-            "Ryoshu",
-            "Kokushu",
-            "Daimyo",
-            "Kuge",
+            "Hatamoto", "Ronin", "Kunoichi", "Joshu", "Ryoshu", "Kokushu", "Daimyo", "Kuge",
             "Shogun",
         ],
         // Tourist: Peregrinatrix differs
@@ -1182,7 +1154,7 @@ pub fn all_ranks(role: Role, is_female: bool) -> Vec<(u8, &'static str)> {
 /// Get the experience level at which the player reaches the next rank.
 ///
 /// Returns `None` if already at maximum rank (level 30).
-pub fn next_rank_level(role: Role, current_level: u8) -> Option<u8> {
+pub fn next_rank_level(_role: Role, current_level: u8) -> Option<u8> {
     const MIN_LEVELS: [u8; 9] = [1, 3, 6, 10, 14, 18, 22, 26, 30];
     for &lvl in &MIN_LEVELS {
         if lvl > current_level {
@@ -1337,7 +1309,8 @@ mod tests {
 
         // long sword
         assert!(
-            inv.iter().any(|i| i.name == "long sword" && i.quantity == 1),
+            inv.iter()
+                .any(|i| i.name == "long sword" && i.quantity == 1),
             "Valkyrie should start with a long sword"
         );
         // small shield
@@ -1386,8 +1359,7 @@ mod tests {
             "Rogue should start with a short sword"
         );
         assert!(
-            inv.iter()
-                .any(|i| i.name == "dagger" && i.quantity == 10),
+            inv.iter().any(|i| i.name == "dagger" && i.quantity == 10),
             "Rogue should start with 10 daggers"
         );
         assert!(
@@ -1414,8 +1386,7 @@ mod tests {
             "Barbarian should start with an axe"
         );
         assert!(
-            inv.iter()
-                .any(|i| i.name == "ring mail" && i.quantity == 1),
+            inv.iter().any(|i| i.name == "ring mail" && i.quantity == 1),
             "Barbarian should start with ring mail"
         );
     }
@@ -1432,8 +1403,7 @@ mod tests {
             "Samurai should start with a katana"
         );
         assert!(
-            inv.iter()
-                .any(|i| i.name == "wakizashi" && i.quantity == 1),
+            inv.iter().any(|i| i.name == "wakizashi" && i.quantity == 1),
             "Samurai should start with a wakizashi"
         );
     }
@@ -1674,12 +1644,7 @@ mod tests {
             // Every role must have 9 non-empty titles.
             let titles = role_titles(role);
             for (i, title) in titles.iter().enumerate() {
-                assert!(
-                    !title.is_empty(),
-                    "{:?} title rank {} is empty",
-                    role,
-                    i
-                );
+                assert!(!title.is_empty(), "{:?} title rank {} is empty", role, i);
             }
             // Level 1 and 30 should produce valid titles.
             let t1 = role_title(role, 1);
@@ -1786,11 +1751,7 @@ mod tests {
     fn test_starting_inventory_all_roles_nonempty() {
         for &role in &Role::ALL {
             let inv = starting_inventory(role);
-            assert!(
-                !inv.is_empty(),
-                "{:?} starting inventory is empty",
-                role
-            );
+            assert!(!inv.is_empty(), "{:?} starting inventory is empty", role);
             for item in &inv {
                 assert!(item.quantity > 0, "{:?} has item with qty 0", role);
                 assert!(!item.name.is_empty(), "{:?} has unnamed item", role);

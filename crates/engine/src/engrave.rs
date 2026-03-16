@@ -225,10 +225,7 @@ pub fn engrave(
 
     // Track Elbereth in conduct system.
     if engraving.has_elbereth() {
-        let violations = crate::conduct::check_conduct(
-            conduct,
-            &ConductAction::WriteElbereth,
-        );
+        let violations = crate::conduct::check_conduct(conduct, &ConductAction::WriteElbereth);
         for v in &violations {
             events.push(EngineEvent::msg_with(
                 "conduct-broken",
@@ -721,18 +718,10 @@ mod tests {
         let mut conduct = ConductState::new();
         let pos = make_pos(5, 5);
 
-        assert_eq!(
-            conduct.elbereths, 0,
-            "elbereth count should start at 0"
-        );
+        assert_eq!(conduct.elbereths, 0, "elbereth count should start at 0");
 
-        let (events, _turns) = engrave(
-            &mut map,
-            &mut conduct,
-            pos,
-            "Elbereth",
-            EngraveMethod::Dust,
-        );
+        let (events, _turns) =
+            engrave(&mut map, &mut conduct, pos, "Elbereth", EngraveMethod::Dust);
 
         assert_eq!(
             conduct.elbereths, 1,
@@ -757,13 +746,7 @@ mod tests {
         engrave(&mut map, &mut conduct, pos, "hello", EngraveMethod::Dust);
         assert_eq!(map.get(pos).unwrap().text, "hello");
 
-        engrave(
-            &mut map,
-            &mut conduct,
-            pos,
-            "Elbereth",
-            EngraveMethod::Fire,
-        );
+        engrave(&mut map, &mut conduct, pos, "Elbereth", EngraveMethod::Fire);
         let eng = map.get(pos).unwrap();
         assert_eq!(eng.text, "Elbereth");
         assert_eq!(eng.method, EngraveMethod::Fire);
@@ -778,7 +761,13 @@ mod tests {
         let mut conduct = ConductState::new();
         let pos = make_pos(5, 5);
 
-        engrave(&mut map, &mut conduct, pos, "hello world", EngraveMethod::Dust);
+        engrave(
+            &mut map,
+            &mut conduct,
+            pos,
+            "hello world",
+            EngraveMethod::Dust,
+        );
         assert_eq!(
             conduct.elbereths, 0,
             "writing non-Elbereth text should not affect conduct"
@@ -791,11 +780,7 @@ mod tests {
     fn test_degrade_engravings() {
         let mut map = EngravingMap::new();
         let pos = make_pos(5, 5);
-        map.insert(Engraving::new(
-            "test".to_string(),
-            EngraveMethod::Dust,
-            pos,
-        ));
+        map.insert(Engraving::new("test".to_string(), EngraveMethod::Dust, pos));
 
         let events = degrade_engravings(&mut map, pos);
         assert!(
@@ -823,13 +808,8 @@ mod tests {
         let pos = make_pos(5, 5);
 
         // "Elbereth" = 8 chars, dust = 1 turn/char => 8 turns.
-        let (_events, turns) = engrave(
-            &mut map,
-            &mut conduct,
-            pos,
-            "Elbereth",
-            EngraveMethod::Dust,
-        );
+        let (_events, turns) =
+            engrave(&mut map, &mut conduct, pos, "Elbereth", EngraveMethod::Dust);
         assert_eq!(turns, 8, "dust Elbereth should take 8 turns");
 
         // "Elbereth" = 8 chars, blade = 2 turns/char => 16 turns.
@@ -843,13 +823,8 @@ mod tests {
         assert_eq!(turns, 16, "blade Elbereth should take 16 turns");
 
         // Fire = 0 turns/char => 0 turns.
-        let (_events, turns) = engrave(
-            &mut map,
-            &mut conduct,
-            pos,
-            "Elbereth",
-            EngraveMethod::Fire,
-        );
+        let (_events, turns) =
+            engrave(&mut map, &mut conduct, pos, "Elbereth", EngraveMethod::Fire);
         assert_eq!(turns, 0, "fire Elbereth should be instant");
     }
 
@@ -905,12 +880,30 @@ mod tests {
 
     #[test]
     fn test_tool_to_method() {
-        assert_eq!(tool_to_engrave_method(EngraveTool::Fingers), Some(EngraveMethod::Dust));
-        assert_eq!(tool_to_engrave_method(EngraveTool::Blade), Some(EngraveMethod::Blade));
-        assert_eq!(tool_to_engrave_method(EngraveTool::WandFire), Some(EngraveMethod::Fire));
-        assert_eq!(tool_to_engrave_method(EngraveTool::WandLightning), Some(EngraveMethod::Lightning));
-        assert_eq!(tool_to_engrave_method(EngraveTool::WandDigging), Some(EngraveMethod::Dig));
-        assert_eq!(tool_to_engrave_method(EngraveTool::Athame), Some(EngraveMethod::Dig));
+        assert_eq!(
+            tool_to_engrave_method(EngraveTool::Fingers),
+            Some(EngraveMethod::Dust)
+        );
+        assert_eq!(
+            tool_to_engrave_method(EngraveTool::Blade),
+            Some(EngraveMethod::Blade)
+        );
+        assert_eq!(
+            tool_to_engrave_method(EngraveTool::WandFire),
+            Some(EngraveMethod::Fire)
+        );
+        assert_eq!(
+            tool_to_engrave_method(EngraveTool::WandLightning),
+            Some(EngraveMethod::Lightning)
+        );
+        assert_eq!(
+            tool_to_engrave_method(EngraveTool::WandDigging),
+            Some(EngraveMethod::Dig)
+        );
+        assert_eq!(
+            tool_to_engrave_method(EngraveTool::Athame),
+            Some(EngraveMethod::Dig)
+        );
         assert_eq!(tool_to_engrave_method(EngraveTool::Unsuitable), None);
     }
 
@@ -947,17 +940,26 @@ mod tests {
 
     #[test]
     fn test_wand_polymorph() {
-        assert_eq!(wand_engrave_effect("polymorph", false), WandEngraveEffect::Polymorphs);
+        assert_eq!(
+            wand_engrave_effect("polymorph", false),
+            WandEngraveEffect::Polymorphs
+        );
     }
 
     #[test]
     fn test_wand_cancellation_removes() {
-        assert_eq!(wand_engrave_effect("cancellation", false), WandEngraveEffect::Removes);
+        assert_eq!(
+            wand_engrave_effect("cancellation", false),
+            WandEngraveEffect::Removes
+        );
     }
 
     #[test]
     fn test_wand_unknown_no_effect() {
-        assert_eq!(wand_engrave_effect("sleep", false), WandEngraveEffect::NoEffect);
+        assert_eq!(
+            wand_engrave_effect("sleep", false),
+            WandEngraveEffect::NoEffect
+        );
     }
 
     // ── test_can_reach_floor ────────────────────────────────────
@@ -998,8 +1000,16 @@ mod tests {
     #[test]
     fn test_count_engravings_mixed() {
         let mut map = EngravingMap::new();
-        map.insert(Engraving::new("hello".to_string(), EngraveMethod::Fire, make_pos(1, 1)));
-        map.insert(Engraving::new("world".to_string(), EngraveMethod::Dust, make_pos(2, 2)));
+        map.insert(Engraving::new(
+            "hello".to_string(),
+            EngraveMethod::Fire,
+            make_pos(1, 1),
+        ));
+        map.insert(Engraving::new(
+            "world".to_string(),
+            EngraveMethod::Dust,
+            make_pos(2, 2),
+        ));
         assert_eq!(count_engravings(&map), 2);
 
         // Degrade the dust one until unreadable.

@@ -114,23 +114,24 @@ pub fn parse_wish(input: &str, objects: &[ObjectDef]) -> Option<WishResult> {
     if is_unwishable(check_name) {
         // Special case: "amulet of yendor" -> downgrade to fake
         if check_name.contains("amulet of yendor")
-            && let Some(fake) = find_object_by_name(FAKE_AMULET_NAME, objects) {
-                return Some(WishResult {
-                    object_type: fake.id,
-                    buc,
-                    enchantment,
-                    quantity: quantity.unwrap_or(1),
-                    erodeproof,
-                    name,
-                });
-            }
+            && let Some(fake) = find_object_by_name(FAKE_AMULET_NAME, objects)
+        {
+            return Some(WishResult {
+                object_type: fake.id,
+                buc,
+                enchantment,
+                quantity: quantity.unwrap_or(1),
+                erodeproof,
+                name,
+            });
+        }
         return None;
     }
 
     // --- 8. Match item name against object database ---
     // Try exact name first, then singularized form.
-    let matched = match_object(check_name, objects)
-        .or_else(|| match_object(&singularized, objects));
+    let matched =
+        match_object(check_name, objects).or_else(|| match_object(&singularized, objects));
 
     if let Some(obj) = matched {
         // Reject items marked as nowish
@@ -163,11 +164,12 @@ fn parse_leading_quantity(s: &mut &str) -> Option<u32> {
         return None;
     }
     if let Ok(n) = digits.parse::<u32>()
-        && n > 0 {
-            let rest = trimmed[digits.len()..].trim_start();
-            *s = rest;
-            return Some(n);
-        }
+        && n > 0
+    {
+        let rest = trimmed[digits.len()..].trim_start();
+        *s = rest;
+        return Some(n);
+    }
     None
 }
 
@@ -237,11 +239,12 @@ fn parse_enchantment(s: &mut &str) -> Option<i8> {
         let rest = &trimmed[1..];
         let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
         if !digits.is_empty()
-            && let Ok(n) = digits.parse::<i8>() {
-                let val = sign.saturating_mul(n);
-                *s = rest[digits.len()..].trim_start();
-                return Some(val);
-            }
+            && let Ok(n) = digits.parse::<i8>()
+        {
+            let val = sign.saturating_mul(n);
+            *s = rest[digits.len()..].trim_start();
+            return Some(val);
+        }
     }
     None
 }
@@ -310,9 +313,10 @@ fn match_object<'a>(name: &str, objects: &'a [ObjectDef]) -> Option<&'a ObjectDe
         if let Some(base_name) = name.strip_prefix(prefix) {
             let base_name = base_name.trim();
             // Exact match within the class
-            if let Some(obj) = objects.iter().find(|o| {
-                o.class == class && o.name.to_lowercase() == base_name
-            }) {
+            if let Some(obj) = objects
+                .iter()
+                .find(|o| o.class == class && o.name.to_lowercase() == base_name)
+            {
                 return Some(obj);
             }
             // Also try matching the full stored name (for amulets like "amulet of ESP")
@@ -355,9 +359,10 @@ fn match_object<'a>(name: &str, objects: &'a [ObjectDef]) -> Option<&'a ObjectDe
             let base_partial = base_partial.trim();
             if !base_partial.is_empty() {
                 // Find objects in this class whose name starts with the partial
-                if let Some(obj) = objects.iter().find(|o| {
-                    o.class == class && o.name.to_lowercase().starts_with(base_partial)
-                }) {
+                if let Some(obj) = objects
+                    .iter()
+                    .find(|o| o.class == class && o.name.to_lowercase().starts_with(base_partial))
+                {
                     return Some(obj);
                 }
             }
@@ -376,11 +381,12 @@ fn match_object<'a>(name: &str, objects: &'a [ObjectDef]) -> Option<&'a ObjectDe
     // Strategy 6: Substring match (less precise, last resort).
     // Check if any object name contains the input as a substring.
     if name.len() >= 3
-        && let Some(obj) = objects.iter().find(|o| {
-            o.name.to_lowercase().contains(name)
-        }) {
-            return Some(obj);
-        }
+        && let Some(obj) = objects
+            .iter()
+            .find(|o| o.name.to_lowercase().contains(name))
+    {
+        return Some(obj);
+    }
 
     None
 }
@@ -458,7 +464,7 @@ pub fn apply_wish_restrictions(result: &mut WishResult) -> Vec<WishRestriction> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nethack_babel_data::{load_game_data, GameData};
+    use nethack_babel_data::{GameData, load_game_data};
     use std::path::PathBuf;
 
     fn data_dir() -> PathBuf {
@@ -541,10 +547,10 @@ mod tests {
     #[test]
     fn test_parse_case_insensitive() {
         let data = load_test_data();
-        let r1 = parse_wish("BLESSED +2 LONG SWORD", &data.objects)
-            .expect("uppercase should parse");
-        let r2 = parse_wish("blessed +2 long sword", &data.objects)
-            .expect("lowercase should parse");
+        let r1 =
+            parse_wish("BLESSED +2 LONG SWORD", &data.objects).expect("uppercase should parse");
+        let r2 =
+            parse_wish("blessed +2 long sword", &data.objects).expect("lowercase should parse");
         assert_eq!(r1.object_type, r2.object_type);
         assert_eq!(r1.buc, r2.buc);
         assert_eq!(r1.enchantment, r2.enchantment);
@@ -825,8 +831,7 @@ mod tests {
     #[test]
     fn test_parse_named_excalibur() {
         let data = load_test_data();
-        let r = parse_wish("long sword named Excalibur", &data.objects)
-            .expect("should parse");
+        let r = parse_wish("long sword named Excalibur", &data.objects).expect("should parse");
         assert_eq!(r.name, Some("excalibur".to_string()));
     }
 
@@ -867,7 +872,10 @@ mod tests {
     #[test]
     fn test_parse_all_modifiers_combined() {
         let data = load_test_data();
-        let r = parse_wish("2 blessed rustproof +3 long sword named test", &data.objects);
+        let r = parse_wish(
+            "2 blessed rustproof +3 long sword named test",
+            &data.objects,
+        );
         if let Some(r) = r {
             assert_eq!(r.quantity, 2);
             assert_eq!(r.buc, Some(BucWish::Blessed));
@@ -895,9 +903,10 @@ mod tests {
         let data = load_test_data();
         let r = parse_wish("wand of fi", &data.objects);
         if let Some(r) = r {
-            let fire_wand = data.objects.iter().find(|o|
-                o.class == ObjectClass::Wand && o.name.to_lowercase() == "fire"
-            );
+            let fire_wand = data
+                .objects
+                .iter()
+                .find(|o| o.class == ObjectClass::Wand && o.name.to_lowercase() == "fire");
             if let Some(fw) = fire_wand {
                 assert_eq!(r.object_type, fw.id);
             }
@@ -1002,8 +1011,12 @@ mod tests {
         };
         let restrictions = apply_wish_restrictions(&mut result);
         assert_eq!(result.enchantment, Some(MAX_WISH_ENCHANTMENT));
-        assert!(restrictions.iter().any(|r| matches!(r,
-            WishRestriction::EnchantmentClamped { requested: 7, granted: 3 }
+        assert!(restrictions.iter().any(|r| matches!(
+            r,
+            WishRestriction::EnchantmentClamped {
+                requested: 7,
+                granted: 3
+            }
         )));
     }
 
@@ -1034,8 +1047,12 @@ mod tests {
         };
         let restrictions = apply_wish_restrictions(&mut result);
         assert_eq!(result.quantity, 20);
-        assert!(restrictions.iter().any(|r| matches!(r,
-            WishRestriction::QuantityReduced { requested: 100, granted: 20 }
+        assert!(restrictions.iter().any(|r| matches!(
+            r,
+            WishRestriction::QuantityReduced {
+                requested: 100,
+                granted: 20
+            }
         )));
     }
 

@@ -104,29 +104,53 @@ pub enum NameTarget {
     Level,
     /// Name a monster.
     Monster { entity: Entity },
+    /// Name the monster at a map position.
+    MonsterAt { position: Position },
 }
 
 /// All possible player inputs that advance (or query) the game state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PlayerAction {
     // ── Movement ──────────────────────────────────────────────
-    Move { direction: Direction },
-    MoveUntilInterrupt { direction: Direction },
-    FightDirection { direction: Direction },
-    RunDirection { direction: Direction },
-    RushDirection { direction: Direction },
-    MoveNoPickup { direction: Direction },
+    Move {
+        direction: Direction,
+    },
+    MoveUntilInterrupt {
+        direction: Direction,
+    },
+    FightDirection {
+        direction: Direction,
+    },
+    RunDirection {
+        direction: Direction,
+    },
+    RushDirection {
+        direction: Direction,
+    },
+    MoveNoPickup {
+        direction: Direction,
+    },
     Rest,
     Wait,
     Search,
 
     // ── Items ─────────────────────────────────────────────────
     PickUp,
-    Drop { item: Entity },
-    DropMultiple { items: Vec<Entity> },
-    Eat { item: Option<Entity> },
-    Quaff { item: Option<Entity> },
-    Read { item: Option<Entity> },
+    Drop {
+        item: Entity,
+    },
+    DropMultiple {
+        items: Vec<Entity>,
+    },
+    Eat {
+        item: Option<Entity>,
+    },
+    Quaff {
+        item: Option<Entity>,
+    },
+    Read {
+        item: Option<Entity>,
+    },
     ZapWand {
         item: Entity,
         direction: Option<Direction>,
@@ -135,12 +159,25 @@ pub enum PlayerAction {
         spell: SpellId,
         direction: Option<Direction>,
     },
-    Wear { item: Entity },
-    TakeOff { item: Entity },
-    Wield { item: Entity },
-    PutOn { item: Entity },
-    Remove { item: Entity },
-    Apply { item: Entity },
+    Wear {
+        item: Entity,
+    },
+    TakeOff {
+        item: Entity,
+    },
+    TakeOffAll,
+    Wield {
+        item: Entity,
+    },
+    PutOn {
+        item: Entity,
+    },
+    Remove {
+        item: Entity,
+    },
+    Apply {
+        item: Entity,
+    },
     Throw {
         item: Entity,
         direction: Direction,
@@ -148,31 +185,64 @@ pub enum PlayerAction {
     Fire,
 
     // ── Interaction ───────────────────────────────────────────
-    Open { direction: Direction },
-    Close { direction: Direction },
-    Kick { direction: Direction },
-    ForceLock { item: Entity },
+    Open {
+        direction: Direction,
+    },
+    Close {
+        direction: Direction,
+    },
+    Kick {
+        direction: Direction,
+    },
+    ForceLock {
+        item: Entity,
+    },
 
     // ── Extended commands ─────────────────────────────────────
     Pray,
-    Offer { item: Option<Entity> },
-    Chat { direction: Direction },
+    Offer {
+        item: Option<Entity>,
+    },
+    Chat {
+        direction: Direction,
+    },
     Loot,
     EnhanceSkill,
-    Dip { item: Entity, into: Entity },
+    Dip {
+        item: Entity,
+        into: Entity,
+    },
     Ride,
-    Engrave { text: String },
-    Name { target: NameTarget },
-    Adjust { item: Entity, new_letter: char },
+    Engrave {
+        text: String,
+    },
+    Name {
+        target: NameTarget,
+        name: String,
+    },
+    Adjust {
+        item: Entity,
+        new_letter: char,
+    },
     Sit,
-    Jump { position: Position },
-    Untrap { direction: Direction },
+    Jump {
+        position: Position,
+    },
+    Untrap {
+        direction: Direction,
+    },
     TurnUndead,
     Swap,
     Wipe,
-    Tip { item: Entity },
-    Rub { item: Entity },
-    InvokeArtifact { item: Entity },
+    Tip {
+        item: Entity,
+    },
+    Rub {
+        item: Entity,
+    },
+    InvokeArtifact {
+        item: Entity,
+    },
     Monster,
 
     // ── Meta / UI queries ────────────────────────────────────
@@ -183,27 +253,42 @@ pub enum PlayerAction {
     DungeonOverview,
     ViewTerrain,
     ShowVersion,
-    Annotate { text: String },
+    Annotate {
+        text: String,
+    },
     Attributes,
-    LookAt { position: Position },
+    LookAt {
+        position: Position,
+    },
     LookHere,
     Help,
     ShowHistory,
-    CallType { class: char, name: String },
+    CallType {
+        class: char,
+        name: String,
+    },
     KnownItems,
-    KnownClass { class: char },
+    KnownClass {
+        class: char,
+    },
     Vanquished,
     Chronicle,
-    Glance { direction: Direction },
+    Glance {
+        direction: Direction,
+    },
     Redraw,
-    WhatIs { position: Option<Position> },
+    WhatIs {
+        position: Option<Position>,
+    },
 
     // ── Stairs ────────────────────────────────────────────────
     GoUp,
     GoDown,
 
     // ── Special ───────────────────────────────────────────────
-    Travel { destination: Position },
+    Travel {
+        destination: Position,
+    },
     Pay,
     ToggleTwoWeapon,
 
@@ -217,15 +302,21 @@ pub enum PlayerAction {
 
     // ── Wizard mode commands (debug only) ─────────────────
     /// #genesis -- create a monster by name.
-    WizGenesis { monster_name: String },
+    WizGenesis {
+        monster_name: String,
+    },
     /// #wish -- wish for an item.
-    WizWish { wish_text: String },
+    WizWish {
+        wish_text: String,
+    },
     /// #identify -- identify all inventory items.
     WizIdentify,
     /// #map -- reveal entire map.
     WizMap,
     /// #levelchange -- jump to a specific dungeon depth.
-    WizLevelTeleport { depth: i32 },
+    WizLevelTeleport {
+        depth: i32,
+    },
     /// #detect -- detect all monsters, objects, and traps.
     WizDetect,
     /// #where -- show special level locations.

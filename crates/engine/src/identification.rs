@@ -12,12 +12,12 @@
 //!   ported from C `objnam.c`.
 
 use hecs::Entity;
-use rand::seq::SliceRandom;
 use rand::Rng;
+use rand::seq::SliceRandom;
 
 use nethack_babel_data::{
-    Alignment, ArmorCategory, BucStatus, ContainerState, Enchantment, Erosion,
-    KnowledgeState, Material, ObjectClass, ObjectCore, ObjectDef, ObjectTypeId,
+    Alignment, ArmorCategory, BucStatus, ContainerState, Enchantment, Erosion, KnowledgeState,
+    Material, ObjectClass, ObjectCore, ObjectDef, ObjectTypeId,
 };
 
 use crate::event::EngineEvent;
@@ -138,10 +138,7 @@ impl IdentificationState {
 /// Types that are unique, non-magic (within shuffled classes), or lack an
 /// appearance description are excluded from shuffling and keep their
 /// original (or no) appearance.
-pub fn init_appearances<R: Rng>(
-    obj_defs: &[ObjectDef],
-    rng: &mut R,
-) -> IdentificationState {
+pub fn init_appearances<R: Rng>(obj_defs: &[ObjectDef], rng: &mut R) -> IdentificationState {
     let num_types = obj_defs.len();
     let mut state = IdentificationState::new(num_types);
 
@@ -303,12 +300,7 @@ pub fn not_fully_identified(
 
     // Check container-related flags.
     let k = knowledge.as_ref().unwrap();
-    if !k.cknown
-        && matches!(
-            core.object_class,
-            ObjectClass::Tool | ObjectClass::Rock
-        )
-    {
+    if !k.cknown && matches!(core.object_class, ObjectClass::Tool | ObjectClass::Rock) {
         // Only matters for actual containers/statues, but we approximate
         // by checking the class.
         return true;
@@ -505,10 +497,7 @@ pub fn just_an(s: &str) -> &'static str {
     }
 
     // "x" + consonant sounds like /z/ or /eks/ -> "an".
-    if c0 == b'x'
-        && bytes.len() > 1
-        && !b"aeiouAEIOU".contains(&bytes[1])
-    {
+    if c0 == b'x' && bytes.len() > 1 && !b"aeiouAEIOU".contains(&bytes[1]) {
         return "an ";
     }
 
@@ -558,11 +547,38 @@ pub fn the(s: &str) -> String {
 
 /// Invariant plurals — these words do not change form.
 const AS_IS: &[&str] = &[
-    "boots", "shoes", "gloves", "lenses", "scales", "eyes",
-    "gauntlets", "iron bars", "bison", "deer", "elk", "fish",
-    "fowl", "tuna", "yaki", "krill", "manes", "moose", "ninja",
-    "sheep", "ronin", "roshi", "shito", "tengu", "ki-rin", "Nazgul",
-    "gunyoki", "piranha", "samurai", "shuriken", "haggis", "Bordeaux",
+    "boots",
+    "shoes",
+    "gloves",
+    "lenses",
+    "scales",
+    "eyes",
+    "gauntlets",
+    "iron bars",
+    "bison",
+    "deer",
+    "elk",
+    "fish",
+    "fowl",
+    "tuna",
+    "yaki",
+    "krill",
+    "manes",
+    "moose",
+    "ninja",
+    "sheep",
+    "ronin",
+    "roshi",
+    "shito",
+    "tengu",
+    "ki-rin",
+    "Nazgul",
+    "gunyoki",
+    "piranha",
+    "samurai",
+    "shuriken",
+    "haggis",
+    "Bordeaux",
 ];
 
 /// Irregular singular→plural suffix pairs.
@@ -593,19 +609,65 @@ const ONE_OFF: &[(&str, &str)] = &[
 
 /// Prefixes where -man should NOT become -men.
 const BADMAN: &[&str] = &[
-    "albu", "antihu", "anti", "ata", "auto", "bildungsro", "cai",
-    "cay", "ceru", "corner", "decu", "des", "dura", "fir", "hanu",
-    "het", "infrahu", "inhu", "nonhu", "otto", "out", "prehu",
-    "protohu", "subhu", "superhu", "talis", "unhu", "sha", "hu",
-    "un", "le", "re", "so", "to", "at", "a",
+    "albu",
+    "antihu",
+    "anti",
+    "ata",
+    "auto",
+    "bildungsro",
+    "cai",
+    "cay",
+    "ceru",
+    "corner",
+    "decu",
+    "des",
+    "dura",
+    "fir",
+    "hanu",
+    "het",
+    "infrahu",
+    "inhu",
+    "nonhu",
+    "otto",
+    "out",
+    "prehu",
+    "protohu",
+    "subhu",
+    "superhu",
+    "talis",
+    "unhu",
+    "sha",
+    "hu",
+    "un",
+    "le",
+    "re",
+    "so",
+    "to",
+    "at",
+    "a",
 ];
 
 /// Words ending in -ch that take -s (not -es) because the ch is /k/.
 const CH_KSOUND: &[&str] = &[
-    "monarch", "poch", "tech", "mech", "stomach", "psych",
-    "amphibrach", "anarch", "atriarch", "azedarach", "broch",
-    "gastrotrich", "isopach", "loch", "oligarch", "peritrich",
-    "sandarach", "sumach", "symposiarch",
+    "monarch",
+    "poch",
+    "tech",
+    "mech",
+    "stomach",
+    "psych",
+    "amphibrach",
+    "anarch",
+    "atriarch",
+    "azedarach",
+    "broch",
+    "gastrotrich",
+    "isopach",
+    "loch",
+    "oligarch",
+    "peritrich",
+    "sandarach",
+    "sumach",
+    "symposiarch",
 ];
 
 /// Pluralize an English word, mirroring C `makeplural()`.
@@ -621,9 +683,21 @@ pub fn makeplural(s: &str) -> String {
 
     // Compound word splitting: pluralize only the part before the separator.
     let separators = &[
-        " of ", " labeled ", " called ", " named ", " above",
-        " versus ", " from ", " in ", " on ", " a la ", " with",
-        " de ", " d'", " du ", " au ",
+        " of ",
+        " labeled ",
+        " called ",
+        " named ",
+        " above",
+        " versus ",
+        " from ",
+        " in ",
+        " on ",
+        " a la ",
+        " with",
+        " de ",
+        " d'",
+        " du ",
+        " au ",
     ];
     let infix_seps = &["-in-", "-at-"];
 
@@ -701,10 +775,7 @@ pub fn makeplural(s: &str) -> String {
     }
 
     // [aeioulr]f -> [aeioulr]ves (but not -erf).
-    if lower.ends_with('f')
-        && s.len() >= 2
-        && !lower.ends_with("erf")
-    {
+    if lower.ends_with('f') && s.len() >= 2 && !lower.ends_with("erf") {
         let penult = lower.as_bytes()[lower.len() - 2];
         if b"aeioulr".contains(&penult) {
             let base = &s[..s.len() - 1];
@@ -761,10 +832,7 @@ pub fn makeplural(s: &str) -> String {
     }
 
     // Sibilant endings: -z, -x, -s, -ch, -sh -> +es.
-    if lower.ends_with('z')
-        || lower.ends_with('x')
-        || lower.ends_with('s')
-        || lower.ends_with("sh")
+    if lower.ends_with('z') || lower.ends_with('x') || lower.ends_with('s') || lower.ends_with("sh")
     {
         return format!("{}es", s);
     }
@@ -810,9 +878,21 @@ pub fn makesingular(s: &str) -> String {
 
     // Compound word splitting.
     let separators = &[
-        " of ", " labeled ", " called ", " named ", " above",
-        " versus ", " from ", " in ", " on ", " a la ", " with",
-        " de ", " d'", " du ", " au ",
+        " of ",
+        " labeled ",
+        " called ",
+        " named ",
+        " above",
+        " versus ",
+        " from ",
+        " in ",
+        " on ",
+        " a la ",
+        " with",
+        " de ",
+        " d'",
+        " du ",
+        " au ",
     ];
     for sep in separators {
         if let Some(idx) = s.find(sep) {
@@ -968,7 +1048,12 @@ pub fn is_damageable_material(mat: Material) -> bool {
 /// Build the erosion prefix string for an item.
 ///
 /// Mirrors C `add_erosion_words()` from objnam.c:1156.
-pub fn erosion_prefix(erosion: &Erosion, mat: Material, class: ObjectClass, rknown: bool) -> String {
+pub fn erosion_prefix(
+    erosion: &Erosion,
+    mat: Material,
+    class: ObjectClass,
+    rknown: bool,
+) -> String {
     let mut prefix = String::new();
     let is_crys = false; // Crysknife detection would need otyp; simplified here.
 
@@ -1154,9 +1239,7 @@ pub fn xname(
 
     let real_name = obj_def.map(|d| d.name.as_str()).unwrap_or("strange object");
     let dn = obj_def
-        .and_then(|d| {
-            id_state.appearance(otyp).or(d.appearance.as_deref())
-        })
+        .and_then(|d| id_state.appearance(otyp).or(d.appearance.as_deref()))
         .unwrap_or(real_name);
     let nn = id_state.is_type_known(otyp);
     let un = id_state.called(otyp);
@@ -1338,10 +1421,7 @@ pub fn show_uncursed(
     }
     // Show uncursed when enchantment is unknown (can't infer BUC),
     // OR for armor/ring classes (always show to disambiguate).
-    !known
-        || !is_charged
-        || class == ObjectClass::Armor
-        || class == ObjectClass::Ring
+    !known || !is_charged || class == ObjectClass::Armor || class == ObjectClass::Ring
 }
 
 /// Generate the complete display name for an item, including all prefixes
@@ -1502,9 +1582,7 @@ pub fn get_display_name(
     let class_name = obj_def
         .map(|d| class_display_name(d.class))
         .unwrap_or("thing");
-    let real_name = obj_def
-        .map(|d| d.name.as_str())
-        .unwrap_or("strange object");
+    let real_name = obj_def.map(|d| d.name.as_str()).unwrap_or("strange object");
 
     // Check dknown.
     let dknown = knowledge.as_ref().is_some_and(|k| k.dknown);
@@ -1555,7 +1633,7 @@ pub fn get_display_name(
 mod tests {
     use super::*;
     use crate::action::Position;
-    use crate::items::{spawn_item, SpawnLocation};
+    use crate::items::{SpawnLocation, spawn_item};
     use crate::world::GameWorld;
     use nethack_babel_data::{Color, Material, ObjectTypeId};
     use rand::SeedableRng;
@@ -1618,7 +1696,13 @@ mod tests {
             make_def(2, "speed", ObjectClass::Potion, Some("dark green"), 20),
             // Scrolls (id 3..5)
             make_def(3, "light", ObjectClass::Scroll, Some("ZELGO MER"), 50),
-            make_def(4, "identify", ObjectClass::Scroll, Some("JUYED AWK YACC"), 20),
+            make_def(
+                4,
+                "identify",
+                ObjectClass::Scroll,
+                Some("JUYED AWK YACC"),
+                20,
+            ),
             make_def(5, "teleportation", ObjectClass::Scroll, Some("NR 9"), 100),
             // Weapon (id 6, no shuffling)
             make_def(6, "long sword", ObjectClass::Weapon, None, 15),
@@ -1648,10 +1732,7 @@ mod tests {
     #[test]
     fn shuffling_produces_different_order_from_original() {
         let defs = potion_defs();
-        let original: Vec<Option<String>> = defs
-            .iter()
-            .map(|d| d.appearance.clone())
-            .collect();
+        let original: Vec<Option<String>> = defs.iter().map(|d| d.appearance.clone()).collect();
 
         let mut found_different = false;
         for seed in 0u64..20 {
@@ -1685,10 +1766,18 @@ mod tests {
         let scroll_pool: Vec<&str> = vec!["ZELGO MER", "JUYED AWK YACC", "NR 9"];
 
         for app in &potion_apps {
-            assert!(potion_pool.contains(app), "potion appearance '{}' not in potion pool", app);
+            assert!(
+                potion_pool.contains(app),
+                "potion appearance '{}' not in potion pool",
+                app
+            );
         }
         for app in &scroll_apps {
-            assert!(scroll_pool.contains(app), "scroll appearance '{}' not in scroll pool", app);
+            assert!(
+                scroll_pool.contains(app),
+                "scroll appearance '{}' not in scroll pool",
+                app
+            );
         }
 
         assert!(state.appearances[6].is_none());
@@ -1700,13 +1789,17 @@ mod tests {
         let mut rng = Pcg64::seed_from_u64(7);
         let state = init_appearances(&defs, &mut rng);
 
-        let mut assigned: Vec<String> = state.appearances.iter().filter_map(|a| a.clone()).collect();
+        let mut assigned: Vec<String> =
+            state.appearances.iter().filter_map(|a| a.clone()).collect();
         assigned.sort();
 
         let mut original: Vec<String> = defs.iter().filter_map(|d| d.appearance.clone()).collect();
         original.sort();
 
-        assert_eq!(assigned, original, "appearances must be a permutation of the original pool");
+        assert_eq!(
+            assigned, original,
+            "appearances must be a permutation of the original pool"
+        );
     }
 
     // -- Altar BUC testing --------------------------------------------------
@@ -1727,7 +1820,9 @@ mod tests {
 
         assert_eq!(flash, AltarFlash::Amber);
         assert_eq!(events.len(), 1);
-        assert!(matches!(&events[0], EngineEvent::Message { key, .. } if key.contains("altar-buc-blessed")));
+        assert!(
+            matches!(&events[0], EngineEvent::Message { key, .. } if key.contains("altar-buc-blessed"))
+        );
 
         let buc = world.get_component::<BucStatus>(item).unwrap();
         assert!(buc.bknown, "bknown should be set after altar test");
@@ -1748,7 +1843,9 @@ mod tests {
         let (flash, events) = test_buc_on_altar(&mut world, item, Alignment::Neutral);
 
         assert_eq!(flash, AltarFlash::Black);
-        assert!(matches!(&events[0], EngineEvent::Message { key, .. } if key.contains("altar-buc-cursed")));
+        assert!(
+            matches!(&events[0], EngineEvent::Message { key, .. } if key.contains("altar-buc-cursed"))
+        );
 
         let buc = world.get_component::<BucStatus>(item).unwrap();
         assert!(buc.bknown);
@@ -1768,7 +1865,9 @@ mod tests {
         let (flash, events) = test_buc_on_altar(&mut world, item, Alignment::Chaotic);
 
         assert_eq!(flash, AltarFlash::None);
-        assert!(matches!(&events[0], EngineEvent::Message { key, .. } if key.contains("altar-buc-unknown")));
+        assert!(
+            matches!(&events[0], EngineEvent::Message { key, .. } if key.contains("altar-buc-unknown"))
+        );
 
         let buc = world.get_component::<BucStatus>(item).unwrap();
         assert!(buc.bknown);
@@ -1983,7 +2082,10 @@ mod tests {
     #[test]
     fn test_plural_compound_splitting() {
         assert_eq!(makeplural("potion of healing"), "potions of healing");
-        assert_eq!(makeplural("scroll labeled ZELGO MER"), "scrolls labeled ZELGO MER");
+        assert_eq!(
+            makeplural("scroll labeled ZELGO MER"),
+            "scrolls labeled ZELGO MER"
+        );
         assert_eq!(makeplural("wand called death"), "wands called death");
     }
 
@@ -1992,7 +2094,10 @@ mod tests {
         assert_eq!(makeplural("boots"), "boots");
         assert_eq!(makeplural("gloves"), "gloves");
         assert_eq!(makeplural("samurai"), "samurai");
-        assert_eq!(makeplural("pair of leather gloves"), "pair of leather gloves");
+        assert_eq!(
+            makeplural("pair of leather gloves"),
+            "pair of leather gloves"
+        );
         assert_eq!(makeplural("sheep"), "sheep");
         assert_eq!(makeplural("deer"), "deer");
     }
@@ -2295,10 +2400,7 @@ mod tests {
             buc.bknown = true;
         }
         // Add enchantment.
-        let _ = world.ecs_mut().insert_one(
-            item,
-            Enchantment { spe: 2 },
-        );
+        let _ = world.ecs_mut().insert_one(item, Enchantment { spe: 2 });
 
         let mut id_state = IdentificationState::new(1);
         id_state.discover_type(ObjectTypeId(0));
@@ -2585,8 +2687,19 @@ mod tests {
         let chain = spawn_item(&mut world, &def_chain, SpawnLocation::Floor(5, 5), None);
         let id_state = IdentificationState::new(2);
 
-        assert_eq!(xname(ball, &world, &id_state, &[def_ball.clone(), def_chain.clone()]), "heavy iron ball");
-        assert_eq!(xname(chain, &world, &id_state, &[def_ball, def_chain]), "iron chain");
+        assert_eq!(
+            xname(
+                ball,
+                &world,
+                &id_state,
+                &[def_ball.clone(), def_chain.clone()]
+            ),
+            "heavy iron ball"
+        );
+        assert_eq!(
+            xname(chain, &world, &id_state, &[def_ball, def_chain]),
+            "iron chain"
+        );
     }
 
     #[test]
@@ -2693,7 +2806,11 @@ mod tests {
         id_state.discover_type(ObjectTypeId(0));
 
         let name = doname(item, &world, &id_state, &[def], true);
-        assert!(name.starts_with("the "), "unique items should get 'the' prefix, got: {}", name);
+        assert!(
+            name.starts_with("the "),
+            "unique items should get 'the' prefix, got: {}",
+            name
+        );
     }
 
     #[test]
@@ -2731,7 +2848,11 @@ mod tests {
         id_state.discover_type(ObjectTypeId(0));
 
         let name = doname(item, &world, &id_state, &[def], true);
-        assert!(name.contains("greased"), "greased should appear in: {}", name);
+        assert!(
+            name.contains("greased"),
+            "greased should appear in: {}",
+            name
+        );
     }
 
     #[test]
@@ -2758,7 +2879,11 @@ mod tests {
         id_state.discover_type(ObjectTypeId(0));
 
         let name = doname(item, &world, &id_state, &[def], true);
-        assert!(name.contains("locked"), "locked container should show 'locked' in: {}", name);
+        assert!(
+            name.contains("locked"),
+            "locked container should show 'locked' in: {}",
+            name
+        );
     }
 
     #[test]
@@ -2785,7 +2910,11 @@ mod tests {
         id_state.discover_type(ObjectTypeId(0));
 
         let name = doname(item, &world, &id_state, &[def], true);
-        assert!(name.contains("trapped"), "trapped container should show 'trapped' in: {}", name);
+        assert!(
+            name.contains("trapped"),
+            "trapped container should show 'trapped' in: {}",
+            name
+        );
     }
 
     #[test]
@@ -2808,7 +2937,11 @@ mod tests {
         id_state.discover_type(ObjectTypeId(0));
 
         let name = doname(item, &world, &id_state, &[def], true);
-        assert!(name.contains("cursed"), "cursed item should show 'cursed' in: {}", name);
+        assert!(
+            name.contains("cursed"),
+            "cursed item should show 'cursed' in: {}",
+            name
+        );
     }
 
     #[test]
@@ -2833,7 +2966,11 @@ mod tests {
         id_state.discover_type(ObjectTypeId(0));
 
         let name = doname(item, &world, &id_state, &[def], true);
-        assert!(name.contains("-3"), "negative enchantment should show in: {}", name);
+        assert!(
+            name.contains("-3"),
+            "negative enchantment should show in: {}",
+            name
+        );
     }
 
     #[test]
@@ -2857,8 +2994,16 @@ mod tests {
 
         let name = doname(item, &world, &id_state, &[def], true);
         // Should say "potion of holy water" not "blessed potion of holy water"
-        assert!(!name.contains("blessed"), "holy water should not duplicate 'blessed' in: {}", name);
-        assert!(name.contains("holy water"), "should contain 'holy water' in: {}", name);
+        assert!(
+            !name.contains("blessed"),
+            "holy water should not duplicate 'blessed' in: {}",
+            name
+        );
+        assert!(
+            name.contains("holy water"),
+            "should contain 'holy water' in: {}",
+            name
+        );
     }
 
     // -- Additional pluralization tests ----------------------------------------
@@ -3305,7 +3450,11 @@ mod tests {
         id_state.discover_type(ObjectTypeId(0));
 
         let name = doname(item, &world, &id_state, &[def], true);
-        assert!(name.starts_with("an "), "elven should get 'an' in: {}", name);
+        assert!(
+            name.starts_with("an "),
+            "elven should get 'an' in: {}",
+            name
+        );
     }
 
     // -- class_display_name coverage -------------------------------------------
@@ -3394,7 +3543,10 @@ mod tests {
     #[test]
     fn test_singular_compound() {
         assert_eq!(makesingular("potions of healing"), "potion of healing");
-        assert_eq!(makesingular("scrolls labeled ZELGO MER"), "scroll labeled ZELGO MER");
+        assert_eq!(
+            makesingular("scrolls labeled ZELGO MER"),
+            "scroll labeled ZELGO MER"
+        );
     }
 
     #[test]

@@ -69,10 +69,7 @@ pub enum ProtectionResult {
     /// Maximum protection already reached.
     MaxReached,
     /// Protection successfully purchased.
-    Purchased {
-        cost: i32,
-        new_protection: i32,
-    },
+    Purchased { cost: i32, new_protection: i32 },
 }
 
 /// Cost of buying one level of protection from a temple priest.
@@ -175,10 +172,7 @@ pub fn donation_effect(
     } else if offer < threshold * 2 {
         // Pious tier.
         // If poor + coaligned + sinned: clairvoyance blessing.
-        if player_gold_after < offer
-            && coaligned
-            && alignment_record <= ALGN_SINNED
-        {
+        if player_gold_after < offer && coaligned && alignment_record <= ALGN_SINNED {
             let turns = rng.random_range(500..1000);
             DonationEffect::Clairvoyance { turns }
         } else {
@@ -187,8 +181,7 @@ pub fn donation_effect(
     } else if offer < threshold * 3
         && (!has_protection_intrinsic
             || (current_protection < 20
-                && (current_protection < 9
-                    || rng.random_range(0..current_protection.max(1)) == 0)))
+                && (current_protection < 9 || rng.random_range(0..current_protection.max(1)) == 0)))
     {
         // Protection reward tier.
         DonationEffect::ProtectionGranted {
@@ -281,10 +274,7 @@ pub fn sanctum_entry(first_time: bool) -> Vec<EngineEvent> {
 // ---------------------------------------------------------------------------
 
 /// Check if the player's alignment matches a temple's alignment.
-pub fn player_coaligned(
-    player_alignment: Alignment,
-    temple_alignment: Alignment,
-) -> bool {
+pub fn player_coaligned(player_alignment: Alignment, temple_alignment: Alignment) -> bool {
     player_alignment == temple_alignment
 }
 
@@ -376,10 +366,7 @@ mod tests {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 7000 (>= 5600 < 8400). Protection 0.
         let effect = donation_effect(7000, 13000, 14, 5, true, 0, false, 0, &mut rng);
-        assert_eq!(
-            effect,
-            DonationEffect::ProtectionGranted { new_level: 1 }
-        );
+        assert_eq!(effect, DonationEffect::ProtectionGranted { new_level: 1 });
     }
 
     #[test]

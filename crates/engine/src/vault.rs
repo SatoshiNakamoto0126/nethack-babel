@@ -86,12 +86,40 @@ pub enum GuardEvent {
 /// Guard name list.  In C, vault guards are named using `rndghostname()`
 /// from `do_name.c`.  We use the same pool here.
 const GUARD_NAMES: &[&str] = &[
-    "Adri", "Andries", "Andreas", "Bert", "David", "Dirk",
-    "Emile", "Frans", "Fred", "Greg", "Hether", "Jay",
-    "John", "Jon", "Karnov", "Kay", "Kenny", "Kevin",
-    "Maud", "Michiel", "Mike", "Peter", "Robert", "Ron",
-    "Tom", "Wilmar", "Nick Danger", "Phoenix", "Jiro", "Mizue",
-    "Stephan", "Lance Braccus", "Shadowhawk", "Murphy",
+    "Adri",
+    "Andries",
+    "Andreas",
+    "Bert",
+    "David",
+    "Dirk",
+    "Emile",
+    "Frans",
+    "Fred",
+    "Greg",
+    "Hether",
+    "Jay",
+    "John",
+    "Jon",
+    "Karnov",
+    "Kay",
+    "Kenny",
+    "Kevin",
+    "Maud",
+    "Michiel",
+    "Mike",
+    "Peter",
+    "Robert",
+    "Ron",
+    "Tom",
+    "Wilmar",
+    "Nick Danger",
+    "Phoenix",
+    "Jiro",
+    "Mizue",
+    "Stephan",
+    "Lance Braccus",
+    "Shadowhawk",
+    "Murphy",
 ];
 
 /// Pick a random guard name.
@@ -159,7 +187,7 @@ const MAX_WAIT_TURNS: i32 = 30;
 /// - Leaving -> guard despawns
 pub fn guard_action(
     guard: &mut VaultGuardData,
-    player_pos: Position,
+    _player_pos: Position,
     player_gold: i32,
     player_in_vault: bool,
     player_name_response: Option<&str>,
@@ -178,9 +206,10 @@ pub fn guard_action(
         VaultGuardState::Approaching => {
             // Guard arrived at the vault, now asks the player.
             guard.state = VaultGuardState::Asking;
-            events.push(GuardEvent::Message(
-                format!("{} says: \"Who are you?\"", guard.guard_name),
-            ));
+            events.push(GuardEvent::Message(format!(
+                "{} says: \"Who are you?\"",
+                guard.guard_name
+            )));
             events.push(GuardEvent::StateChange {
                 new_state: VaultGuardState::Asking,
             });
@@ -193,13 +222,15 @@ pub fn guard_action(
 
                 // If player gave name "Croesus", guard is suspicious.
                 if name.eq_ignore_ascii_case("croesus") {
-                    events.push(GuardEvent::Message(
-                        format!("{} says: \"I don't believe you!\"", guard.guard_name),
-                    ));
+                    events.push(GuardEvent::Message(format!(
+                        "{} says: \"I don't believe you!\"",
+                        guard.guard_name
+                    )));
                 } else {
-                    events.push(GuardEvent::Message(
-                        format!("{} says: \"I'll be watching you, {}.\"", guard.guard_name, name),
-                    ));
+                    events.push(GuardEvent::Message(format!(
+                        "{} says: \"I'll be watching you, {}.\"",
+                        guard.guard_name, name
+                    )));
                 }
 
                 if player_gold > 0 {
@@ -216,9 +247,10 @@ pub fn guard_action(
                 }
             } else if guard.turns_waiting > MAX_WAIT_TURNS {
                 // Player didn't respond; guard gets aggressive.
-                events.push(GuardEvent::Message(
-                    format!("{} gets angry!", guard.guard_name),
-                ));
+                events.push(GuardEvent::Message(format!(
+                    "{} gets angry!",
+                    guard.guard_name
+                )));
                 guard.state = VaultGuardState::Leaving;
                 events.push(GuardEvent::StateChange {
                     new_state: VaultGuardState::Leaving,
@@ -256,10 +288,9 @@ pub fn guard_action(
 /// Convert a `GuardEvent` to an `EngineEvent` for the event bus.
 pub fn guard_event_to_engine_event(event: &GuardEvent) -> EngineEvent {
     match event {
-        GuardEvent::Message(msg) => EngineEvent::msg_with(
-            "vault-guard-speaks",
-            vec![("message", msg.clone())],
-        ),
+        GuardEvent::Message(msg) => {
+            EngineEvent::msg_with("vault-guard-speaks", vec![("message", msg.clone())])
+        }
         GuardEvent::DemandGold { amount } => EngineEvent::msg_with(
             "vault-guard-demand-gold",
             vec![("amount", amount.to_string())],
@@ -311,7 +342,9 @@ mod tests {
         assert_eq!(guard.state, VaultGuardState::Approaching);
         assert!(events.iter().any(|e| matches!(
             e,
-            GuardEvent::StateChange { new_state: VaultGuardState::Approaching }
+            GuardEvent::StateChange {
+                new_state: VaultGuardState::Approaching
+            }
         )));
     }
 
@@ -320,13 +353,7 @@ mod tests {
         let mut guard = VaultGuardData::new("Bert");
         guard.state = VaultGuardState::Approaching;
 
-        let events = guard_action(
-            &mut guard,
-            Position::new(5, 5),
-            100,
-            true,
-            None,
-        );
+        let events = guard_action(&mut guard, Position::new(5, 5), 100, true, None);
         assert_eq!(guard.state, VaultGuardState::Asking);
         assert!(events.iter().any(|e| matches!(e, GuardEvent::Message(_))));
     }
@@ -348,7 +375,9 @@ mod tests {
         assert_eq!(guard.gold_demanded, 500);
         assert!(events.iter().any(|e| matches!(
             e,
-            GuardEvent::StateChange { new_state: VaultGuardState::CollectingGold }
+            GuardEvent::StateChange {
+                new_state: VaultGuardState::CollectingGold
+            }
         )));
     }
 
@@ -367,7 +396,9 @@ mod tests {
         assert_eq!(guard.state, VaultGuardState::Escorting);
         assert!(events.iter().any(|e| matches!(
             e,
-            GuardEvent::StateChange { new_state: VaultGuardState::Escorting }
+            GuardEvent::StateChange {
+                new_state: VaultGuardState::Escorting
+            }
         )));
     }
 
@@ -380,12 +411,10 @@ mod tests {
 
     #[test]
     fn test_player_in_vault() {
-        let vaults = vec![
-            VaultRoom {
-                top_left: Position::new(10, 10),
-                bottom_right: Position::new(12, 12),
-            },
-        ];
+        let vaults = vec![VaultRoom {
+            top_left: Position::new(10, 10),
+            bottom_right: Position::new(12, 12),
+        }];
         assert_eq!(player_in_vault(Position::new(11, 11), &vaults), Some(0));
         assert_eq!(player_in_vault(Position::new(10, 10), &vaults), Some(0));
         assert_eq!(player_in_vault(Position::new(12, 12), &vaults), Some(0));
@@ -407,18 +436,13 @@ mod tests {
         guard.state = VaultGuardState::CollectingGold;
         guard.gold_demanded = 300;
 
-        let events = guard_action(
-            &mut guard,
-            Position::new(5, 5),
-            300,
-            true,
-            None,
-        );
+        let events = guard_action(&mut guard, Position::new(5, 5), 300, true, None);
         assert_eq!(guard.state, VaultGuardState::Escorting);
-        assert!(events.iter().any(|e| matches!(
-            e,
-            GuardEvent::ConfiscateGold { amount: 300 }
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, GuardEvent::ConfiscateGold { amount: 300 }))
+        );
     }
 
     #[test]
@@ -436,7 +460,9 @@ mod tests {
         assert_eq!(guard.state, VaultGuardState::Leaving);
         assert!(events.iter().any(|e| matches!(
             e,
-            GuardEvent::StateChange { new_state: VaultGuardState::Leaving }
+            GuardEvent::StateChange {
+                new_state: VaultGuardState::Leaving
+            }
         )));
     }
 
@@ -445,13 +471,7 @@ mod tests {
         let mut guard = VaultGuardData::new("Maud");
         guard.state = VaultGuardState::Leaving;
 
-        let events = guard_action(
-            &mut guard,
-            Position::new(5, 5),
-            0,
-            false,
-            None,
-        );
+        let events = guard_action(&mut guard, Position::new(5, 5), 0, false, None);
         assert!(events.iter().any(|e| matches!(e, GuardEvent::Disappear)));
     }
 

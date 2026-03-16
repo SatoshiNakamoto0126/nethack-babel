@@ -17,9 +17,7 @@ use nethack_babel_data::Alignment;
 use crate::action::Position;
 use crate::event::EngineEvent;
 use crate::inventory::Inventory;
-use crate::world::{
-    GameWorld, HitPoints, Positioned,
-};
+use crate::world::{GameWorld, HitPoints, Positioned};
 
 // ---------------------------------------------------------------------------
 // ECS marker/state components for NPCs
@@ -226,10 +224,7 @@ pub fn priest_donation<R: Rng>(
         }
     } else if offer < threshold * 2 {
         // Pious tier (200-399 * level).
-        if player_gold < offer * 2
-            && coaligned
-            && alignment_record <= ALGN_SINNED
-        {
+        if player_gold < offer * 2 && coaligned && alignment_record <= ALGN_SINNED {
             let turns = rng.random_range(500..1000);
             DonationResult::Blessing {
                 clairvoyance_turns: turns,
@@ -239,8 +234,7 @@ pub fn priest_donation<R: Rng>(
         }
     } else if offer < threshold * 3
         && (current_protection < 9
-            || (current_protection < 20
-                && rng.random_range(0..current_protection) == 0))
+            || (current_protection < 20 && rng.random_range(0..current_protection) == 0))
     {
         DonationResult::ProtectionReward
     } else {
@@ -328,10 +322,7 @@ pub fn temple_entry(
 }
 
 /// Generate events for an untended temple.
-pub fn untended_temple_events(
-    message_index: u8,
-    spawn_ghost: bool,
-) -> Vec<EngineEvent> {
+pub fn untended_temple_events(message_index: u8, spawn_ghost: bool) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     match message_index {
@@ -353,10 +344,7 @@ pub fn untended_temple_events(
 // ---------------------------------------------------------------------------
 
 /// Whether the angel's alignment matches the player's.
-pub fn angel_coaligned(
-    angel_alignment: Alignment,
-    player_alignment: Alignment,
-) -> bool {
+pub fn angel_coaligned(angel_alignment: Alignment, player_alignment: Alignment) -> bool {
     angel_alignment == player_alignment
 }
 
@@ -374,10 +362,7 @@ pub fn angel_hostility(angel: &Angel, player_alignment: Alignment) -> bool {
 
 /// Reset angel hostility when the player changes alignment or enters
 /// a new level.
-pub fn reset_angel_hostility(
-    angel: &Angel,
-    player_alignment: Alignment,
-) -> bool {
+pub fn reset_angel_hostility(angel: &Angel, player_alignment: Alignment) -> bool {
     // Non-coaligned angels become hostile.
     angel.alignment != player_alignment
 }
@@ -426,11 +411,7 @@ pub fn shopkeeper_movement_intent(
 ///
 /// If following or angry: target is the player.
 /// Otherwise: target is the home position.
-pub fn shopkeeper_goal(
-    shk: &Shopkeeper,
-    is_angry: bool,
-    player_pos: Position,
-) -> Position {
+pub fn shopkeeper_goal(shk: &Shopkeeper, is_angry: bool, player_pos: Position) -> Position {
     if shk.following || is_angry {
         player_pos
     } else {
@@ -456,11 +437,7 @@ pub fn shopkeeper_should_follow(
 /// Shopkeeper honorific based on player status.
 ///
 /// Mirrors `append_honorific()` from `shk.c`.
-pub fn shopkeeper_honorific(
-    is_female: bool,
-    player_level: u8,
-    hallu: bool,
-) -> &'static str {
+pub fn shopkeeper_honorific(is_female: bool, player_level: u8, hallu: bool) -> &'static str {
     if hallu {
         return "dude";
     }
@@ -550,10 +527,7 @@ pub fn guard_patrol_target(
 }
 
 /// Resolve a guard spotting the player in a restricted area.
-pub fn guard_spot_player(
-    guard: &mut Guard,
-    player_in_restricted: bool,
-) -> Vec<EngineEvent> {
+pub fn guard_spot_player(guard: &mut Guard, player_in_restricted: bool) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     if player_in_restricted && !guard.alerted {
@@ -780,10 +754,7 @@ pub fn monster_steal(
 
     events.push(EngineEvent::msg_with(
         "monster-stole-item",
-        vec![
-            ("monster", thief_name.clone()),
-            ("item", item_name),
-        ],
+        vec![("monster", thief_name.clone()), ("item", item_name)],
     ));
 
     events.push(EngineEvent::ItemDropped {
@@ -826,9 +797,10 @@ fn find_random_floor(world: &GameWorld, rng: &mut impl Rng) -> Option<Position> 
         let pos = Position::new(x, y);
 
         if let Some(cell) = map.get(pos)
-            && cell.terrain.is_walkable() {
-                return Some(pos);
-            }
+            && cell.terrain.is_walkable()
+        {
+            return Some(pos);
+        }
     }
 
     None
@@ -845,9 +817,8 @@ mod tests {
     use crate::dungeon::Terrain;
     use crate::inventory::Inventory;
     use crate::world::{
-        ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints,
-        Monster, MovementPoints, Name, Positioned, Speed,
-        NORMAL_SPEED,
+        ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints, Monster, MovementPoints,
+        NORMAL_SPEED, Name, Positioned, Speed,
     };
     use nethack_babel_data::{ObjectClass, ObjectCore, ObjectTypeId};
     use rand::SeedableRng;
@@ -870,16 +841,14 @@ mod tests {
         world
     }
 
-    fn spawn_monster(
-        world: &mut GameWorld,
-        pos: Position,
-        name: &str,
-        hp: i32,
-    ) -> Entity {
+    fn spawn_monster(world: &mut GameWorld, pos: Position, name: &str, hp: i32) -> Entity {
         world.spawn((
             Monster,
             Positioned(pos),
-            HitPoints { current: hp, max: hp },
+            HitPoints {
+                current: hp,
+                max: hp,
+            },
             ArmorClass(10),
             Attributes::default(),
             ExperienceLevel(1),
@@ -910,7 +879,11 @@ mod tests {
         let priest_entity = spawn_monster(&mut world, Position::new(9, 8), "priest", 20);
         let _ = world.ecs_mut().insert_one(
             priest_entity,
-            Priest { alignment: Alignment::Lawful, has_shrine: false, is_high_priest: false },
+            Priest {
+                alignment: Alignment::Lawful,
+                has_shrine: false,
+                is_high_priest: false,
+            },
         );
 
         let events = priest_interaction(
@@ -922,10 +895,13 @@ mod tests {
             0, // current protection
         );
 
-        let granted = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "priest-protection-granted")
-        });
-        assert!(granted, "priest should grant protection when gold is sufficient");
+        let granted = events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "priest-protection-granted"),
+        );
+        assert!(
+            granted,
+            "priest should grant protection when gold is sufficient"
+        );
     }
 
     #[test]
@@ -935,7 +911,11 @@ mod tests {
         let priest_entity = spawn_monster(&mut world, Position::new(9, 8), "priest", 20);
         let _ = world.ecs_mut().insert_one(
             priest_entity,
-            Priest { alignment: Alignment::Lawful, has_shrine: false, is_high_priest: false },
+            Priest {
+                alignment: Alignment::Lawful,
+                has_shrine: false,
+                is_high_priest: false,
+            },
         );
 
         let events = priest_interaction(
@@ -947,9 +927,9 @@ mod tests {
             0,
         );
 
-        let wrong = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "priest-wrong-alignment")
-        });
+        let wrong = events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "priest-wrong-alignment"),
+        );
         assert!(wrong, "priest should reject player with wrong alignment");
     }
 
@@ -964,14 +944,14 @@ mod tests {
 
         let events = guard_interaction(&mut world, player, guard, 500);
 
-        let confiscated = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "guard-confiscate-gold")
-        });
+        let confiscated = events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "guard-confiscate-gold"),
+        );
         assert!(confiscated, "guard should confiscate gold");
 
-        let teleported = events.iter().any(|e| {
-            matches!(e, EngineEvent::EntityTeleported { entity, .. } if *entity == player)
-        });
+        let teleported = events.iter().any(
+            |e| matches!(e, EngineEvent::EntityTeleported { entity, .. } if *entity == player),
+        );
         assert!(teleported, "player should be teleported out of vault");
     }
 
@@ -984,9 +964,9 @@ mod tests {
 
         let events = guard_interaction(&mut world, player, guard, 0);
 
-        let no_gold = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "guard-no-gold")
-        });
+        let no_gold = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "guard-no-gold"));
         assert!(no_gold, "guard should say no gold");
     }
 
@@ -1022,21 +1002,21 @@ mod tests {
         let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
         let _ = world.ecs_mut().insert_one(
             wizard,
-            WizardOfYendor { last_killed_turn: 0, times_killed: 1 },
+            WizardOfYendor {
+                last_killed_turn: 0,
+                times_killed: 1,
+            },
         );
 
         let mut rng = test_rng();
         let events = wizard_harass(
-            &mut world,
-            wizard,
-            player,
-            true, // player has amulet
+            &mut world, wizard, player, true, // player has amulet
             &mut rng,
         );
 
-        let steal = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wizard-steal-amulet")
-        });
+        let steal = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"));
         assert!(steal, "wizard should attempt to steal the Amulet");
     }
 
@@ -1048,21 +1028,18 @@ mod tests {
         // Wizard at full HP, player does not have amulet.
         let _ = world.ecs_mut().insert_one(
             wizard,
-            WizardOfYendor { last_killed_turn: 0, times_killed: 1 },
+            WizardOfYendor {
+                last_killed_turn: 0,
+                times_killed: 1,
+            },
         );
 
         let mut rng = test_rng();
-        let events = wizard_harass(
-            &mut world,
-            wizard,
-            player,
-            false,
-            &mut rng,
-        );
+        let events = wizard_harass(&mut world, wizard, player, false, &mut rng);
 
-        let double = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "wizard-double-trouble")
-        });
+        let double = events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "wizard-double-trouble"),
+        );
         assert!(double, "wizard at full HP should use Double Trouble");
     }
 
@@ -1073,7 +1050,10 @@ mod tests {
         let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
         let _ = world.ecs_mut().insert_one(
             wizard,
-            WizardOfYendor { last_killed_turn: 0, times_killed: 1 },
+            WizardOfYendor {
+                last_killed_turn: 0,
+                times_killed: 1,
+            },
         );
 
         // Reduce wizard HP so it's not at full (no Double Trouble).
@@ -1083,10 +1063,7 @@ mod tests {
 
         let mut rng = test_rng();
         let events = wizard_harass(
-            &mut world,
-            wizard,
-            player,
-            false, // no amulet
+            &mut world, wizard, player, false, // no amulet
             &mut rng,
         );
 
@@ -1131,16 +1108,18 @@ mod tests {
         let nymph = spawn_monster(&mut world, Position::new(9, 8), "wood nymph", 10);
         let _ = world.ecs_mut().insert_one(
             nymph,
-            Thief { teleports_after_steal: true },
+            Thief {
+                teleports_after_steal: true,
+            },
         );
 
         let mut rng = test_rng();
         let events = monster_steal(&mut world, nymph, player, &mut rng);
 
         // Check that the steal event was emitted.
-        let stole = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "monster-stole-item")
-        });
+        let stole = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "monster-stole-item"));
         assert!(stole, "nymph should steal an item");
 
         // Verify the item was removed from inventory.
@@ -1177,16 +1156,18 @@ mod tests {
         let nymph = spawn_monster(&mut world, nymph_start, "wood nymph", 10);
         let _ = world.ecs_mut().insert_one(
             nymph,
-            Thief { teleports_after_steal: true },
+            Thief {
+                teleports_after_steal: true,
+            },
         );
 
         let mut rng = test_rng();
         let events = monster_steal(&mut world, nymph, player, &mut rng);
 
         // Check that the nymph teleported.
-        let teleported = events.iter().any(|e| {
-            matches!(e, EngineEvent::EntityTeleported { entity, .. } if *entity == nymph)
-        });
+        let teleported = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityTeleported { entity, .. } if *entity == nymph));
         assert!(teleported, "nymph should teleport after stealing");
 
         // Verify position changed.
@@ -1204,16 +1185,21 @@ mod tests {
         let nymph = spawn_monster(&mut world, Position::new(9, 8), "wood nymph", 10);
         let _ = world.ecs_mut().insert_one(
             nymph,
-            Thief { teleports_after_steal: true },
+            Thief {
+                teleports_after_steal: true,
+            },
         );
 
         let mut rng = test_rng();
         let events = monster_steal(&mut world, nymph, player, &mut rng);
 
-        let nothing = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "steal-nothing-to-take")
-        });
-        assert!(nothing, "steal from empty inventory should produce 'nothing' message");
+        let nothing = events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "steal-nothing-to-take"),
+        );
+        assert!(
+            nothing,
+            "steal from empty inventory should produce 'nothing' message"
+        );
     }
 
     // ── Priest donation tests ────────────────────────────────────
@@ -1279,18 +1265,18 @@ mod tests {
     #[test]
     fn test_priest_ale_gift_has_gold() {
         let events = priest_ale_gift(5);
-        let has_ale = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "priest-ale-gift")
-        });
+        let has_ale = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "priest-ale-gift"));
         assert!(has_ale);
     }
 
     #[test]
     fn test_priest_ale_gift_no_gold() {
         let events = priest_ale_gift(0);
-        let has_poverty = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "priest-virtues-of-poverty")
-        });
+        let has_poverty = events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "priest-virtues-of-poverty"),
+        );
         assert!(has_poverty);
     }
 
@@ -1301,7 +1287,9 @@ mod tests {
         let mut rng = test_rng();
         let result = temple_entry(true, true, true, 15, false, false, &mut rng);
         match result {
-            TempleEntryResult::Tended { sacred, hostile, .. } => {
+            TempleEntryResult::Tended {
+                sacred, hostile, ..
+            } => {
                 assert!(sacred);
                 assert!(!hostile);
             }
@@ -1325,10 +1313,7 @@ mod tests {
     fn test_temple_entry_sanctum() {
         let mut rng = test_rng();
         let result = temple_entry(true, true, false, 10, true, true, &mut rng);
-        assert_eq!(
-            result,
-            TempleEntryResult::Sanctum { first_time: true }
-        );
+        assert_eq!(result, TempleEntryResult::Sanctum { first_time: true });
     }
 
     #[test]
@@ -1342,9 +1327,9 @@ mod tests {
     fn test_untended_temple_events_with_ghost() {
         let events = untended_temple_events(0, true);
         assert!(events.len() >= 2);
-        let has_ghost = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "temple-ghost-appears")
-        });
+        let has_ghost = events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "temple-ghost-appears"),
+        );
         assert!(has_ghost);
     }
 
@@ -1504,12 +1489,7 @@ mod tests {
             patrol_target: Position::new(5, 5),
             alerted: false,
         };
-        let target = guard_patrol_target(
-            &guard,
-            Position::new(3, 3),
-            Position::new(10, 10),
-            false,
-        );
+        let target = guard_patrol_target(&guard, Position::new(3, 3), Position::new(10, 10), false);
         assert_eq!(target, Position::new(5, 5));
     }
 
@@ -1536,9 +1516,9 @@ mod tests {
         };
         let events = guard_spot_player(&mut guard, true);
         assert!(guard.alerted);
-        let has_halt = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "guard-halt")
-        });
+        let has_halt = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "guard-halt"));
         assert!(has_halt);
 
         // Already alerted — no new event.

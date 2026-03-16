@@ -92,18 +92,26 @@ impl EndHow {
 
     /// Whether the player is considered dead (for bones eligibility etc.).
     pub fn is_dead(&self) -> bool {
-        !matches!(self, EndHow::Quit | EndHow::Escaped | EndHow::Ascended
-                  | EndHow::Panicked | EndHow::Trickery)
+        !matches!(
+            self,
+            EndHow::Quit | EndHow::Escaped | EndHow::Ascended | EndHow::Panicked | EndHow::Trickery
+        )
     }
 
     /// Whether this ending allows bones file creation.
     pub fn allows_bones(&self) -> bool {
         matches!(
             self,
-            EndHow::Died | EndHow::Choked | EndHow::Poisoned
-            | EndHow::Starvation | EndHow::Drowning | EndHow::Burning
-            | EndHow::Dissolved | EndHow::Crushed | EndHow::Stoning
-            | EndHow::Slimed
+            EndHow::Died
+                | EndHow::Choked
+                | EndHow::Poisoned
+                | EndHow::Starvation
+                | EndHow::Drowning
+                | EndHow::Burning
+                | EndHow::Dissolved
+                | EndHow::Crushed
+                | EndHow::Stoning
+                | EndHow::Slimed
         )
     }
 }
@@ -123,9 +131,7 @@ pub struct VanquishedEntry {
 
 /// Sort vanquished list by count descending, then name ascending.
 pub fn sort_vanquished(list: &mut [VanquishedEntry]) {
-    list.sort_by(|a, b| {
-        b.count.cmp(&a.count).then_with(|| a.name.cmp(&b.name))
-    });
+    list.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.name.cmp(&b.name)));
 }
 
 // ---------------------------------------------------------------------------
@@ -215,11 +221,7 @@ pub struct DoneParams {
 ///
 /// The actual UI interactions (DYWYPI, disclosure menus) are driven by the
 /// TUI crate using the returned `GameOverResult`.
-pub fn done(
-    world: &GameWorld,
-    player: Entity,
-    params: DoneParams,
-) -> GameOverResult {
+pub fn done(world: &GameWorld, player: Entity, params: DoneParams) -> GameOverResult {
     let mut events = Vec::new();
 
     // Gather player stats.
@@ -243,10 +245,7 @@ pub fn done(
         .unwrap_or(0);
 
     // Calculate score.
-    let score = calculate_final_score(
-        &params,
-        score_xp,
-    );
+    let score = calculate_final_score(&params, score_xp);
 
     // Build tombstone.
     let tombstone = Tombstone {
@@ -330,10 +329,7 @@ pub fn done(
 /// - Depth bonus: 50 * (deepest - 1)
 /// - Deep bonus: 1000 * (deepest - 20) for levels > 20
 /// - Ascension doubles score if original alignment retained
-fn calculate_final_score(
-    params: &DoneParams,
-    score_xp: i64,
-) -> u64 {
+fn calculate_final_score(params: &DoneParams, score_xp: i64) -> u64 {
     let mut score = score_xp.max(0);
 
     // Net gold gain.
@@ -483,10 +479,7 @@ pub fn format_vanquished(vanquished: &[VanquishedEntry]) -> Vec<String> {
     }
 
     let total: u32 = vanquished.iter().map(|v| v.count).sum();
-    let mut lines = vec![format!(
-        "Vanquished creatures ({} total):",
-        total
-    )];
+    let mut lines = vec![format!("Vanquished creatures ({} total):", total)];
 
     for entry in vanquished {
         if entry.count == 1 {
@@ -532,17 +525,45 @@ pub fn format_conduct_summary(conducts: &ConductState) -> Vec<String> {
 
     let descriptions: &[(Conduct, &str, &str)] = &[
         (Conduct::Foodless, "ate no food", "ate food"),
-        (Conduct::Vegan, "followed a strict vegan diet", "ate non-vegan food"),
+        (
+            Conduct::Vegan,
+            "followed a strict vegan diet",
+            "ate non-vegan food",
+        ),
         (Conduct::Vegetarian, "were a vegetarian", "ate meat"),
         (Conduct::Atheist, "were an atheist", "prayed or sacrificed"),
-        (Conduct::Weaponless, "never hit with a wielded weapon", "hit with weapons"),
+        (
+            Conduct::Weaponless,
+            "never hit with a wielded weapon",
+            "hit with weapons",
+        ),
         (Conduct::Pacifist, "were a pacifist", "killed creatures"),
-        (Conduct::Illiterate, "were illiterate", "read scrolls or spellbooks"),
-        (Conduct::Polypileless, "never polymorphed an object", "polymorphed objects"),
-        (Conduct::Polyselfless, "never polymorphed", "polymorphed self"),
+        (
+            Conduct::Illiterate,
+            "were illiterate",
+            "read scrolls or spellbooks",
+        ),
+        (
+            Conduct::Polypileless,
+            "never polymorphed an object",
+            "polymorphed objects",
+        ),
+        (
+            Conduct::Polyselfless,
+            "never polymorphed",
+            "polymorphed self",
+        ),
         (Conduct::Wishless, "never made a wish", "made wishes"),
-        (Conduct::ArtifactWishless, "never wished for an artifact", "wished for artifacts"),
-        (Conduct::Genocideless, "never genocided anything", "committed genocide"),
+        (
+            Conduct::ArtifactWishless,
+            "never wished for an artifact",
+            "wished for artifacts",
+        ),
+        (
+            Conduct::Genocideless,
+            "never genocided anything",
+            "committed genocide",
+        ),
         (Conduct::Petless, "never used a pet", "used pets"),
     ];
 
@@ -551,8 +572,12 @@ pub fn format_conduct_summary(conducts: &ConductState) -> Vec<String> {
             lines.push(format!("  You {}.", maintained_desc));
         } else {
             let count = conducts.violation_count(*conduct);
-            lines.push(format!("  You {} ({} time{}).", violated_desc, count,
-                if count == 1 { "" } else { "s" }));
+            lines.push(format!(
+                "  You {} ({} time{}).",
+                violated_desc,
+                count,
+                if count == 1 { "" } else { "s" }
+            ));
         }
     }
 
@@ -812,7 +837,10 @@ pub fn format_disclosure(category: &DisclosureCategory) -> Vec<String> {
 pub fn auto_disclose(how: &EndHow, option: DisclosureOption) -> bool {
     match how {
         EndHow::Ascended => {
-            matches!(option, DisclosureOption::Inventory | DisclosureOption::Conducts)
+            matches!(
+                option,
+                DisclosureOption::Inventory | DisclosureOption::Conducts
+            )
         }
         _ => false,
     }
@@ -873,11 +901,7 @@ pub fn calculate_artifact_score(
 ///
 /// If the player has life saving, restore HP to half of max and return true.
 /// Otherwise return false.
-pub fn save_life_check(
-    has_life_saving: bool,
-    hp: &mut i32,
-    max_hp: i32,
-) -> bool {
+pub fn save_life_check(has_life_saving: bool, hp: &mut i32, max_hp: i32) -> bool {
     if has_life_saving {
         *hp = max_hp / 2;
         if *hp < 1 {
@@ -916,9 +940,11 @@ pub fn fixup_death_message(killer: &str, how: &EndHow) -> String {
 /// Add "a" or "an" article to a killer name if it doesn't already have one.
 fn add_death_article(name: &str) -> String {
     // Don't add article if it already starts with an article or is a proper noun.
-    if name.starts_with("a ") || name.starts_with("an ")
+    if name.starts_with("a ")
+        || name.starts_with("an ")
         || name.starts_with("the ")
-        || name.starts_with("A ") || name.starts_with("An ")
+        || name.starts_with("A ")
+        || name.starts_with("An ")
         || name.starts_with("The ")
     {
         return name.to_string();
@@ -1111,16 +1137,28 @@ mod tests {
     #[test]
     fn vanquished_sorting() {
         let mut list = vec![
-            VanquishedEntry { name: "kobold".to_string(), count: 5 },
-            VanquishedEntry { name: "orc".to_string(), count: 10 },
-            VanquishedEntry { name: "ant".to_string(), count: 10 },
-            VanquishedEntry { name: "dragon".to_string(), count: 1 },
+            VanquishedEntry {
+                name: "kobold".to_string(),
+                count: 5,
+            },
+            VanquishedEntry {
+                name: "orc".to_string(),
+                count: 10,
+            },
+            VanquishedEntry {
+                name: "ant".to_string(),
+                count: 10,
+            },
+            VanquishedEntry {
+                name: "dragon".to_string(),
+                count: 1,
+            },
         ];
         sort_vanquished(&mut list);
-        assert_eq!(list[0].name, "ant");     // 10, alphabetically first
-        assert_eq!(list[1].name, "orc");     // 10, alphabetically second
-        assert_eq!(list[2].name, "kobold");  // 5
-        assert_eq!(list[3].name, "dragon");  // 1
+        assert_eq!(list[0].name, "ant"); // 10, alphabetically first
+        assert_eq!(list[1].name, "orc"); // 10, alphabetically second
+        assert_eq!(list[2].name, "kobold"); // 5
+        assert_eq!(list[3].name, "dragon"); // 1
     }
 
     // --- Test 5: Score calculation basic ---
@@ -1225,9 +1263,10 @@ mod tests {
             deepest_level: 3,
             gold: 50,
             starting_gold: 0,
-            vanquished: vec![
-                VanquishedEntry { name: "gnome".to_string(), count: 3 },
-            ],
+            vanquished: vec![VanquishedEntry {
+                name: "gnome".to_string(),
+                count: 3,
+            }],
             conducts: ConductState::new(),
             depth_string: "Dlvl:3".to_string(),
             role: Role::Archeologist,
@@ -1239,10 +1278,10 @@ mod tests {
         assert_eq!(result.how, EndHow::Died);
         assert!(result.score > 0, "score should be positive");
 
-        let has_gameover = result.events.iter().any(|e| matches!(
-            e,
-            EngineEvent::GameOver { .. }
-        ));
+        let has_gameover = result
+            .events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::GameOver { .. }));
         assert!(has_gameover, "should emit GameOver event");
     }
 
@@ -1300,10 +1339,12 @@ mod tests {
 
         let result = done(&world, player, params);
 
-        let has_early_msg = result.events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "end-do-not-pass-go"
-        ));
+        let has_early_msg = result.events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "end-do-not-pass-go"
+            )
+        });
         assert!(has_early_msg, "turn 1 death should get early death message");
     }
 
@@ -1451,8 +1492,14 @@ mod tests {
     #[test]
     fn vanquished_format_entries() {
         let entries = vec![
-            VanquishedEntry { name: "orc".to_string(), count: 10 },
-            VanquishedEntry { name: "dragon".to_string(), count: 1 },
+            VanquishedEntry {
+                name: "orc".to_string(),
+                count: 10,
+            },
+            VanquishedEntry {
+                name: "dragon".to_string(),
+                count: 1,
+            },
         ];
         let lines = format_vanquished(&entries);
         assert!(lines[0].contains("11 total"));
@@ -1464,8 +1511,14 @@ mod tests {
     #[test]
     fn test_total_vanquished() {
         let entries = vec![
-            VanquishedEntry { name: "a".to_string(), count: 5 },
-            VanquishedEntry { name: "b".to_string(), count: 3 },
+            VanquishedEntry {
+                name: "a".to_string(),
+                count: 5,
+            },
+            VanquishedEntry {
+                name: "b".to_string(),
+                count: 3,
+            },
         ];
         assert_eq!(total_vanquished(&entries), 8);
     }
@@ -1531,26 +1584,32 @@ mod tests {
     fn ascension_events() {
         let events = ascension_sequence("Hero", &Role::Valkyrie, true);
         assert!(!events.is_empty());
-        let has_offering = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "end-ascension-offering"
-        ));
+        let has_offering = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "end-ascension-offering"
+            )
+        });
         assert!(has_offering);
 
-        let has_demigod = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "end-ascension-demigod"
-        ));
+        let has_demigod = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "end-ascension-demigod"
+            )
+        });
         assert!(has_demigod);
     }
 
     #[test]
     fn ascension_events_converted() {
         let events = ascension_sequence("Hero", &Role::Wizard, false);
-        let has_converted = events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "end-ascension-demigod-converted"
-        ));
+        let has_converted = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "end-ascension-demigod-converted"
+            )
+        });
         assert!(has_converted);
     }
 
@@ -1578,9 +1637,15 @@ mod tests {
 
     #[test]
     fn auto_disclose_ascension() {
-        assert!(auto_disclose(&EndHow::Ascended, DisclosureOption::Inventory));
+        assert!(auto_disclose(
+            &EndHow::Ascended,
+            DisclosureOption::Inventory
+        ));
         assert!(auto_disclose(&EndHow::Ascended, DisclosureOption::Conducts));
-        assert!(!auto_disclose(&EndHow::Ascended, DisclosureOption::Overview));
+        assert!(!auto_disclose(
+            &EndHow::Ascended,
+            DisclosureOption::Overview
+        ));
         assert!(!auto_disclose(&EndHow::Died, DisclosureOption::Inventory));
     }
 
@@ -1620,13 +1685,8 @@ mod tests {
 
     #[test]
     fn artifact_score_no_double_counting_quest_items() {
-        let carried = vec![
-            "Bell of Opening".to_string(),
-        ];
-        let ever_had = vec![
-            "Bell of Opening".to_string(),
-            "Excalibur".to_string(),
-        ];
+        let carried = vec!["Bell of Opening".to_string()];
+        let ever_had = vec!["Bell of Opening".to_string(), "Excalibur".to_string()];
         // carried: 2500 for Bell
         // ever_had: Bell is quest item (skip), Excalibur = 1000
         // total: 2500 + 1000 = 3500
@@ -1715,12 +1775,20 @@ mod tests {
     #[test]
     fn disclosure_generation_inventory() {
         let inventory = vec![
-            ('a', "long sword".to_string(), "a sword".to_string(), "uncursed".to_string()),
-            ('b', "scroll of identify".to_string(), "scroll labeled LOREM".to_string(), "blessed".to_string()),
+            (
+                'a',
+                "long sword".to_string(),
+                "a sword".to_string(),
+                "uncursed".to_string(),
+            ),
+            (
+                'b',
+                "scroll of identify".to_string(),
+                "scroll labeled LOREM".to_string(),
+                "blessed".to_string(),
+            ),
         ];
-        let disclosure = generate_disclosure(
-            &inventory, &[], &[], &[], &[], &[], &[],
-        );
+        let disclosure = generate_disclosure(&inventory, &[], &[], &[], &[], &[], &[]);
         assert_eq!(disclosure.len(), 5);
         match &disclosure[0] {
             DisclosureCategory::Inventory { items } => {
@@ -1804,8 +1872,14 @@ mod tests {
             gold: 100,
             starting_gold: 0,
             vanquished: vec![
-                VanquishedEntry { name: "gnome".to_string(), count: 3 },
-                VanquishedEntry { name: "orc".to_string(), count: 2 },
+                VanquishedEntry {
+                    name: "gnome".to_string(),
+                    count: 3,
+                },
+                VanquishedEntry {
+                    name: "orc".to_string(),
+                    count: 2,
+                },
             ],
             conducts: ConductState::new(),
             depth_string: "Dlvl:5".to_string(),
@@ -1814,14 +1888,7 @@ mod tests {
         };
 
         let result = done(&world, player, params);
-        let summary = GameSummary::from_result(
-            &result,
-            "Human",
-            "male",
-            "neutral",
-            5,
-            5,
-        );
+        let summary = GameSummary::from_result(&result, "Human", "male", "neutral", 5, 5);
 
         assert_eq!(summary.name, result.tombstone.name);
         assert_eq!(summary.role, "Wizard");

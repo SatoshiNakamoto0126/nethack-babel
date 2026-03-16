@@ -295,7 +295,7 @@ mod tests {
     use super::*;
     use crate::action::Position;
     use crate::identification::IdentificationState;
-    use crate::items::{spawn_item, SpawnLocation};
+    use crate::items::{SpawnLocation, spawn_item};
     use crate::world::GameWorld;
     use nethack_babel_data::{Color, Material, ObjectClass, ObjectDef, ObjectTypeId};
 
@@ -597,7 +597,13 @@ mod tests {
 
     #[test]
     fn test_simple_typename_potion() {
-        let defs = vec![make_def(0, "healing", ObjectClass::Potion, Some("ruby"), 20)];
+        let defs = vec![make_def(
+            0,
+            "healing",
+            ObjectClass::Potion,
+            Some("ruby"),
+            20,
+        )];
         let name = simple_typename(ObjectTypeId(0), &defs);
         assert_eq!(name, "potion of healing");
     }
@@ -661,10 +667,7 @@ mod tests {
 
     #[test]
     fn test_secondary_erosion_type_leather() {
-        assert_eq!(
-            secondary_erosion_type(Material::Leather),
-            ErosionType::Rot
-        );
+        assert_eq!(secondary_erosion_type(Material::Leather), ErosionType::Rot);
     }
 
     // -- display_name_with_appearance tests ----------------------------------
@@ -679,28 +682,14 @@ mod tests {
     #[test]
     fn test_display_name_identified() {
         let table = make_appearance_table();
-        let name = display_name_with_appearance(
-            "healing",
-            '!',
-            0,
-            true,
-            None,
-            &table,
-        );
+        let name = display_name_with_appearance("healing", '!', 0, true, None, &table);
         assert_eq!(name, "healing");
     }
 
     #[test]
     fn test_display_name_unidentified_uses_appearance() {
         let table = make_appearance_table();
-        let name = display_name_with_appearance(
-            "healing",
-            '!',
-            0,
-            false,
-            None,
-            &table,
-        );
+        let name = display_name_with_appearance("healing", '!', 0, false, None, &table);
         // Should be "<color> potion", not "healing"
         assert!(name.ends_with(" potion"), "got: {}", name);
         assert_ne!(name, "healing");
@@ -709,14 +698,7 @@ mod tests {
     #[test]
     fn test_display_name_called() {
         let table = make_appearance_table();
-        let name = display_name_with_appearance(
-            "healing",
-            '!',
-            0,
-            false,
-            Some("heal"),
-            &table,
-        );
+        let name = display_name_with_appearance("healing", '!', 0, false, Some("heal"), &table);
         // Should be "<color> potion called heal"
         assert!(name.ends_with(" called heal"), "got: {}", name);
         assert!(name.contains("potion"), "got: {}", name);
@@ -725,14 +707,7 @@ mod tests {
     #[test]
     fn test_display_name_scroll_unidentified() {
         let table = make_appearance_table();
-        let name = display_name_with_appearance(
-            "identify",
-            '?',
-            0,
-            false,
-            None,
-            &table,
-        );
+        let name = display_name_with_appearance("identify", '?', 0, false, None, &table);
         assert!(name.starts_with("scroll labeled "), "got: {}", name);
     }
 

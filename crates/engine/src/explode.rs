@@ -103,9 +103,7 @@ pub fn explosion_damage(
 
     // Half_physical_damage applies to Physical and Acid only
     // (matching C's `Maybe_Half_Phys` in `explode()`)
-    if has_half_damage
-        && matches!(damage_type, DamageType::Physical | DamageType::Acid)
-    {
+    if has_half_damage && matches!(damage_type, DamageType::Physical | DamageType::Acid) {
         dam = (dam + 1) / 2;
     }
 
@@ -119,20 +117,14 @@ pub fn explosion_damage(
 /// - Fire:       scrolls (`?`/Scroll), spellbooks (`+`/Spellbook), potions (`!`/Potion)
 /// - Cold:       potions shatter
 /// - Lightning:  wands (`/`/Wand), rings (`=`/Ring)
-pub fn item_destroyed_by_explosion(
-    item_class: ObjectClass,
-    damage_type: DamageType,
-) -> bool {
+pub fn item_destroyed_by_explosion(item_class: ObjectClass, damage_type: DamageType) -> bool {
     match damage_type {
         DamageType::Fire => matches!(
             item_class,
             ObjectClass::Scroll | ObjectClass::Spellbook | ObjectClass::Potion
         ),
         DamageType::Cold => matches!(item_class, ObjectClass::Potion),
-        DamageType::Electricity => matches!(
-            item_class,
-            ObjectClass::Wand | ObjectClass::Ring
-        ),
+        DamageType::Electricity => matches!(item_class, ObjectClass::Wand | ObjectClass::Ring),
         _ => false,
     }
 }
@@ -181,7 +173,7 @@ pub fn explode(
     center_x: i32,
     center_y: i32,
     damage_dice: (i32, i32),
-    damage_type: DamageType,
+    _damage_type: DamageType,
     explosion_type: ExplosionType,
     _source_name: &str,
     rng: &mut impl Rng,
@@ -191,7 +183,7 @@ pub fn explode(
     // Roll total damage once, same as C `explode()`.
     let mut total_roll = 0i32;
     for _ in 0..num_dice {
-        total_roll += rng.gen_range(1..=die_size);
+        total_roll += rng.random_range(1..=die_size);
     }
 
     let radius = 1; // standard 3×3 blast
@@ -235,18 +227,13 @@ pub fn explode(
 ///
 /// Simplified version of C's `scatter()`.  Returns positions where
 /// debris might land, each at a random offset within `radius` of centre.
-pub fn scatter(
-    center_x: i32,
-    center_y: i32,
-    radius: i32,
-    rng: &mut impl Rng,
-) -> Vec<(i32, i32)> {
-    let count = rng.gen_range(1..=((2 * radius + 1) * (2 * radius + 1)));
+pub fn scatter(center_x: i32, center_y: i32, radius: i32, rng: &mut impl Rng) -> Vec<(i32, i32)> {
+    let count = rng.random_range(1..=((2 * radius + 1) * (2 * radius + 1)));
     let mut positions = Vec::with_capacity(count as usize);
 
     for _ in 0..count {
-        let dx = rng.gen_range(-radius..=radius);
-        let dy = rng.gen_range(-radius..=radius);
+        let dx = rng.random_range(-radius..=radius);
+        let dy = rng.random_range(-radius..=radius);
         positions.push((center_x + dx, center_y + dy));
     }
 
@@ -326,10 +313,7 @@ mod tests {
     #[test]
     fn test_explosion_damage_with_half_damage_physical() {
         // Half-damage applies to Physical: (20 + 1) / 2 = 10
-        assert_eq!(
-            explosion_damage(20, DamageType::Physical, false, true),
-            10
-        );
+        assert_eq!(explosion_damage(20, DamageType::Physical, false, true), 10);
     }
 
     #[test]
@@ -347,10 +331,7 @@ mod tests {
     #[test]
     fn test_explosion_damage_both_resistance_and_half() {
         // Physical with both: resistance first: (20+1)/2=10, then half: (10+1)/2=5
-        assert_eq!(
-            explosion_damage(20, DamageType::Physical, true, true),
-            5
-        );
+        assert_eq!(explosion_damage(20, DamageType::Physical, true, true), 5);
     }
 
     // -- item_destroyed_by_explosion --
@@ -498,7 +479,15 @@ mod tests {
     #[test]
     fn test_explode_basic_fire_9_tiles() {
         let mut rng = test_rng();
-        let result = explode(5, 5, (6, 6), DamageType::Fire, ExplosionType::Fiery, "fireball", &mut rng);
+        let result = explode(
+            5,
+            5,
+            (6, 6),
+            DamageType::Fire,
+            ExplosionType::Fiery,
+            "fireball",
+            &mut rng,
+        );
 
         // Standard 3×3 blast = 9 tiles
         assert_eq!(result.tiles.len(), 9);
@@ -512,11 +501,23 @@ mod tests {
     fn test_explode_damage_dice_range() {
         // 6d6: min=6, max=36
         let mut rng = test_rng();
-        let result = explode(5, 5, (6, 6), DamageType::Fire, ExplosionType::Fiery, "fireball", &mut rng);
+        let result = explode(
+            5,
+            5,
+            (6, 6),
+            DamageType::Fire,
+            ExplosionType::Fiery,
+            "fireball",
+            &mut rng,
+        );
 
         // Each tile gets the same roll
         let per_tile = result.tiles[0].damage_dealt;
-        assert!(per_tile >= 6 && per_tile <= 36, "damage {} not in 6..=36", per_tile);
+        assert!(
+            per_tile >= 6 && per_tile <= 36,
+            "damage {} not in 6..=36",
+            per_tile
+        );
 
         // All tiles get the same damage (uniform, no fall-off)
         for tile in &result.tiles {
@@ -527,7 +528,15 @@ mod tests {
     #[test]
     fn test_explode_total_damage() {
         let mut rng = test_rng();
-        let result = explode(5, 5, (6, 6), DamageType::Fire, ExplosionType::Fiery, "fireball", &mut rng);
+        let result = explode(
+            5,
+            5,
+            (6, 6),
+            DamageType::Fire,
+            ExplosionType::Fiery,
+            "fireball",
+            &mut rng,
+        );
 
         let per_tile = result.tiles[0].damage_dealt;
         assert_eq!(result.total_damage, per_tile * 9);
@@ -536,7 +545,15 @@ mod tests {
     #[test]
     fn test_explode_tile_coordinates() {
         let mut rng = test_rng();
-        let result = explode(10, 20, (1, 1), DamageType::Cold, ExplosionType::Frosty, "frost", &mut rng);
+        let result = explode(
+            10,
+            20,
+            (1, 1),
+            DamageType::Cold,
+            ExplosionType::Frosty,
+            "frost",
+            &mut rng,
+        );
 
         let mut coords: Vec<(i32, i32)> = result.tiles.iter().map(|t| (t.x, t.y)).collect();
         coords.sort();

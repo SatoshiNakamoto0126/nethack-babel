@@ -7,9 +7,9 @@
 use hecs::Entity;
 use rand::Rng;
 
-use nethack_babel_data::{ArtifactId, BucStatus, ObjectClass, ObjectCore, Erosion};
+use nethack_babel_data::{ArtifactId, BucStatus, Erosion, ObjectClass, ObjectCore};
 
-use crate::artifacts::{try_create_excalibur, ExcaliburResult};
+use crate::artifacts::{ExcaliburResult, try_create_excalibur};
 use crate::dungeon::Terrain;
 use crate::event::{DamageCause, EngineEvent};
 use crate::potions::PotionType;
@@ -182,9 +182,7 @@ pub fn dip_item<R: Rng>(
     // Determine the potion type of `into`.
     // We use a marker component `DipPotionType` if present, or fall back
     // to checking the entity for known potion-type markers.
-    let into_potion_type = world
-        .get_component::<DipPotionType>(into)
-        .map(|d| d.0);
+    let into_potion_type = world.get_component::<DipPotionType>(into).map(|d| d.0);
 
     // ── Holy water: blessed potion of water → bless the item ────
     if into_potion_type == Some(PotionType::Water) && into_buc.blessed {
@@ -251,9 +249,9 @@ pub fn dip_item<R: Rng>(
             if let Some(into_pt) = into_potion_type {
                 let result = match into_pt {
                     PotionType::Sickness => Some(PotionType::FruitJuice),
-                    PotionType::Hallucination
-                    | PotionType::Blindness
-                    | PotionType::Confusion => Some(PotionType::Water),
+                    PotionType::Hallucination | PotionType::Blindness | PotionType::Confusion => {
+                        Some(PotionType::Water)
+                    }
                     _ => None,
                 };
                 if let Some(result_type) = result {
@@ -332,67 +330,66 @@ pub fn dip_item<R: Rng>(
     let item_class = world
         .get_component::<ObjectCore>(item)
         .map(|c| c.object_class);
-    let item_potion_type = world
-        .get_component::<DipPotionType>(item)
-        .map(|d| d.0);
+    let item_potion_type = world.get_component::<DipPotionType>(item).map(|d| d.0);
 
     if item_class == Some(ObjectClass::Potion)
         && let (Some(a_type), Some(b_type)) = (item_potion_type, into_potion_type)
-            && let Some(result_type) = alchemy_result(a_type, b_type) {
-                // BUC of the result comes from the dipped potion (item).
-                let item_buc = match world.get_component::<BucStatus>(item) {
-                    Some(b) => BucStatus {
-                        cursed: b.cursed,
-                        blessed: b.blessed,
-                        bknown: b.bknown,
-                    },
-                    None => BucStatus {
-                        cursed: false,
-                        blessed: false,
-                        bknown: false,
-                    },
-                };
+        && let Some(result_type) = alchemy_result(a_type, b_type)
+    {
+        // BUC of the result comes from the dipped potion (item).
+        let item_buc = match world.get_component::<BucStatus>(item) {
+            Some(b) => BucStatus {
+                cursed: b.cursed,
+                blessed: b.blessed,
+                bknown: b.bknown,
+            },
+            None => BucStatus {
+                cursed: false,
+                blessed: false,
+                bknown: false,
+            },
+        };
 
-                // Despawn both potions.
-                let _ = world.despawn(item);
-                events.push(EngineEvent::ItemDestroyed {
-                    item,
-                    cause: DamageCause::Physical,
-                });
-                let _ = world.despawn(into);
-                events.push(EngineEvent::ItemDestroyed {
-                    item: into,
-                    cause: DamageCause::Physical,
-                });
+        // Despawn both potions.
+        let _ = world.despawn(item);
+        events.push(EngineEvent::ItemDestroyed {
+            item,
+            cause: DamageCause::Physical,
+        });
+        let _ = world.despawn(into);
+        events.push(EngineEvent::ItemDestroyed {
+            item: into,
+            cause: DamageCause::Physical,
+        });
 
-                // Spawn the result potion.
-                let result_entity = world.spawn((
-                    ObjectCore {
-                        otyp: potion_otyp(result_type),
-                        object_class: ObjectClass::Potion,
-                        quantity: 1,
-                        weight: 20,
-                        age: 0,
-                        inv_letter: None,
-                        artifact: None,
-                    },
-                    item_buc,
-                    DipPotionType(result_type),
-                    nethack_babel_data::ObjectLocation::Inventory,
-                ));
+        // Spawn the result potion.
+        let result_entity = world.spawn((
+            ObjectCore {
+                otyp: potion_otyp(result_type),
+                object_class: ObjectClass::Potion,
+                quantity: 1,
+                weight: 20,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            item_buc,
+            DipPotionType(result_type),
+            nethack_babel_data::ObjectLocation::Inventory,
+        ));
 
-                events.push(EngineEvent::msg_with(
-                    "dip-alchemy",
-                    vec![("result", format!("{:?}", result_type))],
-                ));
-                events.push(EngineEvent::ItemPickedUp {
-                    actor: _player,
-                    item: result_entity,
-                    quantity: 1,
-                });
+        events.push(EngineEvent::msg_with(
+            "dip-alchemy",
+            vec![("result", format!("{:?}", result_type))],
+        ));
+        events.push(EngineEvent::ItemPickedUp {
+            actor: _player,
+            item: result_entity,
+            quantity: 1,
+        });
 
-                return events;
-            }
+        return events;
+    }
 
     // ── No special interaction ──────────────────────────────────
     events.push(EngineEvent::msg("dip-nothing-happens"));
@@ -449,7 +446,7 @@ pub fn dip_fountain<R: Rng>(
     let (alignment, is_knight) = world
         .get_component::<nethack_babel_data::PlayerIdentity>(player)
         .map(|id| {
-            let is_knight = id.role == nethack_babel_data::RoleId(10); // Knight
+            let is_knight = id.role == nethack_babel_data::RoleId(crate::religion::roles::KNIGHT);
             (id.alignment, is_knight)
         })
         .unwrap_or((nethack_babel_data::Alignment::Neutral, false));
@@ -503,14 +500,16 @@ pub fn dip_fountain<R: Rng>(
                 // 1/3 chance of rusting the weapon.
                 if rng.random_range(0..3) == 0
                     && let Some(mut ero) = world.get_component_mut::<Erosion>(item)
-                        && !ero.erodeproof && ero.eroded < 3 {
-                            ero.eroded += 1;
-                            events.push(EngineEvent::msg("dip-fountain-rust"));
-                            events.push(EngineEvent::ItemDamaged {
-                                item,
-                                cause: DamageCause::Rust,
-                            });
-                        }
+                    && !ero.erodeproof
+                    && ero.eroded < 3
+                {
+                    ero.eroded += 1;
+                    events.push(EngineEvent::msg("dip-fountain-rust"));
+                    events.push(EngineEvent::ItemDamaged {
+                        item,
+                        cause: DamageCause::Rust,
+                    });
+                }
             }
             if events.is_empty() {
                 events.push(EngineEvent::msg("dip-fountain-nothing"));
@@ -564,7 +563,9 @@ pub struct DipItemTag(pub DipItemKind);
 mod tests {
     use super::*;
     use crate::action::Position;
-    use nethack_babel_data::{Alignment, BucStatus, ObjectClass, ObjectCore, ObjectTypeId, Erosion};
+    use nethack_babel_data::{
+        Alignment, BucStatus, Erosion, ObjectClass, ObjectCore, ObjectTypeId,
+    };
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
 
@@ -602,11 +603,7 @@ mod tests {
 
     /// Spawn a potion with the given type and BUC status in the player's
     /// inventory.
-    fn spawn_potion(
-        world: &mut GameWorld,
-        pt: PotionType,
-        buc: BucStatus,
-    ) -> Entity {
+    fn spawn_potion(world: &mut GameWorld, pt: PotionType, buc: BucStatus) -> Entity {
         world.spawn((
             ObjectCore {
                 otyp: potion_otyp(pt),
@@ -678,7 +675,10 @@ mod tests {
 
         // Item should now be blessed.
         let buc = world.get_component::<BucStatus>(item).unwrap();
-        assert!(buc.blessed, "item should be blessed after dipping in holy water");
+        assert!(
+            buc.blessed,
+            "item should be blessed after dipping in holy water"
+        );
         assert!(!buc.cursed, "item should not be cursed");
 
         // Holy water should be consumed (despawned).
@@ -688,7 +688,9 @@ mod tests {
         );
 
         // Should have relevant message.
-        let has_msg = events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-holy-water"));
+        let has_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-holy-water"));
         assert!(has_msg, "should emit dip-holy-water message");
     }
 
@@ -707,7 +709,10 @@ mod tests {
 
         // Item should now be cursed.
         let buc = world.get_component::<BucStatus>(item).unwrap();
-        assert!(buc.cursed, "item should be cursed after dipping in unholy water");
+        assert!(
+            buc.cursed,
+            "item should be cursed after dipping in unholy water"
+        );
         assert!(!buc.blessed, "item should not be blessed");
 
         // Unholy water should be consumed.
@@ -716,7 +721,9 @@ mod tests {
             "unholy water should be consumed"
         );
 
-        let has_msg = events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-unholy-water"));
+        let has_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-unholy-water"));
         assert!(has_msg, "should emit dip-unholy-water message");
     }
 
@@ -750,10 +757,15 @@ mod tests {
                 found_extra_healing = true;
             }
         }
-        assert!(found_extra_healing, "alchemy should produce extra healing potion");
+        assert!(
+            found_extra_healing,
+            "alchemy should produce extra healing potion"
+        );
 
         // Should have alchemy message.
-        let has_msg = events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-alchemy"));
+        let has_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-alchemy"));
         assert!(has_msg, "should emit dip-alchemy message");
     }
 
@@ -813,10 +825,7 @@ mod tests {
                     buc.blessed,
                     "result potion should inherit blessed from dipped potion"
                 );
-                assert!(
-                    !buc.cursed,
-                    "result potion should not be cursed"
-                );
+                assert!(!buc.cursed, "result potion should not be cursed");
             }
         }
     }
@@ -836,7 +845,10 @@ mod tests {
 
         // Weapon should now have a Poisoned component.
         let poisoned = world.get_component::<Poisoned>(weapon);
-        assert!(poisoned.is_some(), "weapon should be poisoned after dipping");
+        assert!(
+            poisoned.is_some(),
+            "weapon should be poisoned after dipping"
+        );
         assert_eq!(poisoned.unwrap().uses, 3, "poison should have 3 uses");
 
         // Sickness potion should be consumed.
@@ -845,7 +857,9 @@ mod tests {
             "sickness potion should be consumed"
         );
 
-        let has_msg = events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-poison-weapon"));
+        let has_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-poison-weapon"));
         assert!(has_msg, "should emit dip-poison-weapon message");
     }
 
@@ -864,11 +878,7 @@ mod tests {
 
         // The potion should now be water (diluted).
         let pt = world.get_component::<DipPotionType>(potion).unwrap();
-        assert_eq!(
-            pt.0,
-            PotionType::Water,
-            "potion should be diluted to water"
-        );
+        assert_eq!(pt.0, PotionType::Water, "potion should be diluted to water");
 
         // Water potion should be consumed.
         assert!(
@@ -876,7 +886,9 @@ mod tests {
             "water potion should be consumed"
         );
 
-        let has_msg = events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-diluted"));
+        let has_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-diluted"));
         assert!(has_msg, "should emit dip-diluted message");
     }
 
@@ -896,7 +908,7 @@ mod tests {
         // Add PlayerIdentity with Lawful alignment and Knight role.
         let identity = nethack_babel_data::PlayerIdentity {
             name: "TestHero".to_string(),
-            role: nethack_babel_data::RoleId(10), // Knight
+            role: nethack_babel_data::RoleId(crate::religion::roles::KNIGHT),
             race: nethack_babel_data::RaceId(0),
             gender: nethack_babel_data::Gender::Male,
             alignment: Alignment::Lawful,
@@ -929,10 +941,17 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
             let events = dip_fountain(&mut world, player, sword, &mut rng);
 
-            if events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-excalibur")) {
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-excalibur"))
+            {
                 // Verify the sword is now Excalibur.
                 let core = world.get_component::<ObjectCore>(sword).unwrap();
-                assert_eq!(core.artifact, Some(ArtifactId(1)), "should be Excalibur artifact");
+                assert_eq!(
+                    core.artifact,
+                    Some(ArtifactId(1)),
+                    "should be Excalibur artifact"
+                );
 
                 let buc = world.get_component::<BucStatus>(sword).unwrap();
                 assert!(buc.blessed, "Excalibur should be blessed");
@@ -944,7 +963,10 @@ mod tests {
                 break;
             }
         }
-        assert!(found_excalibur, "lawful knight at level 5 should eventually get Excalibur");
+        assert!(
+            found_excalibur,
+            "lawful knight at level 5 should eventually get Excalibur"
+        );
     }
 
     // ── Test: fountain dip non-lawful → cursed ──────────────────
@@ -991,14 +1013,19 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
             let events = dip_fountain(&mut world, player, sword, &mut rng);
 
-            if events.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-fountain-cursed")) {
+            if events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-fountain-cursed"),
+            ) {
                 let buc = world.get_component::<BucStatus>(sword).unwrap();
                 assert!(buc.cursed, "sword should be cursed");
                 found_cursed = true;
                 break;
             }
         }
-        assert!(found_cursed, "non-lawful character should eventually get cursed sword");
+        assert!(
+            found_cursed,
+            "non-lawful character should eventually get cursed sword"
+        );
     }
 
     // ── Test: alchemy extra healing + gain level = full healing ──
@@ -1020,7 +1047,10 @@ mod tests {
                 found = true;
             }
         }
-        assert!(found, "extra healing + gain level should produce full healing");
+        assert!(
+            found,
+            "extra healing + gain level should produce full healing"
+        );
     }
 
     // ── Test: alchemy healing + sickness = fruit juice ──────────
@@ -1064,7 +1094,10 @@ mod tests {
                 found = true;
             }
         }
-        assert!(found, "full healing + gain level should produce gain ability");
+        assert!(
+            found,
+            "full healing + gain level should produce gain ability"
+        );
     }
 
     // ── Test: alchemy gain level + fruit juice = see invisible ──
@@ -1086,7 +1119,10 @@ mod tests {
                 found = true;
             }
         }
-        assert!(found, "gain level + fruit juice should produce see invisible");
+        assert!(
+            found,
+            "gain level + fruit juice should produce see invisible"
+        );
     }
 
     // ── Test: alchemy gain level + booze = hallucination ────────
@@ -1234,25 +1270,53 @@ mod tests {
     fn test_alchemy_result_symmetric() {
         // All recipes should work regardless of order.
         let pairs = [
-            (PotionType::Healing, PotionType::Speed, PotionType::ExtraHealing),
-            (PotionType::Healing, PotionType::Sickness, PotionType::FruitJuice),
-            (PotionType::ExtraHealing, PotionType::GainLevel, PotionType::FullHealing),
-            (PotionType::FullHealing, PotionType::GainLevel, PotionType::GainAbility),
-            (PotionType::GainLevel, PotionType::FruitJuice, PotionType::SeeInvisible),
-            (PotionType::GainLevel, PotionType::Booze, PotionType::Hallucination),
+            (
+                PotionType::Healing,
+                PotionType::Speed,
+                PotionType::ExtraHealing,
+            ),
+            (
+                PotionType::Healing,
+                PotionType::Sickness,
+                PotionType::FruitJuice,
+            ),
+            (
+                PotionType::ExtraHealing,
+                PotionType::GainLevel,
+                PotionType::FullHealing,
+            ),
+            (
+                PotionType::FullHealing,
+                PotionType::GainLevel,
+                PotionType::GainAbility,
+            ),
+            (
+                PotionType::GainLevel,
+                PotionType::FruitJuice,
+                PotionType::SeeInvisible,
+            ),
+            (
+                PotionType::GainLevel,
+                PotionType::Booze,
+                PotionType::Hallucination,
+            ),
         ];
         for (a, b, expected) in &pairs {
             assert_eq!(
                 alchemy_result(*a, *b),
                 Some(*expected),
                 "{:?} + {:?} should produce {:?}",
-                a, b, expected
+                a,
+                b,
+                expected
             );
             assert_eq!(
                 alchemy_result(*b, *a),
                 Some(*expected),
                 "{:?} + {:?} (reversed) should produce {:?}",
-                b, a, expected
+                b,
+                a,
+                expected
             );
         }
     }
@@ -1330,9 +1394,9 @@ mod tests {
             "unicorn horn should cure sickness → fruit juice"
         );
 
-        let has_msg = events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-unicorn-horn-cure"));
+        let has_msg = events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-unicorn-horn-cure"),
+        );
         assert!(has_msg, "should emit dip-unicorn-horn-cure message");
     }
 
@@ -1466,12 +1530,19 @@ mod tests {
 
         // Should still be healing (no cure effect).
         let pt = world.get_component::<DipPotionType>(healing).unwrap();
-        assert_eq!(pt.0, PotionType::Healing, "unicorn horn should not affect healing");
+        assert_eq!(
+            pt.0,
+            PotionType::Healing,
+            "unicorn horn should not affect healing"
+        );
 
         let has_nothing = events
             .iter()
             .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "dip-nothing-happens"));
-        assert!(has_nothing, "should emit nothing-happens for non-curable potion");
+        assert!(
+            has_nothing,
+            "should emit nothing-happens for non-curable potion"
+        );
     }
 
     // ── Test: amethyst dip into booze → fruit juice ─────────────

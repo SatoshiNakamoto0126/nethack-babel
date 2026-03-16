@@ -50,7 +50,12 @@ fn mc_hit_rate_easy_target() {
             hits += 1;
         }
     }
-    assert_rate_within_3sigma(hits as f64 / SAMPLES as f64, 0.30, SAMPLES, "THAC0=15 vs AC=10");
+    assert_rate_within_3sigma(
+        hits as f64 / SAMPLES as f64,
+        0.30,
+        SAMPLES,
+        "THAC0=15 vs AC=10",
+    );
 }
 
 #[test]
@@ -64,7 +69,12 @@ fn mc_hit_rate_hard_target() {
             hits += 1;
         }
     }
-    assert_rate_within_3sigma(hits as f64 / SAMPLES as f64, 0.80, SAMPLES, "THAC0=15 vs AC=0");
+    assert_rate_within_3sigma(
+        hits as f64 / SAMPLES as f64,
+        0.80,
+        SAMPLES,
+        "THAC0=15 vs AC=0",
+    );
 }
 
 #[test]
@@ -279,9 +289,9 @@ fn mc_random_monster_generation_rate() {
 fn mc_experience_thresholds_monotonic() {
     // XP thresholds should be strictly increasing
     let thresholds: Vec<u64> = vec![
-        0, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10000, 20000, 40000, 80000, 160000,
-        320000, 640000, 1280000, 2560000, 5120000, 10000000, 20000000, 40000000, 80000000,
-        160000000, 320000000,
+        0, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10000, 20000, 40000, 80000, 160000, 320000,
+        640000, 1280000, 2560000, 5120000, 10000000, 20000000, 40000000, 80000000, 160000000,
+        320000000,
     ];
     for window in thresholds.windows(2) {
         assert!(
@@ -374,8 +384,7 @@ fn mc_3d6_bell_curve() {
     let mut in_range = 0u32; // count rolls between 8 and 13 inclusive
     let mut rng = Pcg64::seed_from_u64(58);
     for _ in 0..SAMPLES {
-        let roll: u64 =
-            rng.gen_range(1u64..=6) + rng.gen_range(1u64..=6) + rng.gen_range(1u64..=6);
+        let roll: u64 = rng.gen_range(1u64..=6) + rng.gen_range(1u64..=6) + rng.gen_range(1u64..=6);
         total += roll;
         if roll >= 8 && roll <= 13 {
             in_range += 1;

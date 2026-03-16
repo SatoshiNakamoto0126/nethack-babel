@@ -17,9 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::event::{DeathCause, EngineEvent, HpSource, StatusEffect};
 use crate::steed;
-use crate::world::{
-    Attributes, DisplaySymbol, ExperienceLevel, GameWorld, HitPoints, Speed,
-};
+use crate::world::{Attributes, DisplaySymbol, ExperienceLevel, GameWorld, HitPoints, Speed};
 
 // ---------------------------------------------------------------------------
 // OriginalForm component
@@ -110,9 +108,7 @@ pub struct FormAbilities {
 ///
 /// Examines the monster's flags and symbol to determine what
 /// the polymorphed player can do.
-pub fn polymon_abilities(
-    monster_def: &nethack_babel_data::MonsterDef,
-) -> FormAbilities {
+pub fn polymon_abilities(monster_def: &nethack_babel_data::MonsterDef) -> FormAbilities {
     use nethack_babel_data::MonsterFlags;
     let f = monster_def.flags;
     let humanoid = f.contains(MonsterFlags::HUMANOID);
@@ -146,10 +142,7 @@ pub fn is_polymorphed(world: &GameWorld, entity: Entity) -> bool {
 }
 
 /// Return the polymorph abilities for the given entity, if any.
-pub fn polymorph_abilities(
-    world: &GameWorld,
-    entity: Entity,
-) -> Option<PolymorphAbilities> {
+pub fn polymorph_abilities(world: &GameWorld, entity: Entity) -> Option<PolymorphAbilities> {
     world
         .get_component::<PolymorphAbilities>(entity)
         .map(|a| *a)
@@ -196,7 +189,10 @@ pub fn polymorph_self(
     let orig_hp = world
         .get_component::<HitPoints>(player)
         .map(|h| *h)
-        .unwrap_or(HitPoints { current: 16, max: 16 });
+        .unwrap_or(HitPoints {
+            current: 16,
+            max: 16,
+        });
     let orig_speed = world
         .get_component::<Speed>(player)
         .map(|s| s.0)
@@ -261,9 +257,7 @@ pub fn polymorph_self(
     let ml = (monster_def.base_level as u32).max(1);
     let timeout: u32 = (0..ml).map(|_| rng.random_range(1..=500u32)).sum();
     let timeout = timeout.max(1);
-    let _ = world
-        .ecs_mut()
-        .insert_one(player, PolymorphTimer(timeout));
+    let _ = world.ecs_mut().insert_one(player, PolymorphTimer(timeout));
 
     // ── PolymorphState (rich tracking) ────────────────────────
     let poly_state = PolymorphState {
@@ -323,8 +317,7 @@ pub fn polymorph_self(
         });
         // Apply stun for d(1, 8) turns.
         let stun_dur = rng.random_range(1..=8u32);
-        let stun_events =
-            crate::status::make_stunned(world, player, stun_dur);
+        let stun_events = crate::status::make_stunned(world, player, stun_dur);
         events.extend(stun_events);
     }
 
@@ -353,10 +346,7 @@ pub fn polymorph_self(
 /// Restores all attributes, HP, speed, and display symbol from the
 /// saved `OriginalForm` component.  Removes the `OriginalForm`,
 /// `PolymorphTimer`, and `PolymorphAbilities` components.
-pub fn revert_form(
-    world: &mut GameWorld,
-    player: Entity,
-) -> Vec<EngineEvent> {
+pub fn revert_form(world: &mut GameWorld, player: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     // Clone the original form data before mutating the world.
@@ -418,10 +408,7 @@ pub fn revert_form(
 /// revert the player to their original form.
 ///
 /// Called once per game turn from the turn loop (after status ticks).
-pub fn tick_polymorph(
-    world: &mut GameWorld,
-    player: Entity,
-) -> Vec<EngineEvent> {
+pub fn tick_polymorph(world: &mut GameWorld, player: Entity) -> Vec<EngineEvent> {
     let remaining = match world.get_component::<PolymorphTimer>(player) {
         Some(t) => t.0,
         None => return Vec::new(),
@@ -448,11 +435,7 @@ pub fn tick_polymorph(
 ///
 /// Equivalent to C `rehumanize()`.  Restores original stats and clamps
 /// current HP to `min(current, max_human_hp)`.
-pub fn rehumanize(
-    world: &mut GameWorld,
-    player: Entity,
-    _rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+pub fn rehumanize(world: &mut GameWorld, player: Entity, _rng: &mut impl Rng) -> Vec<EngineEvent> {
     revert_form(world, player)
 }
 
@@ -536,10 +519,7 @@ pub fn newman(
 ///
 /// Only humanoid forms (with a torso) can wear body armor. Forms that are
 /// too large, too small, or lack limbs cannot.
-pub fn can_wear_armor(
-    world: &GameWorld,
-    entity: Entity,
-) -> bool {
+pub fn can_wear_armor(world: &GameWorld, entity: Entity) -> bool {
     // Not polymorphed => can wear armor normally.
     let original = match world.get_component::<OriginalForm>(entity) {
         Some(o) => o.clone(),
@@ -561,10 +541,7 @@ pub fn can_wear_armor(
 /// Check whether the polymorphed form can wield weapons.
 ///
 /// Only forms with hands can wield weapons.
-pub fn can_wield_weapon(
-    world: &GameWorld,
-    entity: Entity,
-) -> bool {
+pub fn can_wield_weapon(world: &GameWorld, entity: Entity) -> bool {
     if !is_polymorphed(world, entity) {
         return true;
     }
@@ -579,10 +556,7 @@ pub fn can_wield_weapon(
 /// Check whether the polymorphed form can cast spells.
 ///
 /// Only forms with hands and speech can cast.
-pub fn can_cast_spells(
-    world: &GameWorld,
-    entity: Entity,
-) -> bool {
+pub fn can_cast_spells(world: &GameWorld, entity: Entity) -> bool {
     if !is_polymorphed(world, entity) {
         return true;
     }
@@ -611,9 +585,7 @@ pub fn apply_form_attribute_bonus(
     // Grant extra strength if the form is particularly strong (level > 15).
     if mlevel > 15 {
         if let Some(mut attrs) = world.get_component_mut::<Attributes>(entity) {
-            attrs.strength = attrs.strength.saturating_add(
-                ((mlevel - 15) / 3).min(5),
-            );
+            attrs.strength = attrs.strength.saturating_add(((mlevel - 15) / 3).min(5));
             if attrs.strength > 25 {
                 attrs.strength = 25;
             }
@@ -671,13 +643,8 @@ pub fn adjust_polymorph_timer(
 }
 
 /// Get the remaining polymorph timer for an entity.
-pub fn polymorph_timer_remaining(
-    world: &GameWorld,
-    entity: Entity,
-) -> Option<u32> {
-    world
-        .get_component::<PolymorphTimer>(entity)
-        .map(|t| t.0)
+pub fn polymorph_timer_remaining(world: &GameWorld, entity: Entity) -> Option<u32> {
+    world.get_component::<PolymorphTimer>(entity).map(|t| t.0)
 }
 
 // ---------------------------------------------------------------------------
@@ -745,8 +712,7 @@ pub fn form_special_abilities(form_name: &str) -> Vec<FormAbility> {
         "silver dragon" | "baby silver dragon" => vec![FormAbility::BreathWeapon("cold")],
         // Snakes/nagas can spit venom
         "cobra" | "water moccasin" | "pit viper" | "python" => vec![FormAbility::SpitVenom],
-        "red naga" | "black naga" | "golden naga" | "guardian naga"
-            => vec![FormAbility::SpitVenom],
+        "red naga" | "black naga" | "golden naga" | "guardian naga" => vec![FormAbility::SpitVenom],
         // Spiders can spin webs
         "giant spider" | "cave spider" => vec![FormAbility::SpinWeb],
         // Eye creatures have gaze
@@ -799,12 +765,10 @@ pub fn use_form_ability(
                 effect: Some("poison"),
             }
         }
-        FormAbility::SpinWeb => {
-            FormAbilityResult::Success {
-                damage: 0,
-                effect: Some("web"),
-            }
-        }
+        FormAbility::SpinWeb => FormAbilityResult::Success {
+            damage: 0,
+            effect: Some("web"),
+        },
         FormAbility::Gaze(effect) => {
             if direction.is_none() {
                 return FormAbilityResult::NoTarget;
@@ -814,18 +778,14 @@ pub fn use_form_ability(
                 effect: Some(effect),
             }
         }
-        FormAbility::Hide => {
-            FormAbilityResult::Success {
-                damage: 0,
-                effect: Some("hidden"),
-            }
-        }
-        FormAbility::Shapeshift => {
-            FormAbilityResult::Success {
-                damage: 0,
-                effect: Some("shapeshift"),
-            }
-        }
+        FormAbility::Hide => FormAbilityResult::Success {
+            damage: 0,
+            effect: Some("hidden"),
+        },
+        FormAbility::Shapeshift => FormAbilityResult::Success {
+            damage: 0,
+            effect: Some("shapeshift"),
+        },
         FormAbility::MindBlast => {
             if direction.is_none() {
                 return FormAbilityResult::NoTarget;
@@ -836,12 +796,10 @@ pub fn use_form_ability(
                 effect: Some("psychic"),
             }
         }
-        FormAbility::UnicornHorn => {
-            FormAbilityResult::Success {
-                damage: 0,
-                effect: Some("cure"),
-            }
-        }
+        FormAbility::UnicornHorn => FormAbilityResult::Success {
+            damage: 0,
+            effect: Some("cure"),
+        },
         FormAbility::Engulf => {
             if direction.is_none() {
                 return FormAbilityResult::NoTarget;
@@ -874,10 +832,7 @@ pub fn use_form_ability(
 /// Returns true if the player survives.  Con/30 chance of death.
 /// In NetHack, `rn2(20)` is used: if `con < rn2(20)` => shock.
 /// This is the standalone version for external callers.
-pub fn system_shock_check(
-    constitution: i32,
-    rng: &mut impl Rng,
-) -> bool {
+pub fn system_shock_check(constitution: i32, rng: &mut impl Rng) -> bool {
     // Survive if constitution >= rn2(20).
     constitution >= rng.random_range(0..20i32)
 }
@@ -891,15 +846,26 @@ pub fn system_shock_check(
 /// Returns a list of armor slot names that break.  In NetHack, body armor,
 /// cloaks, and shirts break when polymorphing into forms too large to
 /// wear them (giants, dragons, jabberwocks, etc.).
-pub fn armor_breaks_on_polymorph(
-    form_name: &str,
-    worn_armor: &[String],
-) -> Vec<String> {
+pub fn armor_breaks_on_polymorph(form_name: &str, worn_armor: &[String]) -> Vec<String> {
     let large_forms = [
-        "giant", "stone giant", "hill giant", "fire giant", "frost giant",
-        "storm giant", "titan", "red dragon", "white dragon", "blue dragon",
-        "black dragon", "green dragon", "orange dragon", "yellow dragon",
-        "silver dragon", "jabberwock", "purple worm", "balrog",
+        "giant",
+        "stone giant",
+        "hill giant",
+        "fire giant",
+        "frost giant",
+        "storm giant",
+        "titan",
+        "red dragon",
+        "white dragon",
+        "blue dragon",
+        "black dragon",
+        "green dragon",
+        "orange dragon",
+        "yellow dragon",
+        "silver dragon",
+        "jabberwock",
+        "purple worm",
+        "balrog",
     ];
 
     let is_large = large_forms.iter().any(|f| form_name.contains(f));
@@ -916,8 +882,11 @@ pub fn armor_breaks_on_polymorph(
 
 /// Check if an armor name refers to body armor.
 fn is_body_armor(name: &str) -> bool {
-    name.contains("mail") || name.contains("armor") || name.contains("plate")
-        || name.contains("splint") || name.contains("crystal")
+    name.contains("mail")
+        || name.contains("armor")
+        || name.contains("plate")
+        || name.contains("splint")
+        || name.contains("crystal")
         || name.contains("dragon scale")
 }
 
@@ -941,8 +910,8 @@ mod tests {
     use crate::action::Position;
     use crate::world::GameWorld;
     use nethack_babel_data::{Color, MonsterDef, MonsterFlags};
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_rng() -> SmallRng {
         SmallRng::seed_from_u64(42)
@@ -953,12 +922,7 @@ mod tests {
     }
 
     /// Create a minimal MonsterDef for testing purposes.
-    fn test_monster_def(
-        symbol: char,
-        level: i8,
-        speed: i8,
-        flags: MonsterFlags,
-    ) -> MonsterDef {
+    fn test_monster_def(symbol: char, level: i8, speed: i8, flags: MonsterFlags) -> MonsterDef {
         use arrayvec::ArrayVec;
         use nethack_babel_data::*;
 
@@ -996,19 +960,13 @@ mod tests {
         let player = world.player();
 
         // Record original attributes.
-        let orig_str = world
-            .get_component::<Attributes>(player)
-            .unwrap()
-            .strength;
+        let orig_str = world.get_component::<Attributes>(player).unwrap().strength;
 
         let monster = test_monster_def('D', 15, 9, MonsterFlags::FLY);
         polymorph_self(&mut world, player, &monster, &mut rng);
 
         // Attributes should now reflect the monster's level (clamped).
-        let new_str = world
-            .get_component::<Attributes>(player)
-            .unwrap()
-            .strength;
+        let new_str = world.get_component::<Attributes>(player).unwrap().strength;
         assert_eq!(new_str, 15); // base_level = 15
         assert_ne!(new_str, orig_str); // original was 10
 
@@ -1032,14 +990,8 @@ mod tests {
         let player = world.player();
 
         // Record original values.
-        let orig_str = world
-            .get_component::<Attributes>(player)
-            .unwrap()
-            .strength;
-        let orig_hp_max = world
-            .get_component::<HitPoints>(player)
-            .unwrap()
-            .max;
+        let orig_str = world.get_component::<Attributes>(player).unwrap().strength;
+        let orig_hp_max = world.get_component::<HitPoints>(player).unwrap().max;
 
         let monster = test_monster_def('D', 15, 9, MonsterFlags::empty());
         polymorph_self(&mut world, player, &monster, &mut rng);
@@ -1049,17 +1001,11 @@ mod tests {
         assert!(!is_polymorphed(&world, player));
 
         // Attributes should be restored.
-        let restored_str = world
-            .get_component::<Attributes>(player)
-            .unwrap()
-            .strength;
+        let restored_str = world.get_component::<Attributes>(player).unwrap().strength;
         assert_eq!(restored_str, orig_str);
 
         // HP max should be restored.
-        let restored_hp = world
-            .get_component::<HitPoints>(player)
-            .unwrap()
-            .max;
+        let restored_hp = world.get_component::<HitPoints>(player).unwrap().max;
         assert_eq!(restored_hp, orig_hp_max);
 
         // Should emit StatusRemoved event.
@@ -1089,8 +1035,7 @@ mod tests {
             let mut w = make_test_world();
             let p = w.player();
             let mut rng = SmallRng::seed_from_u64(seed);
-            let events =
-                polymorph_self(&mut w, p, &monster, &mut rng);
+            let events = polymorph_self(&mut w, p, &monster, &mut rng);
             if events
                 .iter()
                 .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "polymorph-system-shock"))
@@ -1120,16 +1065,14 @@ mod tests {
         polymorph_self(&mut world, player, &monster, &mut rng);
 
         // Get the timer value.  With d(10, 500) it ranges from 10 to 5000.
-        let timer = world
-            .get_component::<PolymorphTimer>(player)
-            .unwrap()
-            .0;
-        assert!(timer >= 10 && timer <= 5000, "timer {timer} out of d(10,500) range");
+        let timer = world.get_component::<PolymorphTimer>(player).unwrap().0;
+        assert!(
+            timer >= 10 && timer <= 5000,
+            "timer {timer} out of d(10,500) range"
+        );
 
         // Tick down to 2.
-        if let Some(mut t) =
-            world.get_component_mut::<PolymorphTimer>(player)
-        {
+        if let Some(mut t) = world.get_component_mut::<PolymorphTimer>(player) {
             t.0 = 2;
         }
 
@@ -1137,13 +1080,7 @@ mod tests {
         let events = tick_polymorph(&mut world, player);
         assert!(events.is_empty());
         assert!(is_polymorphed(&world, player));
-        assert_eq!(
-            world
-                .get_component::<PolymorphTimer>(player)
-                .unwrap()
-                .0,
-            1
-        );
+        assert_eq!(world.get_component::<PolymorphTimer>(player).unwrap().0, 1);
 
         // Tick again — should revert.
         let events = tick_polymorph(&mut world, player);
@@ -1163,8 +1100,7 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let monster =
-            test_monster_def('D', 10, 9, MonsterFlags::FLY);
+        let monster = test_monster_def('D', 10, 9, MonsterFlags::FLY);
         polymorph_self(&mut world, player, &monster, &mut rng);
 
         let abilities = polymorph_abilities(&world, player).unwrap();
@@ -1179,8 +1115,7 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let monster =
-            test_monster_def(';', 8, 12, MonsterFlags::SWIM);
+        let monster = test_monster_def(';', 8, 12, MonsterFlags::SWIM);
         polymorph_self(&mut world, player, &monster, &mut rng);
 
         let abilities = polymorph_abilities(&world, player).unwrap();
@@ -1195,8 +1130,7 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let monster =
-            test_monster_def('X', 12, 10, MonsterFlags::WALLWALK);
+        let monster = test_monster_def('X', 12, 10, MonsterFlags::WALLWALK);
         polymorph_self(&mut world, player, &monster, &mut rng);
 
         let abilities = polymorph_abilities(&world, player).unwrap();
@@ -1255,10 +1189,7 @@ mod tests {
         let monster1 = test_monster_def('D', 15, 9, MonsterFlags::FLY);
         polymorph_self(&mut world, player, &monster1, &mut rng);
         assert_eq!(
-            world
-                .get_component::<DisplaySymbol>(player)
-                .unwrap()
-                .symbol,
+            world.get_component::<DisplaySymbol>(player).unwrap().symbol,
             'D'
         );
 
@@ -1266,10 +1197,7 @@ mod tests {
         let monster2 = test_monster_def('a', 5, 18, MonsterFlags::empty());
         polymorph_self(&mut world, player, &monster2, &mut rng);
         assert_eq!(
-            world
-                .get_component::<DisplaySymbol>(player)
-                .unwrap()
-                .symbol,
+            world.get_component::<DisplaySymbol>(player).unwrap().symbol,
             'a'
         );
 
@@ -1364,15 +1292,9 @@ mod tests {
         let monster = test_monster_def('H', 20, 9, MonsterFlags::empty());
         polymorph_self(&mut world, player, &monster, &mut rng);
 
-        let str_before = world
-            .get_component::<Attributes>(player)
-            .unwrap()
-            .strength;
+        let str_before = world.get_component::<Attributes>(player).unwrap().strength;
         apply_form_attribute_bonus(&mut world, player, &monster);
-        let str_after = world
-            .get_component::<Attributes>(player)
-            .unwrap()
-            .strength;
+        let str_after = world.get_component::<Attributes>(player).unwrap().strength;
         assert!(
             str_after > str_before,
             "high-level form should grant STR bonus"
@@ -1389,16 +1311,13 @@ mod tests {
         let monster = test_monster_def('a', 5, 18, MonsterFlags::empty());
         polymorph_self(&mut world, player, &monster, &mut rng);
 
-        let str_before = world
-            .get_component::<Attributes>(player)
-            .unwrap()
-            .strength;
+        let str_before = world.get_component::<Attributes>(player).unwrap().strength;
         apply_form_attribute_bonus(&mut world, player, &monster);
-        let str_after = world
-            .get_component::<Attributes>(player)
-            .unwrap()
-            .strength;
-        assert_eq!(str_after, str_before, "low-level form should not grant bonus");
+        let str_after = world.get_component::<Attributes>(player).unwrap().strength;
+        assert_eq!(
+            str_after, str_before,
+            "low-level form should not grant bonus"
+        );
     }
 
     #[test]
@@ -1412,10 +1331,13 @@ mod tests {
 
         assert!(is_polymorphed(&world, player));
         // Should have both polymorph-self and polymorph-into messages.
-        let has_into = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "polymorph-into")
-        });
-        assert!(has_into, "polymorph_into should emit polymorph-into message");
+        let has_into = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "polymorph-into"));
+        assert!(
+            has_into,
+            "polymorph_into should emit polymorph-into message"
+        );
     }
 
     #[test]
@@ -1494,10 +1416,10 @@ mod tests {
             let p = w.player();
             let mut rng = SmallRng::seed_from_u64(seed);
             let events = newman(&mut w, p, false, &mut rng);
-            if events.iter().any(|e| matches!(
-                e,
-                EngineEvent::EntityDied { .. }
-            )) {
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityDied { .. }))
+            {
                 saw_death = true;
             } else {
                 saw_survive = true;
@@ -1517,11 +1439,18 @@ mod tests {
             let p = w.player();
             let mut rng = SmallRng::seed_from_u64(seed);
             let events = newman(&mut w, p, false, &mut rng);
-            if events.iter().any(|e| matches!(e, EngineEvent::EntityDied { .. })) {
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityDied { .. }))
+            {
                 let hp = w.get_component::<HitPoints>(p).unwrap();
                 assert_eq!(hp.current, 0, "death should set HP to 0");
                 // Should also have GameOver event.
-                assert!(events.iter().any(|e| matches!(e, EngineEvent::GameOver { .. })));
+                assert!(
+                    events
+                        .iter()
+                        .any(|e| matches!(e, EngineEvent::GameOver { .. }))
+                );
                 return;
             }
         }
@@ -1536,7 +1465,10 @@ mod tests {
             let orig_con = w.get_component::<Attributes>(p).unwrap().constitution;
             let mut rng = SmallRng::seed_from_u64(seed);
             let events = newman(&mut w, p, false, &mut rng);
-            if !events.iter().any(|e| matches!(e, EngineEvent::EntityDied { .. })) {
+            if !events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityDied { .. }))
+            {
                 let new_con = w.get_component::<Attributes>(p).unwrap().constitution;
                 // CON should differ by exactly 1.
                 let diff = (new_con as i8 - orig_con as i8).abs();
@@ -1549,10 +1481,7 @@ mod tests {
 
     #[test]
     fn test_polymon_abilities_flying_monster() {
-        let monster = test_monster_def(
-            'D', 15, 9,
-            MonsterFlags::FLY | MonsterFlags::HUMANOID,
-        );
+        let monster = test_monster_def('D', 15, 9, MonsterFlags::FLY | MonsterFlags::HUMANOID);
         let abilities = polymon_abilities(&monster);
         assert!(abilities.can_fly);
         assert!(abilities.has_hands);
@@ -1562,7 +1491,9 @@ mod tests {
     #[test]
     fn test_polymon_abilities_animal_no_hands() {
         let monster = test_monster_def(
-            'a', 5, 18,
+            'a',
+            5,
+            18,
             MonsterFlags::ANIMAL | MonsterFlags::NOHANDS | MonsterFlags::NOLIMBS,
         );
         let abilities = polymon_abilities(&monster);
@@ -1575,7 +1506,9 @@ mod tests {
     #[test]
     fn test_polymon_abilities_undead_regen() {
         let monster = test_monster_def(
-            'Z', 8, 6,
+            'Z',
+            8,
+            6,
             MonsterFlags::UNDEAD | MonsterFlags::REGEN | MonsterFlags::BREATHLESS,
         );
         let abilities = polymon_abilities(&monster);
@@ -1587,7 +1520,9 @@ mod tests {
     #[test]
     fn test_polymon_abilities_wallwalker() {
         let monster = test_monster_def(
-            'X', 12, 10,
+            'X',
+            12,
+            10,
             MonsterFlags::WALLWALK | MonsterFlags::BREATHLESS,
         );
         let abilities = polymon_abilities(&monster);
@@ -1672,7 +1607,9 @@ mod tests {
     #[test]
     fn test_polymon_abilities_swimmer_tunneler() {
         let monster = test_monster_def(
-            'w', 5, 12,
+            'w',
+            5,
+            12,
             MonsterFlags::SWIM | MonsterFlags::TUNNEL | MonsterFlags::AMORPHOUS,
         );
         let abilities = polymon_abilities(&monster);
@@ -1685,7 +1622,9 @@ mod tests {
     #[test]
     fn test_polymon_abilities_humanoid_infravision() {
         let monster = test_monster_def(
-            '@', 10, 12,
+            '@',
+            10,
+            12,
             MonsterFlags::HUMANOID | MonsterFlags::INFRAVISION,
         );
         let abilities = polymon_abilities(&monster);
@@ -1772,7 +1711,10 @@ mod tests {
     #[test]
     fn test_form_abilities_unknown_form() {
         let abilities = form_special_abilities("newt");
-        assert!(abilities.is_empty(), "newt should have no special abilities");
+        assert!(
+            abilities.is_empty(),
+            "newt should have no special abilities"
+        );
     }
 
     #[test]
@@ -1796,14 +1738,14 @@ mod tests {
     #[test]
     fn test_use_breath_weapon_with_direction() {
         let mut rng = test_rng();
-        let result = use_form_ability(
-            &FormAbility::BreathWeapon("fire"),
-            Some((1, 0)),
-            &mut rng,
-        );
+        let result = use_form_ability(&FormAbility::BreathWeapon("fire"), Some((1, 0)), &mut rng);
         match result {
             FormAbilityResult::Success { damage, effect } => {
-                assert!(damage >= 6 && damage <= 36, "d(6,6) damage {} out of range", damage);
+                assert!(
+                    damage >= 6 && damage <= 36,
+                    "d(6,6) damage {} out of range",
+                    damage
+                );
                 assert_eq!(effect, Some("fire"));
             }
             _ => panic!("breath weapon with direction should succeed"),
@@ -1813,22 +1755,14 @@ mod tests {
     #[test]
     fn test_use_breath_weapon_no_direction() {
         let mut rng = test_rng();
-        let result = use_form_ability(
-            &FormAbility::BreathWeapon("fire"),
-            None,
-            &mut rng,
-        );
+        let result = use_form_ability(&FormAbility::BreathWeapon("fire"), None, &mut rng);
         assert_eq!(result, FormAbilityResult::NoTarget);
     }
 
     #[test]
     fn test_use_spin_web_no_direction_needed() {
         let mut rng = test_rng();
-        let result = use_form_ability(
-            &FormAbility::SpinWeb,
-            None,
-            &mut rng,
-        );
+        let result = use_form_ability(&FormAbility::SpinWeb, None, &mut rng);
         match result {
             FormAbilityResult::Success { damage, effect } => {
                 assert_eq!(damage, 0);
@@ -1841,14 +1775,14 @@ mod tests {
     #[test]
     fn test_use_mind_blast_damage_range() {
         let mut rng = test_rng();
-        let result = use_form_ability(
-            &FormAbility::MindBlast,
-            Some((0, -1)),
-            &mut rng,
-        );
+        let result = use_form_ability(&FormAbility::MindBlast, Some((0, -1)), &mut rng);
         match result {
             FormAbilityResult::Success { damage, effect } => {
-                assert!(damage >= 1 && damage <= 10, "mind blast damage {} out of range", damage);
+                assert!(
+                    damage >= 1 && damage <= 10,
+                    "mind blast damage {} out of range",
+                    damage
+                );
                 assert_eq!(effect, Some("psychic"));
             }
             _ => panic!("mind blast with target should succeed"),
@@ -1915,12 +1849,13 @@ mod tests {
 
     #[test]
     fn test_armor_breaks_giant_form() {
-        let worn = vec![
-            "chain mail".to_string(),
-            "leather cloak".to_string(),
-        ];
+        let worn = vec!["chain mail".to_string(), "leather cloak".to_string()];
         let broken = armor_breaks_on_polymorph("hill giant", &worn);
-        assert_eq!(broken.len(), 2, "both body armor and cloak should break for giant");
+        assert_eq!(
+            broken.len(),
+            2,
+            "both body armor and cloak should break for giant"
+        );
     }
 
     #[test]
@@ -1935,10 +1870,7 @@ mod tests {
 
     #[test]
     fn test_armor_no_break_humanoid_form() {
-        let worn = vec![
-            "plate mail".to_string(),
-            "cloak of protection".to_string(),
-        ];
+        let worn = vec!["plate mail".to_string(), "cloak of protection".to_string()];
         let broken = armor_breaks_on_polymorph("elf", &worn);
         assert!(broken.is_empty(), "humanoid form should not break armor");
     }
@@ -1966,7 +1898,10 @@ mod tests {
             Positioned(crate::action::Position::new(6, 5)),
             Name("pony".to_string()),
             Speed(18),
-            HitPoints { current: 30, max: 30 },
+            HitPoints {
+                current: 30,
+                max: 30,
+            },
         ));
         let _ = crate::steed::mount(&mut world, player, steed, &mut rng);
         assert!(crate::steed::is_mounted(&world, player));
@@ -1975,29 +1910,31 @@ mod tests {
         let monster = test_monster_def('D', 10, 9, MonsterFlags::FLY);
         let events = polymorph_self(&mut world, player, &monster, &mut rng);
 
-        assert!(!crate::steed::is_mounted(&world, player),
-            "player should be dismounted after polymorph");
-        assert!(events.iter().any(|e| matches!(e,
+        assert!(
+            !crate::steed::is_mounted(&world, player),
+            "player should be dismounted after polymorph"
+        );
+        assert!(
+            events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "polymorph-dismount")),
-            "should emit polymorph-dismount message");
+            "should emit polymorph-dismount message"
+        );
     }
 
     #[test]
     fn test_polymorph_breaks_armor_large_form() {
-        let worn = vec![
-            "plate mail".to_string(),
-            "cloak of protection".to_string(),
-        ];
+        let worn = vec!["plate mail".to_string(), "cloak of protection".to_string()];
         let broken = armor_breaks_on_polymorph("red dragon", &worn);
-        assert_eq!(broken.len(), 2, "large dragon form should break body armor + cloak");
+        assert_eq!(
+            broken.len(),
+            2,
+            "large dragon form should break body armor + cloak"
+        );
     }
 
     #[test]
     fn test_polymorph_keeps_armor_small_form() {
-        let worn = vec![
-            "plate mail".to_string(),
-            "cloak of protection".to_string(),
-        ];
+        let worn = vec!["plate mail".to_string(), "cloak of protection".to_string()];
         let broken = armor_breaks_on_polymorph("kitten", &worn);
         assert!(broken.is_empty(), "small form should not break any armor");
     }
@@ -2012,8 +1949,10 @@ mod tests {
         let monster = test_monster_def('D', 10, 9, MonsterFlags::FLY);
         let events = polymorph_self(&mut world, player, &monster, &mut rng);
 
-        assert!(!events.iter().any(|e| matches!(e,
+        assert!(
+            !events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "polymorph-dismount")),
-            "should not emit dismount message when not mounted");
+            "should not emit dismount message when not mounted"
+        );
     }
 }

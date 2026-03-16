@@ -155,11 +155,10 @@ pub fn level_teleport(
 
     // Place entity at a walkable position on the new level.
     if let Some(pos) = find_random_walkable(world, rng)
-        && let Some(mut p) =
-            world.get_component_mut::<Positioned>(entity)
-        {
-            p.0 = pos;
-        }
+        && let Some(mut p) = world.get_component_mut::<Positioned>(entity)
+    {
+        p.0 = pos;
+    }
 
     events.push(EngineEvent::LevelChanged {
         entity,
@@ -179,11 +178,7 @@ pub fn level_teleport(
 ///
 /// Returns `true` if the entity has the teleportitis intrinsic and the
 /// 1/85 random check succeeds.
-pub fn teleportitis_check(
-    world: &GameWorld,
-    entity: Entity,
-    rng: &mut impl Rng,
-) -> bool {
+pub fn teleportitis_check(world: &GameWorld, entity: Entity, rng: &mut impl Rng) -> bool {
     let has_teleportitis = world
         .get_component::<Intrinsics>(entity)
         .is_some_and(|i| i.teleportitis);
@@ -199,10 +194,7 @@ pub fn teleportitis_check(
 ///
 /// When true, random teleports become controlled (player picks the
 /// destination instead of it being random).
-pub fn teleport_control_check(
-    world: &GameWorld,
-    entity: Entity,
-) -> bool {
+pub fn teleport_control_check(world: &GameWorld, entity: Entity) -> bool {
     world
         .get_component::<Intrinsics>(entity)
         .is_some_and(|i| i.teleport_control)
@@ -461,10 +453,7 @@ pub fn handle_magic_portal(
 /// Find a random walkable position on the current level.
 ///
 /// Tries up to 1000 random positions, then falls back to a linear scan.
-fn find_random_walkable(
-    world: &GameWorld,
-    rng: &mut impl Rng,
-) -> Option<Position> {
+fn find_random_walkable(world: &GameWorld, rng: &mut impl Rng) -> Option<Position> {
     let level = &world.dungeon().current_level;
     let width = level.width;
     let height = level.height;
@@ -475,9 +464,10 @@ fn find_random_walkable(
         let y = rng.random_range(0..height);
         let pos = Position::new(x as i32, y as i32);
         if let Some(cell) = level.get(pos)
-            && is_passable(cell.terrain) {
-                return Some(pos);
-            }
+            && is_passable(cell.terrain)
+        {
+            return Some(pos);
+        }
     }
 
     // Slow fallback: linear scan.
@@ -485,9 +475,10 @@ fn find_random_walkable(
         for x in 0..width {
             let pos = Position::new(x as i32, y as i32);
             if let Some(cell) = level.get(pos)
-                && is_passable(cell.terrain) {
-                    return Some(pos);
-                }
+                && is_passable(cell.terrain)
+            {
+                return Some(pos);
+            }
         }
     }
 
@@ -498,11 +489,7 @@ fn find_random_walkable(
 /// entities (excluding the given entity).
 ///
 /// Tries up to 2000 random probes.  Returns `None` if no safe spot found.
-fn find_safe_walkable(
-    world: &GameWorld,
-    exclude: Entity,
-    rng: &mut impl Rng,
-) -> Option<Position> {
+fn find_safe_walkable(world: &GameWorld, exclude: Entity, rng: &mut impl Rng) -> Option<Position> {
     let level = &world.dungeon().current_level;
     let width = level.width;
     let height = level.height;
@@ -550,8 +537,8 @@ mod tests {
     use crate::dungeon::{DungeonBranch, LevelMap, MapCell, Terrain};
     use crate::status::Intrinsics;
     use crate::world::GameWorld;
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_rng() -> SmallRng {
         SmallRng::seed_from_u64(42)
@@ -580,18 +567,11 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let before = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let before = world.get_component::<Positioned>(player).unwrap().0;
 
-        let events =
-            random_teleport(&mut world, player, &mut rng);
+        let events = random_teleport(&mut world, player, &mut rng);
 
-        let after = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let after = world.get_component::<Positioned>(player).unwrap().0;
 
         // Entity should have moved (overwhelming probability on a 20x10 map).
         // We check that the event was emitted correctly.
@@ -604,12 +584,9 @@ mod tests {
         // The entity's position should match the `to` in the event.
         let teleport_event = events
             .iter()
-            .find(|e| {
-                matches!(e, EngineEvent::EntityTeleported { .. })
-            })
+            .find(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
             .unwrap();
-        if let EngineEvent::EntityTeleported { to, .. } = teleport_event
-        {
+        if let EngineEvent::EntityTeleported { to, .. } = teleport_event {
             assert_eq!(*to, after);
         }
     }
@@ -620,13 +597,9 @@ mod tests {
         let player = world.player();
 
         let target = Position::new(10, 5);
-        let events =
-            controlled_teleport(&mut world, player, target);
+        let events = controlled_teleport(&mut world, player, target);
 
-        let pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let pos = world.get_component::<Positioned>(player).unwrap().0;
         assert_eq!(pos, target);
 
         assert!(events.iter().any(|e| matches!(
@@ -646,20 +619,13 @@ mod tests {
             ..MapCell::default()
         };
 
-        let before = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let before = world.get_component::<Positioned>(player).unwrap().0;
 
         let target = Position::new(15, 3);
-        let events =
-            controlled_teleport(&mut world, player, target);
+        let events = controlled_teleport(&mut world, player, target);
 
         // Should not have moved.
-        let after = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let after = world.get_component::<Positioned>(player).unwrap().0;
         assert_eq!(before, after);
 
         // Should emit invalid target message.
@@ -674,19 +640,12 @@ mod tests {
         let mut world = make_test_world_with_floor();
         let player = world.player();
 
-        let before = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let before = world.get_component::<Positioned>(player).unwrap().0;
 
         let target = Position::new(100, 100); // Way out of bounds.
-        let events =
-            controlled_teleport(&mut world, player, target);
+        let events = controlled_teleport(&mut world, player, target);
 
-        let after = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let after = world.get_component::<Positioned>(player).unwrap().0;
         assert_eq!(before, after);
 
         assert!(events.iter().any(|e| matches!(
@@ -702,9 +661,7 @@ mod tests {
         let player = world.player();
 
         // Grant teleportitis intrinsic.
-        if let Some(mut intr) =
-            world.get_component_mut::<Intrinsics>(player)
-        {
+        if let Some(mut intr) = world.get_component_mut::<Intrinsics>(player) {
             intr.teleportitis = true;
         }
 
@@ -752,9 +709,7 @@ mod tests {
         assert!(!teleport_control_check(&world, player));
 
         // Grant teleport control.
-        if let Some(mut intr) =
-            world.get_component_mut::<Intrinsics>(player)
-        {
+        if let Some(mut intr) = world.get_component_mut::<Intrinsics>(player) {
             intr.teleport_control = true;
         }
 
@@ -764,17 +719,14 @@ mod tests {
         // controlled_teleport instead of random_teleport.
         // Verify the controlled path works.
         let target = Position::new(8, 4);
-        let events =
-            controlled_teleport(&mut world, player, target);
-        let pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let events = controlled_teleport(&mut world, player, target);
+        let pos = world.get_component::<Positioned>(player).unwrap().0;
         assert_eq!(pos, target);
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::EntityTeleported { .. }
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
+        );
     }
 
     #[test]
@@ -786,8 +738,7 @@ mod tests {
         // Set max depth so we can teleport deeper.
         world.dungeon_mut().set_max_depth(10);
 
-        let events =
-            level_teleport(&mut world, player, 5, &mut rng);
+        let events = level_teleport(&mut world, player, 5, &mut rng);
 
         assert!(events.iter().any(|e| matches!(
             e,
@@ -807,8 +758,7 @@ mod tests {
         world.dungeon_mut().set_max_depth(10);
 
         // Try to teleport beyond max depth.
-        let events =
-            level_teleport(&mut world, player, 99, &mut rng);
+        let events = level_teleport(&mut world, player, 99, &mut rng);
 
         // Should clamp to max depth.
         assert!(events.iter().any(|e| matches!(
@@ -825,8 +775,7 @@ mod tests {
         let player = world.player();
 
         let current = world.dungeon().current_depth();
-        let events =
-            level_teleport(&mut world, player, current, &mut rng);
+        let events = level_teleport(&mut world, player, current, &mut rng);
 
         // Should not change level.
         assert!(events.iter().any(|e| matches!(
@@ -868,22 +817,17 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let before = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let before = world.get_component::<Positioned>(player).unwrap().0;
 
         let events = safe_teleport(&mut world, player, &mut rng);
 
-        let after = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let after = world.get_component::<Positioned>(player).unwrap().0;
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::EntityTeleported { .. }
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
+        );
         // Should have moved (overwhelming probability).
         assert_ne!(before, after);
     }
@@ -896,17 +840,11 @@ mod tests {
 
         world.dungeon_mut().branch = DungeonBranch::Sokoban;
 
-        let before = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let before = world.get_component::<Positioned>(player).unwrap().0;
 
         let events = safe_teleport(&mut world, player, &mut rng);
 
-        let after = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let after = world.get_component::<Positioned>(player).unwrap().0;
 
         // Should not have moved.
         assert_eq!(before, after);
@@ -922,14 +860,14 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let events =
-            handle_teleport_trap(&mut world, player, &mut rng);
+        let events = handle_teleport_trap(&mut world, player, &mut rng);
 
         // Without teleport control, should do a random teleport.
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::EntityTeleported { .. }
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
+        );
     }
 
     #[test]
@@ -939,24 +877,22 @@ mod tests {
         let player = world.player();
 
         // Grant teleport control.
-        if let Some(mut intr) =
-            world.get_component_mut::<Intrinsics>(player)
-        {
+        if let Some(mut intr) = world.get_component_mut::<Intrinsics>(player) {
             intr.teleport_control = true;
         }
 
-        let events =
-            handle_teleport_trap(&mut world, player, &mut rng);
+        let events = handle_teleport_trap(&mut world, player, &mut rng);
 
         // Should emit controlled message, not actually teleport.
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "teleport-trap-controlled"
         )));
-        assert!(!events.iter().any(|e| matches!(
-            e,
-            EngineEvent::EntityTeleported { .. }
-        )));
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
+        );
     }
 
     #[test]
@@ -967,8 +903,7 @@ mod tests {
 
         world.dungeon_mut().branch = DungeonBranch::Sokoban;
 
-        let events =
-            handle_teleport_trap(&mut world, player, &mut rng);
+        let events = handle_teleport_trap(&mut world, player, &mut rng);
 
         assert!(events.iter().any(|e| matches!(
             e,
@@ -984,17 +919,18 @@ mod tests {
 
         world.dungeon_mut().set_max_depth(10);
 
-        let events =
-            handle_level_teleport_trap(&mut world, player, &mut rng);
+        let events = handle_level_teleport_trap(&mut world, player, &mut rng);
 
         // Should change level.
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::LevelChanged { .. }
-        )) || events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "teleport-same-level"
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+                || events.iter().any(|e| matches!(
+                    e,
+                    EngineEvent::Message { key, .. } if key == "teleport-same-level"
+                ))
+        );
     }
 
     #[test]
@@ -1005,8 +941,7 @@ mod tests {
 
         world.dungeon_mut().branch = DungeonBranch::Endgame;
 
-        let events =
-            handle_level_teleport_trap(&mut world, player, &mut rng);
+        let events = handle_level_teleport_trap(&mut world, player, &mut rng);
 
         assert!(events.iter().any(|e| matches!(
             e,
@@ -1020,8 +955,7 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let events =
-            branch_teleport(&mut world, player, &mut rng);
+        let events = branch_teleport(&mut world, player, &mut rng);
 
         assert!(events.iter().any(|e| matches!(
             e,
@@ -1048,13 +982,13 @@ mod tests {
             to_pos: Position::new(3, 3),
         });
 
-        let events =
-            branch_teleport(&mut world, player, &mut rng);
+        let events = branch_teleport(&mut world, player, &mut rng);
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::LevelChanged { .. }
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+        );
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "teleport-branch"
@@ -1080,13 +1014,13 @@ mod tests {
             to_pos: Position::new(10, 10),
         });
 
-        let events =
-            handle_magic_portal(&mut world, player, &mut rng);
+        let events = handle_magic_portal(&mut world, player, &mut rng);
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::LevelChanged { .. }
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+        );
         assert_eq!(world.dungeon().branch, DungeonBranch::FortLudios);
     }
 
@@ -1110,17 +1044,21 @@ mod tests {
         let monster = world.spawn((
             Monster,
             Positioned(Position::new(3, 3)),
-            HitPoints { current: 10, max: 10 },
+            HitPoints {
+                current: 10,
+                max: 10,
+            },
             Speed(12),
             Name("goblin".to_string()),
         ));
 
         let events = teleport_monster(&mut world, monster, &mut rng);
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::EntityTeleported { .. }
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
+        );
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "teleport-monster"
@@ -1138,7 +1076,10 @@ mod tests {
         let monster = world.spawn((
             Monster,
             Positioned(Position::new(3, 3)),
-            HitPoints { current: 10, max: 10 },
+            HitPoints {
+                current: 10,
+                max: 10,
+            },
             Speed(12),
             Name("goblin".to_string()),
         ));

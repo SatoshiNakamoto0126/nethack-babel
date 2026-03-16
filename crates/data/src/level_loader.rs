@@ -526,7 +526,11 @@ id = "goblin"
                 .unwrap_or_else(|| panic!("Missing embedded level: {}", name));
             let level: LevelDefinition = toml::from_str(toml_str)
                 .unwrap_or_else(|e| panic!("Failed to parse embedded level {}: {}", name, e));
-            assert!(!level.level.name.is_empty(), "Level {} has empty name", name);
+            assert!(
+                !level.level.name.is_empty(),
+                "Level {} has empty name",
+                name
+            );
             assert!(level.map.is_some(), "Level {} has no map", name);
             assert!(!level.stairs.is_empty(), "Level {} has no stairs", name);
         }
@@ -573,8 +577,9 @@ id = "goblin"
 
     #[test]
     fn test_load_dungeon_topology_file() {
-        let topo_path =
-            std::path::Path::new("/Users/hz/Downloads/nethack-babel/data/dungeons/dungeon_topology.toml");
+        let topo_path = std::path::Path::new(
+            "/Users/hz/Downloads/nethack-babel/data/dungeons/dungeon_topology.toml",
+        );
         if topo_path.exists() {
             let topo = load_topology_from_file(topo_path).unwrap();
             assert!(topo.branches.len() >= 8, "Should have at least 8 branches");

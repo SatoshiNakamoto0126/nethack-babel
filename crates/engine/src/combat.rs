@@ -10,14 +10,21 @@
 use hecs::Entity;
 use rand::Rng;
 
-use nethack_babel_data::{AttackDef, AttackMethod, DamageType, DiceExpr, ObjectCore, ObjectDef, ResistanceSet};
+use nethack_babel_data::{
+    AttackDef, AttackMethod, DamageType, DiceExpr, ObjectCore, ObjectDef, PlayerSkills,
+    ResistanceSet, WeaponSkill,
+};
 
 use crate::action::Position;
 use crate::equipment;
-use crate::event::{DamageCause, DamageSource, DeathCause, EngineEvent, HpSource, PassiveEffect, StatusEffect};
-use crate::steed;
+use crate::event::{
+    DamageCause, DamageSource, DeathCause, EngineEvent, HpSource, PassiveEffect, StatusEffect,
+};
 use crate::status;
-use crate::world::{ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints, Name, PlayerCombat, Positioned};
+use crate::steed;
+use crate::world::{
+    ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints, Name, PlayerCombat, Positioned,
+};
 
 // ---------------------------------------------------------------------------
 // Skill levels (mirrors P_xxx constants from skills.h)
@@ -222,7 +229,7 @@ impl Default for CombatParams {
 /// Uses a compile-time const lookup table for zero-branch evaluation.
 #[inline]
 pub fn strength_to_hit_bonus(strength: u8, strength_extra: u8) -> i32 {
-    use nethack_babel_data::const_tables::{encode_strength, STR_TO_HIT};
+    use nethack_babel_data::const_tables::{STR_TO_HIT, encode_strength};
     STR_TO_HIT[encode_strength(strength, strength_extra)] as i32
 }
 
@@ -238,7 +245,7 @@ pub fn strength_to_hit_bonus(strength: u8, strength_extra: u8) -> i32 {
 /// Uses a compile-time const lookup table for zero-branch evaluation.
 #[inline]
 pub fn strength_damage_bonus(strength: u8, strength_extra: u8) -> i32 {
-    use nethack_babel_data::const_tables::{encode_strength, STR_DAMAGE};
+    use nethack_babel_data::const_tables::{STR_DAMAGE, encode_strength};
     STR_DAMAGE[encode_strength(strength, strength_extra)] as i32
 }
 
@@ -375,8 +382,11 @@ pub fn hitval(weapon: &WeaponStats, defender: &DefenderState) -> i32 {
 /// Compute `weapon_hit_bonus(weapon)` for armed combat.
 ///
 /// Source: weapon.c:1539-1631, spec section 4.1
-pub fn weapon_hit_bonus_armed(skill: SkillLevel, is_two_weapon: bool,
-                               two_weapon_effective: SkillLevel) -> i32 {
+pub fn weapon_hit_bonus_armed(
+    skill: SkillLevel,
+    is_two_weapon: bool,
+    two_weapon_effective: SkillLevel,
+) -> i32 {
     if is_two_weapon {
         // Two-weapon combat uses the effective skill (min of weapon and twoweap)
         match two_weapon_effective {
@@ -414,8 +424,11 @@ pub fn weapon_hit_bonus_unarmed(skill: SkillLevel, martial: bool) -> i32 {
 /// Compute `weapon_dam_bonus(weapon)` for armed combat.
 ///
 /// Source: weapon.c:1638-1724, spec section 5.6
-pub fn weapon_dam_bonus_armed(skill: SkillLevel, is_two_weapon: bool,
-                               two_weapon_effective: SkillLevel) -> i32 {
+pub fn weapon_dam_bonus_armed(
+    skill: SkillLevel,
+    is_two_weapon: bool,
+    two_weapon_effective: SkillLevel,
+) -> i32 {
     if is_two_weapon {
         match two_weapon_effective {
             SkillLevel::Restricted | SkillLevel::Unskilled => -3,
@@ -462,8 +475,12 @@ pub fn find_roll_to_hit(params: &CombatParams) -> i32 {
     let mut tmp: i32 = 1;
 
     // abon(): combined STR + DEX bonus
-    tmp += abon(params.strength, params.strength_extra,
-                params.dexterity, params.level);
+    tmp += abon(
+        params.strength,
+        params.strength_extra,
+        params.dexterity,
+        params.level,
+    );
 
     // find_mac(target): target AC (positive = easy to hit, negative = hard)
     tmp += params.target_ac;
@@ -616,8 +633,7 @@ pub fn backstab_bonus(params: &CombatParams, rng: &mut impl Rng) -> i32 {
 ///
 /// Returns the base damage value before strength/skill/ring bonuses.
 #[inline]
-pub fn dmgval(weapon: &WeaponStats, defender: &DefenderState,
-              rng: &mut impl Rng) -> i32 {
+pub fn dmgval(weapon: &WeaponStats, defender: &DefenderState, rng: &mut impl Rng) -> i32 {
     // Pick the right damage die based on target size
     let die = if defender.is_large {
         weapon.damage_large
@@ -626,7 +642,11 @@ pub fn dmgval(weapon: &WeaponStats, defender: &DefenderState,
     };
 
     // Roll base damage
-    let mut tmp = if die > 0 { rng.random_range(1..=die) } else { 0 };
+    let mut tmp = if die > 0 {
+        rng.random_range(1..=die)
+    } else {
+        0
+    };
 
     // Enchantment bonus (only for actual weapons)
     if weapon.is_weapon {
@@ -820,9 +840,7 @@ pub fn resolve_melee_attack_ex(
     let has_shield = equipment::wearing_shield(world, attacker);
     let is_bimanual = weapon_entity
         .and_then(|we| world.get_component::<ObjectCore>(we))
-        .and_then(|core| {
-            obj_defs.iter().find(|d| d.id == core.otyp)
-        })
+        .and_then(|core| obj_defs.iter().find(|d| d.id == core.otyp))
         .is_some_and(|d| d.is_bimanual);
 
     // ---- Extract defender stats ----
@@ -872,9 +890,7 @@ pub fn resolve_melee_attack_ex(
     // ---- Mounted combat modifier ----
     // Riding skill affects to-hit when mounted (from steed.c).
     if steed::is_mounted(world, attacker) {
-        let modifier = steed::mounted_combat_modifier(
-            steed::RidingSkill::Unskilled, // TODO: read actual riding skill from ECS
-        );
+        let modifier = steed::mounted_combat_modifier(riding_skill_from_ecs(world, attacker));
         params.uhitinc += modifier;
     }
 
@@ -930,6 +946,28 @@ pub fn resolve_melee_attack_ex(
         check_passive_gaze(world, attacker, defender, rng, events);
     } else {
         events.push(EngineEvent::MeleeMiss { attacker, defender });
+    }
+}
+
+fn riding_skill_from_ecs(world: &GameWorld, entity: Entity) -> steed::RidingSkill {
+    let Some(skills) = world.get_component::<PlayerSkills>(entity) else {
+        return steed::RidingSkill::Unskilled;
+    };
+    let level = skills
+        .skills
+        .iter()
+        .find(|state| state.skill == WeaponSkill::Riding)
+        .map(|state| state.level)
+        .unwrap_or(SkillLevel::Unskilled as u8);
+    riding_skill_from_level(level)
+}
+
+fn riding_skill_from_level(level: u8) -> steed::RidingSkill {
+    match level {
+        x if x >= SkillLevel::Expert as u8 => steed::RidingSkill::Expert,
+        x if x >= SkillLevel::Skilled as u8 => steed::RidingSkill::Skilled,
+        x if x >= SkillLevel::Basic as u8 => steed::RidingSkill::Basic,
+        _ => steed::RidingSkill::Unskilled,
     }
 }
 
@@ -1125,7 +1163,10 @@ pub fn apply_damage_type(
     match damage_type {
         DamageType::Physical => {
             // Pure physical: just return base damage.
-            DamageTypeResult { events, hp_damage: base_damage }
+            DamageTypeResult {
+                events,
+                hp_damage: base_damage,
+            }
         }
 
         DamageType::Fire => {
@@ -1138,7 +1179,10 @@ pub fn apply_damage_type(
                 events.push(EngineEvent::msg("attack-fire-hit"));
                 base_damage
             };
-            DamageTypeResult { events, hp_damage: dmg }
+            DamageTypeResult {
+                events,
+                hp_damage: dmg,
+            }
         }
 
         DamageType::Cold => {
@@ -1150,7 +1194,10 @@ pub fn apply_damage_type(
                 events.push(EngineEvent::msg("attack-cold-hit"));
                 base_damage
             };
-            DamageTypeResult { events, hp_damage: dmg }
+            DamageTypeResult {
+                events,
+                hp_damage: dmg,
+            }
         }
 
         DamageType::Electricity => {
@@ -1162,7 +1209,10 @@ pub fn apply_damage_type(
                 events.push(EngineEvent::msg("attack-shock-hit"));
                 base_damage
             };
-            DamageTypeResult { events, hp_damage: dmg }
+            DamageTypeResult {
+                events,
+                hp_damage: dmg,
+            }
         }
 
         DamageType::Acid => {
@@ -1179,7 +1229,10 @@ pub fn apply_damage_type(
                 });
                 base_damage
             };
-            DamageTypeResult { events, hp_damage: dmg }
+            DamageTypeResult {
+                events,
+                hp_damage: dmg,
+            }
         }
 
         DamageType::DrainLife => {
@@ -1201,7 +1254,10 @@ pub fn apply_damage_type(
                     });
                 }
             }
-            DamageTypeResult { events, hp_damage: base_damage }
+            DamageTypeResult {
+                events,
+                hp_damage: base_damage,
+            }
         }
 
         DamageType::Stone => {
@@ -1212,14 +1268,16 @@ pub fn apply_damage_type(
                     .get_component::<status::StatusEffects>(target)
                     .is_some_and(|s| s.stone_resistance > 0);
                 if !has_stone_res {
-                    let stoning_events = status::make_stoned(
-                        world, target, status::STONING_INITIAL,
-                    );
+                    let stoning_events =
+                        status::make_stoned(world, target, status::STONING_INITIAL);
                     events.extend(stoning_events);
                     events.push(EngineEvent::msg("attack-stoning-start"));
                 }
             }
-            DamageTypeResult { events, hp_damage: base_damage }
+            DamageTypeResult {
+                events,
+                hp_damage: base_damage,
+            }
         }
 
         DamageType::Paralyze => {
@@ -1230,7 +1288,10 @@ pub fn apply_damage_type(
                 events.extend(para_events);
                 events.push(EngineEvent::msg("attack-paralyze"));
             }
-            DamageTypeResult { events, hp_damage: base_damage }
+            DamageTypeResult {
+                events,
+                hp_damage: base_damage,
+            }
         }
 
         DamageType::Slow => {
@@ -1248,7 +1309,10 @@ pub fn apply_damage_type(
                     events.push(EngineEvent::msg("attack-slowed"));
                 }
             }
-            DamageTypeResult { events, hp_damage: base_damage }
+            DamageTypeResult {
+                events,
+                hp_damage: base_damage,
+            }
         }
 
         DamageType::Blind => {
@@ -1257,7 +1321,10 @@ pub fn apply_damage_type(
                 let blnd_events = status::make_blinded(world, target, base_damage as u32);
                 events.extend(blnd_events);
             }
-            DamageTypeResult { events, hp_damage: 0 }
+            DamageTypeResult {
+                events,
+                hp_damage: 0,
+            }
         }
 
         DamageType::Confuse => {
@@ -1267,7 +1334,10 @@ pub fn apply_damage_type(
                 let conf_events = status::make_confused(world, target, base_damage as u32);
                 events.extend(conf_events);
             }
-            DamageTypeResult { events, hp_damage: 0 }
+            DamageTypeResult {
+                events,
+                hp_damage: 0,
+            }
         }
 
         DamageType::Stun => {
@@ -1279,7 +1349,10 @@ pub fn apply_damage_type(
                 events.extend(stun_events);
                 dmg /= 2;
             }
-            DamageTypeResult { events, hp_damage: dmg }
+            DamageTypeResult {
+                events,
+                hp_damage: dmg,
+            }
         }
 
         DamageType::Disease => {
@@ -1289,13 +1362,15 @@ pub fn apply_damage_type(
                 .is_some_and(|i| i.poison_resistance);
             if !has_sick_res {
                 let duration = rng.random_range(20..=40u32);
-                let sick_events = status::make_sick(
-                    world, target, duration, status::SICK_NONVOMITABLE,
-                );
+                let sick_events =
+                    status::make_sick(world, target, duration, status::SICK_NONVOMITABLE);
                 events.extend(sick_events);
                 events.push(EngineEvent::msg("attack-disease"));
             }
-            DamageTypeResult { events, hp_damage: base_damage }
+            DamageTypeResult {
+                events,
+                hp_damage: base_damage,
+            }
         }
 
         DamageType::Poison => {
@@ -1311,7 +1386,10 @@ pub fn apply_damage_type(
                     source: DamageSource::Poison,
                 });
             }
-            DamageTypeResult { events, hp_damage: base_damage }
+            DamageTypeResult {
+                events,
+                hp_damage: base_damage,
+            }
         }
 
         DamageType::Sleep => {
@@ -1327,7 +1405,10 @@ pub fn apply_damage_type(
                 });
                 events.push(EngineEvent::msg("attack-sleep"));
             }
-            DamageTypeResult { events, hp_damage: 0 }
+            DamageTypeResult {
+                events,
+                hp_damage: 0,
+            }
         }
 
         DamageType::Disintegrate => {
@@ -1335,18 +1416,25 @@ pub fn apply_damage_type(
             let has_disint_res = status::has_intrinsic_disint_res(world, target);
             if has_disint_res {
                 events.push(EngineEvent::msg("attack-disintegrate-resisted"));
-                DamageTypeResult { events, hp_damage: 0 }
+                DamageTypeResult {
+                    events,
+                    hp_damage: 0,
+                }
             } else {
                 // Instant kill.
                 events.push(EngineEvent::msg("attack-disintegrate"));
-                DamageTypeResult { events, hp_damage: 9999 }
+                DamageTypeResult {
+                    events,
+                    hp_damage: 9999,
+                }
             }
         }
 
         // Default: treat as physical damage.
-        _ => {
-            DamageTypeResult { events, hp_damage: base_damage }
-        }
+        _ => DamageTypeResult {
+            events,
+            hp_damage: base_damage,
+        },
     }
 }
 
@@ -1368,7 +1456,8 @@ fn has_shock_resistance(world: &GameWorld, entity: Entity) -> bool {
 }
 
 fn has_acid_resistance(world: &GameWorld, entity: Entity) -> bool {
-    world.get_component::<status::StatusEffects>(entity)
+    world
+        .get_component::<status::StatusEffects>(entity)
         .is_some_and(|s| s.acid_resistance > 0)
 }
 
@@ -1428,15 +1517,18 @@ pub fn resolve_monster_attack_slot(
 
     match attack.method {
         // Basic melee attacks: standard hit check + damage type.
-        AttackMethod::Claw | AttackMethod::Bite | AttackMethod::Kick
-        | AttackMethod::Butt | AttackMethod::Sting | AttackMethod::Touch
+        AttackMethod::Claw
+        | AttackMethod::Bite
+        | AttackMethod::Kick
+        | AttackMethod::Butt
+        | AttackMethod::Sting
+        | AttackMethod::Touch
         | AttackMethod::Tentacle => {
             let base_damage = roll_dice(attack.dice, rng);
             if base_damage <= 0 && attack.dice.count == 0 {
                 // Zero-damage attacks still apply the damage type effect.
-                let result = apply_damage_type(
-                    world, defender, attack.damage_type, 0, attacker, rng,
-                );
+                let result =
+                    apply_damage_type(world, defender, attack.damage_type, 0, attacker, rng);
                 events.extend(result.events);
                 return events;
             }
@@ -1457,7 +1549,12 @@ pub fn resolve_monster_attack_slot(
             if to_hit > threshold {
                 // Hit! Apply damage type effect.
                 let result = apply_damage_type(
-                    world, defender, attack.damage_type, base_damage, attacker, rng,
+                    world,
+                    defender,
+                    attack.damage_type,
+                    base_damage,
+                    attacker,
+                    rng,
                 );
                 events.extend(result.events);
 
@@ -1469,7 +1566,14 @@ pub fn resolve_monster_attack_slot(
                         weapon: None,
                         damage: hp_damage as u32,
                     });
-                    apply_hp_damage(world, defender, hp_damage, attacker, HpSource::Combat, &mut events);
+                    apply_hp_damage(
+                        world,
+                        defender,
+                        hp_damage,
+                        attacker,
+                        HpSource::Combat,
+                        &mut events,
+                    );
                 }
             } else {
                 events.push(EngineEvent::MeleeMiss { attacker, defender });
@@ -1486,7 +1590,14 @@ pub fn resolve_monster_attack_slot(
                 weapon: None,
                 damage: base_damage as u32,
             });
-            apply_hp_damage(world, defender, base_damage, attacker, HpSource::Combat, &mut events);
+            apply_hp_damage(
+                world,
+                defender,
+                base_damage,
+                attacker,
+                HpSource::Combat,
+                &mut events,
+            );
         }
 
         // Engulf (AT_ENGL): swallow the defender.
@@ -1499,7 +1610,12 @@ pub fn resolve_monster_attack_slot(
             let defender_pos = world.get_component::<Positioned>(defender).map(|p| p.0);
             if let Some(target_pos) = defender_pos {
                 events.extend(resolve_breath_attack(
-                    world, attacker, target_pos, attack.damage_type, attack.dice, rng,
+                    world,
+                    attacker,
+                    target_pos,
+                    attack.damage_type,
+                    attack.dice,
+                    rng,
                 ));
             }
         }
@@ -1509,7 +1625,12 @@ pub fn resolve_monster_attack_slot(
             let base_damage = roll_dice(attack.dice, rng);
             // Gaze does not use standard hit check; it auto-applies the damage type.
             let result = apply_damage_type(
-                world, defender, attack.damage_type, base_damage, attacker, rng,
+                world,
+                defender,
+                attack.damage_type,
+                base_damage,
+                attacker,
+                rng,
             );
             events.extend(result.events);
             let hp_damage = result.hp_damage.max(0);
@@ -1519,7 +1640,14 @@ pub fn resolve_monster_attack_slot(
                     amount: hp_damage as u32,
                     source: DamageSource::Melee,
                 });
-                apply_hp_damage(world, defender, hp_damage, attacker, HpSource::Combat, &mut events);
+                apply_hp_damage(
+                    world,
+                    defender,
+                    hp_damage,
+                    attacker,
+                    HpSource::Combat,
+                    &mut events,
+                );
             }
         }
 
@@ -1528,7 +1656,12 @@ pub fn resolve_monster_attack_slot(
             let defender_pos = world.get_component::<Positioned>(defender).map(|p| p.0);
             if let Some(target_pos) = defender_pos {
                 events.extend(resolve_breath_attack(
-                    world, attacker, target_pos, attack.damage_type, attack.dice, rng,
+                    world,
+                    attacker,
+                    target_pos,
+                    attack.damage_type,
+                    attack.dice,
+                    rng,
                 ));
             }
         }
@@ -1587,9 +1720,7 @@ pub fn resolve_monster_attacks(
             break;
         }
 
-        let slot_events = resolve_monster_attack_slot(
-            world, attacker, defender, attack, i, rng,
-        );
+        let slot_events = resolve_monster_attack_slot(world, attacker, defender, attack, i, rng);
         all_events.extend(slot_events);
     }
 
@@ -1628,9 +1759,10 @@ pub fn resolve_breath_attack(
     }
 
     let attacker_name = world.entity_name(attacker);
-    events.push(EngineEvent::msg_with("attack-breath", vec![
-        ("monster", attacker_name),
-    ]));
+    events.push(EngineEvent::msg_with(
+        "attack-breath",
+        vec![("monster", attacker_name)],
+    ));
 
     // Roll damage for the breath.
     let effective_dice = if dice.count > 0 && dice.sides > 0 {
@@ -1648,7 +1780,10 @@ pub fn resolve_breath_attack(
         let check_pos = Position::new(check_x, check_y);
 
         // Check if there's a wall blocking.
-        let blocked = world.dungeon().current_level.get(check_pos)
+        let blocked = world
+            .dungeon()
+            .current_level
+            .get(check_pos)
             .is_none_or(|cell| cell.terrain.is_opaque());
         if blocked {
             break;
@@ -1663,9 +1798,7 @@ pub fn resolve_breath_attack(
             .collect();
 
         for target in entities_at {
-            let result = apply_damage_type(
-                world, target, breath_type, damage, attacker, rng,
-            );
+            let result = apply_damage_type(world, target, breath_type, damage, attacker, rng);
             events.extend(result.events);
             let hp_damage = result.hp_damage.max(0);
 
@@ -1741,20 +1874,29 @@ pub fn resolve_engulf(
     let duration = (rng.random_range(1..=(monster_level + 5).max(1)) as u32).max(2);
 
     // Apply engulf component.
-    let _ = world.ecs_mut().insert_one(defender, Engulfed {
-        by: attacker,
-        turns_remaining: duration,
-    });
+    let _ = world.ecs_mut().insert_one(
+        defender,
+        Engulfed {
+            by: attacker,
+            turns_remaining: duration,
+        },
+    );
 
     let attacker_name = world.entity_name(attacker);
-    events.push(EngineEvent::msg_with("attack-engulf", vec![
-        ("monster", attacker_name),
-    ]));
+    events.push(EngineEvent::msg_with(
+        "attack-engulf",
+        vec![("monster", attacker_name)],
+    ));
 
     // Initial damage from the engulf.
     let base_damage = roll_dice(attack.dice, rng);
     let result = apply_damage_type(
-        world, defender, attack.damage_type, base_damage, attacker, rng,
+        world,
+        defender,
+        attack.damage_type,
+        base_damage,
+        attacker,
+        rng,
     );
     events.extend(result.events);
 
@@ -1829,10 +1971,13 @@ pub fn tick_engulf(
     }
 
     // Update timer.
-    let _ = world.ecs_mut().insert_one(defender, Engulfed {
-        by: engulf.by,
-        turns_remaining: new_turns,
-    });
+    let _ = world.ecs_mut().insert_one(
+        defender,
+        Engulfed {
+            by: engulf.by,
+            turns_remaining: new_turns,
+        },
+    );
 
     // Per-turn damage: look up the engulfer's first Engulf attack.
     let damage_type = world
@@ -1845,9 +1990,7 @@ pub fn tick_engulf(
         .unwrap_or((DamageType::Physical, DiceExpr { count: 1, sides: 4 }));
 
     let base_damage = roll_dice(damage_type.1, rng);
-    let result = apply_damage_type(
-        world, defender, damage_type.0, base_damage, engulf.by, rng,
-    );
+    let result = apply_damage_type(world, defender, damage_type.0, base_damage, engulf.by, rng);
     events.extend(result.events);
 
     let hp_damage = result.hp_damage.max(0);
@@ -2114,7 +2257,10 @@ mod tests {
         let none = DefenderState::default();
         assert_eq!(monster_state_bonus(&none), 0);
 
-        let stunned = DefenderState { stunned: true, ..Default::default() };
+        let stunned = DefenderState {
+            stunned: true,
+            ..Default::default()
+        };
         assert_eq!(monster_state_bonus(&stunned), 2);
 
         let all_bad = DefenderState {
@@ -2133,19 +2279,46 @@ mod tests {
 
     #[test]
     fn weapon_hit_bonus_armed_single() {
-        assert_eq!(weapon_hit_bonus_armed(SkillLevel::Restricted, false, SkillLevel::Basic), -4);
-        assert_eq!(weapon_hit_bonus_armed(SkillLevel::Unskilled, false, SkillLevel::Basic), -4);
-        assert_eq!(weapon_hit_bonus_armed(SkillLevel::Basic, false, SkillLevel::Basic), 0);
-        assert_eq!(weapon_hit_bonus_armed(SkillLevel::Skilled, false, SkillLevel::Basic), 2);
-        assert_eq!(weapon_hit_bonus_armed(SkillLevel::Expert, false, SkillLevel::Basic), 3);
+        assert_eq!(
+            weapon_hit_bonus_armed(SkillLevel::Restricted, false, SkillLevel::Basic),
+            -4
+        );
+        assert_eq!(
+            weapon_hit_bonus_armed(SkillLevel::Unskilled, false, SkillLevel::Basic),
+            -4
+        );
+        assert_eq!(
+            weapon_hit_bonus_armed(SkillLevel::Basic, false, SkillLevel::Basic),
+            0
+        );
+        assert_eq!(
+            weapon_hit_bonus_armed(SkillLevel::Skilled, false, SkillLevel::Basic),
+            2
+        );
+        assert_eq!(
+            weapon_hit_bonus_armed(SkillLevel::Expert, false, SkillLevel::Basic),
+            3
+        );
     }
 
     #[test]
     fn weapon_hit_bonus_two_weapon() {
-        assert_eq!(weapon_hit_bonus_armed(SkillLevel::Expert, true, SkillLevel::Unskilled), -9);
-        assert_eq!(weapon_hit_bonus_armed(SkillLevel::Expert, true, SkillLevel::Basic), -7);
-        assert_eq!(weapon_hit_bonus_armed(SkillLevel::Expert, true, SkillLevel::Skilled), -5);
-        assert_eq!(weapon_hit_bonus_armed(SkillLevel::Expert, true, SkillLevel::Expert), -3);
+        assert_eq!(
+            weapon_hit_bonus_armed(SkillLevel::Expert, true, SkillLevel::Unskilled),
+            -9
+        );
+        assert_eq!(
+            weapon_hit_bonus_armed(SkillLevel::Expert, true, SkillLevel::Basic),
+            -7
+        );
+        assert_eq!(
+            weapon_hit_bonus_armed(SkillLevel::Expert, true, SkillLevel::Skilled),
+            -5
+        );
+        assert_eq!(
+            weapon_hit_bonus_armed(SkillLevel::Expert, true, SkillLevel::Expert),
+            -3
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2188,18 +2361,42 @@ mod tests {
 
     #[test]
     fn weapon_dam_bonus_armed_single() {
-        assert_eq!(weapon_dam_bonus_armed(SkillLevel::Restricted, false, SkillLevel::Basic), -2);
-        assert_eq!(weapon_dam_bonus_armed(SkillLevel::Basic, false, SkillLevel::Basic), 0);
-        assert_eq!(weapon_dam_bonus_armed(SkillLevel::Skilled, false, SkillLevel::Basic), 1);
-        assert_eq!(weapon_dam_bonus_armed(SkillLevel::Expert, false, SkillLevel::Basic), 2);
+        assert_eq!(
+            weapon_dam_bonus_armed(SkillLevel::Restricted, false, SkillLevel::Basic),
+            -2
+        );
+        assert_eq!(
+            weapon_dam_bonus_armed(SkillLevel::Basic, false, SkillLevel::Basic),
+            0
+        );
+        assert_eq!(
+            weapon_dam_bonus_armed(SkillLevel::Skilled, false, SkillLevel::Basic),
+            1
+        );
+        assert_eq!(
+            weapon_dam_bonus_armed(SkillLevel::Expert, false, SkillLevel::Basic),
+            2
+        );
     }
 
     #[test]
     fn weapon_dam_bonus_two_weapon() {
-        assert_eq!(weapon_dam_bonus_armed(SkillLevel::Expert, true, SkillLevel::Unskilled), -3);
-        assert_eq!(weapon_dam_bonus_armed(SkillLevel::Expert, true, SkillLevel::Basic), -1);
-        assert_eq!(weapon_dam_bonus_armed(SkillLevel::Expert, true, SkillLevel::Skilled), 0);
-        assert_eq!(weapon_dam_bonus_armed(SkillLevel::Expert, true, SkillLevel::Expert), 1);
+        assert_eq!(
+            weapon_dam_bonus_armed(SkillLevel::Expert, true, SkillLevel::Unskilled),
+            -3
+        );
+        assert_eq!(
+            weapon_dam_bonus_armed(SkillLevel::Expert, true, SkillLevel::Basic),
+            -1
+        );
+        assert_eq!(
+            weapon_dam_bonus_armed(SkillLevel::Expert, true, SkillLevel::Skilled),
+            0
+        );
+        assert_eq!(
+            weapon_dam_bonus_armed(SkillLevel::Expert, true, SkillLevel::Expert),
+            1
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2516,7 +2713,11 @@ mod tests {
         let avg = total as f64 / trials as f64;
         // Without silver: avg ~2.5 (1d4) + str(0) + skill(0) = 2.5
         // With silver: avg ~2.5 + 10.5 (1d20) = ~13
-        assert!(avg > 8.0, "silver bonus should boost average damage significantly, got {:.1}", avg);
+        assert!(
+            avg > 8.0,
+            "silver bonus should boost average damage significantly, got {:.1}",
+            avg
+        );
     }
 
     #[test]
@@ -2551,7 +2752,11 @@ mod tests {
         let avg = total as f64 / trials as f64;
         // Without blessed: avg ~2.5 (1d4) + 0 = 2.5
         // With blessed: avg ~2.5 + 2.5 (1d4) = ~5
-        assert!(avg > 3.5, "blessed bonus should boost average damage, got {:.1}", avg);
+        assert!(
+            avg > 3.5,
+            "blessed bonus should boost average damage, got {:.1}",
+            avg
+        );
     }
 
     #[test]
@@ -2586,9 +2791,16 @@ mod tests {
         //
         // We verify the individual components:
         assert_eq!(strength_damage_bonus(18, 50), 3, "dbon for STR 18/50");
-        assert_eq!(adjust_str_bonus(3, true, false), 2, "two-weapon adjusted dbon=3");
-        assert_eq!(weapon_dam_bonus_unarmed(SkillLevel::GrandMaster, true), 9,
-                   "GrandMaster martial dam bonus");
+        assert_eq!(
+            adjust_str_bonus(3, true, false),
+            2,
+            "two-weapon adjusted dbon=3"
+        );
+        assert_eq!(
+            weapon_dam_bonus_unarmed(SkillLevel::GrandMaster, true),
+            9,
+            "GrandMaster martial dam bonus"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2618,7 +2830,10 @@ mod tests {
         assert_eq!(adj, 5, "two-weapon adjusted dbon");
 
         // Skill dam bonus: two-weapon Expert
-        assert_eq!(weapon_dam_bonus_armed(SkillLevel::Expert, true, SkillLevel::Expert), 1);
+        assert_eq!(
+            weapon_dam_bonus_armed(SkillLevel::Expert, true, SkillLevel::Expert),
+            1
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2709,7 +2924,11 @@ mod tests {
         let mut rng = test_rng();
         for _ in 0..100 {
             let d = dmgval(&weapon, &defender, &mut rng);
-            assert!(d >= 1, "dmgval with erosion should be at least 1 when base > 0, got {}", d);
+            assert!(
+                d >= 1,
+                "dmgval with erosion should be at least 1 when base > 0, got {}",
+                d
+            );
         }
     }
 
@@ -2737,7 +2956,10 @@ mod tests {
                 saw_zero = true;
             }
         }
-        assert!(saw_zero, "dmgval with spe=-5 and 1d4 should produce 0 sometimes");
+        assert!(
+            saw_zero,
+            "dmgval with spe=-5 and 1d4 should produce 0 sometimes"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2761,14 +2983,16 @@ mod tests {
         // for this simple test (we're testing event generation, not game logic).
         let defender = attacker;
 
-        let events = resolve_melee_attack_with_params(
-            &params, attacker, defender, 20, &mut rng,
-        );
+        let events = resolve_melee_attack_with_params(&params, attacker, defender, 20, &mut rng);
 
         assert!(!events.is_empty(), "should generate at least one event");
 
-        let has_hit = events.iter().any(|e| matches!(e, EngineEvent::MeleeHit { .. }));
-        let has_miss = events.iter().any(|e| matches!(e, EngineEvent::MeleeMiss { .. }));
+        let has_hit = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::MeleeHit { .. }));
+        let has_miss = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::MeleeMiss { .. }));
         assert!(has_hit || has_miss, "should generate either hit or miss");
     }
 
@@ -2807,7 +3031,9 @@ mod tests {
             &mut rng,
         );
 
-        let has_death = events.iter().any(|e| matches!(e, EngineEvent::EntityDied { .. }));
+        let has_death = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityDied { .. }));
         assert!(has_death, "lethal damage should generate EntityDied event");
     }
 
@@ -2849,11 +3075,12 @@ mod tests {
         let defender = attacker;
 
         for _ in 0..100 {
-            let events = resolve_melee_attack_with_params(
-                &params, attacker, defender, 100, &mut rng,
-            );
+            let events =
+                resolve_melee_attack_with_params(&params, attacker, defender, 100, &mut rng);
             assert!(
-                events.iter().all(|e| matches!(e, EngineEvent::MeleeMiss { .. })),
+                events
+                    .iter()
+                    .all(|e| matches!(e, EngineEvent::MeleeMiss { .. })),
                 "negative roll should always miss"
             );
         }
@@ -2882,9 +3109,7 @@ mod tests {
         let player = world.player();
 
         // Give the player a large hit bonus to ensure hits.
-        if let Some(mut pc) = world
-            .get_component_mut::<crate::world::PlayerCombat>(player)
-        {
+        if let Some(mut pc) = world.get_component_mut::<crate::world::PlayerCombat>(player) {
             pc.uhitinc = 20;
             pc.udaminc = 5;
             pc.luck = 10;
@@ -2894,7 +3119,10 @@ mod tests {
         let defender = world.spawn((
             crate::world::Positioned(crate::action::Position::new(6, 5)),
             crate::world::ArmorClass(10),
-            crate::world::HitPoints { current: 100, max: 100 },
+            crate::world::HitPoints {
+                current: 100,
+                max: 100,
+            },
             crate::world::Attributes::default(),
             crate::world::ExperienceLevel(1),
         ));
@@ -2905,7 +3133,9 @@ mod tests {
 
         // With uhitinc=20, luck=10 boosting the roll, we should almost
         // always hit against AC 10.
-        let has_hit = events.iter().any(|e| matches!(e, EngineEvent::MeleeHit { .. }));
+        let has_hit = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::MeleeHit { .. }));
         assert!(has_hit, "with uhitinc=20 and luck=10, attack should hit");
     }
 
@@ -3000,8 +3230,7 @@ mod tests {
         params_no.is_elf = false;
         let roll_without = find_roll_to_hit(&params_no);
 
-        assert_eq!(roll_with, roll_without + 1,
-                   "Elf vs orc gives +1 to hit");
+        assert_eq!(roll_with, roll_without + 1, "Elf vs orc gives +1 to hit");
     }
 
     #[test]
@@ -3024,8 +3253,7 @@ mod tests {
         params_no.is_elf = false;
         let roll_without = find_roll_to_hit(&params_no);
 
-        assert_eq!(roll_with, roll_without,
-                   "Elf vs non-orc has no bonus");
+        assert_eq!(roll_with, roll_without, "Elf vs non-orc has no bonus");
     }
 
     // -----------------------------------------------------------------------
@@ -3037,10 +3265,14 @@ mod tests {
         // AC >= 0: secondary check always passes
         let mut rng = test_rng();
         for _ in 0..100 {
-            assert!(negative_ac_check(15, 10, 0, &mut rng),
-                    "AC 0: no secondary check");
-            assert!(negative_ac_check(15, 10, 5, &mut rng),
-                    "AC 5: no secondary check");
+            assert!(
+                negative_ac_check(15, 10, 0, &mut rng),
+                "AC 0: no secondary check"
+            );
+            assert!(
+                negative_ac_check(15, 10, 5, &mut rng),
+                "AC 5: no secondary check"
+            );
         }
     }
 
@@ -3058,8 +3290,12 @@ mod tests {
             }
         }
         // Expect roughly 40% pass rate (400 +/- ~50)
-        assert!(passes > 200 && passes < 600,
-                "negative AC check with AC -10 should reduce hit rate, got {}/{}", passes, trials);
+        assert!(
+            passes > 200 && passes < 600,
+            "negative AC check with AC -10 should reduce hit rate, got {}/{}",
+            passes,
+            trials
+        );
     }
 
     #[test]
@@ -3067,11 +3303,15 @@ mod tests {
         // AC -1: rnd(1) always = 1, so need roll_to_hit > dieroll + 1
         let mut rng = test_rng();
         // roll_to_hit=12, dieroll=10: 12 > 10 + 1 = true
-        assert!(negative_ac_check(12, 10, -1, &mut rng),
-                "AC -1: 12 > 10 + 1 should pass");
+        assert!(
+            negative_ac_check(12, 10, -1, &mut rng),
+            "AC -1: 12 > 10 + 1 should pass"
+        );
         // roll_to_hit=11, dieroll=10: 11 > 10 + 1 = false
-        assert!(!negative_ac_check(11, 10, -1, &mut rng),
-                "AC -1: 11 > 10 + 1 should fail");
+        assert!(
+            !negative_ac_check(11, 10, -1, &mut rng),
+            "AC -1: 11 > 10 + 1 should fail"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3151,7 +3391,11 @@ mod tests {
         let mut rng = test_rng();
         let dmg = calculate_damage(&params, &mut rng);
         // base = rnd(12) + spe(0) + udaminc(0) + str_bimanual(11) + skill(0)
-        assert!(dmg >= 12, "bimanual STR 18/100 should add at least 11 to damage, got {}", dmg);
+        assert!(
+            dmg >= 12,
+            "bimanual STR 18/100 should add at least 11 to damage, got {}",
+            dmg
+        );
     }
 
     #[test]
@@ -3214,8 +3458,11 @@ mod tests {
         // backstab_bonus should return rnd(15) = [1, 15]
         let mut rng = test_rng();
         let bonus = backstab_bonus(&params, &mut rng);
-        assert!(bonus >= 1 && bonus <= 15,
-                "backstab should add rnd(level) = rnd(15), got {}", bonus);
+        assert!(
+            bonus >= 1 && bonus <= 15,
+            "backstab should add rnd(level) = rnd(15), got {}",
+            bonus
+        );
     }
 
     #[test]
@@ -3260,7 +3507,11 @@ mod tests {
         // Not backstabbable
         let mut p = base_params.clone();
         p.defender_state.backstabbable = false;
-        assert_eq!(backstab_bonus(&p, &mut rng), 0, "not backstabbable: no backstab");
+        assert_eq!(
+            backstab_bonus(&p, &mut rng),
+            0,
+            "not backstabbable: no backstab"
+        );
 
         // Can't see monster
         let mut p = base_params.clone();
@@ -3271,7 +3522,11 @@ mod tests {
         let mut p = base_params.clone();
         p.defender_state.fleeing = false;
         p.defender_state.helpless = false;
-        assert_eq!(backstab_bonus(&p, &mut rng), 0, "not fleeing/helpless: no backstab");
+        assert_eq!(
+            backstab_bonus(&p, &mut rng),
+            0,
+            "not fleeing/helpless: no backstab"
+        );
     }
 
     #[test]
@@ -3292,8 +3547,11 @@ mod tests {
 
         let mut rng = test_rng();
         let bonus = backstab_bonus(&params, &mut rng);
-        assert!(bonus >= 1 && bonus <= 10,
-                "backstab vs helpless should work, got {}", bonus);
+        assert!(
+            bonus >= 1 && bonus <= 10,
+            "backstab vs helpless should work, got {}",
+            bonus
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3391,7 +3649,11 @@ mod tests {
             let dmg = calculate_damage(&params, &mut rng);
             // dam_bonus_unskilled_twoweap = -3, so low rolls can be negative
             // but gets clamped to 1
-            assert!(dmg >= 1, "TV15: unskilled two-weapon damage >= 1, got {}", dmg);
+            assert!(
+                dmg >= 1,
+                "TV15: unskilled two-weapon damage >= 1, got {}",
+                dmg
+            );
         }
     }
 
@@ -3430,10 +3692,11 @@ mod tests {
 
         // Every attack should hit when swallowed
         for _ in 0..50 {
-            let events = resolve_melee_attack_with_params(
-                &params, attacker, defender, 100, &mut rng,
-            );
-            let has_hit = events.iter().any(|e| matches!(e, EngineEvent::MeleeHit { .. }));
+            let events =
+                resolve_melee_attack_with_params(&params, attacker, defender, 100, &mut rng);
+            let has_hit = events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::MeleeHit { .. }));
             assert!(has_hit, "swallowed should always hit regardless of AC");
         }
     }
@@ -3490,9 +3753,12 @@ mod tests {
         let avg_no = total_no as f64 / trials as f64;
         let avg_bs = total_bs as f64 / trials as f64;
         // Backstab adds rnd(15) = avg 8 extra damage
-        assert!(avg_bs > avg_no + 4.0,
-                "backstab should significantly increase damage: no_bs={:.1}, bs={:.1}",
-                avg_no, avg_bs);
+        assert!(
+            avg_bs > avg_no + 4.0,
+            "backstab should significantly increase damage: no_bs={:.1}, bs={:.1}",
+            avg_no,
+            avg_bs
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3502,7 +3768,10 @@ mod tests {
     #[test]
     fn test_combat_monk_spelarmr_constant() {
         // Verify the monk armor penalty constant matches the spec
-        assert_eq!(MONK_SPELARMR, 20, "Monk spelarmr should be 20 (from role.c)");
+        assert_eq!(
+            MONK_SPELARMR, 20,
+            "Monk spelarmr should be 20 (from role.c)"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3549,24 +3818,31 @@ mod tests {
         let mut hits_ac_neg = 0;
 
         for _ in 0..trials {
-            let events = resolve_melee_attack_with_params(
-                &params_ac10, attacker, defender, 100, &mut rng,
-            );
-            if events.iter().any(|e| matches!(e, EngineEvent::MeleeHit { .. })) {
+            let events =
+                resolve_melee_attack_with_params(&params_ac10, attacker, defender, 100, &mut rng);
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::MeleeHit { .. }))
+            {
                 hits_ac10 += 1;
             }
 
-            let events = resolve_melee_attack_with_params(
-                &params_ac_neg, attacker, defender, 100, &mut rng,
-            );
-            if events.iter().any(|e| matches!(e, EngineEvent::MeleeHit { .. })) {
+            let events =
+                resolve_melee_attack_with_params(&params_ac_neg, attacker, defender, 100, &mut rng);
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::MeleeHit { .. }))
+            {
                 hits_ac_neg += 1;
             }
         }
 
-        assert!(hits_ac10 > hits_ac_neg,
-                "AC -10 should be harder to hit than AC 10: hits_ac10={}, hits_ac_neg={}",
-                hits_ac10, hits_ac_neg);
+        assert!(
+            hits_ac10 > hits_ac_neg,
+            "AC -10 should be harder to hit than AC 10: hits_ac10={}, hits_ac_neg={}",
+            hits_ac10,
+            hits_ac_neg
+        );
     }
 
     // ── Stun penalty tests ───────────────────────────────────────
@@ -3585,7 +3861,8 @@ mod tests {
         let stunned_roll = find_roll_to_hit(&stunned_params);
 
         assert_eq!(
-            base_roll - stunned_roll, 2,
+            base_roll - stunned_roll,
+            2,
             "stunned attacker should have exactly -2 to-hit penalty"
         );
     }
@@ -3613,14 +3890,17 @@ mod tests {
         let trials = 500;
 
         for _ in 0..trials {
-            let ev = resolve_melee_attack_with_params(
-                &base_params, attacker, defender, 100, &mut rng,
-            );
+            let ev =
+                resolve_melee_attack_with_params(&base_params, attacker, defender, 100, &mut rng);
             if ev.iter().any(|e| matches!(e, EngineEvent::MeleeHit { .. })) {
                 hits_base += 1;
             }
             let ev = resolve_melee_attack_with_params(
-                &stunned_params, attacker, defender, 100, &mut rng,
+                &stunned_params,
+                attacker,
+                defender,
+                100,
+                &mut rng,
             );
             if ev.iter().any(|e| matches!(e, EngineEvent::MeleeHit { .. })) {
                 hits_stunned += 1;
@@ -3630,7 +3910,8 @@ mod tests {
         assert!(
             hits_base > hits_stunned,
             "stunned attacker should hit less: base={}, stunned={}",
-            hits_base, hits_stunned
+            hits_base,
+            hits_stunned
         );
     }
 
@@ -3649,10 +3930,10 @@ mod tests {
         // Fill map with floor for LOS / breath traversal.
         for y in 0..20 {
             for x in 0..20 {
-                world.dungeon_mut().current_level.set_terrain(
-                    crate::action::Position::new(x, y),
-                    Terrain::Floor,
-                );
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(crate::action::Position::new(x, y), Terrain::Floor);
             }
         }
 
@@ -3660,13 +3941,18 @@ mod tests {
 
         // Ensure player has StatusEffects and Intrinsics.
         let _ = world.ecs_mut().insert_one(player, StatusEffects::default());
-        let _ = world.ecs_mut().insert_one(player, crate::status::Intrinsics::default());
+        let _ = world
+            .ecs_mut()
+            .insert_one(player, crate::status::Intrinsics::default());
 
         // Spawn a monster adjacent to the player.
         let monster = world.spawn((
             Positioned(crate::action::Position::new(6, 5)),
             ArmorClass(10),
-            HitPoints { current: 50, max: 50 },
+            HitPoints {
+                current: 50,
+                max: 50,
+            },
             Attributes::default(),
             ExperienceLevel(10),
             Name("test monster".to_string()),
@@ -3689,11 +3975,14 @@ mod tests {
             dice: DiceExpr { count: 1, sides: 4 },
         };
 
-        let _ = world.ecs_mut().insert_one(monster, MonsterAttacks({
-            let mut v = arrayvec::ArrayVec::new();
-            v.push(attack.clone());
-            v
-        }));
+        let _ = world.ecs_mut().insert_one(
+            monster,
+            MonsterAttacks({
+                let mut v = arrayvec::ArrayVec::new();
+                v.push(attack.clone());
+                v
+            }),
+        );
 
         // Run many attacks; at least some should poison.
         let mut poison_events = 0;
@@ -3702,17 +3991,21 @@ mod tests {
             if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                 hp.current = 100;
             }
-            let events = resolve_monster_attack_slot(
-                &mut world, monster, player, &attack, 0, &mut rng,
-            );
-            if events.iter().any(|e| matches!(e,
-                EngineEvent::Message { key, .. } if key == "attack-poisoned")) {
+            let events =
+                resolve_monster_attack_slot(&mut world, monster, player, &attack, 0, &mut rng);
+            if events.iter().any(|e| {
+                matches!(e,
+                EngineEvent::Message { key, .. } if key == "attack-poisoned")
+            }) {
                 poison_events += 1;
             }
         }
         // 1/8 chance per hit, should see at least a few.
-        assert!(poison_events > 0,
-            "sting+poison should trigger poison at least once in 200 tries, got {}", poison_events);
+        assert!(
+            poison_events > 0,
+            "sting+poison should trigger poison at least once in 200 tries, got {}",
+            poison_events
+        );
     }
 
     // ── Test: AD_DRLI reduces XP level ────────────────────────────────
@@ -3739,19 +4032,27 @@ mod tests {
             if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                 hp.current = 100;
             }
-            let events = resolve_monster_attack_slot(
-                &mut world, monster, player, &attack, 0, &mut rng,
-            );
-            if events.iter().any(|e| matches!(e,
-                EngineEvent::Message { key, .. } if key == "attack-drain-level")) {
+            let events =
+                resolve_monster_attack_slot(&mut world, monster, player, &attack, 0, &mut rng);
+            if events.iter().any(|e| {
+                matches!(e,
+                EngineEvent::Message { key, .. } if key == "attack-drain-level")
+            }) {
                 drained = true;
                 break;
             }
         }
-        assert!(drained, "AD_DRLI should drain a level at least once in 100 attacks");
+        assert!(
+            drained,
+            "AD_DRLI should drain a level at least once in 100 attacks"
+        );
 
         let level = world.get_component::<ExperienceLevel>(player).unwrap().0;
-        assert!(level < 10, "player level should have decreased from 10, got {}", level);
+        assert!(
+            level < 10,
+            "player level should have decreased from 10, got {}",
+            level
+        );
     }
 
     // ── Test: AD_STON starts stoning countdown ────────────────────────
@@ -3777,16 +4078,25 @@ mod tests {
             if let Some(mut st) = world.get_component_mut::<crate::status::StatusEffects>(player) {
                 st.stoning = 0;
             }
-            let events = resolve_monster_attack_slot(
-                &mut world, monster, player, &attack, 0, &mut rng,
-            );
-            if events.iter().any(|e| matches!(e,
-                EngineEvent::StatusApplied { status: StatusEffect::Stoning, .. })) {
+            let events =
+                resolve_monster_attack_slot(&mut world, monster, player, &attack, 0, &mut rng);
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        status: StatusEffect::Stoning,
+                        ..
+                    }
+                )
+            }) {
                 stoned = true;
                 break;
             }
         }
-        assert!(stoned, "AD_STON should start stoning countdown at least once in 500 attacks");
+        assert!(
+            stoned,
+            "AD_STON should start stoning countdown at least once in 500 attacks"
+        );
     }
 
     // ── Test: breath weapon deals fire damage ─────────────────────────
@@ -3801,22 +4111,29 @@ mod tests {
         // Fill map with floor tiles so breath can traverse.
         for y in 0..20 {
             for x in 0..20 {
-                world.dungeon_mut().current_level.set_terrain(
-                    crate::action::Position::new(x, y),
-                    Terrain::Floor,
-                );
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(crate::action::Position::new(x, y), Terrain::Floor);
             }
         }
 
         let player = world.player();
-        let _ = world.ecs_mut().insert_one(player, crate::status::StatusEffects::default());
-        let _ = world.ecs_mut().insert_one(player, crate::status::Intrinsics::default());
+        let _ = world
+            .ecs_mut()
+            .insert_one(player, crate::status::StatusEffects::default());
+        let _ = world
+            .ecs_mut()
+            .insert_one(player, crate::status::Intrinsics::default());
 
         // Monster at (2, 5), player at (5, 5) -- in a line.
         let monster = world.spawn((
             Positioned(crate::action::Position::new(2, 5)),
             ArmorClass(10),
-            HitPoints { current: 50, max: 50 },
+            HitPoints {
+                current: 50,
+                max: 50,
+            },
             Attributes::default(),
             ExperienceLevel(10),
             Name("dragon".to_string()),
@@ -3827,23 +4144,34 @@ mod tests {
         let player_pos = crate::action::Position::new(5, 5);
 
         let events = resolve_breath_attack(
-            &mut world, monster, player_pos,
+            &mut world,
+            monster,
+            player_pos,
             DamageType::Fire,
             DiceExpr { count: 6, sides: 6 },
             &mut rng,
         );
 
         // Should have breath message.
-        let has_breath = events.iter().any(|e| matches!(e,
-            EngineEvent::Message { key, .. } if key == "attack-breath"));
-        assert!(has_breath, "breath attack should emit attack-breath message");
+        let has_breath = events.iter().any(|e| {
+            matches!(e,
+            EngineEvent::Message { key, .. } if key == "attack-breath")
+        });
+        assert!(
+            has_breath,
+            "breath attack should emit attack-breath message"
+        );
 
         // Player should take fire damage (no fire resistance).
-        let has_fire = events.iter().any(|e| matches!(e,
-            EngineEvent::Message { key, .. } if key == "attack-fire-hit"));
+        let has_fire = events.iter().any(|e| {
+            matches!(e,
+            EngineEvent::Message { key, .. } if key == "attack-fire-hit")
+        });
         assert!(has_fire, "fire breath should emit attack-fire-hit message");
 
-        let has_damage = events.iter().any(|e| matches!(e, EngineEvent::HpChange { .. }));
+        let has_damage = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::HpChange { .. }));
         assert!(has_damage, "fire breath should deal HP damage");
     }
 
@@ -3859,13 +4187,16 @@ mod tests {
             intr.cold_resistance = true;
         }
 
-        let result = apply_damage_type(
-            &mut world, player, DamageType::Cold, 20, player, &mut rng,
-        );
+        let result = apply_damage_type(&mut world, player, DamageType::Cold, 20, player, &mut rng);
 
-        assert_eq!(result.hp_damage, 0, "cold resistance should block cold damage");
-        let has_resist_msg = result.events.iter().any(|e| matches!(e,
-            EngineEvent::Message { key, .. } if key == "attack-cold-resisted"));
+        assert_eq!(
+            result.hp_damage, 0,
+            "cold resistance should block cold damage"
+        );
+        let has_resist_msg = result.events.iter().any(|e| {
+            matches!(e,
+            EngineEvent::Message { key, .. } if key == "attack-cold-resisted")
+        });
         assert!(has_resist_msg, "should emit cold-resisted message");
     }
 
@@ -3877,14 +4208,22 @@ mod tests {
         let mut rng = test_rng();
 
         // Player has no acid resistance.
-        let result = apply_damage_type(
-            &mut world, player, DamageType::Acid, 10, player, &mut rng,
-        );
+        let result = apply_damage_type(&mut world, player, DamageType::Acid, 10, player, &mut rng);
 
         assert_eq!(result.hp_damage, 10, "acid should deal base damage");
-        let has_corrosion = result.events.iter().any(|e| matches!(e,
-            EngineEvent::ItemDamaged { cause: DamageCause::Acid, .. }));
-        assert!(has_corrosion, "acid should emit ItemDamaged event for armor");
+        let has_corrosion = result.events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::ItemDamaged {
+                    cause: DamageCause::Acid,
+                    ..
+                }
+            )
+        });
+        assert!(
+            has_corrosion,
+            "acid should emit ItemDamaged event for armor"
+        );
     }
 
     // ── Test: AD_PLYS applies paralysis ───────────────────────────────
@@ -3902,15 +4241,30 @@ mod tests {
                 st.paralysis = 0;
             }
             let result = apply_damage_type(
-                &mut world, player, DamageType::Paralyze, 5, player, &mut rng,
+                &mut world,
+                player,
+                DamageType::Paralyze,
+                5,
+                player,
+                &mut rng,
             );
-            if result.events.iter().any(|e| matches!(e,
-                EngineEvent::StatusApplied { status: StatusEffect::Paralyzed, .. })) {
+            if result.events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        status: StatusEffect::Paralyzed,
+                        ..
+                    }
+                )
+            }) {
                 paralyzed = true;
                 break;
             }
         }
-        assert!(paralyzed, "AD_PLYS should apply paralysis at least once in 100 tries");
+        assert!(
+            paralyzed,
+            "AD_PLYS should apply paralysis at least once in 100 tries"
+        );
     }
 
     // ── Test: AD_CONF via gaze ────────────────────────────────────────
@@ -3931,16 +4285,25 @@ mod tests {
             if let Some(mut st) = world.get_component_mut::<crate::status::StatusEffects>(player) {
                 st.confusion = 0;
             }
-            let events = resolve_monster_attack_slot(
-                &mut world, monster, player, &attack, 0, &mut rng,
-            );
-            if events.iter().any(|e| matches!(e,
-                EngineEvent::StatusApplied { status: StatusEffect::Confused, .. })) {
+            let events =
+                resolve_monster_attack_slot(&mut world, monster, player, &attack, 0, &mut rng);
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        status: StatusEffect::Confused,
+                        ..
+                    }
+                )
+            }) {
                 confused = true;
                 break;
             }
         }
-        assert!(confused, "gaze+confuse should apply confusion at least once in 100 tries");
+        assert!(
+            confused,
+            "gaze+confuse should apply confusion at least once in 100 tries"
+        );
     }
 
     // ── Test: breath weapon travels in a line ─────────────────────────
@@ -3955,22 +4318,29 @@ mod tests {
         // Fill map with floor tiles.
         for y in 0..20 {
             for x in 0..20 {
-                world.dungeon_mut().current_level.set_terrain(
-                    crate::action::Position::new(x, y),
-                    Terrain::Floor,
-                );
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(crate::action::Position::new(x, y), Terrain::Floor);
             }
         }
 
         let player = world.player();
-        let _ = world.ecs_mut().insert_one(player, crate::status::StatusEffects::default());
-        let _ = world.ecs_mut().insert_one(player, crate::status::Intrinsics::default());
+        let _ = world
+            .ecs_mut()
+            .insert_one(player, crate::status::StatusEffects::default());
+        let _ = world
+            .ecs_mut()
+            .insert_one(player, crate::status::Intrinsics::default());
 
         // Place monster at (1, 5), player at (5, 5).
         let monster = world.spawn((
             Positioned(crate::action::Position::new(1, 5)),
             ArmorClass(10),
-            HitPoints { current: 50, max: 50 },
+            HitPoints {
+                current: 50,
+                max: 50,
+            },
             Attributes::default(),
             ExperienceLevel(10),
             Name("dragon".to_string()),
@@ -3981,16 +4351,19 @@ mod tests {
         let target_pos = crate::action::Position::new(5, 5);
 
         let events = resolve_breath_attack(
-            &mut world, monster, target_pos,
+            &mut world,
+            monster,
+            target_pos,
             DamageType::Fire,
             DiceExpr { count: 6, sides: 6 },
             &mut rng,
         );
 
         // The breath should reach the player at (5, 5) -- 4 steps away.
-        let has_hp_change = events.iter().any(|e| matches!(e, EngineEvent::HpChange { .. }));
-        assert!(has_hp_change,
-            "breath at range 4 should hit the player");
+        let has_hp_change = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::HpChange { .. }));
+        assert!(has_hp_change, "breath at range 4 should hit the player");
 
         // Verify player HP decreased.
         let hp = world.get_component::<HitPoints>(player).unwrap();
@@ -4019,11 +4392,16 @@ mod tests {
 
         // Should be engulfed.
         let is_engulfed = world.get_component::<Engulfed>(player).is_some();
-        assert!(is_engulfed, "player should be engulfed after successful engulf attack");
+        assert!(
+            is_engulfed,
+            "player should be engulfed after successful engulf attack"
+        );
 
         // Should have engulf message.
-        let has_engulf_msg = events.iter().any(|e| matches!(e,
-            EngineEvent::Message { key, .. } if key == "attack-engulf"));
+        let has_engulf_msg = events.iter().any(|e| {
+            matches!(e,
+            EngineEvent::Message { key, .. } if key == "attack-engulf")
+        });
         assert!(has_engulf_msg, "should emit engulf message");
     }
 
@@ -4035,10 +4413,13 @@ mod tests {
         let mut rng = test_rng();
 
         // Manually set engulfed state.
-        let _ = world.ecs_mut().insert_one(player, Engulfed {
-            by: monster,
-            turns_remaining: 5,
-        });
+        let _ = world.ecs_mut().insert_one(
+            player,
+            Engulfed {
+                by: monster,
+                turns_remaining: 5,
+            },
+        );
 
         // Kill the monster.
         if let Some(mut hp) = world.get_component_mut::<HitPoints>(monster) {
@@ -4051,8 +4432,10 @@ mod tests {
         let is_engulfed = world.get_component::<Engulfed>(player).is_some();
         assert!(!is_engulfed, "player should be released when engulfer dies");
 
-        let has_escape_msg = events.iter().any(|e| matches!(e,
-            EngineEvent::Message { key, .. } if key == "engulf-escape-killed"));
+        let has_escape_msg = events.iter().any(|e| {
+            matches!(e,
+            EngineEvent::Message { key, .. } if key == "engulf-escape-killed")
+        });
         assert!(has_escape_msg, "should emit escape-killed message");
     }
 
@@ -4071,8 +4454,11 @@ mod tests {
         let mut rng = test_rng();
         for _ in 0..100 {
             let result = roll_dice(DiceExpr { count: 2, sides: 6 }, &mut rng);
-            assert!(result >= 2 && result <= 12,
-                "2d6 should be in [2, 12], got {}", result);
+            assert!(
+                result >= 2 && result <= 12,
+                "2d6 should be in [2, 12], got {}",
+                result
+            );
         }
     }
 
@@ -4084,10 +4470,21 @@ mod tests {
         let mut rng = test_rng();
 
         let result = apply_damage_type(
-            &mut world, player, DamageType::Physical, 15, player, &mut rng,
+            &mut world,
+            player,
+            DamageType::Physical,
+            15,
+            player,
+            &mut rng,
         );
-        assert_eq!(result.hp_damage, 15, "physical should pass through base damage");
-        assert!(result.events.is_empty(), "physical should generate no extra events");
+        assert_eq!(
+            result.hp_damage, 15,
+            "physical should pass through base damage"
+        );
+        assert!(
+            result.events.is_empty(),
+            "physical should generate no extra events"
+        );
     }
 
     // ── Test: stun halves damage ─────────────────────────────────────
@@ -4104,9 +4501,8 @@ mod tests {
                 st.stun = 0;
             }
             let mut rng = Pcg64::seed_from_u64(seed);
-            let result = apply_damage_type(
-                &mut world, player, DamageType::Stun, 10, player, &mut rng,
-            );
+            let result =
+                apply_damage_type(&mut world, player, DamageType::Stun, 10, player, &mut rng);
             if result.hp_damage == 5 {
                 saw_halved = true;
                 break;
@@ -4139,9 +4535,16 @@ mod tests {
         let events = resolve_monster_attacks(&mut world, monster, player, &mut rng);
 
         // Should have at least one hit or miss event.
-        let has_combat = events.iter().any(|e| matches!(e,
-            EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }));
-        assert!(has_combat, "resolve_monster_attacks should generate combat events");
+        let has_combat = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+            )
+        });
+        assert!(
+            has_combat,
+            "resolve_monster_attacks should generate combat events"
+        );
     }
 
     // ── Test: AD_BLND does no HP damage ──────────────────────────────
@@ -4151,9 +4554,7 @@ mod tests {
         let (mut world, player, _) = make_attack_test_world();
         let mut rng = test_rng();
 
-        let result = apply_damage_type(
-            &mut world, player, DamageType::Blind, 10, player, &mut rng,
-        );
+        let result = apply_damage_type(&mut world, player, DamageType::Blind, 10, player, &mut rng);
         assert_eq!(result.hp_damage, 0, "blind should not deal HP damage");
     }
 
@@ -4165,7 +4566,12 @@ mod tests {
         let mut rng = test_rng();
 
         let result = apply_damage_type(
-            &mut world, player, DamageType::Confuse, 10, player, &mut rng,
+            &mut world,
+            player,
+            DamageType::Confuse,
+            10,
+            player,
+            &mut rng,
         );
         assert_eq!(result.hp_damage, 0, "confuse should not deal HP damage");
     }
@@ -4183,9 +4589,17 @@ mod tests {
         }
 
         let result = apply_damage_type(
-            &mut world, player, DamageType::Disintegrate, 100, player, &mut rng,
+            &mut world,
+            player,
+            DamageType::Disintegrate,
+            100,
+            player,
+            &mut rng,
         );
-        assert_eq!(result.hp_damage, 0, "disintegration resistance should block damage");
+        assert_eq!(
+            result.hp_damage, 0,
+            "disintegration resistance should block damage"
+        );
     }
 
     // ── Mounted combat modifier ─────────────────────────────────────
@@ -4194,7 +4608,7 @@ mod tests {
     fn test_mounted_combat_applies_modifier() {
         // When mounted, find_roll_to_hit should include the riding modifier
         // via uhitinc. Unskilled riding gives -2 penalty.
-        let (mut world, player, defender) = make_attack_test_world();
+        let (mut world, player, _defender) = make_attack_test_world();
         let mut rng = test_rng();
 
         // Spawn a steed and mount the player.
@@ -4204,7 +4618,10 @@ mod tests {
             crate::world::Tame,
             Name("pony".to_string()),
             crate::world::Speed(18),
-            HitPoints { current: 30, max: 30 },
+            HitPoints {
+                current: 30,
+                max: 30,
+            },
         ));
         let _ = crate::steed::mount(&mut world, player, steed, &mut rng);
         assert!(crate::steed::is_mounted(&world, player));
@@ -4218,9 +4635,7 @@ mod tests {
 
         // With unskilled riding modifier (-2) applied.
         let params_mounted = CombatParams {
-            uhitinc: crate::steed::mounted_combat_modifier(
-                crate::steed::RidingSkill::Unskilled,
-            ),
+            uhitinc: crate::steed::mounted_combat_modifier(crate::steed::RidingSkill::Unskilled),
             ..CombatParams::default()
         };
         let roll_mounted = find_roll_to_hit(&params_mounted);
@@ -4235,9 +4650,7 @@ mod tests {
     #[test]
     fn test_mounted_combat_expert_bonus() {
         let params_expert = CombatParams {
-            uhitinc: crate::steed::mounted_combat_modifier(
-                crate::steed::RidingSkill::Expert,
-            ),
+            uhitinc: crate::steed::mounted_combat_modifier(crate::steed::RidingSkill::Expert),
             ..CombatParams::default()
         };
         let params_base = CombatParams::default();
@@ -4249,6 +4662,42 @@ mod tests {
             roll_expert,
             roll_base + 2,
             "expert riding should apply +2 to-hit bonus"
+        );
+    }
+
+    #[test]
+    fn test_riding_skill_from_ecs_defaults_unskilled() {
+        let world = crate::world::GameWorld::new(crate::action::Position::new(5, 5));
+        let player = world.player();
+        assert_eq!(
+            riding_skill_from_ecs(&world, player),
+            crate::steed::RidingSkill::Unskilled
+        );
+    }
+
+    #[test]
+    fn test_riding_skill_from_ecs_reads_riding_skill_state() {
+        let mut world = crate::world::GameWorld::new(crate::action::Position::new(5, 5));
+        let player = world.player();
+
+        let _ = world.ecs_mut().insert_one(
+            player,
+            nethack_babel_data::PlayerSkills {
+                weapon_slots: 0,
+                skills_advanced: 0,
+                skills: vec![nethack_babel_data::SkillState {
+                    skill: nethack_babel_data::WeaponSkill::Riding,
+                    level: SkillLevel::GrandMaster as u8,
+                    max_level: SkillLevel::GrandMaster as u8,
+                    advance: 0,
+                }],
+                two_weapon: false,
+            },
+        );
+
+        assert_eq!(
+            riding_skill_from_ecs(&world, player),
+            crate::steed::RidingSkill::Expert
         );
     }
 }

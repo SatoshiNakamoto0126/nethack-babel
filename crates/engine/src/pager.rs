@@ -225,9 +225,7 @@ pub fn help_topic(topic: &str) -> Option<&'static str> {
              Other: s(search), o(open), c(close), >(down), <(up)",
         ),
         "options" => Some("Set options with OPTIONS= in .nethackrc or press O in-game."),
-        "symbols" => {
-            Some("@=you .=floor #=corridor <=upstairs >=downstairs +=door |/-=wall")
-        }
+        "symbols" => Some("@=you .=floor #=corridor <=upstairs >=downstairs +=door |/-=wall"),
         _ => None,
     }
 }
@@ -252,15 +250,7 @@ mod tests {
 
     #[test]
     fn test_describe_position_with_monster() {
-        let result = describe_position(
-            "floor",
-            Some("a grid bug"),
-            &[],
-            None,
-            None,
-            true,
-            true,
-        );
+        let result = describe_position("floor", Some("a grid bug"), &[], None, None, true, true);
         assert_eq!(result[0], "You see a grid bug here.");
         assert_eq!(result.len(), 2); // monster + terrain
     }
@@ -293,29 +283,13 @@ mod tests {
 
     #[test]
     fn test_describe_position_with_trap() {
-        let result = describe_position(
-            "floor",
-            None,
-            &[],
-            Some("a pit"),
-            None,
-            true,
-            true,
-        );
+        let result = describe_position("floor", None, &[], Some("a pit"), None, true, true);
         assert_eq!(result[0], "There is a pit here.");
     }
 
     #[test]
     fn test_describe_position_with_engraving() {
-        let result = describe_position(
-            "floor",
-            None,
-            &[],
-            None,
-            Some("Elbereth"),
-            true,
-            true,
-        );
+        let result = describe_position("floor", None, &[], None, Some("Elbereth"), true, true);
         assert_eq!(result[0], "You read: \"Elbereth\".");
     }
 
@@ -402,14 +376,8 @@ mod tests {
             describe_terrain("throne", true),
             "There is an opulent throne here."
         );
-        assert_eq!(
-            describe_terrain("altar", true),
-            "There is an altar here."
-        );
-        assert_eq!(
-            describe_terrain("lava", true),
-            "There is molten lava here."
-        );
+        assert_eq!(describe_terrain("altar", true), "There is an altar here.");
+        assert_eq!(describe_terrain("lava", true), "There is molten lava here.");
         assert_eq!(
             describe_terrain("pool", true),
             "There is a pool of water here."

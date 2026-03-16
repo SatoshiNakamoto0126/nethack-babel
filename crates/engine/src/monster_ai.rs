@@ -22,7 +22,9 @@ use rand::Rng;
 use nethack_babel_data::{MonsterFlags, ObjectClass, ObjectCore, ObjectLocation};
 
 use crate::action::{Direction, Position};
-use crate::combat::{resolve_melee_attack, resolve_monster_attacks, MonsterAttacks, monster_ranged_attack_dispatch};
+use crate::combat::{
+    MonsterAttacks, monster_ranged_attack_dispatch, resolve_melee_attack, resolve_monster_attacks,
+};
 use crate::dungeon::Terrain;
 use crate::event::{EngineEvent, HpSource, StatusEffect};
 use crate::potions::PotionType;
@@ -166,7 +168,13 @@ pub fn resolve_monster_turn(
     // ── Phase 1: Covetous behavior ─────────────────────────────────
     if is_covetous {
         let covetous_events = covetous_behavior(
-            world, monster, monster_pos, player_pos, current_hp, max_hp, rng,
+            world,
+            monster,
+            monster_pos,
+            player_pos,
+            current_hp,
+            max_hp,
+            rng,
         );
         if !covetous_events.is_empty() {
             return covetous_events;
@@ -211,9 +219,7 @@ pub fn resolve_monster_turn(
     if can_see && distance > 1 {
         // First check for innate ranged attacks (breath, gaze).
         if world.get_component::<MonsterAttacks>(monster).is_some() {
-            let ranged_events = monster_ranged_attack_dispatch(
-                world, monster, player_pos, rng,
-            );
+            let ranged_events = monster_ranged_attack_dispatch(world, monster, player_pos, rng);
             if !ranged_events.is_empty() {
                 events.extend(ranged_events);
                 return events;
@@ -234,21 +240,16 @@ pub fn resolve_monster_turn(
         // Elbereth check: if the player is standing on an Elbereth
         // engraving and this monster is not immune, the monster refuses
         // to attack and may flee instead.
-        let elbereth_active = crate::engrave::is_elbereth_at(
-            &world.dungeon().engraving_map,
-            player_pos,
-        );
+        let elbereth_active =
+            crate::engrave::is_elbereth_at(&world.dungeon().engraving_map, player_pos);
         if elbereth_active {
             let is_blind = crate::status::is_blind(world, monster);
-            let immune = crate::engrave::is_elbereth_immune(
-                species_flags, is_blind, is_covetous, false,
-            );
+            let immune =
+                crate::engrave::is_elbereth_immune(species_flags, is_blind, is_covetous, false);
             if !immune {
                 // Monster is scared by Elbereth — flee instead of attacking.
                 events.push(EngineEvent::msg("monster-scared-elbereth"));
-                if let Some(flee_events) =
-                    move_away(world, monster, monster_pos, player_pos, rng)
-                {
+                if let Some(flee_events) = move_away(world, monster, monster_pos, player_pos, rng) {
                     events.extend(flee_events);
                 }
                 return events;
@@ -271,9 +272,8 @@ pub fn resolve_monster_turn(
     // LOS, so we check for doors toward the player even when can_see
     // is false (because the door itself blocks sight).
     if intelligence != MonsterIntelligence::Animal && distance <= 8 {
-        let door_events = try_open_doors_toward(
-            world, monster, monster_pos, player_pos, species_flags,
-        );
+        let door_events =
+            try_open_doors_toward(world, monster, monster_pos, player_pos, species_flags);
         if !door_events.is_empty() {
             events.extend(door_events);
             return events;
@@ -321,8 +321,7 @@ pub fn monster_regen(
         .map(|f| f.0)
         .unwrap_or_else(MonsterFlags::empty);
 
-    let should_regen = species_flags.contains(MonsterFlags::REGEN)
-        || game_turn.is_multiple_of(20);
+    let should_regen = species_flags.contains(MonsterFlags::REGEN) || game_turn.is_multiple_of(20);
 
     if !should_regen {
         return;
@@ -400,22 +399,26 @@ pub fn monster_use_defensive(
 
         // Apply healing.
         if heal_amount > 0
-            && let Some(mut hp) = world.get_component_mut::<HitPoints>(monster) {
-                let old = hp.current;
-                hp.current = (hp.current + heal_amount).min(hp.max);
-                let actual = hp.current - old;
-                if actual > 0 {
-                    events.push(EngineEvent::HpChange {
-                        entity: monster,
-                        amount: actual,
-                        new_hp: hp.current,
-                        source: HpSource::Potion,
-                    });
-                }
+            && let Some(mut hp) = world.get_component_mut::<HitPoints>(monster)
+        {
+            let old = hp.current;
+            hp.current = (hp.current + heal_amount).min(hp.max);
+            let actual = hp.current - old;
+            if actual > 0 {
+                events.push(EngineEvent::HpChange {
+                    entity: monster,
+                    amount: actual,
+                    new_hp: hp.current,
+                    source: HpSource::Potion,
+                });
             }
+        }
 
         let mon_name = world.entity_name(monster);
-        events.push(EngineEvent::msg_with("monster-quaffs", vec![("monster", mon_name.clone())]));
+        events.push(EngineEvent::msg_with(
+            "monster-quaffs",
+            vec![("monster", mon_name.clone())],
+        ));
 
         // Consume the potion.
         let _ = world.despawn(item);
@@ -445,7 +448,10 @@ pub fn monster_use_defensive(
                     from,
                     to: dest,
                 });
-                events.push(EngineEvent::msg_with("monster-teleport-away", vec![("monster", mon_name.clone())]));
+                events.push(EngineEvent::msg_with(
+                    "monster-teleport-away",
+                    vec![("monster", mon_name.clone())],
+                ));
             }
             return events;
         }
@@ -462,7 +468,13 @@ pub fn monster_use_defensive(
                 charges.spe -= 1;
             }
             let mon_name = world.entity_name(monster);
-            events.push(EngineEvent::msg_with("monster-uses-wand", vec![("monster", mon_name.clone()), ("wand_type", "digging".to_string())]));
+            events.push(EngineEvent::msg_with(
+                "monster-uses-wand",
+                vec![
+                    ("monster", mon_name.clone()),
+                    ("wand_type", "digging".to_string()),
+                ],
+            ));
             // For now, the monster just "escapes" -- despawn it.
             let _ = world.despawn(monster);
             return events;
@@ -528,7 +540,13 @@ pub fn monster_use_offensive(
             }
 
             let mon_name = world.entity_name(monster);
-            events.push(EngineEvent::msg_with("monster-uses-wand", vec![("monster", mon_name.clone()), ("wand_type", wtype.ray_name().to_string())]));
+            events.push(EngineEvent::msg_with(
+                "monster-uses-wand",
+                vec![
+                    ("monster", mon_name.clone()),
+                    ("wand_type", wtype.ray_name().to_string()),
+                ],
+            ));
 
             // Apply damage to the player based on wand type.
             let damage = match wtype {
@@ -560,15 +578,16 @@ pub fn monster_use_offensive(
             };
 
             if damage > 0
-                && let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
-                    hp.current -= damage as i32;
-                    events.push(EngineEvent::HpChange {
-                        entity: player,
-                        amount: -(damage as i32),
-                        new_hp: hp.current,
-                        source: HpSource::Combat,
-                    });
-                }
+                && let Some(mut hp) = world.get_component_mut::<HitPoints>(player)
+            {
+                hp.current -= damage as i32;
+                events.push(EngineEvent::HpChange {
+                    entity: player,
+                    amount: -(damage as i32),
+                    new_hp: hp.current,
+                    source: HpSource::Combat,
+                });
+            }
 
             return events;
         }
@@ -586,7 +605,13 @@ pub fn monster_use_offensive(
     for &ptype in &throw_potions {
         if let Some((item, _)) = find_potion_in_list(&monster_items, world, ptype) {
             let mon_name = world.entity_name(monster);
-            events.push(EngineEvent::msg_with("monster-throws", vec![("monster", mon_name.clone()), ("item", "potion".to_string())]));
+            events.push(EngineEvent::msg_with(
+                "monster-throws",
+                vec![
+                    ("monster", mon_name.clone()),
+                    ("item", "potion".to_string()),
+                ],
+            ));
 
             match ptype {
                 PotionType::Paralysis => {
@@ -673,7 +698,10 @@ pub fn monster_use_misc(
             duration: Some(100),
             source: None,
         });
-        events.push(EngineEvent::msg_with("monster-quaffs", vec![("monster", mon_name.clone())]));
+        events.push(EngineEvent::msg_with(
+            "monster-quaffs",
+            vec![("monster", mon_name.clone())],
+        ));
         let _ = world.despawn(item);
         return events;
     }
@@ -687,7 +715,10 @@ pub fn monster_use_misc(
             duration: Some(200),
             source: None,
         });
-        events.push(EngineEvent::msg_with("monster-quaffs", vec![("monster", mon_name.clone())]));
+        events.push(EngineEvent::msg_with(
+            "monster-quaffs",
+            vec![("monster", mon_name.clone())],
+        ));
         let _ = world.despawn(item);
         return events;
     }
@@ -758,7 +789,10 @@ fn covetous_behavior(
                     from: monster_pos,
                     to: stairs_pos,
                 });
-                events.push(EngineEvent::msg_with("monster-teleport-away", vec![("monster", mon_name.clone())]));
+                events.push(EngineEvent::msg_with(
+                    "monster-teleport-away",
+                    vec![("monster", mon_name.clone())],
+                ));
                 return events;
             } else {
                 // Already at stairs: heal if far from player.
@@ -801,7 +835,10 @@ fn covetous_behavior(
             };
             if teleported {
                 let mon_name = world.entity_name(monster);
-                events.push(EngineEvent::msg_with("monster-teleport-near", vec![("monster", mon_name.clone())]));
+                events.push(EngineEvent::msg_with(
+                    "monster-teleport-near",
+                    vec![("monster", mon_name.clone())],
+                ));
                 return events;
             }
         }
@@ -892,12 +929,13 @@ fn try_open_doors_toward(
     for &dir in &candidates {
         let door_pos = monster_pos.step(dir);
         if let Some(cell) = world.dungeon().current_level.get(door_pos)
-            && matches!(cell.terrain, Terrain::DoorClosed | Terrain::DoorLocked) {
-                let events = try_open_door(world, monster, door_pos);
-                if !events.is_empty() {
-                    return events;
-                }
+            && matches!(cell.terrain, Terrain::DoorClosed | Terrain::DoorLocked)
+        {
+            let events = try_open_door(world, monster, door_pos);
+            if !events.is_empty() {
+                return events;
             }
+        }
     }
     Vec::new()
 }
@@ -961,7 +999,10 @@ pub fn monster_pickup(
             item,
             quantity: 1,
         });
-        events.push(EngineEvent::msg_with("monster-picks-up", vec![("monster", mon_name.clone()), ("item", "item".to_string())]));
+        events.push(EngineEvent::msg_with(
+            "monster-picks-up",
+            vec![("monster", mon_name.clone()), ("item", "item".to_string())],
+        ));
     }
 
     events
@@ -971,10 +1012,7 @@ pub fn monster_pickup(
 fn is_useful_pickup(core: &ObjectCore) -> bool {
     matches!(
         core.object_class,
-        ObjectClass::Weapon
-            | ObjectClass::Armor
-            | ObjectClass::Tool
-            | ObjectClass::Potion
+        ObjectClass::Weapon | ObjectClass::Armor | ObjectClass::Tool | ObjectClass::Potion
     )
 }
 
@@ -1009,9 +1047,10 @@ fn is_fleeing(
 ) -> bool {
     // Check flee timer first.
     if let Some(timer) = world.get_component::<FleeTimer>(monster)
-        && timer.0 > 0 {
-            return true;
-        }
+        && timer.0 > 0
+    {
+        return true;
+    }
 
     // HP-based flee threshold: HP < max_hp / 3 (and max_hp >= 3).
     if current_hp < max_hp / 3 && max_hp >= 3 {
@@ -1022,9 +1061,7 @@ fn is_fleeing(
             100u8
         };
         let flee_time = rng.random_range(1..=upper);
-        let _ = world
-            .ecs_mut()
-            .insert_one(monster, FleeTimer(flee_time));
+        let _ = world.ecs_mut().insert_one(monster, FleeTimer(flee_time));
         return true;
     }
 
@@ -1034,9 +1071,10 @@ fn is_fleeing(
 /// Tick down the flee timer by 1 each turn.
 fn tick_flee_timer(world: &mut GameWorld, monster: Entity) {
     if let Some(mut timer) = world.get_component_mut::<FleeTimer>(monster)
-        && timer.0 > 0 {
-            timer.0 -= 1;
-        }
+        && timer.0 > 0
+    {
+        timer.0 -= 1;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1310,22 +1348,22 @@ fn find_potion_in_list(
     world: &GameWorld,
     potion_type: PotionType,
 ) -> Option<(Entity, PotionType)> {
-    items.iter().copied().find(|&item| {
-        world
-            .get_component::<ObjectCore>(item)
-            .is_some_and(|core| core.object_class == ObjectClass::Potion)
-            && world
-                .get_component::<PotionTypeTag>(item)
-                .is_some_and(|tag| tag.0 == potion_type)
-    }).map(|item| (item, potion_type))
+    items
+        .iter()
+        .copied()
+        .find(|&item| {
+            world
+                .get_component::<ObjectCore>(item)
+                .is_some_and(|core| core.object_class == ObjectClass::Potion)
+                && world
+                    .get_component::<PotionTypeTag>(item)
+                    .is_some_and(|tag| tag.0 == potion_type)
+        })
+        .map(|item| (item, potion_type))
 }
 
 /// Find a wand of the given type in the item list.
-fn find_wand_in_list(
-    items: &[Entity],
-    world: &GameWorld,
-    wand_type: WandType,
-) -> Option<Entity> {
+fn find_wand_in_list(items: &[Entity], world: &GameWorld, wand_type: WandType) -> Option<Entity> {
     items.iter().copied().find(|&item| {
         world
             .get_component::<ObjectCore>(item)
@@ -1343,9 +1381,10 @@ fn find_stairs(world: &GameWorld) -> Option<Position> {
         for x in 0..map.width {
             let pos = Position::new(x as i32, y as i32);
             if let Some(cell) = map.get(pos)
-                && matches!(cell.terrain, Terrain::StairsUp | Terrain::StairsDown) {
-                    return Some(pos);
-                }
+                && matches!(cell.terrain, Terrain::StairsUp | Terrain::StairsDown)
+            {
+                return Some(pos);
+            }
         }
     }
     None
@@ -1396,9 +1435,10 @@ fn find_random_floor_tile(world: &GameWorld, rng: &mut impl Rng) -> Option<Posit
         for x in 0..map.width {
             let pos = Position::new(x as i32, y as i32);
             if let Some(cell) = map.get(pos)
-                && cell.terrain.is_walkable() {
-                    candidates.push(pos);
-                }
+                && cell.terrain.is_walkable()
+            {
+                candidates.push(pos);
+            }
         }
     }
     if candidates.is_empty() {
@@ -1548,11 +1588,8 @@ pub fn monster_cast_spell(
             ClericSpell::OpenWounds => {
                 let dice = 3u32;
                 let sides = (caster.monster_level as u32).max(1);
-                let damage: u32 =
-                    (0..dice).map(|_| rng.random_range(1..=sides)).sum();
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                let damage: u32 = (0..dice).map(|_| rng.random_range(1..=sides)).sum();
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage as i32;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -1563,11 +1600,8 @@ pub fn monster_cast_spell(
                 }
             }
             ClericSpell::CureSelf => {
-                let heal: i32 =
-                    (0..3).map(|_| rng.random_range(1i32..=6)).sum::<i32>() + 6;
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(monster)
-                {
+                let heal: i32 = (0..3).map(|_| rng.random_range(1i32..=6)).sum::<i32>() + 6;
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(monster) {
                     let old = hp.current;
                     hp.current = (hp.current + heal).min(hp.max);
                     let actual = hp.current - old;
@@ -1615,11 +1649,8 @@ pub fn monster_cast_spell(
                 events.push(EngineEvent::msg("spell-curse-items"));
             }
             ClericSpell::Lightning => {
-                let damage: u32 =
-                    (0..4).map(|_| rng.random_range(1u32..=6)).sum();
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                let damage: u32 = (0..4).map(|_| rng.random_range(1u32..=6)).sum();
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage as i32;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -1630,11 +1661,8 @@ pub fn monster_cast_spell(
                 }
             }
             ClericSpell::FirePillar => {
-                let damage: u32 =
-                    (0..4).map(|_| rng.random_range(1u32..=6)).sum();
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                let damage: u32 = (0..4).map(|_| rng.random_range(1u32..=6)).sum();
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage as i32;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -1645,11 +1673,8 @@ pub fn monster_cast_spell(
                 }
             }
             ClericSpell::Geyser => {
-                let damage: u32 =
-                    (0..6).map(|_| rng.random_range(1u32..=6)).sum();
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                let damage: u32 = (0..6).map(|_| rng.random_range(1u32..=6)).sum();
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage as i32;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -1678,11 +1703,8 @@ pub fn monster_cast_spell(
             MageSpell::PsiBolt => {
                 let dice = 3u32;
                 let sides = (caster.monster_level as u32).max(1);
-                let damage: u32 =
-                    (0..dice).map(|_| rng.random_range(1..=sides)).sum();
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                let damage: u32 = (0..dice).map(|_| rng.random_range(1..=sides)).sum();
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage as i32;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -1693,11 +1715,8 @@ pub fn monster_cast_spell(
                 }
             }
             MageSpell::CureSelf => {
-                let heal: i32 =
-                    (0..3).map(|_| rng.random_range(1i32..=6)).sum::<i32>() + 6;
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(monster)
-                {
+                let heal: i32 = (0..3).map(|_| rng.random_range(1i32..=6)).sum::<i32>() + 6;
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(monster) {
                     let old = hp.current;
                     hp.current = (hp.current + heal).min(hp.max);
                     let actual = hp.current - old;
@@ -1753,11 +1772,8 @@ pub fn monster_cast_spell(
                 events.push(EngineEvent::msg("spell-summon-monster"));
             }
             MageSpell::DeathTouch => {
-                let damage: u32 =
-                    (0..8).map(|_| rng.random_range(1u32..=6)).sum();
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                let damage: u32 = (0..8).map(|_| rng.random_range(1u32..=6)).sum();
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage as i32;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -1790,11 +1806,7 @@ pub struct Throwable {
 ///
 /// Returns true if the monster has a ranged weapon and has line of sight
 /// to the player at a distance > 1.
-pub fn should_monster_throw(
-    world: &GameWorld,
-    monster: Entity,
-    player_pos: Position,
-) -> bool {
+pub fn should_monster_throw(world: &GameWorld, monster: Entity, player_pos: Position) -> bool {
     let monster_pos = match world.get_component::<Positioned>(monster) {
         Some(p) => p.0,
         None => return false,
@@ -1811,9 +1823,9 @@ pub fn should_monster_throw(
 
     // Check if the monster has a throwable item.
     let items = get_monster_inventory(world, monster);
-    items.iter().any(|&item| {
-        world.get_component::<Throwable>(item).is_some()
-    })
+    items
+        .iter()
+        .any(|&item| world.get_component::<Throwable>(item).is_some())
 }
 
 /// Monster throws an item at the player.
@@ -1841,9 +1853,10 @@ pub fn monster_throw_item(
 
     // Find a throwable item.
     let items = get_monster_inventory(world, monster);
-    let throwable_item = items.iter().copied().find(|&item| {
-        world.get_component::<Throwable>(item).is_some()
-    });
+    let throwable_item = items
+        .iter()
+        .copied()
+        .find(|&item| world.get_component::<Throwable>(item).is_some());
 
     let item = match throwable_item {
         Some(i) => i,
@@ -1855,7 +1868,10 @@ pub fn monster_throw_item(
 
     events.push(EngineEvent::msg_with(
         "monster-throws",
-        vec![("monster", mon_name.clone()), ("item", "projectile".to_string())],
+        vec![
+            ("monster", mon_name.clone()),
+            ("item", "projectile".to_string()),
+        ],
     ));
 
     // Hit check: to_hit = monster_level + 1 + d(1,20) vs player AC + distance penalty.
@@ -1949,11 +1965,7 @@ pub fn spawn_rate(wizard_killed: bool, dungeon_depth: u32) -> u32 {
 /// Check whether a spontaneous monster should be generated this turn.
 ///
 /// Returns true with probability `1/spawn_rate`.
-pub fn should_spawn_monster(
-    wizard_killed: bool,
-    dungeon_depth: u32,
-    rng: &mut impl Rng,
-) -> bool {
+pub fn should_spawn_monster(wizard_killed: bool, dungeon_depth: u32, rng: &mut impl Rng) -> bool {
     let rate = spawn_rate(wizard_killed, dungeon_depth);
     rng.random_range(0..rate) == 0
 }
@@ -2034,10 +2046,7 @@ pub enum DemonLord {
 
 /// Identify whether a monster is a known demon lord, based on its name
 /// and species flags.
-pub fn identify_demon_lord(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<DemonLord> {
+pub fn identify_demon_lord(world: &GameWorld, monster: Entity) -> Option<DemonLord> {
     let flags = world
         .get_component::<MonsterSpeciesFlags>(monster)
         .map(|f| f.0)
@@ -2093,17 +2102,13 @@ pub fn demon_lord_special(
         DemonLord::Orcus => {
             // Orcus prioritizes wand of death if he has one.
             let monster_items = get_monster_inventory(world, monster);
-            if let Some(wand) = find_wand_in_list(
-                &monster_items, world, WandType::Death,
-            ) {
+            if let Some(wand) = find_wand_in_list(&monster_items, world, WandType::Death) {
                 let has_charges = world
                     .get_component::<WandCharges>(wand)
                     .map(|c| c.spe > 0)
                     .unwrap_or(false);
                 if has_charges && can_see {
-                    if let Some(mut charges) =
-                        world.get_component_mut::<WandCharges>(wand)
-                    {
+                    if let Some(mut charges) = world.get_component_mut::<WandCharges>(wand) {
                         charges.spe -= 1;
                     }
                     events.push(EngineEvent::msg_with(
@@ -2111,9 +2116,7 @@ pub fn demon_lord_special(
                         vec![("monster", mon_name)],
                     ));
                     // Death ray: 999 damage (player must have MR to survive).
-                    if let Some(mut hp) =
-                        world.get_component_mut::<HitPoints>(player)
-                    {
+                    if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                         hp.current -= 999;
                         events.push(EngineEvent::HpChange {
                             entity: player,
@@ -2137,9 +2140,7 @@ pub fn demon_lord_special(
                         "orcus-death-touch",
                         vec![("monster", mon_name)],
                     ));
-                    if let Some(mut hp) =
-                        world.get_component_mut::<HitPoints>(player)
-                    {
+                    if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                         hp.current -= damage;
                         events.push(EngineEvent::HpChange {
                             entity: player,
@@ -2155,15 +2156,12 @@ pub fn demon_lord_special(
         DemonLord::Asmodeus => {
             // Asmodeus uses cold attacks at range.
             if can_see && distance > 1 && distance <= 6 {
-                let damage: i32 =
-                    (0..6).map(|_| rng.random_range(1..=6i32)).sum();
+                let damage: i32 = (0..6).map(|_| rng.random_range(1..=6i32)).sum();
                 events.push(EngineEvent::msg_with(
                     "asmodeus-cold-blast",
                     vec![("monster", mon_name)],
                 ));
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -2189,9 +2187,7 @@ pub fn demon_lord_special(
                     duration: Some(rng.random_range(10..=40u32)),
                     source: Some(monster),
                 });
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -2206,15 +2202,12 @@ pub fn demon_lord_special(
         DemonLord::Juiblex => {
             // Juiblex spits acid at range.
             if can_see && distance > 1 && distance <= 4 {
-                let damage: i32 =
-                    (0..4).map(|_| rng.random_range(1..=6i32)).sum();
+                let damage: i32 = (0..4).map(|_| rng.random_range(1..=6i32)).sum();
                 events.push(EngineEvent::msg_with(
                     "juiblex-acid-spit",
                     vec![("monster", mon_name)],
                 ));
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -2256,9 +2249,7 @@ pub fn demon_lord_special(
                     duration: Some(rng.random_range(5..=20u32)),
                     source: Some(monster),
                 });
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -2321,8 +2312,8 @@ mod tests {
     use crate::action::Position;
     use crate::dungeon::Terrain;
     use crate::world::{
-        ArmorClass, Attributes, CreationOrder, ExperienceLevel, HitPoints, Monster,
-        MovementPoints, Name, Positioned, Speed, NORMAL_SPEED,
+        ArmorClass, Attributes, CreationOrder, ExperienceLevel, HitPoints, Monster, MovementPoints,
+        NORMAL_SPEED, Name, Positioned, Speed,
     };
     use nethack_babel_data::{ObjectClass, ObjectCore, ObjectLocation, ObjectTypeId};
     use rand::SeedableRng;
@@ -2479,9 +2470,12 @@ mod tests {
         assert!(moved, "low-HP monster should move (flee)");
 
         // Should NOT have attacked.
-        let attacked = events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }));
+        let attacked = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+            )
+        });
         assert!(!attacked, "fleeing monster should not attack");
     }
 
@@ -2585,9 +2579,12 @@ mod tests {
 
         let events = resolve_monster_turn(&mut world, monster, &mut rng);
 
-        let attacked = events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }));
+        let attacked = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+            )
+        });
         assert!(!attacked, "monster with blocked LOS should not attack");
     }
 
@@ -2600,13 +2597,34 @@ mod tests {
         let monster = spawn_monster_at(&mut world, monster_pos, 10, 10);
 
         // Block all directions except south.
-        world.dungeon_mut().current_level.set_terrain(Position::new(5, 4), Terrain::Wall);
-        world.dungeon_mut().current_level.set_terrain(Position::new(6, 5), Terrain::Wall);
-        world.dungeon_mut().current_level.set_terrain(Position::new(4, 5), Terrain::Wall);
-        world.dungeon_mut().current_level.set_terrain(Position::new(6, 4), Terrain::Wall);
-        world.dungeon_mut().current_level.set_terrain(Position::new(4, 4), Terrain::Wall);
-        world.dungeon_mut().current_level.set_terrain(Position::new(6, 6), Terrain::Wall);
-        world.dungeon_mut().current_level.set_terrain(Position::new(4, 6), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(5, 4), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(4, 5), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 4), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(4, 4), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 6), Terrain::Wall);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(4, 6), Terrain::Wall);
 
         let events = resolve_monster_turn(&mut world, monster, &mut rng);
 
@@ -2689,15 +2707,28 @@ mod tests {
 
     #[test]
     fn test_chebyshev_distance() {
-        assert_eq!(chebyshev_distance(Position::new(0, 0), Position::new(3, 4)), 4);
-        assert_eq!(chebyshev_distance(Position::new(5, 5), Position::new(5, 5)), 0);
-        assert_eq!(chebyshev_distance(Position::new(0, 0), Position::new(8, 0)), 8);
+        assert_eq!(
+            chebyshev_distance(Position::new(0, 0), Position::new(3, 4)),
+            4
+        );
+        assert_eq!(
+            chebyshev_distance(Position::new(5, 5), Position::new(5, 5)),
+            0
+        );
+        assert_eq!(
+            chebyshev_distance(Position::new(0, 0), Position::new(8, 0)),
+            8
+        );
     }
 
     #[test]
     fn test_can_see_through_open_floor() {
         let world = make_test_world();
-        assert!(can_see_target(&world, Position::new(8, 8), Position::new(12, 8)));
+        assert!(can_see_target(
+            &world,
+            Position::new(8, 8),
+            Position::new(12, 8)
+        ));
     }
 
     #[test]
@@ -2802,11 +2833,17 @@ mod tests {
         let player_damaged = events
             .iter()
             .any(|e| matches!(e, EngineEvent::HpChange { amount, .. } if *amount < 0));
-        assert!(player_damaged, "player should take damage from wand of fire");
+        assert!(
+            player_damaged,
+            "player should take damage from wand of fire"
+        );
 
         // Wand charges should have decremented.
         let charges = world.get_component::<WandCharges>(wand).unwrap();
-        assert_eq!(charges.spe, 2, "wand charges should have decremented from 3 to 2");
+        assert_eq!(
+            charges.spe, 2,
+            "wand charges should have decremented from 3 to 2"
+        );
     }
 
     // ── Test 3: Covetous monster teleports to stairs when hurt ────
@@ -2836,9 +2873,9 @@ mod tests {
         let events = resolve_monster_turn(&mut world, monster, &mut rng);
 
         // Should have teleported to stairs.
-        let teleported = events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::EntityTeleported { to, .. } if *to == Position::new(3, 3)));
+        let teleported = events.iter().any(
+            |e| matches!(e, EngineEvent::EntityTeleported { to, .. } if *to == Position::new(3, 3)),
+        );
         assert!(
             teleported,
             "covetous monster should teleport to stairs when critically hurt"
@@ -2914,10 +2951,7 @@ mod tests {
         let healed = events
             .iter()
             .any(|e| matches!(e, EngineEvent::HpChange { amount, .. } if *amount > 0));
-        assert!(
-            !healed,
-            "animal monster should not quaff healing potion"
-        );
+        assert!(!healed, "animal monster should not quaff healing potion");
 
         // Potion should still exist.
         assert!(
@@ -2993,13 +3027,19 @@ mod tests {
                 false
             }
         });
-        assert!(zapped, "spellcaster should prefer ranged wand zap at distance");
+        assert!(
+            zapped,
+            "spellcaster should prefer ranged wand zap at distance"
+        );
 
         // Monster should NOT have moved.
         let moved = events
             .iter()
             .any(|e| matches!(e, EngineEvent::EntityMoved { .. }));
-        assert!(!moved, "spellcaster using ranged attack should not also move");
+        assert!(
+            !moved,
+            "spellcaster using ranged attack should not also move"
+        );
     }
 
     // ── Test 8: Enhanced flee timer behavior ──────────────────────
@@ -3023,9 +3063,12 @@ mod tests {
         assert!(moved, "monster with active flee timer should flee");
 
         // Should NOT have attacked (even though adjacent to player).
-        let attacked = events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }));
+        let attacked = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+            )
+        });
         assert!(
             !attacked,
             "fleeing monster (timer active) should not attack"
@@ -3033,10 +3076,7 @@ mod tests {
 
         // Flee timer should have decremented by 1 (from 5 to 4).
         let timer = world.get_component::<FleeTimer>(monster).unwrap();
-        assert_eq!(
-            timer.0, 4,
-            "flee timer should have decremented from 5 to 4"
-        );
+        assert_eq!(timer.0, 4, "flee timer should have decremented from 5 to 4");
     }
 
     // ── Test 9: Flee timer expires and monster resumes attacking ───
@@ -3121,7 +3161,11 @@ mod tests {
             .get(Position::new(9, 8))
             .unwrap()
             .terrain;
-        assert_eq!(terrain, Terrain::DoorOpen, "door should be open after giant breaks it");
+        assert_eq!(
+            terrain,
+            Terrain::DoorOpen,
+            "door should be open after giant breaks it"
+        );
     }
 
     // ── Test 11: Animal does not pick up items ────────────────────
@@ -3183,13 +3227,8 @@ mod tests {
             .set_terrain(stairs_pos, Terrain::StairsDown);
 
         // Covetous monster already at stairs, very low HP.
-        let monster = spawn_intelligent_monster(
-            &mut world,
-            stairs_pos,
-            2,
-            30,
-            MonsterIntelligence::Humanoid,
-        );
+        let monster =
+            spawn_intelligent_monster(&mut world, stairs_pos, 2, 30, MonsterIntelligence::Humanoid);
         let _ = world.ecs_mut().insert_one(monster, Covetous);
 
         let events = resolve_monster_turn(&mut world, monster, &mut rng);
@@ -3244,10 +3283,7 @@ mod tests {
             matches!(e, EngineEvent::EntityMoved { to, .. }
                 if to.x == 9) // moved into the water column
         });
-        assert!(
-            moved,
-            "flying monster should be able to cross water"
-        );
+        assert!(moved, "flying monster should be able to cross water");
     }
 
     #[test]
@@ -3275,9 +3311,9 @@ mod tests {
         let mut rng = test_rng();
         let events = resolve_monster_turn(&mut world, monster, &mut rng);
 
-        let moved_through_water = events.iter().any(|e| {
-            matches!(e, EngineEvent::EntityMoved { to, .. } if to.x == 9)
-        });
+        let moved_through_water = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityMoved { to, .. } if to.x == 9));
         assert!(
             moved_through_water,
             "swimming monster should be able to cross pool"
@@ -3464,7 +3500,10 @@ mod tests {
             is_valid_monster_move(&world, Position::new(9, 8), monster),
             "amorphous monster should be able to move through closed doors"
         );
-        assert!(terrain_passable_for(Terrain::DoorClosed, MonsterFlags::AMORPHOUS));
+        assert!(terrain_passable_for(
+            Terrain::DoorClosed,
+            MonsterFlags::AMORPHOUS
+        ));
     }
 
     // ── G.1: Teleporting monsters ────────────────────────────────
@@ -3537,9 +3576,10 @@ mod tests {
                 pos.0 = Position::new(14, 14);
             }
             let events = resolve_monster_turn(&mut world, monster, &mut rng);
-            if events.iter().any(|e| {
-                matches!(e, EngineEvent::EntityTeleported { .. })
-            }) {
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::EntityTeleported { .. }))
+            {
                 // Check the teleport was to near the player.
                 let new_pos = world.get_component::<Positioned>(monster).unwrap().0;
                 let player_pos = Position::new(8, 8);
@@ -3579,12 +3619,12 @@ mod tests {
 
         let events = try_open_door(&mut world, monster, Position::new(9, 8));
         let opened = events.iter().any(|e| {
-            matches!(e, EngineEvent::DoorOpened { .. } | EngineEvent::DoorBroken { .. })
+            matches!(
+                e,
+                EngineEvent::DoorOpened { .. } | EngineEvent::DoorBroken { .. }
+            )
         });
-        assert!(
-            !opened,
-            "monster with NOHANDS should not open doors"
-        );
+        assert!(!opened, "monster with NOHANDS should not open doors");
 
         // Verify door is still closed.
         let terrain = world
@@ -3607,11 +3647,16 @@ mod tests {
 
         // No REGEN flag -- should heal on turn 20 but not turn 19.
         monster_regen(&mut world, monster, 19, &mut events);
-        assert!(events.is_empty(), "non-REGEN monster should not heal on turn 19");
+        assert!(
+            events.is_empty(),
+            "non-REGEN monster should not heal on turn 19"
+        );
 
         monster_regen(&mut world, monster, 20, &mut events);
         assert!(
-            events.iter().any(|e| matches!(e, EngineEvent::HpChange { amount: 1, .. })),
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::HpChange { amount: 1, .. })),
             "non-REGEN monster should heal 1 HP on turn 20"
         );
 
@@ -3632,7 +3677,9 @@ mod tests {
         // REGEN flag -- should heal every turn.
         monster_regen(&mut world, monster, 1, &mut events);
         assert!(
-            events.iter().any(|e| matches!(e, EngineEvent::HpChange { amount: 1, .. })),
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::HpChange { amount: 1, .. })),
             "REGEN monster should heal on turn 1"
         );
         {
@@ -3756,11 +3803,7 @@ mod tests {
 
     #[test]
     fn test_monster_spawn_rate_wizard_killed() {
-        assert_eq!(
-            spawn_rate(true, 10),
-            25,
-            "post-wizard spawn rate is 25"
-        );
+        assert_eq!(spawn_rate(true, 10), 25, "post-wizard spawn rate is 25");
     }
 
     // ── G.2: Group generation ────────────────────────────────────
@@ -3786,7 +3829,10 @@ mod tests {
         let max_size = *sizes.iter().max().unwrap();
         let min_size = *sizes.iter().min().unwrap();
         assert!(min_size >= 1, "group size should be at least 1");
-        assert!(max_size >= 3, "large group at plvl 10 should sometimes be >= 3");
+        assert!(
+            max_size >= 3,
+            "large group at plvl 10 should sometimes be >= 3"
+        );
         assert!(max_size <= 10, "large group should not exceed 10");
     }
 
@@ -3805,7 +3851,10 @@ mod tests {
         let fast = world.spawn((
             Monster,
             Positioned(Position::new(14, 14)),
-            HitPoints { current: 10, max: 10 },
+            HitPoints {
+                current: 10,
+                max: 10,
+            },
             ArmorClass(10),
             Attributes::default(),
             ExperienceLevel(1),
@@ -3818,7 +3867,10 @@ mod tests {
         let slow = world.spawn((
             Monster,
             Positioned(Position::new(14, 12)),
-            HitPoints { current: 10, max: 10 },
+            HitPoints {
+                current: 10,
+                max: 10,
+            },
             ArmorClass(10),
             Attributes::default(),
             ExperienceLevel(1),
@@ -3830,7 +3882,11 @@ mod tests {
 
         // Collect sorted order.
         let mut monsters: Vec<(Entity, u32, u64)> = Vec::new();
-        for (entity, (speed, mp, _)) in world.ecs().query::<(&Speed, &MovementPoints, &Monster)>().iter() {
+        for (entity, (speed, mp, _)) in world
+            .ecs()
+            .query::<(&Speed, &MovementPoints, &Monster)>()
+            .iter()
+        {
             if mp.0 >= NORMAL_SPEED as i32 {
                 let creation = world
                     .get_component::<CreationOrder>(entity)
@@ -3875,7 +3931,10 @@ mod tests {
     fn test_terrain_passable_floor_always() {
         assert!(terrain_passable_for(Terrain::Floor, MonsterFlags::empty()));
         assert!(terrain_passable_for(Terrain::Floor, MonsterFlags::FLY));
-        assert!(terrain_passable_for(Terrain::Corridor, MonsterFlags::empty()));
+        assert!(terrain_passable_for(
+            Terrain::Corridor,
+            MonsterFlags::empty()
+        ));
     }
 
     #[test]
@@ -3902,9 +3961,18 @@ mod tests {
 
     #[test]
     fn test_terrain_passable_door_amorphous() {
-        assert!(!terrain_passable_for(Terrain::DoorClosed, MonsterFlags::empty()));
-        assert!(terrain_passable_for(Terrain::DoorClosed, MonsterFlags::AMORPHOUS));
-        assert!(terrain_passable_for(Terrain::DoorLocked, MonsterFlags::AMORPHOUS));
+        assert!(!terrain_passable_for(
+            Terrain::DoorClosed,
+            MonsterFlags::empty()
+        ));
+        assert!(terrain_passable_for(
+            Terrain::DoorClosed,
+            MonsterFlags::AMORPHOUS
+        ));
+        assert!(terrain_passable_for(
+            Terrain::DoorLocked,
+            MonsterFlags::AMORPHOUS
+        ));
     }
 
     // ── G: dist2_positions ───────────────────────────────────────
@@ -3915,10 +3983,7 @@ mod tests {
             dist2_positions(Position::new(0, 0), Position::new(3, 4)),
             25
         );
-        assert_eq!(
-            dist2_positions(Position::new(5, 5), Position::new(5, 5)),
-            0
-        );
+        assert_eq!(dist2_positions(Position::new(5, 5), Position::new(5, 5)), 0);
         assert_eq!(
             dist2_positions(Position::new(0, 0), Position::new(8, 0)),
             64
@@ -3987,10 +4052,7 @@ mod tests {
                 break;
             }
         }
-        assert!(
-            saw_geyser,
-            "level 24 cleric should sometimes choose Geyser"
-        );
+        assert!(saw_geyser, "level 24 cleric should sometimes choose Geyser");
     }
 
     #[test]
@@ -4017,17 +4079,10 @@ mod tests {
         // Cast several times and check at least one damages the player.
         let mut damaged = false;
         for _ in 0..20 {
-            let orig_hp = world
-                .get_component::<HitPoints>(player)
-                .unwrap()
-                .current;
-            let events =
-                monster_cast_spell(&mut world, monster, player, &mut rng);
+            let orig_hp = world.get_component::<HitPoints>(player).unwrap().current;
+            let events = monster_cast_spell(&mut world, monster, player, &mut rng);
 
-            let player_hp = world
-                .get_component::<HitPoints>(player)
-                .unwrap()
-                .current;
+            let player_hp = world.get_component::<HitPoints>(player).unwrap().current;
 
             if player_hp < orig_hp {
                 damaged = true;
@@ -4040,9 +4095,7 @@ mod tests {
             }
 
             // Reset HP for next attempt.
-            if let Some(mut hp) =
-                world.get_component_mut::<HitPoints>(player)
-            {
+            if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                 hp.current = hp.max;
             }
         }
@@ -4061,7 +4114,7 @@ mod tests {
         let monster = spawn_intelligent_monster(
             &mut world,
             Position::new(12, 8),
-            5,  // low HP
+            5, // low HP
             30,
             MonsterIntelligence::Spellcaster,
         );
@@ -4077,18 +4130,17 @@ mod tests {
         let mut healed = false;
         for _ in 0..50 {
             // Reset monster HP to be hurt.
-            if let Some(mut hp) =
-                world.get_component_mut::<HitPoints>(monster)
-            {
+            if let Some(mut hp) = world.get_component_mut::<HitPoints>(monster) {
                 hp.current = 5;
             }
-            let events =
-                monster_cast_spell(&mut world, monster, player, &mut rng);
-            if events.iter().any(|e| matches!(
-                e,
-                EngineEvent::HpChange { entity, amount, source: HpSource::Spell, .. }
-                    if *entity == monster && *amount > 0
-            )) {
+            let events = monster_cast_spell(&mut world, monster, player, &mut rng);
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::HpChange { entity, amount, source: HpSource::Spell, .. }
+                        if *entity == monster && *amount > 0
+                )
+            }) {
                 healed = true;
                 break;
             }
@@ -4102,11 +4154,9 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let monster =
-            spawn_monster_at(&mut world, Position::new(12, 8), 10, 10);
+        let monster = spawn_monster_at(&mut world, Position::new(12, 8), 10, 10);
 
-        let events =
-            monster_cast_spell(&mut world, monster, player, &mut rng);
+        let events = monster_cast_spell(&mut world, monster, player, &mut rng);
         assert!(
             events.is_empty(),
             "monster without Spellcaster component should do nothing"
@@ -4137,17 +4187,19 @@ mod tests {
         let mut stunned = false;
         for _ in 0..200 {
             // Reset player HP each time.
-            if let Some(mut hp) =
-                world.get_component_mut::<HitPoints>(player)
-            {
+            if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                 hp.current = hp.max;
             }
-            let events =
-                monster_cast_spell(&mut world, monster, player, &mut rng);
-            if events.iter().any(|e| matches!(
-                e,
-                EngineEvent::StatusApplied { status: StatusEffect::Stunned, .. }
-            )) {
+            let events = monster_cast_spell(&mut world, monster, player, &mut rng);
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        status: StatusEffect::Stunned,
+                        ..
+                    }
+                )
+            }) {
                 stunned = true;
                 break;
             }
@@ -4181,24 +4233,22 @@ mod tests {
 
         let mut hasted = false;
         for _ in 0..100 {
-            let events =
-                monster_cast_spell(&mut world, monster, player, &mut rng);
-            if events.iter().any(|e| matches!(
-                e,
-                EngineEvent::StatusApplied {
-                    entity,
-                    status: StatusEffect::FastSpeed,
-                    ..
-                } if *entity == monster
-            )) {
+            let events = monster_cast_spell(&mut world, monster, player, &mut rng);
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        entity,
+                        status: StatusEffect::FastSpeed,
+                        ..
+                    } if *entity == monster
+                )
+            }) {
                 hasted = true;
                 break;
             }
         }
-        assert!(
-            hasted,
-            "mage should sometimes cast HasteSelf"
-        );
+        assert!(hasted, "mage should sometimes cast HasteSelf");
     }
 
     // ── Monster throwing ─────────────────────────────────────────
@@ -4222,7 +4272,14 @@ mod tests {
             artifact: None,
         };
         let loc = ObjectLocation::MonsterInventory { carrier_id };
-        world.spawn((core, loc, Throwable { dice_count, dice_sides }))
+        world.spawn((
+            core,
+            loc,
+            Throwable {
+                dice_count,
+                dice_sides,
+            },
+        ))
     }
 
     #[test]
@@ -4300,10 +4357,9 @@ mod tests {
             20,
             MonsterIntelligence::Humanoid,
         );
-        let _ = world.ecs_mut().insert_one(
-            monster,
-            crate::world::ExperienceLevel(5),
-        );
+        let _ = world
+            .ecs_mut()
+            .insert_one(monster, crate::world::ExperienceLevel(5));
 
         // Give multiple throwables.
         give_monster_throwable(&mut world, monster, 2, 6, 10);
@@ -4312,22 +4368,19 @@ mod tests {
         let mut miss_count = 0;
         for _ in 0..30 {
             // Reset player HP.
-            if let Some(mut hp) =
-                world.get_component_mut::<HitPoints>(player)
-            {
+            if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                 hp.current = hp.max;
             }
             // Give fresh throwables if consumed.
             let items = get_monster_inventory(&world, monster);
-            let has_throwable = items.iter().any(|&i| {
-                world.get_component::<Throwable>(i).is_some()
-            });
+            let has_throwable = items
+                .iter()
+                .any(|&i| world.get_component::<Throwable>(i).is_some());
             if !has_throwable {
                 give_monster_throwable(&mut world, monster, 2, 6, 10);
             }
 
-            let events =
-                monster_throw_item(&mut world, monster, player, &mut rng);
+            let events = monster_throw_item(&mut world, monster, player, &mut rng);
             if events
                 .iter()
                 .any(|e| matches!(e, EngineEvent::RangedHit { .. }))
@@ -4410,11 +4463,9 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let monster =
-            spawn_monster_at(&mut world, Position::new(12, 8), 10, 10);
+        let monster = spawn_monster_at(&mut world, Position::new(12, 8), 10, 10);
 
-        let events =
-            monster_throw_item(&mut world, monster, player, &mut rng);
+        let events = monster_throw_item(&mut world, monster, player, &mut rng);
         assert!(
             events.is_empty(),
             "throw with no throwable items should be noop"
@@ -4423,15 +4474,14 @@ mod tests {
 
     // ── Demon lord identification ────────────────────────────────
 
-    fn spawn_demon_lord(
-        world: &mut GameWorld,
-        pos: Position,
-        name: &str,
-    ) -> Entity {
+    fn spawn_demon_lord(world: &mut GameWorld, pos: Position, name: &str) -> Entity {
         world.spawn((
             Monster,
             Positioned(pos),
-            HitPoints { current: 100, max: 100 },
+            HitPoints {
+                current: 100,
+                max: 100,
+            },
             ArmorClass(0),
             Attributes::default(),
             ExperienceLevel(25),
@@ -4447,18 +4497,13 @@ mod tests {
         let mut world = make_test_world();
         let orcus = spawn_demon_lord(&mut world, Position::new(5, 5), "Orcus");
 
-        assert_eq!(
-            identify_demon_lord(&world, orcus),
-            Some(DemonLord::Orcus),
-        );
+        assert_eq!(identify_demon_lord(&world, orcus), Some(DemonLord::Orcus),);
     }
 
     #[test]
     fn test_identify_demogorgon() {
         let mut world = make_test_world();
-        let demo = spawn_demon_lord(
-            &mut world, Position::new(5, 5), "Demogorgon",
-        );
+        let demo = spawn_demon_lord(&mut world, Position::new(5, 5), "Demogorgon");
 
         assert_eq!(
             identify_demon_lord(&world, demo),
@@ -4469,9 +4514,7 @@ mod tests {
     #[test]
     fn test_identify_non_demon_returns_none() {
         let mut world = make_test_world();
-        let goblin = spawn_monster_at(
-            &mut world, Position::new(5, 5), 10, 10,
-        );
+        let goblin = spawn_monster_at(&mut world, Position::new(5, 5), 10, 10);
 
         assert_eq!(identify_demon_lord(&world, goblin), None);
     }
@@ -4484,9 +4527,7 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let orcus = spawn_demon_lord(
-            &mut world, Position::new(12, 8), "Orcus",
-        );
+        let orcus = spawn_demon_lord(&mut world, Position::new(12, 8), "Orcus");
 
         // Give Orcus a wand of death.
         let carrier_id = orcus.to_bits().get() as u32;
@@ -4500,14 +4541,22 @@ mod tests {
             artifact: None,
         };
         let loc = ObjectLocation::MonsterInventory { carrier_id };
-        let wand_charges = WandCharges { spe: 3, recharged: 0 };
+        let wand_charges = WandCharges {
+            spe: 3,
+            recharged: 0,
+        };
         let _wand = world.spawn((core, loc, WandTypeTag(WandType::Death), wand_charges));
 
         let orig_hp = world.get_component::<HitPoints>(player).unwrap().current;
 
         let events = demon_lord_special(
-            &mut world, orcus, DemonLord::Orcus, player,
-            4, true, &mut rng,
+            &mut world,
+            orcus,
+            DemonLord::Orcus,
+            player,
+            4,
+            true,
+            &mut rng,
         );
 
         assert!(!events.is_empty(), "Orcus should zap wand of death");
@@ -4521,21 +4570,28 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let demo = spawn_demon_lord(
-            &mut world, Position::new(12, 8), "Demogorgon",
-        );
+        let demo = spawn_demon_lord(&mut world, Position::new(12, 8), "Demogorgon");
 
         let events = demon_lord_special(
-            &mut world, demo, DemonLord::Demogorgon, player,
-            4, true, &mut rng,
+            &mut world,
+            demo,
+            DemonLord::Demogorgon,
+            player,
+            4,
+            true,
+            &mut rng,
         );
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::Sick, ..
-            }
-        )), "Demogorgon should apply disease via gaze");
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Sick,
+                    ..
+                }
+            )),
+            "Demogorgon should apply disease via gaze"
+        );
     }
 
     #[test]
@@ -4544,22 +4600,29 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let yeen = spawn_demon_lord(
-            &mut world, Position::new(9, 8), "Yeenoghu",
-        );
+        let yeen = spawn_demon_lord(&mut world, Position::new(9, 8), "Yeenoghu");
 
         // Distance 1 — melee range.
         let events = demon_lord_special(
-            &mut world, yeen, DemonLord::Yeenoghu, player,
-            1, true, &mut rng,
+            &mut world,
+            yeen,
+            DemonLord::Yeenoghu,
+            player,
+            1,
+            true,
+            &mut rng,
         );
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::Confused, ..
-            }
-        )), "Yeenoghu should confuse at melee range");
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Confused,
+                    ..
+                }
+            )),
+            "Yeenoghu should confuse at melee range"
+        );
 
         let player_hp = world.get_component::<HitPoints>(player).unwrap().current;
         let orig_hp = world.get_component::<HitPoints>(player).unwrap().max;
@@ -4572,18 +4635,24 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let asmo = spawn_demon_lord(
-            &mut world, Position::new(12, 8), "Asmodeus",
-        );
+        let asmo = spawn_demon_lord(&mut world, Position::new(12, 8), "Asmodeus");
 
         let orig_hp = world.get_component::<HitPoints>(player).unwrap().current;
 
         let events = demon_lord_special(
-            &mut world, asmo, DemonLord::Asmodeus, player,
-            4, true, &mut rng,
+            &mut world,
+            asmo,
+            DemonLord::Asmodeus,
+            player,
+            4,
+            true,
+            &mut rng,
         );
 
-        assert!(!events.is_empty(), "Asmodeus should use cold blast at range");
+        assert!(
+            !events.is_empty(),
+            "Asmodeus should use cold blast at range"
+        );
         let new_hp = world.get_component::<HitPoints>(player).unwrap().current;
         assert!(new_hp < orig_hp, "player should take cold damage");
     }
@@ -4594,15 +4663,18 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let jui = spawn_demon_lord(
-            &mut world, Position::new(12, 8), "Juiblex",
-        );
+        let jui = spawn_demon_lord(&mut world, Position::new(12, 8), "Juiblex");
 
         let orig_hp = world.get_component::<HitPoints>(player).unwrap().current;
 
         let events = demon_lord_special(
-            &mut world, jui, DemonLord::Juiblex, player,
-            3, true, &mut rng,
+            &mut world,
+            jui,
+            DemonLord::Juiblex,
+            player,
+            3,
+            true,
+            &mut rng,
         );
 
         assert!(!events.is_empty(), "Juiblex should spit acid at range");
@@ -4616,21 +4688,28 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let baal = spawn_demon_lord(
-            &mut world, Position::new(9, 8), "Baalzebub",
-        );
+        let baal = spawn_demon_lord(&mut world, Position::new(9, 8), "Baalzebub");
 
         let events = demon_lord_special(
-            &mut world, baal, DemonLord::Baalzebub, player,
-            1, true, &mut rng,
+            &mut world,
+            baal,
+            DemonLord::Baalzebub,
+            player,
+            1,
+            true,
+            &mut rng,
         );
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied {
-                status: StatusEffect::Sick, ..
-            }
-        )), "Baalzebub should apply sickness from poison sting");
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Sick,
+                    ..
+                }
+            )),
+            "Baalzebub should apply sickness from poison sting"
+        );
     }
 
     #[test]
@@ -4640,13 +4719,16 @@ mod tests {
         let player = world.player();
 
         // Baalzebub at distance > 1 — his special is melee-only.
-        let baal = spawn_demon_lord(
-            &mut world, Position::new(12, 8), "Baalzebub",
-        );
+        let baal = spawn_demon_lord(&mut world, Position::new(12, 8), "Baalzebub");
 
         let events = demon_lord_special(
-            &mut world, baal, DemonLord::Baalzebub, player,
-            4, true, &mut rng,
+            &mut world,
+            baal,
+            DemonLord::Baalzebub,
+            player,
+            4,
+            true,
+            &mut rng,
         );
 
         assert!(

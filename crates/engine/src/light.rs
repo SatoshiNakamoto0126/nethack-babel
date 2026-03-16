@@ -172,7 +172,9 @@ pub fn player_light_radius(world: &GameWorld) -> u32 {
 pub fn toggle_light(world: &mut GameWorld, item: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
-    let state = world.get_component::<LightFuel>(item).map(|lf| (lf.lit, lf.fuel, lf.kind));
+    let state = world
+        .get_component::<LightFuel>(item)
+        .map(|lf| (lf.lit, lf.fuel, lf.kind));
     match state {
         Some((true, _fuel, _kind)) => {
             // Turn off.
@@ -264,7 +266,11 @@ pub enum LightEvent {
     /// A light source was extinguished due to fuel exhaustion.
     Extinguished { id: u32, kind: LightKind },
     /// A light source is running low on fuel (< 20%).
-    FuelLow { id: u32, kind: LightKind, fuel_remaining: u32 },
+    FuelLow {
+        id: u32,
+        kind: LightKind,
+        fuel_remaining: u32,
+    },
 }
 
 /// A tracked light source in the game world.
@@ -583,7 +589,8 @@ mod tests {
             mgr.tick();
         }
         assert_eq!(
-            mgr.sources()[0].fuel_remaining, -1,
+            mgr.sources()[0].fuel_remaining,
+            -1,
             "permanent source should not lose fuel"
         );
         assert!(mgr.sources()[0].is_lit, "permanent source should stay lit");
@@ -599,7 +606,10 @@ mod tests {
         let mut extinguished = false;
         for _ in 0..=initial {
             let events = mgr.tick();
-            if events.iter().any(|e| matches!(e, LightEvent::Extinguished { .. })) {
+            if events
+                .iter()
+                .any(|e| matches!(e, LightEvent::Extinguished { .. }))
+            {
                 extinguished = true;
                 break;
             }

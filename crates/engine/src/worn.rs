@@ -63,7 +63,7 @@ fn property_to_status(prop: Property) -> Option<StatusEffect> {
         Property::Telepat => Some(StatusEffect::Telepathy),
         Property::Warning => Some(StatusEffect::Warning),
         Property::Stealth => Some(StatusEffect::Stealth),
-        Property::Searching => None, // no status effect equivalent
+        Property::Searching => None,  // no status effect equivalent
         Property::FreeAction => None, // handled by marker component
         Property::Lifesaved => None,  // handled specially
         _ => None,
@@ -196,16 +196,18 @@ pub fn recalc_worn_intrinsics(
 
     // Handle speed boots: Fast property -> HeroSpeed::VeryFast.
     if added.contains(&Property::Fast)
-        && let Some(mut speed) = world.get_component_mut::<HeroSpeedBonus>(player) {
-            speed.0 = HeroSpeed::VeryFast;
-        }
+        && let Some(mut speed) = world.get_component_mut::<HeroSpeedBonus>(player)
+    {
+        speed.0 = HeroSpeed::VeryFast;
+    }
     if removed.contains(&Property::Fast)
-        && let Some(mut speed) = world.get_component_mut::<HeroSpeedBonus>(player) {
-            // Revert to Normal (or Fast if they have intrinsic fast from
-            // corpse — but that check is left for the full intrinsic
-            // stacking pass).
-            speed.0 = HeroSpeed::Normal;
-        }
+        && let Some(mut speed) = world.get_component_mut::<HeroSpeedBonus>(player)
+    {
+        // Revert to Normal (or Fast if they have intrinsic fast from
+        // corpse — but that check is left for the full intrinsic
+        // stacking pass).
+        speed.0 = HeroSpeed::Normal;
+    }
 
     // Handle gauntlets of power: STR -> 25 on equip, restore on unequip.
     let mut new_saved_str = old_saved_str;
@@ -220,9 +222,10 @@ pub fn recalc_worn_intrinsics(
     } else if !has_power_gauntlets && old_saved_str.is_some() {
         // Just unequipped — restore saved STR.
         if let Some(saved) = old_saved_str
-            && let Some(mut attrs) = world.get_component_mut::<Attributes>(player) {
-                attrs.strength = saved;
-            }
+            && let Some(mut attrs) = world.get_component_mut::<Attributes>(player)
+        {
+            attrs.strength = saved;
+        }
         new_saved_str = None;
         events.push(EngineEvent::msg("worn-gauntlets-power-off"));
     }
@@ -255,7 +258,9 @@ pub fn recalc_worn_intrinsics(
             .insert_one(player, crate::potions::FreeAction);
     }
     if removed.contains(&Property::FreeAction) {
-        let _ = world.ecs_mut().remove_one::<crate::potions::FreeAction>(player);
+        let _ = world
+            .ecs_mut()
+            .remove_one::<crate::potions::FreeAction>(player);
     }
 
     // Update the WornIntrinsics component.
@@ -292,12 +297,11 @@ pub fn has_worn_property(world: &GameWorld, player: Entity, prop: Property) -> b
 mod tests {
     use super::*;
     use crate::action::Position;
-    use crate::equipment::{equip_item, unequip_slot, EquipSlot};
-    use crate::items::{spawn_item, SpawnLocation};
+    use crate::equipment::{EquipSlot, equip_item, unequip_slot};
+    use crate::items::{SpawnLocation, spawn_item};
     use crate::world::GameWorld;
     use nethack_babel_data::{
-        ArmorCategory, ArmorInfo, Color, Material, ObjectClass, ObjectDef,
-        ObjectTypeId, Property,
+        ArmorCategory, ArmorInfo, Color, Material, ObjectClass, ObjectDef, ObjectTypeId, Property,
     };
 
     /// Build an armor ObjectDef with a conferred property.
@@ -409,7 +413,11 @@ mod tests {
         let player = world.player();
 
         let boots = armor_with_property(
-            1, "speed boots", ArmorCategory::Boots, -1, Some(Property::Fast),
+            1,
+            "speed boots",
+            ArmorCategory::Boots,
+            -1,
+            Some(Property::Fast),
         );
         let defs = vec![boots.clone()];
 
@@ -422,7 +430,10 @@ mod tests {
         assert!(
             events.iter().any(|e| matches!(
                 e,
-                EngineEvent::StatusApplied { status: StatusEffect::FastSpeed, .. }
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::FastSpeed,
+                    ..
+                }
             )),
             "equipping speed boots should grant FastSpeed"
         );
@@ -438,7 +449,11 @@ mod tests {
         let player = world.player();
 
         let boots = armor_with_property(
-            1, "speed boots", ArmorCategory::Boots, -1, Some(Property::Fast),
+            1,
+            "speed boots",
+            ArmorCategory::Boots,
+            -1,
+            Some(Property::Fast),
         );
         let defs = vec![boots.clone()];
 
@@ -453,7 +468,10 @@ mod tests {
         assert!(
             events.iter().any(|e| matches!(
                 e,
-                EngineEvent::StatusRemoved { status: StatusEffect::FastSpeed, .. }
+                EngineEvent::StatusRemoved {
+                    status: StatusEffect::FastSpeed,
+                    ..
+                }
             )),
             "unequipping speed boots should remove FastSpeed"
         );
@@ -480,7 +498,10 @@ mod tests {
         assert!(
             events.iter().any(|e| matches!(
                 e,
-                EngineEvent::StatusApplied { status: StatusEffect::FireResistance, .. }
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::FireResistance,
+                    ..
+                }
             )),
             "ring of fire resistance should grant FireResistance"
         );
@@ -495,9 +516,7 @@ mod tests {
         let mut world = test_world();
         let player = world.player();
 
-        let amulet = amulet_with_property(
-            1, "amulet of reflection", Some(Property::Reflecting),
-        );
+        let amulet = amulet_with_property(1, "amulet of reflection", Some(Property::Reflecting));
         let defs = vec![amulet.clone()];
 
         let item = spawn_item(&mut world, &amulet, SpawnLocation::Inventory, None);
@@ -508,7 +527,10 @@ mod tests {
         assert!(
             events.iter().any(|e| matches!(
                 e,
-                EngineEvent::StatusApplied { status: StatusEffect::Reflection, .. }
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Reflection,
+                    ..
+                }
             )),
             "amulet of reflection should grant Reflection"
         );
@@ -529,9 +551,8 @@ mod tests {
             attrs.strength = 14;
         }
 
-        let gauntlets = armor_with_property(
-            1, "gauntlets of power", ArmorCategory::Gloves, -1, None,
-        );
+        let gauntlets =
+            armor_with_property(1, "gauntlets of power", ArmorCategory::Gloves, -1, None);
         let defs = vec![gauntlets.clone()];
 
         let item = spawn_item(&mut world, &gauntlets, SpawnLocation::Inventory, Some(0));
@@ -541,7 +562,10 @@ mod tests {
 
         {
             let attrs = world.get_component::<Attributes>(player).unwrap();
-            assert_eq!(attrs.strength, 25, "gauntlets of power should set STR to 25");
+            assert_eq!(
+                attrs.strength, 25,
+                "gauntlets of power should set STR to 25"
+            );
         }
 
         // Unequip should restore.
@@ -550,7 +574,10 @@ mod tests {
 
         {
             let attrs = world.get_component::<Attributes>(player).unwrap();
-            assert_eq!(attrs.strength, 14, "STR should be restored after unequipping");
+            assert_eq!(
+                attrs.strength, 14,
+                "STR should be restored after unequipping"
+            );
         }
     }
 
@@ -564,7 +591,11 @@ mod tests {
         // Equip two items that both grant fire resistance.
         let ring = ring_with_property(1, "ring of fire resistance", Some(Property::FireRes));
         let cloak = armor_with_property(
-            2, "cloak of fire resistance", ArmorCategory::Cloak, -1, Some(Property::FireRes),
+            2,
+            "cloak of fire resistance",
+            ArmorCategory::Cloak,
+            -1,
+            Some(Property::FireRes),
         );
         let defs = vec![ring.clone(), cloak.clone()];
 
@@ -581,7 +612,15 @@ mod tests {
         // (property was already in the set).
         let fire_applied = events
             .iter()
-            .filter(|e| matches!(e, EngineEvent::StatusApplied { status: StatusEffect::FireResistance, .. }))
+            .filter(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        status: StatusEffect::FireResistance,
+                        ..
+                    }
+                )
+            })
             .count();
         assert_eq!(
             fire_applied, 0,
@@ -595,7 +634,15 @@ mod tests {
         // FireRes should NOT be removed because cloak still provides it.
         let fire_removed = events
             .iter()
-            .filter(|e| matches!(e, EngineEvent::StatusRemoved { status: StatusEffect::FireResistance, .. }))
+            .filter(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusRemoved {
+                        status: StatusEffect::FireResistance,
+                        ..
+                    }
+                )
+            })
             .count();
         assert_eq!(
             fire_removed, 0,
@@ -618,9 +665,7 @@ mod tests {
             attrs.wisdom = 14;
         }
 
-        let helm = armor_with_property(
-            1, "helm of brilliance", ArmorCategory::Helm, -1, None,
-        );
+        let helm = armor_with_property(1, "helm of brilliance", ArmorCategory::Helm, -1, None);
         let defs = vec![helm.clone()];
 
         let item = spawn_item(&mut world, &helm, SpawnLocation::Inventory, Some(0));

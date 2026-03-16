@@ -14,8 +14,8 @@ use crate::action::Position;
 use crate::event::EngineEvent;
 use crate::monster_ai::is_valid_monster_move;
 use crate::world::{
-    Attributes, GameWorld, HitPoints, Monster, Name, Positioned, Speed, Tame,
-    MovementPoints, NORMAL_SPEED,
+    Attributes, GameWorld, HitPoints, Monster, MovementPoints, NORMAL_SPEED, Name, Positioned,
+    Speed, Tame,
 };
 
 use nethack_babel_data::{ObjectClass, ObjectCore, ObjectLocation};
@@ -352,7 +352,10 @@ pub fn init_pet(
         pet_state,
     ));
 
-    events.push(EngineEvent::msg_with("pet-nearby", vec![("pet", name.clone())]));
+    events.push(EngineEvent::msg_with(
+        "pet-nearby",
+        vec![("pet", name.clone())],
+    ));
 
     (pet, events)
 }
@@ -400,9 +403,10 @@ pub fn resolve_pet_turn(
     // Update last_seen_turn if adjacent to player.
     let dist = chebyshev(pet_pos, player_pos);
     if dist <= 1
-        && let Some(mut ps) = world.get_component_mut::<PetState>(pet) {
-            ps.last_seen_turn = current_turn;
-        }
+        && let Some(mut ps) = world.get_component_mut::<PetState>(pet)
+    {
+        ps.last_seen_turn = current_turn;
+    }
 
     // ── 2. Look for food on the ground ───────────────────────────
     if let Some(food_pos) = find_food_nearby(world, pet_pos) {
@@ -413,9 +417,7 @@ pub fn resolve_pet_turn(
             return events;
         }
         // Move toward food.
-        if let Some(move_events) =
-            move_toward_pos(world, pet, pet_pos, food_pos, rng)
-        {
+        if let Some(move_events) = move_toward_pos(world, pet, pet_pos, food_pos, rng) {
             events.extend(move_events);
             return events;
         }
@@ -435,17 +437,16 @@ pub fn resolve_pet_turn(
         .unwrap_or(false);
 
     if dist > 1
-        && let Some(move_events) =
-            move_toward_pos(world, pet, pet_pos, player_pos, rng)
-        {
-            // If leashed, verify new position is within constraint.
-            if leashed {
-                // We already moved; check after.  If too far, undo.
-                // (In practice move_toward filters by leash constraint.)
-            }
-            events.extend(move_events);
-            return events;
+        && let Some(move_events) = move_toward_pos(world, pet, pet_pos, player_pos, rng)
+    {
+        // If leashed, verify new position is within constraint.
+        if leashed {
+            // We already moved; check after.  If too far, undo.
+            // (In practice move_toward filters by leash constraint.)
         }
+        events.extend(move_events);
+        return events;
+    }
 
     // ── 4. Wander randomly ───────────────────────────────────────
     if let Some(move_events) = wander(world, pet, pet_pos, player_pos, leashed, rng) {
@@ -464,16 +465,17 @@ struct HungerResult {
     died: bool,
 }
 
-fn process_hunger(
-    world: &mut GameWorld,
-    pet: Entity,
-    current_turn: u32,
-) -> HungerResult {
+fn process_hunger(world: &mut GameWorld, pet: Entity, current_turn: u32) -> HungerResult {
     let mut events = Vec::new();
 
     let deficit = match world.get_component::<PetState>(pet) {
         Some(ps) => ps.hunger_deficit(current_turn),
-        None => return HungerResult { events, died: false },
+        None => {
+            return HungerResult {
+                events,
+                died: false,
+            };
+        }
     };
 
     if deficit >= DOG_STARVE {
@@ -486,7 +488,10 @@ fn process_hunger(
         if penalty_set {
             // Pet dies of starvation.
             let name = world.entity_name(pet);
-            events.push(EngineEvent::msg_with("pet-starving", vec![("pet", name.clone())]));
+            events.push(EngineEvent::msg_with(
+                "pet-starving",
+                vec![("pet", name.clone())],
+            ));
             events.push(EngineEvent::EntityDied {
                 entity: pet,
                 killer: None,
@@ -517,15 +522,22 @@ fn process_hunger(
                 0
             };
             if penalty > 0
-                && let Some(mut ps) = world.get_component_mut::<PetState>(pet) {
-                    ps.mhpmax_penalty = penalty;
-                }
+                && let Some(mut ps) = world.get_component_mut::<PetState>(pet)
+            {
+                ps.mhpmax_penalty = penalty;
+            }
             let name = world.entity_name(pet);
-            events.push(EngineEvent::msg_with("pet-very-hungry", vec![("pet", name.clone())]));
+            events.push(EngineEvent::msg_with(
+                "pet-very-hungry",
+                vec![("pet", name.clone())],
+            ));
         }
     }
 
-    HungerResult { events, died: false }
+    HungerResult {
+        events,
+        died: false,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -541,14 +553,14 @@ fn find_food_nearby(world: &GameWorld, center: Position) -> Option<Position> {
             continue;
         }
         if let Some(loc) = world.get_component::<ObjectLocation>(_entity)
-            && let ObjectLocation::Floor { x, y } = *loc {
-                let pos = Position::new(x as i32, y as i32);
-                let dist = chebyshev(center, pos);
-                if dist <= SQSRCHRADIUS
-                    && (best.is_none() || dist < best.unwrap().1) {
-                        best = Some((pos, dist));
-                    }
+            && let ObjectLocation::Floor { x, y } = *loc
+        {
+            let pos = Position::new(x as i32, y as i32);
+            let dist = chebyshev(center, pos);
+            if dist <= SQSRCHRADIUS && (best.is_none() || dist < best.unwrap().1) {
+                best = Some((pos, dist));
             }
+        }
     }
 
     best.map(|(pos, _)| pos)
@@ -556,11 +568,7 @@ fn find_food_nearby(world: &GameWorld, center: Position) -> Option<Position> {
 
 /// Have the pet eat a food item at its current position.
 /// Increases tameness and resets hunger.
-fn pet_eat_food_at(
-    world: &mut GameWorld,
-    pet: Entity,
-    current_turn: u32,
-) -> Vec<EngineEvent> {
+fn pet_eat_food_at(world: &mut GameWorld, pet: Entity, current_turn: u32) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let pet_pos = match world.get_component::<Positioned>(pet) {
@@ -577,17 +585,22 @@ fn pet_eat_food_at(
             }
             if let Some(loc) = world.get_component::<ObjectLocation>(entity)
                 && let ObjectLocation::Floor { x, y } = *loc
-                    && x as i32 == pet_pos.x && y as i32 == pet_pos.y {
-                        found = Some(entity);
-                        break;
-                    }
+                && x as i32 == pet_pos.x
+                && y as i32 == pet_pos.y
+            {
+                found = Some(entity);
+                break;
+            }
         }
         found
     };
 
     if let Some(food) = food_entity {
         let pet_name = world.entity_name(pet);
-        events.push(EngineEvent::msg_with("pet-eats", vec![("pet", pet_name.clone()), ("food", "food".to_string())]));
+        events.push(EngineEvent::msg_with(
+            "pet-eats",
+            vec![("pet", pet_name.clone()), ("food", "food".to_string())],
+        ));
 
         // Remove food.
         let _ = world.despawn(food);
@@ -615,9 +628,10 @@ fn pet_eat_food_at(
             0
         };
         if hp_restore > 0
-            && let Some(mut hp) = world.get_component_mut::<HitPoints>(pet) {
-                hp.max += hp_restore;
-            }
+            && let Some(mut hp) = world.get_component_mut::<HitPoints>(pet)
+        {
+            hp.max += hp_restore;
+        }
     }
 
     events
@@ -768,11 +782,7 @@ pub fn evaluate_food_quality(
 /// Calculate nutrition a pet gets from eating an item.
 ///
 /// Mirrors NetHack's `dog_nutrition()` from `dogmove.c`.
-pub fn calculate_nutrition(
-    base_nutrition: u32,
-    pet_size: MonsterSize,
-    is_devoured: bool,
-) -> u32 {
+pub fn calculate_nutrition(base_nutrition: u32, pet_size: MonsterSize, is_devoured: bool) -> u32 {
     let mut nutrit = base_nutrition * pet_size.nutrition_multiplier();
 
     if is_devoured {
@@ -821,7 +831,11 @@ pub fn pet_will_attack(
 
     // Balk threshold.
     let balk = pet_level as i32
-        + if pet_hpmax > 0 { 5 * pet_hp / pet_hpmax } else { 0 }
+        + if pet_hpmax > 0 {
+            5 * pet_hp / pet_hpmax
+        } else {
+            0
+        }
         - 2;
 
     // Won't attack targets at or above balk level.
@@ -830,10 +844,7 @@ pub fn pet_will_attack(
     }
 
     // Avoid peacefuls when HP is low (below 25%).
-    if target_is_peaceful
-        && !has_conflict
-        && (pet_hp * 4 < pet_hpmax)
-    {
+    if target_is_peaceful && !has_conflict && (pet_hp * 4 < pet_hpmax) {
         return PetCombatDecision::Refuse;
     }
 
@@ -911,12 +922,7 @@ pub fn score_ranged_target(
 /// Mirrors NetHack's `wary_dog()` from `dog.c`.
 ///
 /// Returns `true` if the pet remains tame after revival.
-pub fn wary_dog(
-    world: &mut GameWorld,
-    pet: Entity,
-    was_dead: bool,
-    rng: &mut impl Rng,
-) -> bool {
+pub fn wary_dog(world: &mut GameWorld, pet: Entity, was_dead: bool, rng: &mut impl Rng) -> bool {
     let current_turn = world.turn();
 
     // Restore starvation penalty first.
@@ -1031,10 +1037,11 @@ pub fn can_follow_through_stairs(
 /// (the leash goes slack during level change).
 pub fn leash_level_change_penalty(world: &mut GameWorld, pet: Entity) {
     if let Some(mut ps) = world.get_component_mut::<PetState>(pet)
-        && ps.leashed {
-            ps.tameness = ps.tameness.saturating_sub(1);
-            ps.leashed = false; // Leash released during level change.
-        }
+        && ps.leashed
+    {
+        ps.tameness = ps.tameness.saturating_sub(1);
+        ps.leashed = false; // Leash released during level change.
+    }
     // Check if pet went feral.
     let went_feral = world
         .get_component::<PetState>(pet)
@@ -1073,8 +1080,7 @@ pub fn check_separated_starvation(
 
     // Starvation conditions from the spec:
     // if (moves > hungrytime + 500 and mhp < 3) or (moves > hungrytime + 750)
-    let starved = (current_turn > hungrytime + 500 && hp < 3)
-        || current_turn > hungrytime + 750;
+    let starved = (current_turn > hungrytime + 500 && hp < 3) || current_turn > hungrytime + 750;
 
     if starved {
         if let Some(mut ps) = world.get_component_mut::<PetState>(pet) {
@@ -1096,10 +1102,7 @@ pub fn check_separated_starvation(
 /// This is a simplified check that tests whether the pet's position falls
 /// within a shopkeeper-owned room.  The full implementation requires shop
 /// integration from Track Q; this provides the skeleton.
-pub fn pet_is_in_shop(
-    _world: &GameWorld,
-    _pet_pos: Position,
-) -> bool {
+pub fn pet_is_in_shop(_world: &GameWorld, _pet_pos: Position) -> bool {
     // Stub: full implementation deferred to shop.rs integration.
     // When shops are fully implemented, this checks shop room boundaries.
     false
@@ -1156,15 +1159,16 @@ pub fn tame_monster(
     if already_tame {
         // Boost tameness if < 10.
         if let Some(mut ps) = world.get_component_mut::<PetState>(monster)
-            && ps.tameness < 10 {
-                let threshold: u8 = rng.random_range(1..=10);
-                if ps.tameness < threshold {
-                    ps.tameness += 1;
-                }
-                if let TameSource::ScrollOrSpell { blessed: true } = source {
-                    ps.tameness = (ps.tameness + 2).min(10);
-                }
+            && ps.tameness < 10
+        {
+            let threshold: u8 = rng.random_range(1..=10);
+            if ps.tameness < threshold {
+                ps.tameness += 1;
             }
+            if let TameSource::ScrollOrSpell { blessed: true } = source {
+                ps.tameness = (ps.tameness + 2).min(10);
+            }
+        }
         return true;
     }
 
@@ -1210,11 +1214,7 @@ pub fn tame_monster(
 /// Try to displace (swap positions with) a pet.
 ///
 /// Returns `true` if the swap was executed.
-pub fn try_displace_pet(
-    world: &mut GameWorld,
-    player: Entity,
-    pet: Entity,
-) -> bool {
+pub fn try_displace_pet(world: &mut GameWorld, player: Entity, pet: Entity) -> bool {
     let player_pos = match world.get_component::<Positioned>(player) {
         Some(p) => p.0,
         None => return false,
@@ -1304,10 +1304,7 @@ pub fn detach_leash(world: &mut GameWorld, pet: Entity) {
 /// Check leash constraint and snap if too far.
 ///
 /// Returns events (including messages about leash snapping).
-pub fn check_leash_constraint(
-    world: &mut GameWorld,
-    pet: Entity,
-) -> Vec<EngineEvent> {
+pub fn check_leash_constraint(world: &mut GameWorld, pet: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let leashed = world
@@ -1339,7 +1336,10 @@ pub fn check_leash_constraint(
             ps.tameness = ps.tameness.saturating_sub(1);
         }
         let name = world.entity_name(pet);
-        events.push(EngineEvent::msg_with("pet-hostile", vec![("pet", name.clone())]));
+        events.push(EngineEvent::msg_with(
+            "pet-hostile",
+            vec![("pet", name.clone())],
+        ));
     } else if d2 > LEASH_DIST2 {
         // Pull pet toward player.
         if let Some(adj) = find_adjacent_free(world, player_pos) {
@@ -1449,7 +1449,8 @@ fn pet_try_attack_adjacent(
         });
 
         // Apply damage to target.
-        let target_died = if let Some(mut hp) = world.get_component_mut::<HitPoints>(target_entity) {
+        let target_died = if let Some(mut hp) = world.get_component_mut::<HitPoints>(target_entity)
+        {
             hp.current -= damage;
             hp.current <= 0
         } else {
@@ -1533,11 +1534,7 @@ fn try_move_pet(
             if let Some(mut pos) = world.get_component_mut::<Positioned>(entity) {
                 pos.0 = to;
             }
-            let events = vec![EngineEvent::EntityMoved {
-                entity,
-                from,
-                to,
-            }];
+            let events = vec![EngineEvent::EntityMoved { entity, from, to }];
             return Some(events);
         }
     }
@@ -1565,11 +1562,7 @@ fn try_move_pet_leash(
         if let Some(mut pos) = world.get_component_mut::<Positioned>(entity) {
             pos.0 = to;
         }
-        let events = vec![EngineEvent::EntityMoved {
-            entity,
-            from,
-            to,
-        }];
+        let events = vec![EngineEvent::EntityMoved { entity, from, to }];
         return Some(events);
     }
     None
@@ -1664,8 +1657,8 @@ mod tests {
     use crate::action::Position;
     use crate::dungeon::Terrain;
     use crate::world::{
-        ArmorClass, Attributes, ExperienceLevel, HitPoints, Monster,
-        MovementPoints, Name, Positioned, Speed, Tame, NORMAL_SPEED,
+        ArmorClass, Attributes, ExperienceLevel, HitPoints, Monster, MovementPoints, NORMAL_SPEED,
+        Name, Positioned, Speed, Tame,
     };
     use nethack_babel_data::{ObjectClass, ObjectCore, ObjectLocation, ObjectTypeId};
     use rand::SeedableRng;
@@ -1691,11 +1684,7 @@ mod tests {
     }
 
     /// Spawn a pet at the given position.
-    fn spawn_pet_at(
-        world: &mut GameWorld,
-        pos: Position,
-        tameness: u8,
-    ) -> Entity {
+    fn spawn_pet_at(world: &mut GameWorld, pos: Position, tameness: u8) -> Entity {
         let mut ps = PetState::new(10, world.turn());
         ps.tameness = tameness;
         world.spawn((
@@ -1717,11 +1706,7 @@ mod tests {
     }
 
     /// Spawn a hostile monster at the given position.
-    fn spawn_monster_at(
-        world: &mut GameWorld,
-        pos: Position,
-        name: &str,
-    ) -> Entity {
+    fn spawn_monster_at(world: &mut GameWorld, pos: Position, name: &str) -> Entity {
         world.spawn((
             Monster,
             Positioned(pos),
@@ -1975,9 +1960,9 @@ mod tests {
         }
 
         let events = check_leash_constraint(&mut world, pet);
-        let snapped = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("pet-hostile"))
-        });
+        let snapped = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("pet-hostile")));
         assert!(snapped, "leash should snap when too far");
 
         let ps = world.get_component::<PetState>(pet).unwrap();
@@ -1998,9 +1983,9 @@ mod tests {
 
         let events = resolve_pet_turn(&mut world, pet, &mut rng);
 
-        let ate = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("pet-eats"))
-        });
+        let ate = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("pet-eats")));
         assert!(ate, "pet should eat food at its position");
 
         // Tameness should have increased.
@@ -2105,10 +2090,7 @@ mod tests {
         assert!(world.get_component::<Tame>(pet).is_some());
         assert!(world.get_component::<PetState>(pet).is_some());
 
-        let player_pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(world.player()).unwrap().0;
         let pet_pos = world.get_component::<Positioned>(pet).unwrap().0;
         let dist = chebyshev(player_pos, pet_pos);
         assert!(dist <= 1, "pet should be adjacent to player");
@@ -2144,7 +2126,13 @@ mod tests {
 
         let events = resolve_pet_turn(&mut world, pet, &mut rng);
         let died = events.iter().any(|e| {
-            matches!(e, EngineEvent::EntityDied { cause: crate::event::DeathCause::Starvation, .. })
+            matches!(
+                e,
+                EngineEvent::EntityDied {
+                    cause: crate::event::DeathCause::Starvation,
+                    ..
+                }
+            )
         });
         assert!(died, "pet should die of starvation");
     }
@@ -2157,12 +2145,7 @@ mod tests {
         let mut rng = test_rng();
         let monster = spawn_monster_at(&mut world, Position::new(9, 8), "wolf");
 
-        let success = tame_monster(
-            &mut world,
-            monster,
-            TameSource::Food,
-            &mut rng,
-        );
+        let success = tame_monster(&mut world, monster, TameSource::Food, &mut rng);
         assert!(success);
         let ps = world.get_component::<PetState>(monster).unwrap();
         assert_eq!(ps.tameness, 10);
@@ -2258,7 +2241,7 @@ mod tests {
     fn test_pet_food_quality_poison() {
         let quality = evaluate_food_quality(
             ObjectClass::Food,
-            true,  // corpse
+            true, // corpse
             false,
             false,
             true, // poisonous
@@ -2274,7 +2257,7 @@ mod tests {
     fn test_pet_food_quality_petrifying() {
         let quality = evaluate_food_quality(
             ObjectClass::Food,
-            true,  // corpse
+            true, // corpse
             false,
             false,
             false,
@@ -2290,7 +2273,7 @@ mod tests {
     fn test_pet_food_quality_rotten() {
         let quality = evaluate_food_quality(
             ObjectClass::Food,
-            true,  // corpse
+            true, // corpse
             false,
             true, // rotten
             false,
@@ -2373,10 +2356,8 @@ mod tests {
     #[test]
     fn test_pet_combat_refuse_tame_no_conflict() {
         let decision = pet_will_attack(
-            5, 20, 20, 3,
-            true,  // target is tame
-            false,
-            false, // no conflict
+            5, 20, 20, 3, true, // target is tame
+            false, false, // no conflict
             false,
         );
         assert_eq!(decision, PetCombatDecision::Refuse);
@@ -2386,10 +2367,8 @@ mod tests {
     fn test_pet_combat_attack_tame_with_conflict() {
         // With conflict, tame check is bypassed.
         let decision = pet_will_attack(
-            5, 20, 20, 3,
-            true,  // target is tame
-            false,
-            true, // conflict
+            5, 20, 20, 3, true, // target is tame
+            false, true, // conflict
             false,
         );
         assert_eq!(decision, PetCombatDecision::Attack);
@@ -2399,11 +2378,8 @@ mod tests {
     fn test_pet_combat_refuse_peaceful_low_hp() {
         // pet_hp * 4 < pet_hpmax: 4*4 = 16 < 20 -> true
         let decision = pet_will_attack(
-            5, 4, 20, 3,
-            false,
-            true, // peaceful
-            false,
-            false,
+            5, 4, 20, 3, false, true, // peaceful
+            false, false,
         );
         assert_eq!(decision, PetCombatDecision::Refuse);
     }
@@ -2411,9 +2387,7 @@ mod tests {
     #[test]
     fn test_pet_combat_ranged_only_dangerous() {
         let decision = pet_will_attack(
-            5, 20, 20, 3,
-            false, false, false,
-            true, // dangerous melee target
+            5, 20, 20, 3, false, false, false, true, // dangerous melee target
         );
         assert_eq!(decision, PetCombatDecision::RangedOnly);
     }
@@ -2452,13 +2426,10 @@ mod tests {
 
         let events = resolve_pet_turn(&mut world, pet, &mut rng);
 
-        let hit = events.iter().any(|e| {
-            matches!(e, EngineEvent::MeleeHit { attacker, .. } if *attacker == pet)
-        });
-        assert!(
-            hit,
-            "pet should attack adjacent hostile monster"
-        );
+        let hit = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::MeleeHit { attacker, .. } if *attacker == pet));
+        assert!(hit, "pet should attack adjacent hostile monster");
     }
 
     // ── Track L: Pet Revival Tests ───────────────────────────────
@@ -2550,31 +2521,19 @@ mod tests {
 
     #[test]
     fn test_pet_follow_adjacent() {
-        let can = can_follow_through_stairs(
-            Position::new(9, 8),
-            Position::new(8, 8),
-            false,
-        );
+        let can = can_follow_through_stairs(Position::new(9, 8), Position::new(8, 8), false);
         assert!(can, "adjacent pet should follow through stairs");
     }
 
     #[test]
     fn test_pet_follow_same_position() {
-        let can = can_follow_through_stairs(
-            Position::new(8, 8),
-            Position::new(8, 8),
-            false,
-        );
+        let can = can_follow_through_stairs(Position::new(8, 8), Position::new(8, 8), false);
         assert!(can, "pet at same position should follow");
     }
 
     #[test]
     fn test_pet_follow_too_far() {
-        let can = can_follow_through_stairs(
-            Position::new(12, 8),
-            Position::new(8, 8),
-            false,
-        );
+        let can = can_follow_through_stairs(Position::new(12, 8), Position::new(8, 8), false);
         assert!(!can, "distant pet should not follow");
     }
 
@@ -2590,11 +2549,7 @@ mod tests {
 
     #[test]
     fn test_pet_follow_leashed_too_far() {
-        let can = can_follow_through_stairs(
-            Position::new(12, 8),
-            Position::new(8, 8),
-            true,
-        );
+        let can = can_follow_through_stairs(Position::new(12, 8), Position::new(8, 8), true);
         assert!(!can, "leashed pet too far should not follow");
     }
 
@@ -2723,8 +2678,7 @@ mod tests {
     fn test_pet_ranged_score_hostile() {
         let mut rng = test_rng();
         let score = score_ranged_target(
-            5, 3, 10,
-            true,  // hostile
+            5, 3, 10, true,  // hostile
             false, // not passive
             false, // not tame
             false, // not adjacent
@@ -2738,13 +2692,8 @@ mod tests {
     fn test_pet_ranged_score_adjacent_veto() {
         let mut rng = test_rng();
         let score = score_ranged_target(
-            5, 3, 10,
-            true,
-            false,
-            false,
-            true, // adjacent -> veto
-            false,
-            &mut rng,
+            5, 3, 10, true, false, false, true, // adjacent -> veto
+            false, &mut rng,
         );
         assert_eq!(score, -3000, "adjacent target should be vetoed");
     }
@@ -2753,13 +2702,8 @@ mod tests {
     fn test_pet_ranged_score_tame_veto() {
         let mut rng = test_rng();
         let score = score_ranged_target(
-            5, 3, 10,
-            false,
-            false,
-            true, // tame -> veto
-            false,
-            false,
-            &mut rng,
+            5, 3, 10, false, false, true, // tame -> veto
+            false, false, &mut rng,
         );
         assert_eq!(score, -3000, "tame target should be vetoed");
     }
@@ -2768,13 +2712,8 @@ mod tests {
     fn test_pet_ranged_score_passive_penalty() {
         let mut rng = test_rng();
         let score = score_ranged_target(
-            5, 3, 10,
-            false,
-            true, // passive -> big penalty
-            false,
-            false,
-            false,
-            &mut rng,
+            5, 3, 10, false, true, // passive -> big penalty
+            false, false, false, &mut rng,
         );
         assert!(score < -900, "passive target should have large penalty");
     }
@@ -2823,7 +2762,10 @@ mod tests {
             Position::new(9, 8),
             Position::new(10, 8),
         );
-        assert!(events.is_empty(), "non-tame entity should not trigger shop steal");
+        assert!(
+            events.is_empty(),
+            "non-tame entity should not trigger shop steal"
+        );
     }
 
     #[test]

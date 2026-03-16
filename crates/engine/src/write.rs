@@ -52,9 +52,7 @@ pub struct MarkerCharges(pub u8);
 /// Level 5+  scrolls: powerful (genocide, charging, etc.)
 fn scroll_level(scroll: ScrollType) -> u32 {
     match scroll {
-        ScrollType::Light
-        | ScrollType::BlankPaper
-        | ScrollType::Mail => 1,
+        ScrollType::Light | ScrollType::BlankPaper | ScrollType::Mail => 1,
 
         ScrollType::ConfuseMonster
         | ScrollType::ScareMonster
@@ -77,8 +75,7 @@ fn scroll_level(scroll: ScrollType) -> u32 {
         | ScrollType::DestroyArmor
         | ScrollType::MagicMapping => 4,
 
-        ScrollType::Genocide
-        | ScrollType::Charging => 5,
+        ScrollType::Genocide | ScrollType::Charging => 5,
     }
 }
 
@@ -257,19 +254,17 @@ mod tests {
         let player = world.player();
         let marker = setup_marker(&mut world, 50);
 
-        let events = write_scroll(
-            &mut world,
-            player,
-            marker,
-            ScrollType::Light,
-            &mut rng,
-        );
+        let events = write_scroll(&mut world, player, marker, ScrollType::Light, &mut rng);
 
         // Charges should have decreased.
         let remaining = world.get_component::<MarkerCharges>(marker).unwrap().0;
         assert!(remaining < 50);
         // Should have ItemCharged and either success or fail event.
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::ItemCharged { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::ItemCharged { .. }))
+        );
     }
 
     #[test]
@@ -279,13 +274,7 @@ mod tests {
         let player = world.player();
         let marker = setup_marker(&mut world, 1); // Not enough for any scroll.
 
-        let events = write_scroll(
-            &mut world,
-            player,
-            marker,
-            ScrollType::Genocide,
-            &mut rng,
-        );
+        let events = write_scroll(&mut world, player, marker, ScrollType::Genocide, &mut rng);
 
         assert!(events.iter().any(|e| matches!(
             e,
@@ -304,13 +293,7 @@ mod tests {
         // Entity without MarkerCharges.
         let fake = world.spawn(());
 
-        let events = write_scroll(
-            &mut world,
-            player,
-            fake,
-            ScrollType::Light,
-            &mut rng,
-        );
+        let events = write_scroll(&mut world, player, fake, ScrollType::Light, &mut rng);
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "write-no-marker"
@@ -325,23 +308,11 @@ mod tests {
         let player = world.player();
 
         let marker1 = setup_marker(&mut world, 100);
-        write_scroll(
-            &mut world,
-            player,
-            marker1,
-            ScrollType::Light,
-            &mut rng1,
-        );
+        write_scroll(&mut world, player, marker1, ScrollType::Light, &mut rng1);
         let scroll_remaining = world.get_component::<MarkerCharges>(marker1).unwrap().0;
 
         let marker2 = setup_marker(&mut world, 100);
-        write_spellbook(
-            &mut world,
-            player,
-            marker2,
-            SpellType::Light,
-            &mut rng2,
-        );
+        write_spellbook(&mut world, player, marker2, SpellType::Light, &mut rng2);
         let book_remaining = world.get_component::<MarkerCharges>(marker2).unwrap().0;
 
         // Spellbook should cost more (or equal in edge cases), so fewer
@@ -369,7 +340,10 @@ mod tests {
             }
         }
         // With luck=10, rn2(30) > 10 succeeds ~63% of the time.
-        assert!(successes > 30, "expected many successes with luck 10, got {successes}");
+        assert!(
+            successes > 30,
+            "expected many successes with luck 10, got {successes}"
+        );
 
         // With very negative luck, should rarely succeed.
         let mut successes = 0;

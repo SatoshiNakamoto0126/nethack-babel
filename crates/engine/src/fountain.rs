@@ -487,8 +487,8 @@ mod tests {
     use crate::action::Position;
     use crate::dungeon::Terrain;
     use crate::world::GameWorld;
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_world_with_fountain() -> GameWorld {
         let mut world = GameWorld::new(Position::new(5, 5));
@@ -580,8 +580,7 @@ mod tests {
         let player = world.player();
         let fs = default_fountain_state();
 
-        let events =
-            drink_fountain(&mut rng, &mut world, player, Position::new(5, 5), &fs);
+        let events = drink_fountain(&mut rng, &mut world, player, Position::new(5, 5), &fs);
         // Should have at least the FountainDrank event
         assert!(
             events
@@ -598,8 +597,7 @@ mod tests {
         let player = world.player();
         let fs = default_fountain_state();
 
-        let events =
-            drink_fountain(&mut rng, &mut world, player, Position::new(5, 5), &fs);
+        let events = drink_fountain(&mut rng, &mut world, player, Position::new(5, 5), &fs);
         assert!(
             events.iter().any(|e| matches!(
                 e,
@@ -641,8 +639,7 @@ mod tests {
         let player = world.player();
         let fs = default_fountain_state();
 
-        let events =
-            dip_fountain(&mut rng, &mut world, player, Position::new(5, 5), &fs);
+        let events = dip_fountain(&mut rng, &mut world, player, Position::new(5, 5), &fs);
         assert!(!events.is_empty());
     }
 
@@ -653,8 +650,7 @@ mod tests {
         let player = world.player();
         let fs = default_fountain_state();
 
-        let events =
-            dip_fountain(&mut rng, &mut world, player, Position::new(5, 5), &fs);
+        let events = dip_fountain(&mut rng, &mut world, player, Position::new(5, 5), &fs);
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "no-fountain-here"
@@ -668,11 +664,17 @@ mod tests {
         let mut world = test_world_with_fountain();
         let pos = Position::new(5, 5);
 
-        assert_eq!(world.dungeon().current_level.get(pos).map(|c| c.terrain), Some(Terrain::Fountain));
+        assert_eq!(
+            world.dungeon().current_level.get(pos).map(|c| c.terrain),
+            Some(Terrain::Fountain)
+        );
 
         let events = dry_up(&mut world, pos);
         assert!(!events.is_empty());
-        assert_eq!(world.dungeon().current_level.get(pos).map(|c| c.terrain), Some(Terrain::Floor));
+        assert_eq!(
+            world.dungeon().current_level.get(pos).map(|c| c.terrain),
+            Some(Terrain::Floor)
+        );
     }
 
     #[test]
@@ -744,13 +746,7 @@ mod tests {
                 hp.current = 8;
             }
 
-            let events = drink_fountain(
-                &mut rng,
-                &mut world,
-                player,
-                Position::new(5, 5),
-                &fs,
-            );
+            let events = drink_fountain(&mut rng, &mut world, player, Position::new(5, 5), &fs);
             let has_heal = events
                 .iter()
                 .any(|e| matches!(e, EngineEvent::HpChange { amount, .. } if *amount > 0));
@@ -788,17 +784,13 @@ mod tests {
                 attrs.strength = original_str;
             }
 
-            let events = drink_fountain(
-                &mut rng,
-                &mut world,
-                player,
-                Position::new(5, 5),
-                &fs,
-            );
-            let has_poison = events.iter().any(|e| matches!(
-                e,
-                EngineEvent::Message { key, .. } if key == "fountain-poison"
-            ));
+            let events = drink_fountain(&mut rng, &mut world, player, Position::new(5, 5), &fs);
+            let has_poison = events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::Message { key, .. } if key == "fountain-poison"
+                )
+            });
             if has_poison {
                 let new_str = {
                     let attrs = world.get_component::<Attributes>(player).unwrap();

@@ -121,10 +121,7 @@ impl Conduct {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConductAction {
     /// Ate food.  `is_vegan` / `is_vegetarian` describe the food item.
-    Eat {
-        is_vegan: bool,
-        is_vegetarian: bool,
-    },
+    Eat { is_vegan: bool, is_vegetarian: bool },
     /// Prayed to a god, sacrificed, or used divine aid.
     Pray,
     /// Hit a monster with a wielded weapon.
@@ -266,10 +263,7 @@ impl Default for ConductState {
 
 /// Check whether a `ConductAction` violates any conducts.  If so, increment
 /// the relevant counters and return a list of violations.
-pub fn check_conduct(
-    state: &mut ConductState,
-    action: &ConductAction,
-) -> Vec<ConductViolation> {
+pub fn check_conduct(state: &mut ConductState, action: &ConductAction) -> Vec<ConductViolation> {
     let mut violations = Vec::new();
 
     match action {
@@ -663,9 +657,7 @@ impl Scoreboard {
     /// Add an entry.  The board is kept sorted by score descending.
     pub fn add_entry(&mut self, entry: ScoreEntry) {
         // Find insertion point to maintain descending order.
-        let pos = self
-            .entries
-            .partition_point(|e| e.score >= entry.score);
+        let pos = self.entries.partition_point(|e| e.score >= entry.score);
         self.entries.insert(pos, entry);
     }
 
@@ -689,8 +681,7 @@ impl Scoreboard {
     pub fn save(&self, path: &Path) -> Result<(), ScoreboardError> {
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| ScoreboardError::SerializeError(e.to_string()))?;
-        std::fs::write(path, json)
-            .map_err(|e| ScoreboardError::IoError(e.to_string()))?;
+        std::fs::write(path, json).map_err(|e| ScoreboardError::IoError(e.to_string()))?;
         Ok(())
     }
 
@@ -700,8 +691,8 @@ impl Scoreboard {
         if !path.exists() {
             return Ok(Self::new());
         }
-        let json = std::fs::read_to_string(path)
-            .map_err(|e| ScoreboardError::IoError(e.to_string()))?;
+        let json =
+            std::fs::read_to_string(path).map_err(|e| ScoreboardError::IoError(e.to_string()))?;
         let board: Scoreboard = serde_json::from_str(&json)
             .map_err(|e| ScoreboardError::DeserializeError(e.to_string()))?;
         Ok(board)
@@ -1131,11 +1122,7 @@ pub fn pudding_should_split(is_edged: bool, pudding_hp: i32) -> bool {
 ///
 /// Returns the set of base prices that map to that buy price range,
 /// allowing the player to narrow down item identity.
-pub fn price_id_from_buy_price(
-    observed_buy_price: i32,
-    charisma: u8,
-    is_tourist: bool,
-) -> i32 {
+pub fn price_id_from_buy_price(observed_buy_price: i32, charisma: u8, is_tourist: bool) -> i32 {
     // Reverse the buy price to get the base cost.
     // buy_price = base_cost * cha_mul / cha_div * tourist_mul / tourist_div
     // So base_cost = buy_price * cha_div / cha_mul * tourist_div / tourist_mul
@@ -1236,8 +1223,7 @@ mod tests {
                 is_vegetarian: false,
             },
         );
-        let violated: Vec<Conduct> =
-            violations.iter().map(|v| v.conduct).collect();
+        let violated: Vec<Conduct> = violations.iter().map(|v| v.conduct).collect();
         assert!(violated.contains(&Conduct::Foodless));
         assert!(violated.contains(&Conduct::Vegan));
         assert!(violated.contains(&Conduct::Vegetarian));
@@ -1256,8 +1242,7 @@ mod tests {
                 is_vegetarian: true,
             },
         );
-        let violated: Vec<Conduct> =
-            violations.iter().map(|v| v.conduct).collect();
+        let violated: Vec<Conduct> = violations.iter().map(|v| v.conduct).collect();
         assert!(violated.contains(&Conduct::Foodless));
         assert!(!violated.contains(&Conduct::Vegan));
         assert!(!violated.contains(&Conduct::Vegetarian));
@@ -1266,8 +1251,7 @@ mod tests {
     #[test]
     fn using_weapon_violates_weaponless() {
         let mut state = ConductState::new();
-        let violations =
-            check_conduct(&mut state, &ConductAction::WeaponHit);
+        let violations = check_conduct(&mut state, &ConductAction::WeaponHit);
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].conduct, Conduct::Weaponless);
         assert_eq!(state.weaphit, 1);
@@ -1325,10 +1309,8 @@ mod tests {
     #[test]
     fn artifact_wish_violates_both_wishless_and_artiwishless() {
         let mut state = ConductState::new();
-        let violations =
-            check_conduct(&mut state, &ConductAction::ArtifactWish);
-        let violated: Vec<Conduct> =
-            violations.iter().map(|v| v.conduct).collect();
+        let violations = check_conduct(&mut state, &ConductAction::ArtifactWish);
+        let violated: Vec<Conduct> = violations.iter().map(|v| v.conduct).collect();
         assert!(violated.contains(&Conduct::Wishless));
         assert!(violated.contains(&Conduct::ArtifactWishless));
         assert_eq!(state.wishes, 1);
@@ -1341,14 +1323,12 @@ mod tests {
     fn achievement_granted_once_only_idempotent() {
         let mut state = AchievementState::new();
 
-        let events1 =
-            grant_achievement(&mut state, Achievement::FirstKill, 10);
+        let events1 = grant_achievement(&mut state, Achievement::FirstKill, 10);
         assert_eq!(events1.len(), 1);
         assert!(state.has(Achievement::FirstKill));
 
         // Granting again returns no events.
-        let events2 =
-            grant_achievement(&mut state, Achievement::FirstKill, 20);
+        let events2 = grant_achievement(&mut state, Achievement::FirstKill, 20);
         assert!(events2.is_empty());
         assert_eq!(state.count(), 1);
         // Turn number is from first grant.
@@ -1503,8 +1483,7 @@ mod tests {
         board.add_entry(make_entry("Zero", 100));
         board.save(&path).expect("save should succeed");
 
-        let loaded =
-            Scoreboard::load(&path).expect("load should succeed");
+        let loaded = Scoreboard::load(&path).expect("load should succeed");
         assert_eq!(loaded.len(), 2);
         assert_eq!(loaded.get_top(1)[0].name, "Hero");
         assert_eq!(loaded.get_top(1)[0].score, 42000);
@@ -1516,11 +1495,9 @@ mod tests {
 
     #[test]
     fn scoreboard_load_nonexistent_returns_empty() {
-        let path =
-            std::env::temp_dir().join("nethack_babel_no_such_file.json");
+        let path = std::env::temp_dir().join("nethack_babel_no_such_file.json");
         let _ = std::fs::remove_file(&path);
-        let board =
-            Scoreboard::load(&path).expect("load of missing file");
+        let board = Scoreboard::load(&path).expect("load of missing file");
         assert!(board.is_empty());
     }
 
@@ -1647,11 +1624,7 @@ mod tests {
             (30, 110_000_000),
         ];
         for (lev, exp) in &expected {
-            assert_eq!(
-                newuexp(*lev), *exp,
-                "newuexp({}) should be {}",
-                lev, exp
-            );
+            assert_eq!(newuexp(*lev), *exp, "newuexp({}) should be {}", lev, exp);
         }
     }
 
@@ -1685,9 +1658,24 @@ mod tests {
         // Vector B: m_lev=10, mac=-2, mmove=15,
         // attacks: [AT_WEAP/AD_PHYS/2d8, AT_MAGC/AD_SPEL/0d0, AT_CLAW/AD_DRLI/1d6]
         let attacks = vec![
-            XpAttack { aatyp: at::AT_WEAP, adtyp: ad::AD_PHYS, damn: 2, damd: 8 },
-            XpAttack { aatyp: at::AT_MAGC, adtyp: 241, damn: 0, damd: 0 }, // AD_SPEL=241
-            XpAttack { aatyp: at::AT_CLAW, adtyp: ad::AD_DRLI, damn: 1, damd: 6 },
+            XpAttack {
+                aatyp: at::AT_WEAP,
+                adtyp: ad::AD_PHYS,
+                damn: 2,
+                damd: 8,
+            },
+            XpAttack {
+                aatyp: at::AT_MAGC,
+                adtyp: 241,
+                damn: 0,
+                damd: 0,
+            }, // AD_SPEL=241
+            XpAttack {
+                aatyp: at::AT_CLAW,
+                adtyp: ad::AD_DRLI,
+                damn: 1,
+                damd: 6,
+            },
         ];
         let input = MonsterXpInput {
             m_lev: 10,
@@ -1708,8 +1696,18 @@ mod tests {
     fn test_score_monster_xp_vector_c_eel_drowning() {
         // Vector C: m_lev=5, mac=9, mmove=12, S_EEL, non-amphibious player
         let attacks = vec![
-            XpAttack { aatyp: at::AT_TUCH, adtyp: ad::AD_WRAP, damn: 2, damd: 6 },
-            XpAttack { aatyp: at::AT_BITE, adtyp: ad::AD_PHYS, damn: 1, damd: 4 },
+            XpAttack {
+                aatyp: at::AT_TUCH,
+                adtyp: ad::AD_WRAP,
+                damn: 2,
+                damd: 6,
+            },
+            XpAttack {
+                aatyp: at::AT_BITE,
+                adtyp: ad::AD_PHYS,
+                damn: 1,
+                damd: 4,
+            },
         ];
         let input = MonsterXpInput {
             m_lev: 5,
@@ -1747,9 +1745,12 @@ mod tests {
             m_lev: 25,
             mac: -10,
             mmove: 24,
-            attacks: vec![
-                XpAttack { aatyp: at::AT_MAGC, adtyp: 1, damn: 8, damd: 8 },
-            ],
+            attacks: vec![XpAttack {
+                aatyp: at::AT_MAGC,
+                adtyp: 1,
+                damn: 8,
+                damd: 8,
+            }],
             extra_nasty: true,
             is_mail_daemon: true,
             revived_or_cloned: false,
@@ -1875,9 +1876,12 @@ mod tests {
     #[test]
     fn test_score_monster_xp_heavy_damage() {
         // damn * damd > 23: e.g. 4d8 = 32 > 23 => +m_lev
-        let attacks = vec![
-            XpAttack { aatyp: at::AT_CLAW, adtyp: ad::AD_PHYS, damn: 4, damd: 8 },
-        ];
+        let attacks = vec![XpAttack {
+            aatyp: at::AT_CLAW,
+            adtyp: ad::AD_PHYS,
+            damn: 4,
+            damd: 8,
+        }];
         let input = MonsterXpInput {
             m_lev: 5,
             mac: 10,
@@ -2103,8 +2107,8 @@ mod tests {
         //   - Selected as candidate: 1/1 = 100% (only candidate)
         //   - should_givit: level(3) > rn2(1) => 3 > 0 always true
         //   - Therefore: 100% probability
+        use crate::hunger::{CorpseDef, CorpseIntrinsic, check_intrinsic_gain};
         use nethack_babel_data::{MonsterFlags, ResistanceSet};
-        use crate::hunger::{CorpseIntrinsic, CorpseDef, check_intrinsic_gain};
 
         let mut rng = Pcg64::seed_from_u64(42);
         let mut successes = 0;
@@ -2191,7 +2195,7 @@ mod tests {
     fn test_rng_prayer_success_deterministic() {
         // With alignment_record >= 0, luck >= 0, no anger, no cooldown,
         // prayer should succeed deterministically.
-        use crate::religion::{ReligionState, evaluate_prayer_simple, PrayerType};
+        use crate::religion::{PrayerType, ReligionState, evaluate_prayer_simple};
         use nethack_babel_data::Alignment;
 
         let state = ReligionState {
@@ -2229,7 +2233,7 @@ mod tests {
 
     #[test]
     fn test_rng_prayer_fails_with_anger() {
-        use crate::religion::{ReligionState, evaluate_prayer_simple, PrayerType};
+        use crate::religion::{PrayerType, ReligionState, evaluate_prayer_simple};
         use nethack_babel_data::Alignment;
 
         let state = ReligionState {
@@ -2466,7 +2470,7 @@ mod tests {
 
     #[test]
     fn test_exploit_excalibur_fountain_dip() {
-        use crate::artifacts::{try_create_excalibur, ExcaliburResult};
+        use crate::artifacts::{ExcaliburResult, try_create_excalibur};
         use nethack_babel_data::{Alignment, ObjectTypeId};
 
         let long_sword = ObjectTypeId(28); // OBJ_LONG_SWORD
@@ -2479,7 +2483,7 @@ mod tests {
                 long_sword,
                 5, // level 5 minimum
                 Alignment::Lawful,
-                true, // is_knight
+                true,  // is_knight
                 false, // excalibur_exists
                 &mut rng,
             );
@@ -2488,12 +2492,15 @@ mod tests {
                 break;
             }
         }
-        assert!(found_success, "lawful character at level 5+ should eventually get Excalibur");
+        assert!(
+            found_success,
+            "lawful character at level 5+ should eventually get Excalibur"
+        );
     }
 
     #[test]
     fn test_exploit_excalibur_requires_level_5() {
-        use crate::artifacts::{try_create_excalibur, ExcaliburResult};
+        use crate::artifacts::{ExcaliburResult, try_create_excalibur};
         use nethack_babel_data::{Alignment, ObjectTypeId};
 
         let long_sword = ObjectTypeId(28);
@@ -2505,7 +2512,7 @@ mod tests {
 
     #[test]
     fn test_exploit_excalibur_requires_lawful() {
-        use crate::artifacts::{try_create_excalibur, ExcaliburResult};
+        use crate::artifacts::{ExcaliburResult, try_create_excalibur};
         use nethack_babel_data::{Alignment, ObjectTypeId};
 
         let long_sword = ObjectTypeId(28);
@@ -2541,8 +2548,8 @@ mod tests {
         // 1. Kill a floating eye (e.g., while blind or with ranged attack)
         // 2. Eat the corpse
         // 3. Gain intrinsic telepathy (100% if level 3 floating eye)
+        use crate::hunger::{CorpseDef, CorpseIntrinsic, check_intrinsic_gain};
         use nethack_babel_data::{MonsterFlags, ResistanceSet};
-        use crate::hunger::{CorpseIntrinsic, CorpseDef, check_intrinsic_gain};
 
         let mut rng = Pcg64::seed_from_u64(42);
 
@@ -2622,10 +2629,30 @@ mod tests {
     #[test]
     fn test_exploit_unicorn_horn_uncursed_partial() {
         // Uncursed: 33% chance (roll < 33)
-        assert!(unicorn_horn_cures(UnicornHornCurable::Confusion, false, false, 10));
-        assert!(unicorn_horn_cures(UnicornHornCurable::Confusion, false, false, 32));
-        assert!(!unicorn_horn_cures(UnicornHornCurable::Confusion, false, false, 33));
-        assert!(!unicorn_horn_cures(UnicornHornCurable::Confusion, false, false, 99));
+        assert!(unicorn_horn_cures(
+            UnicornHornCurable::Confusion,
+            false,
+            false,
+            10
+        ));
+        assert!(unicorn_horn_cures(
+            UnicornHornCurable::Confusion,
+            false,
+            false,
+            32
+        ));
+        assert!(!unicorn_horn_cures(
+            UnicornHornCurable::Confusion,
+            false,
+            false,
+            33
+        ));
+        assert!(!unicorn_horn_cures(
+            UnicornHornCurable::Confusion,
+            false,
+            false,
+            99
+        ));
     }
 
     // ── Score formula edge cases ──────────────────────────────

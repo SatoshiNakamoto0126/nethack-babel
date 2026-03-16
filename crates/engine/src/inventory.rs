@@ -64,9 +64,7 @@ pub struct Inventory {
 impl Inventory {
     /// Create an empty inventory.
     pub fn new() -> Self {
-        Self {
-            items: Vec::new(),
-        }
+        Self { items: Vec::new() }
     }
 
     /// Add an item entity to the inventory.
@@ -147,18 +145,10 @@ impl Inventory {
     /// Sort inventory items by the given packorder class ordering.
     /// Items whose class appears earlier in `packorder` come first.
     /// Within the same class, original order is preserved (stable sort).
-    pub fn sort_by_packorder(
-        &mut self,
-        world: &GameWorld,
-        packorder: &[ObjectClass],
-    ) {
+    pub fn sort_by_packorder(&mut self, world: &GameWorld, packorder: &[ObjectClass]) {
         self.items.sort_by(|&a, &b| {
-            let class_a = world
-                .get_component::<ObjectCore>(a)
-                .map(|c| c.object_class);
-            let class_b = world
-                .get_component::<ObjectCore>(b)
-                .map(|c| c.object_class);
+            let class_a = world.get_component::<ObjectCore>(a).map(|c| c.object_class);
+            let class_b = world.get_component::<ObjectCore>(b).map(|c| c.object_class);
             let rank_a = class_a
                 .and_then(|c| packorder.iter().position(|p| *p == c))
                 .unwrap_or(usize::MAX);
@@ -257,12 +247,15 @@ pub fn inv_cnt(world: &GameWorld, player: Entity, include_gold: bool) -> usize {
     if include_gold {
         inv.len()
     } else {
-        inv.items.iter().filter(|&&item| {
-            world
-                .get_component::<ObjectCore>(item)
-                .map(|c| c.object_class != ObjectClass::Coin)
-                .unwrap_or(true)
-        }).count()
+        inv.items
+            .iter()
+            .filter(|&&item| {
+                world
+                    .get_component::<ObjectCore>(item)
+                    .map(|c| c.object_class != ObjectClass::Coin)
+                    .unwrap_or(true)
+            })
+            .count()
     }
 }
 
@@ -289,11 +282,22 @@ pub fn split_stack(
     obj_defs: &[ObjectDef],
 ) -> SplitResult {
     let (otyp, old_qty, object_class, inv_letter, artifact, age) = {
-        let core = world.get_component::<ObjectCore>(item)
+        let core = world
+            .get_component::<ObjectCore>(item)
             .expect("split_stack: item must have ObjectCore");
         assert!(num > 0, "split_stack: num must be > 0");
-        assert!((num as i32) < core.quantity, "split_stack: num must be < quantity");
-        (core.otyp, core.quantity, core.object_class, core.inv_letter, core.artifact, core.age)
+        assert!(
+            (num as i32) < core.quantity,
+            "split_stack: num must be < quantity"
+        );
+        (
+            core.otyp,
+            core.quantity,
+            core.object_class,
+            core.inv_letter,
+            core.artifact,
+            core.age,
+        )
     };
 
     let unit_weight = obj_defs
@@ -324,8 +328,16 @@ pub fn split_stack(
     // Clone BUC from parent.
     let buc = world
         .get_component::<BucStatus>(item)
-        .map(|b| BucStatus { cursed: b.cursed, blessed: b.blessed, bknown: b.bknown })
-        .unwrap_or(BucStatus { cursed: false, blessed: false, bknown: false });
+        .map(|b| BucStatus {
+            cursed: b.cursed,
+            blessed: b.blessed,
+            bknown: b.bknown,
+        })
+        .unwrap_or(BucStatus {
+            cursed: false,
+            blessed: false,
+            bknown: false,
+        });
 
     let child = world.spawn((child_core, buc, ObjectLocation::Inventory));
 
@@ -582,16 +594,14 @@ pub fn boh_cursed_loss<R: Rng>(rng: &mut R) -> bool {
 /// Find all item entities on the floor at the given position.
 pub fn items_at_position(world: &GameWorld, pos: Position) -> Vec<Entity> {
     let mut result = Vec::new();
-    for (entity, (core, loc)) in world
-        .ecs()
-        .query::<(&ObjectCore, &ObjectLocation)>()
-        .iter()
-    {
+    for (entity, (core, loc)) in world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter() {
         let _ = core; // we just need the entity
         if let ObjectLocation::Floor { x, y } = *loc
-            && x as i32 == pos.x && y as i32 == pos.y {
-                result.push(entity);
-            }
+            && x as i32 == pos.x
+            && y as i32 == pos.y
+        {
+            result.push(entity);
+        }
     }
     result
 }
@@ -614,13 +624,14 @@ pub fn pickup_item(
     // the Inventory component.
     for event in &events {
         if let EngineEvent::ItemPickedUp { item, .. } = event
-            && let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
-                // For a merge, the item entity is the merge target which
-                // may already be in the inventory.
-                if !inv.contains(*item) {
-                    inv.add(*item);
-                }
+            && let Some(mut inv) = world.get_component_mut::<Inventory>(player)
+        {
+            // For a merge, the item entity is the merge target which
+            // may already be in the inventory.
+            if !inv.contains(*item) {
+                inv.add(*item);
             }
+        }
     }
 
     events
@@ -659,11 +670,7 @@ pub fn pickup_all_at_player(
 ///
 /// Delegates to `items::drop_item` and synchronizes the `Inventory`
 /// component.
-pub fn drop_item(
-    world: &mut GameWorld,
-    player: Entity,
-    item_entity: Entity,
-) -> Vec<EngineEvent> {
+pub fn drop_item(world: &mut GameWorld, player: Entity, item_entity: Entity) -> Vec<EngineEvent> {
     // Remove from Inventory component first.
     if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
         inv.remove(item_entity);
@@ -835,12 +842,11 @@ pub fn autopickup(
         };
 
         if should_pickup {
-            let pickup_events =
-                pickup_item(world, player, item, letter_state, obj_defs);
+            let pickup_events = pickup_item(world, player, item, letter_state, obj_defs);
             // If we got a "knapsack-full" message, stop trying.
-            let full = pickup_events.iter().any(|e| {
-                matches!(e, EngineEvent::Message { key, .. } if key == "knapsack-full")
-            });
+            let full = pickup_events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "knapsack-full"));
             events.extend(pickup_events);
             if full {
                 break;
@@ -938,8 +944,8 @@ pub fn carry_capacity(
         return MAX_CARR_CAP;
     }
 
-    let mut cap = WT_WEIGHTCAP_STRCON * (strength as u32 + constitution as u32)
-        + WT_WEIGHTCAP_SPARE;
+    let mut cap =
+        WT_WEIGHTCAP_STRCON * (strength as u32 + constitution as u32) + WT_WEIGHTCAP_SPARE;
 
     if cap > MAX_CARR_CAP {
         cap = MAX_CARR_CAP;
@@ -1180,27 +1186,15 @@ mod tests {
     }
 
     /// Helper: spawn a floor item.
-    fn spawn_floor_item(
-        world: &mut GameWorld,
-        def: &ObjectDef,
-        x: i16,
-        y: i16,
-    ) -> Entity {
-        items::spawn_item(
-            world,
-            def,
-            items::SpawnLocation::Floor(x, y),
-            None,
-        )
+    fn spawn_floor_item(world: &mut GameWorld, def: &ObjectDef, x: i16, y: i16) -> Entity {
+        items::spawn_item(world, def, items::SpawnLocation::Floor(x, y), None)
     }
 
     /// Helper: create a GameWorld with an Inventory on the player.
     fn world_with_inventory(start: Position) -> GameWorld {
         let mut world = GameWorld::new(start);
         let player = world.player();
-        let _ = world
-            .ecs_mut()
-            .insert_one(player, Inventory::new());
+        let _ = world.ecs_mut().insert_one(player, Inventory::new());
         world
     }
 
@@ -1312,19 +1306,19 @@ mod tests {
     #[test]
     fn test_gold_weight_formula() {
         // TV7 from spec
-        assert_eq!(gold_weight(1), 0);    // (1+50)/100 = 0
-        assert_eq!(gold_weight(50), 1);   // (50+50)/100 = 1
-        assert_eq!(gold_weight(100), 1);  // (100+50)/100 = 1
-        assert_eq!(gold_weight(149), 1);  // (149+50)/100 = 1
-        assert_eq!(gold_weight(150), 2);  // (150+50)/100 = 2
-        assert_eq!(gold_weight(0), 0);    // edge case
+        assert_eq!(gold_weight(1), 0); // (1+50)/100 = 0
+        assert_eq!(gold_weight(50), 1); // (50+50)/100 = 1
+        assert_eq!(gold_weight(100), 1); // (100+50)/100 = 1
+        assert_eq!(gold_weight(149), 1); // (149+50)/100 = 1
+        assert_eq!(gold_weight(150), 2); // (150+50)/100 = 2
+        assert_eq!(gold_weight(0), 0); // edge case
     }
 
     #[test]
     fn test_gold_weight_min1() {
-        assert_eq!(gold_weight_min1(1), 1);   // min(0, 1) = 1
-        assert_eq!(gold_weight_min1(49), 1);  // 0 -> 1
-        assert_eq!(gold_weight_min1(50), 1);  // already 1
+        assert_eq!(gold_weight_min1(1), 1); // min(0, 1) = 1
+        assert_eq!(gold_weight_min1(49), 1); // 0 -> 1
+        assert_eq!(gold_weight_min1(50), 1); // already 1
         assert_eq!(gold_weight_min1(100), 1);
     }
 
@@ -1342,25 +1336,37 @@ mod tests {
 
     #[test]
     fn test_boh_content_weight_uncursed() {
-        let buc = BucStatus { cursed: false, blessed: false, bknown: false };
+        let buc = BucStatus {
+            cursed: false,
+            blessed: false,
+            bknown: false,
+        };
         // TV12: uncursed BoH, cwt=1 → (1+1)/2 = 1
         assert_eq!(boh_content_weight(1, &buc), 1);
         assert_eq!(boh_content_weight(100, &buc), 50); // (100+1)/2 = 50
-        assert_eq!(boh_content_weight(0, &buc), 0);    // (0+1)/2 = 0
+        assert_eq!(boh_content_weight(0, &buc), 0); // (0+1)/2 = 0
     }
 
     #[test]
     fn test_boh_content_weight_blessed() {
-        let buc = BucStatus { cursed: false, blessed: true, bknown: false };
+        let buc = BucStatus {
+            cursed: false,
+            blessed: true,
+            bknown: false,
+        };
         // TV12: blessed BoH, cwt=1 → (1+3)/4 = 1
         assert_eq!(boh_content_weight(1, &buc), 1);
-        assert_eq!(boh_content_weight(0, &buc), 0);    // (0+3)/4 = 0
-        assert_eq!(boh_content_weight(100, &buc), 25);  // (100+3)/4 = 25
+        assert_eq!(boh_content_weight(0, &buc), 0); // (0+3)/4 = 0
+        assert_eq!(boh_content_weight(100, &buc), 25); // (100+3)/4 = 25
     }
 
     #[test]
     fn test_boh_content_weight_cursed() {
-        let buc = BucStatus { cursed: true, blessed: false, bknown: false };
+        let buc = BucStatus {
+            cursed: true,
+            blessed: false,
+            bknown: false,
+        };
         // TV12: cursed BoH, cwt=100 → 100*2 = 200
         assert_eq!(boh_content_weight(100, &buc), 200);
         assert_eq!(boh_content_weight(0, &buc), 0);
@@ -1369,7 +1375,11 @@ mod tests {
     #[test]
     fn test_delta_cwt_boh_blessed() {
         // TV17: blessed BoH with 400 content weight, removing 100 weight item
-        let buc = BucStatus { cursed: false, blessed: true, bknown: false };
+        let buc = BucStatus {
+            cursed: false,
+            blessed: true,
+            bknown: false,
+        };
         // Before: (400+3)/4 = 100. After: (300+3)/4 = 75. Delta = 25.
         assert_eq!(delta_cwt_boh(400, 100, true, &buc), 25);
     }
@@ -1377,14 +1387,22 @@ mod tests {
     #[test]
     fn test_delta_cwt_boh_cursed() {
         // TV17: cursed BoH with 100 content weight, removing 50 weight item
-        let buc = BucStatus { cursed: true, blessed: false, bknown: false };
+        let buc = BucStatus {
+            cursed: true,
+            blessed: false,
+            bknown: false,
+        };
         // Before: 100*2 = 200. After: 50*2 = 100. Delta = 100.
         assert_eq!(delta_cwt_boh(100, 50, true, &buc), 100);
     }
 
     #[test]
     fn test_delta_cwt_normal_container() {
-        let buc = BucStatus { cursed: false, blessed: false, bknown: false };
+        let buc = BucStatus {
+            cursed: false,
+            blessed: false,
+            bknown: false,
+        };
         // Non-BoH: delta = item weight directly.
         assert_eq!(delta_cwt_boh(200, 50, false, &buc), 50);
     }
@@ -1422,7 +1440,7 @@ mod tests {
         }
 
         assert_eq!(inv_cnt(&world, player, false), 1); // weapon only
-        assert_eq!(inv_cnt(&world, player, true), 2);  // weapon + gold
+        assert_eq!(inv_cnt(&world, player, true), 2); // weapon + gold
     }
 
     // ── Invletter value tests ────────────────────────────────────
@@ -1456,7 +1474,11 @@ mod tests {
             ..Default::default()
         };
         // Thrown items should be picked up regardless
-        assert!(should_autopickup(ObjectClass::Weapon, HowLost::Thrown, &config));
+        assert!(should_autopickup(
+            ObjectClass::Weapon,
+            HowLost::Thrown,
+            &config
+        ));
     }
 
     #[test]
@@ -1468,13 +1490,21 @@ mod tests {
             ..Default::default()
         };
         // Dropped weapons should NOT be picked up
-        assert!(!should_autopickup(ObjectClass::Weapon, HowLost::Dropped, &config));
+        assert!(!should_autopickup(
+            ObjectClass::Weapon,
+            HowLost::Dropped,
+            &config
+        ));
     }
 
     #[test]
     fn test_should_autopickup_exploding_never() {
         let config = AutopickupConfig::default();
-        assert!(!should_autopickup(ObjectClass::Weapon, HowLost::Exploding, &config));
+        assert!(!should_autopickup(
+            ObjectClass::Weapon,
+            HowLost::Exploding,
+            &config
+        ));
     }
 
     #[test]
@@ -1483,7 +1513,11 @@ mod tests {
             enabled: false,
             ..Default::default()
         };
-        assert!(!should_autopickup(ObjectClass::Coin, HowLost::None, &config));
+        assert!(!should_autopickup(
+            ObjectClass::Coin,
+            HowLost::None,
+            &config
+        ));
     }
 
     #[test]
@@ -1493,8 +1527,16 @@ mod tests {
             pickup_types: vec![ObjectClass::Potion],
             ..Default::default()
         };
-        assert!(should_autopickup(ObjectClass::Potion, HowLost::None, &config));
-        assert!(!should_autopickup(ObjectClass::Weapon, HowLost::None, &config));
+        assert!(should_autopickup(
+            ObjectClass::Potion,
+            HowLost::None,
+            &config
+        ));
+        assert!(!should_autopickup(
+            ObjectClass::Weapon,
+            HowLost::None,
+            &config
+        ));
     }
 
     // ── Encumbrance message tests ────────────────────────────────
@@ -1516,11 +1558,14 @@ mod tests {
     fn test_pickup_encumbrance_check() {
         // Current = Unencumbered, new = Burdened, threshold = Stressed
         // Burdened <= Stressed, so no problem.
-        assert!(pickup_encumbrance_check(
-            Encumbrance::Unencumbered,
-            Encumbrance::Burdened,
-            Encumbrance::Stressed,
-        ).is_none());
+        assert!(
+            pickup_encumbrance_check(
+                Encumbrance::Unencumbered,
+                Encumbrance::Burdened,
+                Encumbrance::Stressed,
+            )
+            .is_none()
+        );
 
         // Current = Unencumbered, new = Strained, threshold = Stressed
         // Strained > Stressed → warn.
@@ -1591,9 +1636,7 @@ mod tests {
             check_drop_restriction(ObjectClass::Armor, false, false, true),
             Some(CannotDrop::WornEquipment)
         );
-        assert!(
-            check_drop_restriction(ObjectClass::Weapon, false, false, false).is_none()
-        );
+        assert!(check_drop_restriction(ObjectClass::Weapon, false, false, false).is_none());
     }
 
     // ── Candle merge age tests ───────────────────────────────────
@@ -1617,12 +1660,22 @@ mod tests {
     #[test]
     fn test_merge_knowledge_inference() {
         // Different known states → learned
-        assert!(merge_knowledge_inference(true, false, false, false, false, false));
-        assert!(merge_knowledge_inference(false, false, true, false, false, false));
-        assert!(merge_knowledge_inference(false, false, false, false, true, false));
+        assert!(merge_knowledge_inference(
+            true, false, false, false, false, false
+        ));
+        assert!(merge_knowledge_inference(
+            false, false, true, false, false, false
+        ));
+        assert!(merge_knowledge_inference(
+            false, false, false, false, true, false
+        ));
         // Same states → not learned
-        assert!(!merge_knowledge_inference(false, false, false, false, false, false));
-        assert!(!merge_knowledge_inference(true, true, true, true, true, true));
+        assert!(!merge_knowledge_inference(
+            false, false, false, false, false, false
+        ));
+        assert!(!merge_knowledge_inference(
+            true, true, true, true, true, true
+        ));
     }
 
     // ── BoH explosion probability tests ──────────────────────────
@@ -1662,12 +1715,7 @@ mod tests {
         let mut world = GameWorld::new(Position::new(0, 0));
         let def = test_obj_def(1, true);
         let defs = vec![def.clone()];
-        let item = items::spawn_item(
-            &mut world,
-            &def,
-            items::SpawnLocation::Inventory,
-            None,
-        );
+        let item = items::spawn_item(&mut world, &def, items::SpawnLocation::Inventory, None);
         {
             let mut core = world.get_component_mut::<ObjectCore>(item).unwrap();
             core.quantity = 20;
@@ -1693,12 +1741,7 @@ mod tests {
         let mut world = GameWorld::new(Position::new(0, 0));
         let def = test_obj_def(1, true);
         let defs = vec![def.clone()];
-        let item = items::spawn_item(
-            &mut world,
-            &def,
-            items::SpawnLocation::Inventory,
-            None,
-        );
+        let item = items::spawn_item(&mut world, &def, items::SpawnLocation::Inventory, None);
         {
             let mut core = world.get_component_mut::<ObjectCore>(item).unwrap();
             core.quantity = 10;
@@ -1712,12 +1755,7 @@ mod tests {
         let mut world = GameWorld::new(Position::new(0, 0));
         let def = test_obj_def(1, true);
         let defs = vec![def.clone()];
-        let item = items::spawn_item(
-            &mut world,
-            &def,
-            items::SpawnLocation::Inventory,
-            None,
-        );
+        let item = items::spawn_item(&mut world, &def, items::SpawnLocation::Inventory, None);
         {
             let mut core = world.get_component_mut::<ObjectCore>(item).unwrap();
             core.quantity = 10;
@@ -1802,9 +1840,7 @@ mod tests {
 
         let item1 = spawn_floor_item(&mut world, &def, 5, 5);
         {
-            let mut core = world
-                .get_component_mut::<ObjectCore>(item1)
-                .unwrap();
+            let mut core = world.get_component_mut::<ObjectCore>(item1).unwrap();
             core.quantity = 5;
             core.weight = 50;
         }
@@ -1817,9 +1853,7 @@ mod tests {
 
         let item2 = spawn_floor_item(&mut world, &def, 5, 5);
         {
-            let mut core = world
-                .get_component_mut::<ObjectCore>(item2)
-                .unwrap();
+            let mut core = world.get_component_mut::<ObjectCore>(item2).unwrap();
             core.quantity = 3;
             core.weight = 30;
         }
@@ -1859,9 +1893,7 @@ mod tests {
             None,
         );
         {
-            let mut core = world
-                .get_component_mut::<ObjectCore>(gold)
-                .unwrap();
+            let mut core = world.get_component_mut::<ObjectCore>(gold).unwrap();
             core.object_class = ObjectClass::Coin;
             core.quantity = 100;
         }
@@ -1893,20 +1925,29 @@ mod tests {
         let weapon = world.ecs_mut().spawn((ObjectCore {
             otyp: ObjectTypeId(1),
             object_class: ObjectClass::Weapon,
-            quantity: 1, weight: 10, age: 0,
-            inv_letter: Some('a'), artifact: None,
+            quantity: 1,
+            weight: 10,
+            age: 0,
+            inv_letter: Some('a'),
+            artifact: None,
         },));
         let food = world.ecs_mut().spawn((ObjectCore {
             otyp: ObjectTypeId(2),
             object_class: ObjectClass::Food,
-            quantity: 1, weight: 5, age: 0,
-            inv_letter: Some('b'), artifact: None,
+            quantity: 1,
+            weight: 5,
+            age: 0,
+            inv_letter: Some('b'),
+            artifact: None,
         },));
         let coin = world.ecs_mut().spawn((ObjectCore {
             otyp: ObjectTypeId(3),
             object_class: ObjectClass::Coin,
-            quantity: 100, weight: 1, age: 0,
-            inv_letter: Some('$'), artifact: None,
+            quantity: 100,
+            weight: 1,
+            age: 0,
+            inv_letter: Some('$'),
+            artifact: None,
         },));
 
         {
@@ -1938,11 +1979,16 @@ mod tests {
         }
 
         let inv = world.get_component::<Inventory>(player).unwrap();
-        let classes: Vec<ObjectClass> = inv.items.iter().map(|&e| {
-            world.get_component::<ObjectCore>(e).unwrap().object_class
-        }).collect();
+        let classes: Vec<ObjectClass> = inv
+            .items
+            .iter()
+            .map(|&e| world.get_component::<ObjectCore>(e).unwrap().object_class)
+            .collect();
 
-        assert_eq!(classes, vec![ObjectClass::Coin, ObjectClass::Weapon, ObjectClass::Food]);
+        assert_eq!(
+            classes,
+            vec![ObjectClass::Coin, ObjectClass::Weapon, ObjectClass::Food]
+        );
     }
 
     // ── Inv rank sorting test ────────────────────────────────────
@@ -2035,20 +2081,40 @@ mod tests {
 
     #[test]
     fn test_container_weight_normal() {
-        assert_eq!(container_weight(15, 100, false, &BucStatus { blessed: false, cursed: false, bknown: false }), 115);
+        assert_eq!(
+            container_weight(
+                15,
+                100,
+                false,
+                &BucStatus {
+                    blessed: false,
+                    cursed: false,
+                    bknown: false
+                }
+            ),
+            115
+        );
     }
 
     #[test]
     fn test_container_weight_boh_uncursed() {
         // Uncursed BoH: contents weight halved
-        let buc = BucStatus { blessed: false, cursed: false, bknown: false };
+        let buc = BucStatus {
+            blessed: false,
+            cursed: false,
+            bknown: false,
+        };
         assert_eq!(container_weight(15, 100, true, &buc), 15 + 50);
     }
 
     #[test]
     fn test_container_weight_boh_blessed() {
         // Blessed BoH: contents weight reduced by 75%
-        let buc = BucStatus { blessed: true, cursed: false, bknown: true };
+        let buc = BucStatus {
+            blessed: true,
+            cursed: false,
+            bknown: true,
+        };
         assert_eq!(container_weight(15, 100, true, &buc), 15 + 25);
     }
 
@@ -2128,8 +2194,16 @@ mod tests {
             object_class: ObjectClass::Potion,
         };
         let core_b = core_a.clone();
-        let buc_a = BucStatus { blessed: true, cursed: false, bknown: true };
-        let buc_b = BucStatus { blessed: false, cursed: true, bknown: true };
+        let buc_a = BucStatus {
+            blessed: true,
+            cursed: false,
+            bknown: true,
+        };
+        let buc_b = BucStatus {
+            blessed: false,
+            cursed: true,
+            bknown: true,
+        };
         assert!(!can_merge(&core_a, &core_b, Some(&buc_a), Some(&buc_b)));
     }
 
@@ -2177,14 +2251,12 @@ mod tests {
         let mut world = world_with_inventory(Position { x: 1, y: 1 });
         let player = world.player();
         let def = test_obj_def(1, false);
-        let item = items::spawn_item(
-            &mut world,
-            &def,
-            items::SpawnLocation::Inventory,
-            None,
-        );
+        let item = items::spawn_item(&mut world, &def, items::SpawnLocation::Inventory, None);
         // Assign letter 'a'.
-        world.get_component_mut::<ObjectCore>(item).unwrap().inv_letter = Some('a');
+        world
+            .get_component_mut::<ObjectCore>(item)
+            .unwrap()
+            .inv_letter = Some('a');
         assert_eq!(find_by_letter(&world, player, 'a'), Some(item));
     }
 
@@ -2193,13 +2265,11 @@ mod tests {
         let mut world = world_with_inventory(Position { x: 1, y: 1 });
         let player = world.player();
         let def = test_obj_def(1, false);
-        let item = items::spawn_item(
-            &mut world,
-            &def,
-            items::SpawnLocation::Inventory,
-            None,
-        );
-        world.get_component_mut::<ObjectCore>(item).unwrap().inv_letter = Some('a');
+        let item = items::spawn_item(&mut world, &def, items::SpawnLocation::Inventory, None);
+        world
+            .get_component_mut::<ObjectCore>(item)
+            .unwrap()
+            .inv_letter = Some('a');
         assert_eq!(find_by_letter(&world, player, 'z'), None);
     }
 
@@ -2226,20 +2296,21 @@ mod tests {
         def_potion.class = ObjectClass::Potion;
 
         let w = items::spawn_item(
-            &mut world, &def_weapon,
-            items::SpawnLocation::Inventory, None,
+            &mut world,
+            &def_weapon,
+            items::SpawnLocation::Inventory,
+            None,
         );
         world.get_component_mut::<ObjectCore>(w).unwrap().inv_letter = Some('c');
 
-        let f = items::spawn_item(
-            &mut world, &def_food,
-            items::SpawnLocation::Inventory, None,
-        );
+        let f = items::spawn_item(&mut world, &def_food, items::SpawnLocation::Inventory, None);
         world.get_component_mut::<ObjectCore>(f).unwrap().inv_letter = Some('a');
 
         let p = items::spawn_item(
-            &mut world, &def_potion,
-            items::SpawnLocation::Inventory, None,
+            &mut world,
+            &def_potion,
+            items::SpawnLocation::Inventory,
+            None,
         );
         world.get_component_mut::<ObjectCore>(p).unwrap().inv_letter = Some('b');
 

@@ -47,9 +47,7 @@ pub fn encumbrance_message(enc: Encumbrance) -> &'static str {
         Encumbrance::Burdened => "You have a little trouble",
         Encumbrance::Stressed => "You have trouble",
         Encumbrance::Strained => "You have much trouble",
-        Encumbrance::Overtaxed | Encumbrance::Overloaded => {
-            "You have extreme difficulty"
-        }
+        Encumbrance::Overtaxed | Encumbrance::Overloaded => "You have extreme difficulty",
         Encumbrance::Unencumbered => "",
     }
 }
@@ -390,9 +388,7 @@ pub struct PickupAction {
 }
 
 /// Generate a pickup menu from items on the ground.
-pub fn pickup_menu_items(
-    ground_items: &[(String, char, u32)],
-) -> Vec<PickupMenuItem> {
+pub fn pickup_menu_items(ground_items: &[(String, char, u32)]) -> Vec<PickupMenuItem> {
     ground_items
         .iter()
         .enumerate()
@@ -418,12 +414,14 @@ pub fn process_pickup_selections(
     selections
         .iter()
         .filter_map(|&idx| {
-            ground_items.get(idx).map(|(name, class, qty)| PickupAction {
-                index: idx,
-                name: name.clone(),
-                class: *class,
-                quantity: *qty,
-            })
+            ground_items
+                .get(idx)
+                .map(|(name, class, qty)| PickupAction {
+                    index: idx,
+                    name: name.clone(),
+                    class: *class,
+                    quantity: *qty,
+                })
         })
         .collect()
 }
@@ -485,10 +483,7 @@ pub fn container_menu(
 ///
 /// Removes the selected items from `container_items` and returns them.
 /// Indices are processed in reverse order to avoid invalidation.
-pub fn take_from_container(
-    container_items: &mut Vec<String>,
-    selections: &[usize],
-) -> Vec<String> {
+pub fn take_from_container(container_items: &mut Vec<String>, selections: &[usize]) -> Vec<String> {
     let mut sorted: Vec<usize> = selections
         .iter()
         .copied()
@@ -497,10 +492,7 @@ pub fn take_from_container(
     sorted.sort_unstable();
     sorted.dedup();
 
-    let taken: Vec<String> = sorted
-        .iter()
-        .map(|&i| container_items[i].clone())
-        .collect();
+    let taken: Vec<String> = sorted.iter().map(|&i| container_items[i].clone()).collect();
 
     // Remove in reverse order so indices stay valid.
     for &i in sorted.iter().rev() {
@@ -580,8 +572,8 @@ pub fn check_encumbrance(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_rng() -> SmallRng {
         SmallRng::seed_from_u64(42)
@@ -745,11 +737,7 @@ mod tests {
             }
         }
         // Expect ~1000 (13000/13), allow wide range
-        assert!(
-            gone > 700 && gone < 1500,
-            "expected ~1000, got {}",
-            gone
-        );
+        assert!(gone > 700 && gone < 1500, "expected ~1000, got {}", gone);
     }
 
     // ── Autopickup logic ──────────────────────────────────────

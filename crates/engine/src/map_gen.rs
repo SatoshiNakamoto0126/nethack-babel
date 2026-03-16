@@ -126,9 +126,7 @@ pub fn generate_level(depth: u8, rng: &mut impl Rng) -> GeneratedLevel {
 
     // 6. Special rooms and themed rooms ---------------------------------------
     if rooms.len() >= 2 {
-        if let Some(room_type) =
-            select_special_room(depth as u32, rooms.len(), false, 24, rng)
-        {
+        if let Some(room_type) = select_special_room(depth as u32, rooms.len(), false, 24, rng) {
             // Pick a room (not first or last, to avoid stair conflicts).
             let room_idx = if rooms.len() > 2 {
                 rng.random_range(1..rooms.len() - 1)
@@ -458,12 +456,10 @@ fn maybe_place_door(map: &mut LevelMap, pos: Position, depth: u8, rng: &mut impl
 
     // Check that at least one cardinal neighbour is floor (confirms this
     // corridor cell sits on the room boundary).
-    let has_floor_neighbour = [(0, -1), (0, 1), (-1, 0), (1, 0)]
-        .iter()
-        .any(|&(dx, dy)| {
-            map.get(Position::new(pos.x + dx, pos.y + dy))
-                .is_some_and(|c| c.terrain == Terrain::Floor)
-        });
+    let has_floor_neighbour = [(0, -1), (0, 1), (-1, 0), (1, 0)].iter().any(|&(dx, dy)| {
+        map.get(Position::new(pos.x + dx, pos.y + dy))
+            .is_some_and(|c| c.terrain == Terrain::Floor)
+    });
 
     if !has_floor_neighbour {
         return;
@@ -533,14 +529,15 @@ fn place_stairs(
         let mut idx = rng.random_range(0..rooms.len());
         // Try to avoid same room as up stairs.
         if rooms.len() > 1
-            && let Some(up) = up_pos {
-                for _ in 0..20 {
-                    if !rooms[idx].contains(up.x as usize, up.y as usize) {
-                        break;
-                    }
-                    idx = rng.random_range(0..rooms.len());
+            && let Some(up) = up_pos
+        {
+            for _ in 0..20 {
+                if !rooms[idx].contains(up.x as usize, up.y as usize) {
+                    break;
                 }
+                idx = rng.random_range(0..rooms.len());
             }
+        }
         let pos = random_floor_in_room(&rooms[idx], rng);
         map.set_terrain(pos, Terrain::StairsDown);
         down_pos = Some(pos);
@@ -703,9 +700,7 @@ pub fn choose_door_state(
         // Secret door: shop or 1/5 => locked, else closed.
         // Trap: if not shop and difficulty >= 4, 1/20 chance.
         let locked = is_shop_door || rng.random_range(0..5u32) == 0;
-        let trapped = !is_shop_door
-            && difficulty >= 4
-            && rng.random_range(0..20u32) == 0;
+        let trapped = !is_shop_door && difficulty >= 4 && rng.random_range(0..20u32) == 0;
         if locked {
             if trapped {
                 DoorState::LockedTrapped
@@ -733,8 +728,7 @@ pub fn choose_door_state(
         }
         if rng.random_range(0..6u32) == 0 {
             // 1/6 of 4/15: locked.
-            let trapped = difficulty >= 5
-                && rng.random_range(0..25u32) == 0;
+            let trapped = difficulty >= 5 && rng.random_range(0..25u32) == 0;
             return if trapped {
                 DoorState::LockedTrapped
             } else {
@@ -742,8 +736,7 @@ pub fn choose_door_state(
             };
         }
         // Remainder: closed.
-        let trapped = difficulty >= 5
-            && rng.random_range(0..25u32) == 0;
+        let trapped = difficulty >= 5 && rng.random_range(0..25u32) == 0;
         if trapped {
             DoorState::ClosedTrapped
         } else {
@@ -821,17 +814,29 @@ pub fn traptype_rnd(
 
         // Teleport trap: min difficulty 1, not on no-teleport levels
         TrapType::TeleportTrap => {
-            if no_teleport { None } else { Some(trap) }
+            if no_teleport {
+                None
+            } else {
+                Some(trap)
+            }
         }
 
         // Min difficulty 2
         TrapType::SleepingGasTrap | TrapType::RollingBoulderTrap => {
-            if difficulty >= 2 { Some(trap) } else { None }
+            if difficulty >= 2 {
+                Some(trap)
+            } else {
+                None
+            }
         }
 
         // Min difficulty 5
         TrapType::SpikedPit => {
-            if difficulty >= 5 { Some(trap) } else { None }
+            if difficulty >= 5 {
+                Some(trap)
+            } else {
+                None
+            }
         }
         TrapType::LevelTeleport => {
             if difficulty >= 5 && !no_teleport && !single_branch {
@@ -843,22 +848,38 @@ pub fn traptype_rnd(
 
         // Min difficulty 6
         TrapType::Landmine => {
-            if difficulty >= 6 { Some(trap) } else { None }
+            if difficulty >= 6 {
+                Some(trap)
+            } else {
+                None
+            }
         }
 
         // Min difficulty 7
         TrapType::Web => {
-            if difficulty >= 7 { Some(trap) } else { None }
+            if difficulty >= 7 {
+                Some(trap)
+            } else {
+                None
+            }
         }
 
         // Min difficulty 8
         TrapType::StatueTrap | TrapType::PolyTrap => {
-            if difficulty >= 8 { Some(trap) } else { None }
+            if difficulty >= 8 {
+                Some(trap)
+            } else {
+                None
+            }
         }
 
         // Fire trap: Gehennom only
         TrapType::FireTrap => {
-            if in_hell { Some(trap) } else { None }
+            if in_hell {
+                Some(trap)
+            } else {
+                None
+            }
         }
 
         // Hole: min difficulty 1, but only 1/7 chance to keep
@@ -1015,11 +1036,12 @@ pub fn branch_level_count(branch: DungeonBranch, rng: &mut impl Rng) -> u32 {
         .into_iter()
         .find(|c| c.branch == branch)
         .unwrap();
-    cfg.base_levels + if cfg.range > 0 {
-        rng.random_range(0..cfg.range)
-    } else {
-        0
-    }
+    cfg.base_levels
+        + if cfg.range > 0 {
+            rng.random_range(0..cfg.range)
+        } else {
+            0
+        }
 }
 
 /// Level trap placement: determine how many traps to place on a
@@ -1109,13 +1131,12 @@ pub fn try_place_vault(
         }
 
         // Check that the vault area is currently all stone (uncarved).
-        let all_stone = (vy.saturating_sub(1)..=vy + 2)
-            .all(|y| {
-                (vx.saturating_sub(1)..=vx + 2).all(|x| {
-                    map.get(Position::new(x as i32, y as i32))
-                        .is_some_and(|c| c.terrain == Terrain::Stone)
-                })
-            });
+        let all_stone = (vy.saturating_sub(1)..=vy + 2).all(|y| {
+            (vx.saturating_sub(1)..=vx + 2).all(|x| {
+                map.get(Position::new(x as i32, y as i32))
+                    .is_some_and(|c| c.terrain == Terrain::Stone)
+            })
+        });
         if !all_stone {
             continue;
         }
@@ -1315,7 +1336,8 @@ pub fn plan_room_population(
                     if x == cx && y == cy {
                         continue;
                     }
-                    if map.get(Position::new(x as i32, y as i32))
+                    if map
+                        .get(Position::new(x as i32, y as i32))
                         .is_some_and(|c| c.terrain == Terrain::Floor)
                     {
                         // 'o' for orc-class courtier
@@ -1357,8 +1379,8 @@ pub fn plan_room_population(
                 for x in room.x..=room.right() {
                     let pos = Position::new(x as i32, y as i32);
                     if map.get(pos).is_some_and(|c| c.terrain == Terrain::Floor) {
-                        let on_edge = x == room.x || x == room.right()
-                            || y == room.y || y == room.bottom();
+                        let on_edge =
+                            x == room.x || x == room.right() || y == room.y || y == room.bottom();
                         if !on_edge && (x + y) % 2 == 1 {
                             map.set_terrain(pos, Terrain::Pool);
                             // Eel in some pools
@@ -1383,7 +1405,8 @@ pub fn plan_room_population(
                     if x == cx && y == cy {
                         continue;
                     }
-                    if map.get(Position::new(x as i32, y as i32))
+                    if map
+                        .get(Position::new(x as i32, y as i32))
                         .is_some_and(|c| c.terrain == Terrain::Floor)
                     {
                         // Killer bee on every tile (C NetHack fills all tiles)
@@ -1400,7 +1423,8 @@ pub fn plan_room_population(
             // Fill with random monsters (asleep) and gold
             for y in room.y..=room.bottom() {
                 for x in room.x..=room.right() {
-                    if map.get(Position::new(x as i32, y as i32))
+                    if map
+                        .get(Position::new(x as i32, y as i32))
                         .is_some_and(|c| c.terrain == Terrain::Floor)
                     {
                         // Random monster on every tile, all asleep
@@ -1415,7 +1439,8 @@ pub fn plan_room_population(
             // Fill with soldiers
             for y in room.y..=room.bottom() {
                 for x in room.x..=room.right() {
-                    if map.get(Position::new(x as i32, y as i32))
+                    if map
+                        .get(Position::new(x as i32, y as i32))
                         .is_some_and(|c| c.terrain == Terrain::Floor)
                     {
                         // Soldier class '@'
@@ -1432,7 +1457,8 @@ pub fn plan_room_population(
             // Fill with leprechauns and gold
             for y in room.y..=room.bottom() {
                 for x in room.x..=room.right() {
-                    if map.get(Position::new(x as i32, y as i32))
+                    if map
+                        .get(Position::new(x as i32, y as i32))
                         .is_some_and(|c| c.terrain == Terrain::Floor)
                     {
                         // Leprechaun 'l'
@@ -1447,7 +1473,8 @@ pub fn plan_room_population(
             // Fill with cockatrices, statues, and eggs
             for y in room.y..=room.bottom() {
                 for x in room.x..=room.right() {
-                    if map.get(Position::new(x as i32, y as i32))
+                    if map
+                        .get(Position::new(x as i32, y as i32))
                         .is_some_and(|c| c.terrain == Terrain::Floor)
                     {
                         // Cockatrice 'c'
@@ -1464,7 +1491,8 @@ pub fn plan_room_population(
             // Fill with ants and food
             for y in room.y..=room.bottom() {
                 for x in room.x..=room.right() {
-                    if map.get(Position::new(x as i32, y as i32))
+                    if map
+                        .get(Position::new(x as i32, y as i32))
                         .is_some_and(|c| c.terrain == Terrain::Floor)
                     {
                         // Ant 'a'
@@ -1599,10 +1627,7 @@ fn apply_theme(map: &mut LevelMap, room: &Room, theme: ThemeRoom, rng: &mut impl
                         && x != room.right()
                         && y != room.bottom()
                     {
-                        map.set_terrain(
-                            Position::new(x as i32, y as i32),
-                            Terrain::Stone,
-                        );
+                        map.set_terrain(Position::new(x as i32, y as i32), Terrain::Stone);
                     }
                 }
             }
@@ -1617,16 +1642,11 @@ fn apply_theme(map: &mut LevelMap, room: &Room, theme: ThemeRoom, rng: &mut impl
                     if x == cx && y == cy {
                         continue;
                     }
-                    if x == room.x || x == room.right()
-                        || y == room.y || y == room.bottom()
-                    {
+                    if x == room.x || x == room.right() || y == room.y || y == room.bottom() {
                         continue;
                     }
                     if rng.random_range(0..5u32) == 0 {
-                        map.set_terrain(
-                            Position::new(x as i32, y as i32),
-                            Terrain::Tree,
-                        );
+                        map.set_terrain(Position::new(x as i32, y as i32), Terrain::Tree);
                     }
                 }
             }
@@ -1653,16 +1673,11 @@ fn apply_theme(map: &mut LevelMap, room: &Room, theme: ThemeRoom, rng: &mut impl
             for y in room.y..=room.bottom() {
                 for x in room.x..=room.right() {
                     // Preserve edge tiles adjacent to walls (where doors connect).
-                    if x == room.x || x == room.right()
-                        || y == room.y || y == room.bottom()
-                    {
+                    if x == room.x || x == room.right() || y == room.y || y == room.bottom() {
                         continue;
                     }
                     if rng.random_range(0..4u32) == 0 {
-                        map.set_terrain(
-                            Position::new(x as i32, y as i32),
-                            Terrain::Pool,
-                        );
+                        map.set_terrain(Position::new(x as i32, y as i32), Terrain::Pool);
                     }
                 }
             }
@@ -1684,16 +1699,11 @@ fn apply_theme(map: &mut LevelMap, room: &Room, theme: ThemeRoom, rng: &mut impl
             // Lava on ~20% of interior tiles (skip edge rows/cols to keep paths).
             for y in room.y..=room.bottom() {
                 for x in room.x..=room.right() {
-                    if x == room.x || x == room.right()
-                        || y == room.y || y == room.bottom()
-                    {
+                    if x == room.x || x == room.right() || y == room.y || y == room.bottom() {
                         continue;
                     }
                     if rng.random_range(0..5u32) == 0 {
-                        map.set_terrain(
-                            Position::new(x as i32, y as i32),
-                            Terrain::Lava,
-                        );
+                        map.set_terrain(Position::new(x as i32, y as i32), Terrain::Lava);
                     }
                 }
             }
@@ -1827,12 +1837,7 @@ pub fn generate_gehennom_level(depth: u8, rng: &mut impl Rng) -> GeneratedLevel 
                 .iter()
                 .any(|&(dx, dy)| {
                     map.get(Position::new(x + dx, y + dy))
-                        .is_some_and(|c| {
-                            matches!(
-                                c.terrain,
-                                Terrain::Corridor | Terrain::Floor
-                            )
-                        })
+                        .is_some_and(|c| matches!(c.terrain, Terrain::Corridor | Terrain::Floor))
                 });
             if has_passage {
                 map.set_terrain(pos, Terrain::Lava);
@@ -1960,7 +1965,10 @@ mod tests {
     fn up_and_down_stairs_exist() {
         let mut rng = test_rng();
         let level = generate_level(5, &mut rng);
-        assert!(level.up_stairs.is_some(), "up stairs should exist at depth 5");
+        assert!(
+            level.up_stairs.is_some(),
+            "up stairs should exist at depth 5"
+        );
         assert!(
             level.down_stairs.is_some(),
             "down stairs should exist at depth 5"
@@ -2009,9 +2017,8 @@ mod tests {
 
         // Every room should have at least one reachable cell.
         for (i, room) in level.rooms.iter().enumerate() {
-            let room_reachable = (room.y..=room.bottom()).any(|y| {
-                (room.x..=room.right()).any(|x| reachable[y][x])
-            });
+            let room_reachable =
+                (room.y..=room.bottom()).any(|y| (room.x..=room.right()).any(|x| reachable[y][x]));
             assert!(
                 room_reachable,
                 "room {} at ({},{}) {}x{} is not reachable from the flood fill",
@@ -2033,11 +2040,9 @@ mod tests {
         for y in 0..level_a.map.height {
             for x in 0..level_a.map.width {
                 assert_eq!(
-                    level_a.map.cells[y][x].terrain,
-                    level_b.map.cells[y][x].terrain,
+                    level_a.map.cells[y][x].terrain, level_b.map.cells[y][x].terrain,
                     "terrain mismatch at ({}, {})",
-                    x,
-                    y
+                    x, y
                 );
             }
         }
@@ -2101,8 +2106,7 @@ mod tests {
     /// Includes closed/locked doors which are reachable but not "walkable"
     /// in the gameplay sense.
     fn is_passable(terrain: Terrain) -> bool {
-        terrain.is_walkable()
-            || matches!(terrain, Terrain::DoorClosed | Terrain::DoorLocked)
+        terrain.is_walkable() || matches!(terrain, Terrain::DoorClosed | Terrain::DoorLocked)
     }
 
     fn flood_fill(map: &LevelMap, start: (usize, usize)) -> Vec<Vec<bool>> {
@@ -2154,16 +2158,8 @@ mod tests {
                 max_w = max_w.max(room.width);
             }
         }
-        assert!(
-            min_w >= 2,
-            "Room width min should be >= 2, got {}",
-            min_w
-        );
-        assert!(
-            max_w <= 13,
-            "Room width max should be <= 13, got {}",
-            max_w
-        );
+        assert!(min_w >= 2, "Room width min should be >= 2, got {}", min_w);
+        assert!(max_w <= 13, "Room width max should be <= 13, got {}", max_w);
         // Should hit at least width 2 and width 9+ with 2000 seeds.
         assert_eq!(min_w, 2, "Should observe min width of 2");
         assert!(
@@ -2186,16 +2182,8 @@ mod tests {
                 max_h = max_h.max(room.height);
             }
         }
-        assert!(
-            min_h >= 2,
-            "Room height min should be >= 2, got {}",
-            min_h
-        );
-        assert!(
-            max_h <= 5,
-            "Room height max should be <= 5, got {}",
-            max_h
-        );
+        assert!(min_h >= 2, "Room height min should be >= 2, got {}", min_h);
+        assert!(max_h <= 5, "Room height max should be <= 5, got {}", max_h);
         assert_eq!(min_h, 2, "Should hit min height 2");
         assert_eq!(max_h, 5, "Should hit max height 5");
     }
@@ -2239,18 +2227,14 @@ mod tests {
                 assert!(
                     reachable[up.y as usize][up.x as usize],
                     "seed {}: up stairs at ({},{}) not reachable",
-                    seed,
-                    up.x,
-                    up.y,
+                    seed, up.x, up.y,
                 );
             }
             if let Some(down) = level.down_stairs {
                 assert!(
                     reachable[down.y as usize][down.x as usize],
                     "seed {}: down stairs at ({},{}) not reachable",
-                    seed,
-                    down.x,
-                    down.y,
+                    seed, down.x, down.y,
                 );
             }
         }
@@ -2264,8 +2248,7 @@ mod tests {
         for seed in 0..50 {
             let mut rng = Pcg64::seed_from_u64(seed + 1000);
             let level = generate_level(5, &mut rng);
-            let start = find_first_walkable(&level.map)
-                .expect("should have walkable cells");
+            let start = find_first_walkable(&level.map).expect("should have walkable cells");
             let reachable = flood_fill(&level.map, start);
 
             for (i, room) in level.rooms.iter().enumerate() {
@@ -2337,10 +2320,7 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
             let state = choose_door_state(false, 3, false, &mut rng);
             assert!(
-                !matches!(
-                    state,
-                    DoorState::ClosedTrapped | DoorState::LockedTrapped
-                ),
+                !matches!(state, DoorState::ClosedTrapped | DoorState::LockedTrapped),
                 "Doors at difficulty 3 should never be trapped"
             );
         }
@@ -2586,9 +2566,7 @@ mod tests {
         let mut fire_seen = false;
         for seed in 0..10_000 {
             let mut rng = Pcg64::seed_from_u64(seed);
-            if let Some(TrapType::FireTrap) =
-                traptype_rnd(15, true, false, false, &mut rng)
-            {
+            if let Some(TrapType::FireTrap) = traptype_rnd(15, true, false, false, &mut rng) {
                 fire_seen = true;
                 break;
             }
@@ -2705,11 +2683,7 @@ mod tests {
     fn test_dungeon_branch_configs_count() {
         let configs = branch_configs();
         // Should have configs for all 8 branches.
-        assert_eq!(
-            configs.len(),
-            8,
-            "Should have 8 branch configs"
-        );
+        assert_eq!(configs.len(), 8, "Should have 8 branch configs");
     }
 
     #[test]
@@ -2827,8 +2801,7 @@ mod tests {
         // Vlad's Tower: 3 + rn2(0) = always 3 levels.
         for seed in 0..100 {
             let mut rng = Pcg64::seed_from_u64(seed);
-            let count =
-                branch_level_count(DungeonBranch::VladsTower, &mut rng);
+            let count = branch_level_count(DungeonBranch::VladsTower, &mut rng);
             assert_eq!(count, 3, "Vlad's Tower should always have 3 levels");
         }
     }
@@ -2901,11 +2874,7 @@ mod tests {
         // from the first corridor cell (flood fill).
         for seed in 0..20u64 {
             let mut rng = Pcg64::seed_from_u64(seed);
-            let map = generate_maze(
-                LevelMap::DEFAULT_WIDTH,
-                LevelMap::DEFAULT_HEIGHT,
-                &mut rng,
-            );
+            let map = generate_maze(LevelMap::DEFAULT_WIDTH, LevelMap::DEFAULT_HEIGHT, &mut rng);
 
             let start = find_first_walkable(&map);
             assert!(
@@ -2986,7 +2955,10 @@ mod tests {
         let rooms = Vec::new();
 
         let vault = try_place_vault(&mut map, &rooms, &mut rng);
-        assert!(vault.is_some(), "Should be able to place a vault on empty map");
+        assert!(
+            vault.is_some(),
+            "Should be able to place a vault on empty map"
+        );
 
         let v = vault.unwrap();
         // Interior should be 2x2 floor.
@@ -3118,7 +3090,11 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
             seen.insert(choose_shop_type(20, &mut rng));
         }
-        assert!(seen.len() >= 10, "Should see at least 10 shop types at depth 20, got {}", seen.len());
+        assert!(
+            seen.len() >= 10,
+            "Should see at least 10 shop types at depth 20, got {}",
+            seen.len()
+        );
     }
 
     // =================================================================
@@ -3187,7 +3163,13 @@ mod tests {
         for seed in 0..total {
             let mut rng = Pcg64::seed_from_u64(seed as u64);
             let mut map = LevelMap::new_standard();
-            let room = Room { x: 10, y: 5, width: 6, height: 4, lit: true };
+            let room = Room {
+                x: 10,
+                y: 5,
+                width: 6,
+                height: 4,
+                lit: true,
+            };
             let (_, alignment) = configure_temple_room(&mut map, &room, &mut rng);
             match alignment {
                 AltarAlignment::Lawful => lawful += 1,
@@ -3198,7 +3180,11 @@ mod tests {
         }
 
         // Each should be ~33%.
-        for (name, count) in [("Lawful", lawful), ("Neutral", neutral), ("Chaotic", chaotic)] {
+        for (name, count) in [
+            ("Lawful", lawful),
+            ("Neutral", neutral),
+            ("Chaotic", chaotic),
+        ] {
             let pct = count as f64 / total as f64;
             assert!(
                 pct > 0.25 && pct < 0.42,
@@ -3217,7 +3203,13 @@ mod tests {
     fn test_populate_court_places_throne() {
         let mut rng = test_rng();
         let mut map = LevelMap::new_standard();
-        let room = Room { x: 10, y: 5, width: 8, height: 5, lit: true };
+        let room = Room {
+            x: 10,
+            y: 5,
+            width: 8,
+            height: 5,
+            lit: true,
+        };
         for y in room.y..=room.bottom() {
             for x in room.x..=room.right() {
                 map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
@@ -3228,7 +3220,9 @@ mod tests {
 
         let (cx, cy) = room.center();
         assert_eq!(
-            map.get(Position::new(cx as i32, cy as i32)).unwrap().terrain,
+            map.get(Position::new(cx as i32, cy as i32))
+                .unwrap()
+                .terrain,
             Terrain::Throne,
         );
     }
@@ -3237,7 +3231,13 @@ mod tests {
     fn test_populate_morgue_places_graves() {
         let mut rng = test_rng();
         let mut map = LevelMap::new_standard();
-        let room = Room { x: 10, y: 5, width: 10, height: 6, lit: false };
+        let room = Room {
+            x: 10,
+            y: 5,
+            width: 10,
+            height: 6,
+            lit: false,
+        };
         for y in room.y..=room.bottom() {
             for x in room.x..=room.right() {
                 map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
@@ -3264,7 +3264,13 @@ mod tests {
     fn test_populate_swamp_has_pools() {
         let mut rng = test_rng();
         let mut map = LevelMap::new_standard();
-        let room = Room { x: 10, y: 5, width: 10, height: 6, lit: false };
+        let room = Room {
+            x: 10,
+            y: 5,
+            width: 10,
+            height: 6,
+            lit: false,
+        };
         for y in room.y..=room.bottom() {
             for x in room.x..=room.right() {
                 map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
@@ -3281,21 +3287,21 @@ mod tests {
             })
             .count();
         let total = room.width * room.height;
-        assert!(
-            pool_count > 0,
-            "Swamp should have pools"
-        );
-        assert!(
-            pool_count < total,
-            "Swamp should not be entirely pools"
-        );
+        assert!(pool_count > 0, "Swamp should have pools");
+        assert!(pool_count < total, "Swamp should not be entirely pools");
     }
 
     #[test]
     fn test_populate_temple_places_altar() {
         let mut rng = test_rng();
         let mut map = LevelMap::new_standard();
-        let room = Room { x: 10, y: 5, width: 6, height: 4, lit: true };
+        let room = Room {
+            x: 10,
+            y: 5,
+            width: 6,
+            height: 4,
+            lit: true,
+        };
         for y in room.y..=room.bottom() {
             for x in room.x..=room.right() {
                 map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
@@ -3306,7 +3312,9 @@ mod tests {
 
         let (cx, cy) = room.center();
         assert_eq!(
-            map.get(Position::new(cx as i32, cy as i32)).unwrap().terrain,
+            map.get(Position::new(cx as i32, cy as i32))
+                .unwrap()
+                .terrain,
             Terrain::Altar,
         );
     }
@@ -3318,7 +3326,13 @@ mod tests {
     #[test]
     fn test_room_floor_count() {
         let mut map = LevelMap::new_standard();
-        let room = Room { x: 5, y: 5, width: 4, height: 3, lit: true };
+        let room = Room {
+            x: 5,
+            y: 5,
+            width: 4,
+            height: 3,
+            lit: true,
+        };
         // No floor yet.
         assert_eq!(room_floor_count(&map, &room), 0);
 
@@ -3336,7 +3350,13 @@ mod tests {
     fn test_configure_shop_room_has_door() {
         let mut rng = test_rng();
         let mut map = LevelMap::new_standard();
-        let room = Room { x: 10, y: 5, width: 6, height: 4, lit: true };
+        let room = Room {
+            x: 10,
+            y: 5,
+            width: 6,
+            height: 4,
+            lit: true,
+        };
         carve_room(&mut map, &room);
 
         configure_shop_room(&mut map, &room, &mut rng);
@@ -3349,18 +3369,30 @@ mod tests {
         let hy = room.bottom() as i32 + 1;
 
         for x in room.x..=room.right() {
-            if map.get(Position::new(x as i32, ly)).is_some_and(|c| c.terrain == Terrain::DoorClosed) {
+            if map
+                .get(Position::new(x as i32, ly))
+                .is_some_and(|c| c.terrain == Terrain::DoorClosed)
+            {
                 door_count += 1;
             }
-            if map.get(Position::new(x as i32, hy)).is_some_and(|c| c.terrain == Terrain::DoorClosed) {
+            if map
+                .get(Position::new(x as i32, hy))
+                .is_some_and(|c| c.terrain == Terrain::DoorClosed)
+            {
                 door_count += 1;
             }
         }
         for y in room.y..=room.bottom() {
-            if map.get(Position::new(lx, y as i32)).is_some_and(|c| c.terrain == Terrain::DoorClosed) {
+            if map
+                .get(Position::new(lx, y as i32))
+                .is_some_and(|c| c.terrain == Terrain::DoorClosed)
+            {
                 door_count += 1;
             }
-            if map.get(Position::new(hx, y as i32)).is_some_and(|c| c.terrain == Terrain::DoorClosed) {
+            if map
+                .get(Position::new(hx, y as i32))
+                .is_some_and(|c| c.terrain == Terrain::DoorClosed)
+            {
                 door_count += 1;
             }
         }
@@ -3377,20 +3409,38 @@ mod tests {
 
     #[test]
     fn test_room_center() {
-        let room = Room { x: 10, y: 5, width: 6, height: 4, lit: true };
+        let room = Room {
+            x: 10,
+            y: 5,
+            width: 6,
+            height: 4,
+            lit: true,
+        };
         assert_eq!(room.center(), (13, 7));
     }
 
     #[test]
     fn test_room_right_bottom() {
-        let room = Room { x: 10, y: 5, width: 6, height: 4, lit: true };
+        let room = Room {
+            x: 10,
+            y: 5,
+            width: 6,
+            height: 4,
+            lit: true,
+        };
         assert_eq!(room.right(), 15);
         assert_eq!(room.bottom(), 8);
     }
 
     #[test]
     fn test_room_contains() {
-        let room = Room { x: 10, y: 5, width: 6, height: 4, lit: true };
+        let room = Room {
+            x: 10,
+            y: 5,
+            width: 6,
+            height: 4,
+            lit: true,
+        };
         assert!(room.contains(10, 5));
         assert!(room.contains(15, 8));
         assert!(room.contains(12, 7));
@@ -3402,12 +3452,36 @@ mod tests {
 
     #[test]
     fn test_room_overlaps_with_margin() {
-        let a = Room { x: 10, y: 5, width: 5, height: 3, lit: true };
-        let b = Room { x: 20, y: 5, width: 5, height: 3, lit: true };
-        assert!(!a.overlaps_with_margin(&b, 2), "Distant rooms should not overlap");
+        let a = Room {
+            x: 10,
+            y: 5,
+            width: 5,
+            height: 3,
+            lit: true,
+        };
+        let b = Room {
+            x: 20,
+            y: 5,
+            width: 5,
+            height: 3,
+            lit: true,
+        };
+        assert!(
+            !a.overlaps_with_margin(&b, 2),
+            "Distant rooms should not overlap"
+        );
 
-        let c = Room { x: 16, y: 5, width: 3, height: 3, lit: true };
-        assert!(a.overlaps_with_margin(&c, 2), "Close rooms should overlap with margin=2");
+        let c = Room {
+            x: 16,
+            y: 5,
+            width: 3,
+            height: 3,
+            lit: true,
+        };
+        assert!(
+            a.overlaps_with_margin(&c, 2),
+            "Close rooms should overlap with margin=2"
+        );
     }
 
     // =================================================================
@@ -3417,7 +3491,13 @@ mod tests {
     /// Helper: create a room and carve it into a fresh map.
     fn setup_room_map(x: usize, y: usize, w: usize, h: usize) -> (LevelMap, Room) {
         let mut map = LevelMap::new_standard();
-        let room = Room { x, y, width: w, height: h, lit: true };
+        let room = Room {
+            x,
+            y,
+            width: w,
+            height: h,
+            lit: true,
+        };
         carve_room(&mut map, &room);
         (map, room)
     }
@@ -3508,11 +3588,12 @@ mod tests {
         let mut rng = test_rng();
         let (mut map, room) = setup_room_map(10, 5, 8, 6);
 
-        let pop = plan_room_population(
-            &mut map, &room, SpecialRoomType::LeprechaunHall, &mut rng,
-        );
+        let pop = plan_room_population(&mut map, &room, SpecialRoomType::LeprechaunHall, &mut rng);
 
-        assert!(!pop.monsters.is_empty(), "Leprechaun hall should have monsters");
+        assert!(
+            !pop.monsters.is_empty(),
+            "Leprechaun hall should have monsters"
+        );
         assert!(
             pop.monsters.iter().all(|m| m.0 == 'l'),
             "Leprechaun hall monsters should be class 'l'"
@@ -3528,11 +3609,12 @@ mod tests {
         let mut rng = test_rng();
         let (mut map, room) = setup_room_map(10, 5, 8, 6);
 
-        let pop = plan_room_population(
-            &mut map, &room, SpecialRoomType::CockatriceNest, &mut rng,
-        );
+        let pop = plan_room_population(&mut map, &room, SpecialRoomType::CockatriceNest, &mut rng);
 
-        assert!(!pop.monsters.is_empty(), "Cockatrice nest should have monsters");
+        assert!(
+            !pop.monsters.is_empty(),
+            "Cockatrice nest should have monsters"
+        );
         assert!(
             pop.monsters.iter().all(|m| m.0 == 'c'),
             "Cockatrice nest monsters should be class 'c'"
@@ -3583,10 +3665,7 @@ mod tests {
                     .is_some_and(|c| c.terrain == Terrain::Grave)
             })
             .count();
-        assert!(
-            grave_count > 0,
-            "Morgue should have grave terrain"
-        );
+        assert!(grave_count > 0, "Morgue should have grave terrain");
     }
 
     #[test]
@@ -3607,10 +3686,7 @@ mod tests {
         assert!(pool_count > 0, "Swamp should have pool terrain");
 
         // Should have some monsters (eels ';' or fungi 'F').
-        assert!(
-            !pop.monsters.is_empty(),
-            "Swamp should have creatures"
-        );
+        assert!(!pop.monsters.is_empty(), "Swamp should have creatures");
         assert!(
             pop.monsters.iter().all(|m| m.0 == ';' || m.0 == 'F'),
             "Swamp monsters should be eels or fungi"
@@ -3627,7 +3703,9 @@ mod tests {
         // Throne at center.
         let (cx, cy) = room.center();
         assert_eq!(
-            map.get(Position::new(cx as i32, cy as i32)).unwrap().terrain,
+            map.get(Position::new(cx as i32, cy as i32))
+                .unwrap()
+                .terrain,
             Terrain::Throne,
         );
         // First monster is the king 'K'.
@@ -3648,7 +3726,9 @@ mod tests {
 
         let (cx, cy) = room.center();
         assert_eq!(
-            map.get(Position::new(cx as i32, cy as i32)).unwrap().terrain,
+            map.get(Position::new(cx as i32, cy as i32))
+                .unwrap()
+                .terrain,
             Terrain::Altar,
         );
         // Should have priest.
@@ -3672,7 +3752,8 @@ mod tests {
             assert!(
                 room.contains(*mx, *my),
                 "Monster at ({}, {}) should be inside room",
-                mx, my
+                mx,
+                my
             );
         }
         // All object positions should be inside the room.
@@ -3680,7 +3761,8 @@ mod tests {
             assert!(
                 room.contains(*ox, *oy),
                 "Object at ({}, {}) should be inside room",
-                ox, oy
+                ox,
+                oy
             );
         }
     }
@@ -3715,10 +3797,7 @@ mod tests {
                     .is_some_and(|c| c.terrain == Terrain::Stone)
             })
             .count();
-        assert!(
-            pillar_count > 0,
-            "Pillared hall should have stone pillars"
-        );
+        assert!(pillar_count > 0, "Pillared hall should have stone pillars");
     }
 
     #[test]
@@ -3731,7 +3810,9 @@ mod tests {
         // Should have a fountain at center.
         let (cx, cy) = room.center();
         assert_eq!(
-            map.get(Position::new(cx as i32, cy as i32)).unwrap().terrain,
+            map.get(Position::new(cx as i32, cy as i32))
+                .unwrap()
+                .terrain,
             Terrain::Fountain,
             "Garden should have fountain at center"
         );
@@ -3744,10 +3825,7 @@ mod tests {
                     .is_some_and(|c| c.terrain == Terrain::Tree)
             })
             .count();
-        assert!(
-            tree_count > 0,
-            "Garden should have trees"
-        );
+        assert!(tree_count > 0, "Garden should have trees");
     }
 
     #[test]
@@ -3785,10 +3863,7 @@ mod tests {
                     .is_some_and(|c| c.terrain == Terrain::Pool)
             })
             .count();
-        assert!(
-            pool_count > 0,
-            "Flooded room should have pools"
-        );
+        assert!(pool_count > 0, "Flooded room should have pools");
     }
 
     #[test]
@@ -3800,7 +3875,9 @@ mod tests {
 
         let (cx, cy) = room.center();
         assert_eq!(
-            map.get(Position::new(cx as i32, cy as i32)).unwrap().terrain,
+            map.get(Position::new(cx as i32, cy as i32))
+                .unwrap()
+                .terrain,
             Terrain::Throne,
             "Minor throne room should have throne at center"
         );
@@ -3820,16 +3897,19 @@ mod tests {
                     .is_some_and(|c| c.terrain == Terrain::Lava)
             })
             .count();
-        assert!(
-            lava_count > 0,
-            "Lava room should have lava tiles"
-        );
+        assert!(lava_count > 0, "Lava room should have lava tiles");
     }
 
     #[test]
     fn test_maybe_apply_theme_probability() {
         // Over many seeds, ~15% of calls should apply a theme.
-        let room = Room { x: 10, y: 5, width: 8, height: 6, lit: true };
+        let room = Room {
+            x: 10,
+            y: 5,
+            width: 8,
+            height: 6,
+            lit: true,
+        };
         let mut themed_count = 0u32;
         let total = 10_000u32;
 
@@ -3853,7 +3933,13 @@ mod tests {
     #[test]
     fn test_maybe_apply_theme_depth_gating() {
         // At depth 1, LavaRoom should never appear (requires depth > 10).
-        let room = Room { x: 10, y: 5, width: 8, height: 6, lit: true };
+        let room = Room {
+            x: 10,
+            y: 5,
+            width: 8,
+            height: 6,
+            lit: true,
+        };
         let mut lava_seen = false;
 
         for seed in 0..10_000u64 {
@@ -3865,10 +3951,7 @@ mod tests {
                 break;
             }
         }
-        assert!(
-            !lava_seen,
-            "LavaRoom should not appear at depth 1"
-        );
+        assert!(!lava_seen, "LavaRoom should not appear at depth 1");
     }
 
     // =================================================================

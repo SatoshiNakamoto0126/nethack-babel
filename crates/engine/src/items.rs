@@ -34,12 +34,10 @@ const MAX_CARRY_CAP: u32 = 1000;
 
 /// The round-robin state for letter assignment.  Persists across calls within
 /// a game session but is never saved/restored (matches C `lastinvnr`).
-#[derive(Debug, Clone, Copy)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct LetterState {
     last: usize,
 }
-
 
 /// Convert a slot index (0..51) to its inventory letter.
 fn index_to_letter(i: usize) -> char {
@@ -62,15 +60,16 @@ pub fn assign_inv_letter(
     // Mark letters already in use.
     let player = world.player();
     for (_entity, core) in world.query::<ObjectCore>().iter() {
-        let is_owner = world
-            .get_component::<ObjectLocation>(_entity)
-            .is_some_and(|loc| match *loc {
-                ObjectLocation::Inventory => owner == player,
-                ObjectLocation::MonsterInventory { carrier_id } => {
-                    carrier_id == owner.to_bits().get() as u32
-                }
-                _ => false,
-            });
+        let is_owner =
+            world
+                .get_component::<ObjectLocation>(_entity)
+                .is_some_and(|loc| match *loc {
+                    ObjectLocation::Inventory => owner == player,
+                    ObjectLocation::MonsterInventory { carrier_id } => {
+                        carrier_id == owner.to_bits().get() as u32
+                    }
+                    _ => false,
+                });
         if is_owner && let Some(ch) = core.inv_letter {
             match ch {
                 'a'..='z' => in_use[(ch as u8 - b'a') as usize] = true,
@@ -410,8 +409,7 @@ pub fn pickup_item(
             core.quantity
         };
         {
-            let mut target_core =
-                world.get_component_mut::<ObjectCore>(merge_entity).unwrap();
+            let mut target_core = world.get_component_mut::<ObjectCore>(merge_entity).unwrap();
             target_core.quantity += added_qty;
             // Recalculate weight based on single-item weight * new quantity.
             let single_weight = if target_core.quantity > 0 {
@@ -516,11 +514,7 @@ fn find_merge_target(
 
 /// Drop an item from the player's inventory onto the floor at the player's
 /// current position.
-pub fn drop_item(
-    world: &mut GameWorld,
-    player: Entity,
-    item_entity: Entity,
-) -> Vec<EngineEvent> {
+pub fn drop_item(world: &mut GameWorld, player: Entity, item_entity: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     // Get player position.
@@ -595,12 +589,7 @@ mod tests {
     }
 
     /// Helper: spawn a floor item with the given def.
-    fn spawn_test_item(
-        world: &mut GameWorld,
-        def: &ObjectDef,
-        x: i16,
-        y: i16,
-    ) -> Entity {
+    fn spawn_test_item(world: &mut GameWorld, def: &ObjectDef, x: i16, y: i16) -> Entity {
         spawn_item(world, def, SpawnLocation::Floor(x, y), None)
     }
 
@@ -652,10 +641,7 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert!(matches!(
             events[0],
-            EngineEvent::ItemPickedUp {
-                quantity: 1,
-                ..
-            }
+            EngineEvent::ItemPickedUp { quantity: 1, .. }
         ));
 
         let loc = world.get_component::<ObjectLocation>(item).unwrap();

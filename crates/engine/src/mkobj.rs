@@ -8,12 +8,12 @@ use hecs::Entity;
 use rand::Rng;
 
 use nethack_babel_data::{
-    BucStatus, CorpseData, Enchantment, MonsterId, ObjectClass, ObjectCore, ObjectDef,
-    ObjectExtra, ObjectLocation, ObjectTypeId, WeaponSkill,
+    BucStatus, CorpseData, Enchantment, MonsterId, ObjectClass, ObjectCore, ObjectDef, ObjectExtra,
+    ObjectLocation, ObjectTypeId, WeaponSkill,
 };
 
 use crate::action::Position;
-use crate::items::{spawn_item, SpawnLocation};
+use crate::items::{SpawnLocation, spawn_item};
 use crate::world::GameWorld;
 
 // ---------------------------------------------------------------------------
@@ -185,12 +185,7 @@ pub fn mkbox_cnts(
 /// `pct` is the 1-in-N chance of the object being blessed or cursed
 /// (each direction). If `pct` is 10, there's a 1/10 chance of being
 /// non-uncursed, then 50/50 blessed vs cursed.
-pub fn bless_or_curse(
-    world: &mut GameWorld,
-    obj: Entity,
-    pct: i32,
-    rng: &mut impl Rng,
-) {
+pub fn bless_or_curse(world: &mut GameWorld, obj: Entity, pct: i32, rng: &mut impl Rng) {
     if let Some(buc) = world.get_component::<BucStatus>(obj)
         && (buc.blessed || buc.cursed)
     {
@@ -214,10 +209,7 @@ pub fn bless_or_curse(
 // ---------------------------------------------------------------------------
 
 /// Select a class from a probability table.
-fn select_class_from_table(
-    table: &[(ObjectClass, u16)],
-    rng: &mut impl Rng,
-) -> ObjectClass {
+fn select_class_from_table(table: &[(ObjectClass, u16)], rng: &mut impl Rng) -> ObjectClass {
     let total: u16 = table.iter().map(|(_, w)| w).sum();
     let mut roll = rng.random_range(1..=total);
     for &(class, weight) in table {
@@ -265,12 +257,7 @@ fn select_random_otyp(
 /// Apply class-specific initialization to a freshly created object.
 ///
 /// This mirrors the `mksobj_init()` function in C NetHack's mkobj.c.
-fn init_object(
-    world: &mut GameWorld,
-    entity: Entity,
-    obj_def: &ObjectDef,
-    rng: &mut impl Rng,
-) {
+fn init_object(world: &mut GameWorld, entity: Entity, obj_def: &ObjectDef, rng: &mut impl Rng) {
     match obj_def.class {
         ObjectClass::Weapon => init_weapon(world, entity, obj_def, rng),
         ObjectClass::Armor => init_armor(world, entity, rng),
@@ -293,12 +280,7 @@ fn init_object(
 }
 
 /// Initialize a weapon: quantity for ammo, enchantment, BUC.
-fn init_weapon(
-    world: &mut GameWorld,
-    entity: Entity,
-    obj_def: &ObjectDef,
-    rng: &mut impl Rng,
-) {
+fn init_weapon(world: &mut GameWorld, entity: Entity, obj_def: &ObjectDef, rng: &mut impl Rng) {
     // Set quantity for projectile/ammo weapons (is_multigen).
     let is_ammo = obj_def.weapon.as_ref().is_some_and(|w| {
         matches!(
@@ -311,9 +293,7 @@ fn init_weapon(
         )
     }) && obj_def.is_mergeable;
 
-    if is_ammo
-        && let Some(mut core) = world.get_component_mut::<ObjectCore>(entity)
-    {
+    if is_ammo && let Some(mut core) = world.get_component_mut::<ObjectCore>(entity) {
         core.quantity = rn1(6, 6, rng); // 6..11
     }
 
@@ -343,11 +323,7 @@ fn init_weapon(
 }
 
 /// Initialize armor: enchantment and BUC.
-fn init_armor(
-    world: &mut GameWorld,
-    entity: Entity,
-    rng: &mut impl Rng,
-) {
+fn init_armor(world: &mut GameWorld, entity: Entity, rng: &mut impl Rng) {
     // ~1/10 chance cursed with negative enchantment.
     // ~1/10 chance positive enchantment, possibly blessed.
     // Rest: blessorcurse(10).
@@ -375,12 +351,7 @@ fn init_armor(
 }
 
 /// Initialize food: quantity doubling for some types.
-fn init_food(
-    world: &mut GameWorld,
-    entity: Entity,
-    _obj_def: &ObjectDef,
-    rng: &mut impl Rng,
-) {
+fn init_food(world: &mut GameWorld, entity: Entity, _obj_def: &ObjectDef, rng: &mut impl Rng) {
     // ~1/6 chance of quantity 2 for non-special food items.
     if rng.random_range(0..6) == 0
         && let Some(mut core) = world.get_component_mut::<ObjectCore>(entity)
@@ -390,26 +361,18 @@ fn init_food(
 }
 
 /// Initialize a wand: charges and BUC.
-fn init_wand(
-    world: &mut GameWorld,
-    entity: Entity,
-    _obj_def: &ObjectDef,
-    rng: &mut impl Rng,
-) {
+fn init_wand(world: &mut GameWorld, entity: Entity, _obj_def: &ObjectDef, rng: &mut impl Rng) {
     // Charges: rn1(5, 4) = 4..8 for directional, rn1(5, 11) = 11..15 for non-dir.
     // Simplified: use rn1(5, 4) as default.
     let charges = rn1(5, 4, rng) as i8;
-    let _ = world.ecs_mut().insert_one(entity, Enchantment { spe: charges });
+    let _ = world
+        .ecs_mut()
+        .insert_one(entity, Enchantment { spe: charges });
     bless_or_curse(world, entity, 17, rng);
 }
 
 /// Initialize a ring: enchantment for charged rings, BUC.
-fn init_ring(
-    world: &mut GameWorld,
-    entity: Entity,
-    obj_def: &ObjectDef,
-    rng: &mut impl Rng,
-) {
+fn init_ring(world: &mut GameWorld, entity: Entity, obj_def: &ObjectDef, rng: &mut impl Rng) {
     if obj_def.is_charged {
         bless_or_curse(world, entity, 3, rng);
         // 9/10 chance of getting enchantment.
@@ -456,12 +419,7 @@ fn init_ring(
 }
 
 /// Initialize a gem: quantity, loadstone curse.
-fn init_gem(
-    world: &mut GameWorld,
-    entity: Entity,
-    obj_def: &ObjectDef,
-    rng: &mut impl Rng,
-) {
+fn init_gem(world: &mut GameWorld, entity: Entity, obj_def: &ObjectDef, rng: &mut impl Rng) {
     // Loadstones are always cursed (we'd check by name; simplified here).
     let name_lower = obj_def.name.to_lowercase();
     if name_lower == "loadstone"
@@ -481,15 +439,12 @@ fn init_gem(
 }
 
 /// Initialize a tool: charges for charged tools, BUC.
-fn init_tool(
-    world: &mut GameWorld,
-    entity: Entity,
-    obj_def: &ObjectDef,
-    rng: &mut impl Rng,
-) {
+fn init_tool(world: &mut GameWorld, entity: Entity, obj_def: &ObjectDef, rng: &mut impl Rng) {
     if obj_def.is_charged {
         let charges = rn1(5, 4, rng) as i8;
-        let _ = world.ecs_mut().insert_one(entity, Enchantment { spe: charges });
+        let _ = world
+            .ecs_mut()
+            .insert_one(entity, Enchantment { spe: charges });
     }
     bless_or_curse(world, entity, 5, rng);
 }
@@ -758,8 +713,8 @@ pub fn make_statue(
 mod tests {
     use super::*;
     use nethack_babel_data::{Color, Erosion, KnowledgeState, Material};
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_rng() -> SmallRng {
         SmallRng::seed_from_u64(42)
@@ -979,7 +934,9 @@ mod tests {
         let entity = mksobj(&mut world, ObjectTypeId(0), true, &defs, &mut rng)
             .expect("should create entity");
 
-        let core = world.get_component::<ObjectCore>(entity).expect("ObjectCore");
+        let core = world
+            .get_component::<ObjectCore>(entity)
+            .expect("ObjectCore");
         assert_eq!(core.otyp, ObjectTypeId(0));
         assert_eq!(core.object_class, ObjectClass::Weapon);
 
@@ -1023,8 +980,8 @@ mod tests {
         let n = 1000;
 
         for _ in 0..n {
-            let entity = mksobj(&mut world, ObjectTypeId(6), false, &defs, &mut rng)
-                .expect("potion");
+            let entity =
+                mksobj(&mut world, ObjectTypeId(6), false, &defs, &mut rng).expect("potion");
             bless_or_curse(&mut world, entity, 10, &mut rng);
 
             let buc = world.get_component::<BucStatus>(entity).unwrap();
@@ -1097,8 +1054,8 @@ mod tests {
         let mut max_spe = i8::MIN;
 
         for _ in 0..500 {
-            let entity = mksobj(&mut world, ObjectTypeId(0), true, &defs, &mut rng)
-                .expect("weapon");
+            let entity =
+                mksobj(&mut world, ObjectTypeId(0), true, &defs, &mut rng).expect("weapon");
             if let Some(ench) = world.get_component::<Enchantment>(entity) {
                 min_spe = min_spe.min(ench.spe);
                 max_spe = max_spe.max(ench.spe);
@@ -1106,11 +1063,23 @@ mod tests {
         }
 
         // Enchantment should range from negative (at least -1) to positive (at least +1).
-        assert!(min_spe < 0, "should generate some negative enchantment, got min={min_spe}");
-        assert!(max_spe > 0, "should generate some positive enchantment, got max={max_spe}");
+        assert!(
+            min_spe < 0,
+            "should generate some negative enchantment, got min={min_spe}"
+        );
+        assert!(
+            max_spe > 0,
+            "should generate some positive enchantment, got max={max_spe}"
+        );
         // rne(3) caps at 5, so range should be -5..+5.
-        assert!(min_spe >= -5, "min enchantment should be >= -5, got {min_spe}");
-        assert!(max_spe <= 5, "max enchantment should be <= 5, got {max_spe}");
+        assert!(
+            min_spe >= -5,
+            "min enchantment should be >= -5, got {min_spe}"
+        );
+        assert!(
+            max_spe <= 5,
+            "max enchantment should be <= 5, got {max_spe}"
+        );
     }
 
     // ── Test: quantity assignment for stackable items (arrows) ──
@@ -1123,8 +1092,7 @@ mod tests {
 
         let mut quantities = Vec::new();
         for _ in 0..100 {
-            let entity = mksobj(&mut world, ObjectTypeId(7), true, &defs, &mut rng)
-                .expect("arrow");
+            let entity = mksobj(&mut world, ObjectTypeId(7), true, &defs, &mut rng).expect("arrow");
             let core = world.get_component::<ObjectCore>(entity).expect("core");
             quantities.push(core.quantity);
         }
@@ -1133,7 +1101,10 @@ mod tests {
         let min_q = *quantities.iter().min().unwrap();
         let max_q = *quantities.iter().max().unwrap();
         assert!(min_q >= 6, "min arrow quantity should be >= 6, got {min_q}");
-        assert!(max_q <= 11, "max arrow quantity should be <= 11, got {max_q}");
+        assert!(
+            max_q <= 11,
+            "max arrow quantity should be <= 11, got {max_q}"
+        );
     }
 
     // ── Test: wand gets charges ──
@@ -1145,8 +1116,7 @@ mod tests {
         let mut rng = test_rng();
 
         for _ in 0..50 {
-            let entity = mksobj(&mut world, ObjectTypeId(4), true, &defs, &mut rng)
-                .expect("wand");
+            let entity = mksobj(&mut world, ObjectTypeId(4), true, &defs, &mut rng).expect("wand");
             let ench = world
                 .get_component::<Enchantment>(entity)
                 .expect("wand should have charges");
@@ -1169,8 +1139,7 @@ mod tests {
 
         let mut has_enchantment = false;
         for _ in 0..50 {
-            let entity = mksobj(&mut world, ObjectTypeId(5), true, &defs, &mut rng)
-                .expect("ring");
+            let entity = mksobj(&mut world, ObjectTypeId(5), true, &defs, &mut rng).expect("ring");
             if world.get_component::<Enchantment>(entity).is_some() {
                 has_enchantment = true;
                 break;
@@ -1212,8 +1181,8 @@ mod tests {
         let defs = test_defs();
         let mut rng = test_rng();
 
-        let entity = mksobj(&mut world, ObjectTypeId(0), false, &defs, &mut rng)
-            .expect("weapon no-init");
+        let entity =
+            mksobj(&mut world, ObjectTypeId(0), false, &defs, &mut rng).expect("weapon no-init");
 
         // Without init, spawn_item does not add Enchantment (we passed None).
         assert!(
@@ -1275,7 +1244,10 @@ mod tests {
             }
         }
 
-        assert!(total_contents > 0, "should have generated some contents across seeds");
+        assert!(
+            total_contents > 0,
+            "should have generated some contents across seeds"
+        );
     }
 
     // ── Test: fill_container with chest type ──
@@ -1524,9 +1496,7 @@ mod tests {
         assert_eq!(corpse.eaten, 0);
 
         // Check position.
-        let loc = world
-            .get_component::<ObjectLocation>(entity)
-            .expect("loc");
+        let loc = world.get_component::<ObjectLocation>(entity).expect("loc");
         assert!(matches!(*loc, ObjectLocation::Floor { x: 5, y: 5 }));
     }
 

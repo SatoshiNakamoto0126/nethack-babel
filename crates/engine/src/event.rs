@@ -350,10 +350,7 @@ impl EngineEvent {
     pub fn msg_with(key: &str, args: Vec<(&str, String)>) -> Self {
         EngineEvent::Message {
             key: key.to_string(),
-            args: args
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect(),
+            args: args.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
         }
     }
 }
@@ -434,13 +431,19 @@ pub fn summarize(events: &[EngineEvent]) -> Vec<AnalyticsEvent> {
     for event in events {
         match event {
             EngineEvent::MeleeHit {
-                attacker, defender, damage, ..
+                attacker,
+                defender,
+                damage,
+                ..
             }
             | EngineEvent::RangedHit {
-                attacker, defender, damage, ..
+                attacker,
+                defender,
+                damage,
+                ..
             } => {
-                let same_pair = combat_attacker == Some(*attacker)
-                    && combat_defender == Some(*defender);
+                let same_pair =
+                    combat_attacker == Some(*attacker) && combat_defender == Some(*defender);
                 if !same_pair {
                     // Flush previous round.
                     flush_combat_round(
@@ -458,17 +461,18 @@ pub fn summarize(events: &[EngineEvent]) -> Vec<AnalyticsEvent> {
                 // If the defender in the current combat round just died,
                 // close the round as AttackerWon.
                 if combat_defender == Some(*entity)
-                    && let (Some(a), Some(d)) = (combat_attacker, combat_defender) {
-                        analytics.push(AnalyticsEvent::CombatRound {
-                            attacker: a,
-                            defender: d,
-                            total_damage: combat_damage,
-                            outcome: CombatOutcome::AttackerWon,
-                        });
-                        combat_attacker = None;
-                        combat_defender = None;
-                        combat_damage = 0;
-                    }
+                    && let (Some(a), Some(d)) = (combat_attacker, combat_defender)
+                {
+                    analytics.push(AnalyticsEvent::CombatRound {
+                        attacker: a,
+                        defender: d,
+                        total_damage: combat_damage,
+                        outcome: CombatOutcome::AttackerWon,
+                    });
+                    combat_attacker = None;
+                    combat_defender = None;
+                    combat_damage = 0;
+                }
             }
             EngineEvent::LevelChanged {
                 from_depth,

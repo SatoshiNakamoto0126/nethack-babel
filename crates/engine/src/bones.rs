@@ -141,10 +141,7 @@ pub fn can_make_bones(
 /// Check whether a specific level depth+branch combination should never
 /// have bones, regardless of probabilistic checks.
 pub fn no_bones_level(branch: DungeonBranch, depth: i32) -> bool {
-    matches!(
-        branch,
-        DungeonBranch::Quest | DungeonBranch::Endgame
-    ) || depth <= 0
+    matches!(branch, DungeonBranch::Quest | DungeonBranch::Endgame) || depth <= 0
 }
 
 // ---------------------------------------------------------------------------
@@ -265,10 +262,7 @@ pub fn try_load_bones(
 /// - Halve wand charges
 /// - Replace unique quest artifacts with generic versions
 /// - Convert real Amulet of Yendor to fake
-pub fn downgrade_bone_items(
-    items: &mut [BoneItem],
-    rng: &mut impl Rng,
-) {
+pub fn downgrade_bone_items(items: &mut [BoneItem], rng: &mut impl Rng) {
     for item in items.iter_mut() {
         // Additional cursing on load (some may have survived generation).
         if !item.cursed && rng.random_range(0..5) != 0 {
@@ -581,7 +575,6 @@ pub fn bones_filename(branch: DungeonBranch, depth: i32) -> String {
         DungeonBranch::VladsTower => 'V',
         DungeonBranch::Gehennom => 'G',
         DungeonBranch::Endgame => 'E',
-        _ => 'X',
     };
     format!("bon{}{:04}", branch_char, depth)
 }
@@ -712,25 +705,13 @@ mod tests {
     #[test]
     fn test_bones_can_make_not_portal_level() {
         let mut rng = test_rng();
-        assert!(!can_make_bones(
-            DungeonBranch::Main,
-            5,
-            30,
-            true,
-            &mut rng
-        ));
+        assert!(!can_make_bones(DungeonBranch::Main, 5, 30, true, &mut rng));
     }
 
     #[test]
     fn test_bones_can_make_not_zero_depth() {
         let mut rng = test_rng();
-        assert!(!can_make_bones(
-            DungeonBranch::Main,
-            0,
-            30,
-            false,
-            &mut rng
-        ));
+        assert!(!can_make_bones(DungeonBranch::Main, 0, 30, false, &mut rng));
     }
 
     // ── Bones generation ─────────────────────────────────────────
@@ -740,12 +721,7 @@ mod tests {
         let mut rng = test_rng();
         let level = make_test_level();
         let items = vec![
-            (
-                Position::new(10, 5),
-                "long sword".to_string(),
-                None,
-                false,
-            ),
+            (Position::new(10, 5), "long sword".to_string(), None, false),
             (
                 Position::new(10, 5),
                 "wand of fire".to_string(),
@@ -786,14 +762,7 @@ mod tests {
 
         // Generate 20 items to test the 80% curse rate.
         let items: Vec<_> = (0..20)
-            .map(|i| {
-                (
-                    Position::new(5, 5),
-                    format!("item {}", i),
-                    None,
-                    false,
-                )
-            })
+            .map(|i| (Position::new(5, 5), format!("item {}", i), None, false))
             .collect();
 
         let bones = generate_bones(
@@ -999,15 +968,14 @@ mod tests {
 
         // Wrong depth.
         let mut try_rng = Pcg64::seed_from_u64(0);
-        assert!(pool
-            .try_get(DungeonBranch::Main, 5, &mut try_rng)
-            .is_none());
+        assert!(pool.try_get(DungeonBranch::Main, 5, &mut try_rng).is_none());
 
         // Wrong branch.
         let mut try_rng = Pcg64::seed_from_u64(0);
-        assert!(pool
-            .try_get(DungeonBranch::Mines, 3, &mut try_rng)
-            .is_none());
+        assert!(
+            pool.try_get(DungeonBranch::Mines, 3, &mut try_rng)
+                .is_none()
+        );
     }
 
     #[test]
@@ -1157,10 +1125,7 @@ mod tests {
         let mut found = false;
         for seed in 0..100 {
             let mut try_rng = Pcg64::seed_from_u64(seed);
-            if pool
-                .try_get(DungeonBranch::Main, 3, &mut try_rng)
-                .is_some()
-            {
+            if pool.try_get(DungeonBranch::Main, 3, &mut try_rng).is_some() {
                 found = true;
                 break;
             }

@@ -31,22 +31,42 @@ use crate::world::{GameWorld, HitPoints, Positioned};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MonsterItemAction {
     // Escape (highest priority when low HP)
-    QuaffHealingPotion { item: Entity },
+    QuaffHealingPotion {
+        item: Entity,
+    },
     ReadTeleportScroll,
-    ZapTeleportWand { item: Entity },
-    UseEscapeItem { item: Entity },
+    ZapTeleportWand {
+        item: Entity,
+    },
+    UseEscapeItem {
+        item: Entity,
+    },
 
     // Offensive
-    ZapAttackWand { item: Entity, wand_type: WandType },
-    ThrowPotion { item: Entity, potion_type: PotionType },
+    ZapAttackWand {
+        item: Entity,
+        wand_type: WandType,
+    },
+    ThrowPotion {
+        item: Entity,
+        potion_type: PotionType,
+    },
 
     // Defensive
-    WearBetterArmor { item: Entity },
-    WieldBetterWeapon { item: Entity },
-    QuaffSpeedPotion { item: Entity },
+    WearBetterArmor {
+        item: Entity,
+    },
+    WieldBetterWeapon {
+        item: Entity,
+    },
+    QuaffSpeedPotion {
+        item: Entity,
+    },
 
     // Utility
-    UseUnicornHorn { item: Entity },
+    UseUnicornHorn {
+        item: Entity,
+    },
 
     NoAction,
 }
@@ -144,10 +164,10 @@ pub fn monster_item_decision(
 /// below fraction of max (fraction = 5 at low levels, 3 at high levels).
 pub fn should_use_item_now(hp_ratio: f32, threat_level: u32) -> bool {
     match threat_level {
-        0 => hp_ratio < 0.2,       // No threat: only at critical HP
-        1 => hp_ratio < 0.33,      // Low threat
-        2..=3 => hp_ratio < 0.5,   // Medium threat
-        _ => hp_ratio < 0.75,      // High threat: more willing to use items
+        0 => hp_ratio < 0.2,     // No threat: only at critical HP
+        1 => hp_ratio < 0.33,    // Low threat
+        2..=3 => hp_ratio < 0.5, // Medium threat
+        _ => hp_ratio < 0.75,    // High threat: more willing to use items
     }
 }
 
@@ -159,28 +179,20 @@ pub fn should_use_item_now(hp_ratio: f32, threat_level: u32) -> bool {
 ///
 /// Unicorn horns cure confusion, stunning, and blindness.  Matches C
 /// NetHack's `find_defensive()` unicorn horn logic.
-fn find_unicorn_horn(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<Entity> {
+fn find_unicorn_horn(world: &GameWorld, monster: Entity) -> Option<Entity> {
     let items = get_monster_inventory(world, monster);
     items.iter().copied().find(|&item| {
         world
             .get_component::<ObjectCore>(item)
             .is_some_and(|core| core.object_class == ObjectClass::Tool)
-            && world
-                .get_component::<UnicornHornTag>(item)
-                .is_some()
+            && world.get_component::<UnicornHornTag>(item).is_some()
     })
 }
 
 /// Find the best healing potion (full > extra > regular).
 ///
 /// Matches C NetHack's `m_use_healing()` priority.
-fn find_healing_item(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<Entity> {
+fn find_healing_item(world: &GameWorld, monster: Entity) -> Option<Entity> {
     let items = get_monster_inventory(world, monster);
     let priority = [
         PotionType::FullHealing,
@@ -196,10 +208,7 @@ fn find_healing_item(
 }
 
 /// Find a teleportation escape item (wand of teleportation with charges).
-fn find_escape_item(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<Entity> {
+fn find_escape_item(world: &GameWorld, monster: Entity) -> Option<Entity> {
     let items = get_monster_inventory(world, monster);
     if let Some(wand) = find_wand_in_list(&items, world, WandType::Teleportation) {
         let has_charges = world
@@ -217,10 +226,7 @@ fn find_escape_item(
 ///
 /// Priority: Death > Sleep > Fire > Cold > Lightning > MagicMissile.
 /// Matches C NetHack's `find_offensive()` wand scanning.
-fn find_attack_wand(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<(Entity, WandType)> {
+fn find_attack_wand(world: &GameWorld, monster: Entity) -> Option<(Entity, WandType)> {
     let items = get_monster_inventory(world, monster);
     let wand_priority = [
         WandType::Death,
@@ -247,10 +253,7 @@ fn find_attack_wand(
 /// Find an offensive potion to throw at the player.
 ///
 /// Priority: Paralysis > Blindness > Confusion > Sleeping > Acid.
-fn find_attack_potion(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<(Entity, PotionType)> {
+fn find_attack_potion(world: &GameWorld, monster: Entity) -> Option<(Entity, PotionType)> {
     let items = get_monster_inventory(world, monster);
     let potion_priority = [
         PotionType::Paralysis,
@@ -268,10 +271,7 @@ fn find_attack_potion(
 }
 
 /// Find a speed potion for self-buffing.
-fn find_speed_potion(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<Entity> {
+fn find_speed_potion(world: &GameWorld, monster: Entity) -> Option<Entity> {
     let items = get_monster_inventory(world, monster);
     find_potion_in_list(&items, world, PotionType::Speed)
 }
@@ -303,11 +303,7 @@ fn get_monster_inventory(world: &GameWorld, monster: Entity) -> Vec<Entity> {
 }
 
 /// Find a wand of the given type in the item list.
-fn find_wand_in_list(
-    items: &[Entity],
-    world: &GameWorld,
-    wand_type: WandType,
-) -> Option<Entity> {
+fn find_wand_in_list(items: &[Entity], world: &GameWorld, wand_type: WandType) -> Option<Entity> {
     items.iter().copied().find(|&item| {
         world
             .get_component::<ObjectCore>(item)
@@ -342,10 +338,7 @@ fn find_potion_in_list(
 ///
 /// Priority: Wand of Death > Sleep > Fire > Cold > Lightning > MagicMissile,
 /// then offensive potions (paralysis, blindness, confusion, acid).
-pub fn find_offensive_item(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<Entity> {
+pub fn find_offensive_item(world: &GameWorld, monster: Entity) -> Option<Entity> {
     let items = get_monster_inventory(world, monster);
 
     // Wand priority.
@@ -389,10 +382,7 @@ pub fn find_offensive_item(
 ///
 /// Priority: Potion of Full Healing > Extra Healing > Healing > Speed >
 /// Invisibility, then wands of teleportation/digging.
-pub fn find_defensive_item(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<Entity> {
+pub fn find_defensive_item(world: &GameWorld, monster: Entity) -> Option<Entity> {
     let items = get_monster_inventory(world, monster);
 
     // Healing potion priority.
@@ -410,9 +400,7 @@ pub fn find_defensive_item(
     }
 
     // Defensive wand priority.
-    let wand_priority = [
-        WandType::Teleportation,
-    ];
+    let wand_priority = [WandType::Teleportation];
     for &wtype in &wand_priority {
         if let Some(wand) = find_wand_in_list(&items, world, wtype) {
             let has_charges = world
@@ -431,16 +419,10 @@ pub fn find_defensive_item(
 /// Scan a monster's inventory for miscellaneous usable items.
 ///
 /// Looks for speed/invisibility potions (for self-buffing).
-pub fn find_misc_item(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<Entity> {
+pub fn find_misc_item(world: &GameWorld, monster: Entity) -> Option<Entity> {
     let items = get_monster_inventory(world, monster);
 
-    let misc_potions = [
-        PotionType::Speed,
-        PotionType::Invisibility,
-    ];
+    let misc_potions = [PotionType::Speed, PotionType::Invisibility];
     for &ptype in &misc_potions {
         if let Some(potion) = find_potion_in_list(&items, world, ptype) {
             return Some(potion);
@@ -509,22 +491,19 @@ pub fn use_offensive_item(
             }
             WandType::Fire | WandType::Cold | WandType::Lightning => {
                 let nd = wtype.ray_nd();
-                let total: i32 =
-                    (0..nd).map(|_| rng.random_range(1i32..=6)).sum();
+                let total: i32 = (0..nd).map(|_| rng.random_range(1i32..=6)).sum();
                 total
             }
             WandType::MagicMissile => {
                 let nd = wtype.ray_nd();
-                let total: i32 =
-                    (0..nd).map(|_| rng.random_range(1i32..=6)).sum();
+                let total: i32 = (0..nd).map(|_| rng.random_range(1i32..=6)).sum();
                 total
             }
             _ => 0,
         };
 
         if damage > 0 {
-            if let Some(mut hp) = world.get_component_mut::<HitPoints>(player)
-            {
+            if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                 hp.current -= damage;
                 events.push(EngineEvent::HpChange {
                     entity: player,
@@ -574,11 +553,8 @@ pub fn use_offensive_item(
                 });
             }
             PotionType::Acid => {
-                let damage: i32 =
-                    (0..2).map(|_| rng.random_range(1i32..=6)).sum();
-                if let Some(mut hp) =
-                    world.get_component_mut::<HitPoints>(player)
-                {
+                let damage: i32 = (0..2).map(|_| rng.random_range(1i32..=6)).sum();
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
                     hp.current -= damage;
                     events.push(EngineEvent::HpChange {
                         entity: player,
@@ -629,12 +605,8 @@ pub fn use_defensive_item(
 
         let heal_amount: i32 = match ptype {
             PotionType::FullHealing => max_hp - current_hp,
-            PotionType::ExtraHealing => {
-                (0..6).map(|_| rng.random_range(1i32..=8)).sum::<i32>() + 8
-            }
-            PotionType::Healing => {
-                (0..6).map(|_| rng.random_range(1i32..=4)).sum::<i32>() + 8
-            }
+            PotionType::ExtraHealing => (0..6).map(|_| rng.random_range(1i32..=8)).sum::<i32>() + 8,
+            PotionType::Healing => (0..6).map(|_| rng.random_range(1i32..=4)).sum::<i32>() + 8,
             PotionType::Speed => {
                 events.push(EngineEvent::StatusApplied {
                     entity: monster,
@@ -667,9 +639,7 @@ pub fn use_defensive_item(
         };
 
         if heal_amount > 0 {
-            if let Some(mut hp) =
-                world.get_component_mut::<HitPoints>(monster)
-            {
+            if let Some(mut hp) = world.get_component_mut::<HitPoints>(monster) {
                 let old = hp.current;
                 hp.current = (hp.current + heal_amount).min(hp.max);
                 let actual = hp.current - old;
@@ -700,9 +670,7 @@ pub fn use_defensive_item(
                 .map(|c| c.spe > 0)
                 .unwrap_or(false);
             if has_charges {
-                if let Some(mut charges) =
-                    world.get_component_mut::<WandCharges>(item)
-                {
+                if let Some(mut charges) = world.get_component_mut::<WandCharges>(item) {
                     charges.spe -= 1;
                 }
                 events.push(EngineEvent::msg_with(
@@ -854,10 +822,7 @@ pub fn use_unicorn_horn(
 /// non-weapons.  Returns the best weapon entity, if any.
 ///
 /// Mirrors C NetHack's `select_hwep()` from `muse.c`.
-pub fn find_best_weapon(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<Entity> {
+pub fn find_best_weapon(world: &GameWorld, monster: Entity) -> Option<Entity> {
     let items = get_monster_inventory(world, monster);
 
     let mut best: Option<(Entity, i32)> = None;
@@ -894,10 +859,7 @@ pub fn find_best_weapon(
 /// lower (better) AC value.  Uses weight as AC proxy.
 ///
 /// Mirrors C NetHack's `m_dowear()` from `worn.c`.
-pub fn find_best_armor(
-    world: &GameWorld,
-    monster: Entity,
-) -> Option<Entity> {
+pub fn find_best_armor(world: &GameWorld, monster: Entity) -> Option<Entity> {
     let items = get_monster_inventory(world, monster);
 
     let mut best: Option<(Entity, i32)> = None;
@@ -930,10 +892,7 @@ pub fn find_best_armor(
 /// Emits an `ItemWielded` event if a weapon is found.  This is a
 /// simplified version that just marks the item as wielded — the
 /// combat system checks for wielded weapons via EquipmentSlots.
-pub fn monster_wield_weapon(
-    world: &mut GameWorld,
-    monster: Entity,
-) -> Vec<EngineEvent> {
+pub fn monster_wield_weapon(world: &mut GameWorld, monster: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let weapon = match find_best_weapon(world, monster) {
@@ -958,10 +917,7 @@ pub fn monster_wield_weapon(
 /// Monster wears the best available armor from its inventory.
 ///
 /// Emits an `ItemWorn` event if armor is found.
-pub fn monster_wear_armor(
-    world: &mut GameWorld,
-    monster: Entity,
-) -> Vec<EngineEvent> {
+pub fn monster_wear_armor(world: &mut GameWorld, monster: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let armor = match find_best_armor(world, monster) {
@@ -1026,12 +982,12 @@ mod tests {
     use super::*;
     use crate::action::Position;
     use crate::world::{
-        Attributes, ArmorClass, ExperienceLevel, HitPoints, Monster,
-        MovementPoints, Name, Positioned, Speed, NORMAL_SPEED,
+        ArmorClass, Attributes, ExperienceLevel, HitPoints, Monster, MovementPoints, NORMAL_SPEED,
+        Name, Positioned, Speed,
     };
     use nethack_babel_data::{ObjectClass, ObjectCore, ObjectLocation, ObjectTypeId};
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_rng() -> SmallRng {
         SmallRng::seed_from_u64(42)
@@ -1050,16 +1006,14 @@ mod tests {
         world
     }
 
-    fn spawn_monster(
-        world: &mut GameWorld,
-        pos: Position,
-        current_hp: i32,
-        max_hp: i32,
-    ) -> Entity {
+    fn spawn_monster(world: &mut GameWorld, pos: Position, current_hp: i32, max_hp: i32) -> Entity {
         world.spawn((
             Monster,
             Positioned(pos),
-            HitPoints { current: current_hp, max: max_hp },
+            HitPoints {
+                current: current_hp,
+                max: max_hp,
+            },
             ArmorClass(10),
             Attributes::default(),
             ExperienceLevel(1),
@@ -1069,11 +1023,7 @@ mod tests {
         ))
     }
 
-    fn give_potion(
-        world: &mut GameWorld,
-        monster: Entity,
-        ptype: PotionType,
-    ) -> Entity {
+    fn give_potion(world: &mut GameWorld, monster: Entity, ptype: PotionType) -> Entity {
         let carrier_id = monster.to_bits().get() as u32;
         let core = ObjectCore {
             otyp: ObjectTypeId(100),
@@ -1088,12 +1038,7 @@ mod tests {
         world.spawn((core, loc, PotionTypeTag(ptype)))
     }
 
-    fn give_wand(
-        world: &mut GameWorld,
-        monster: Entity,
-        wtype: WandType,
-        charges: i8,
-    ) -> Entity {
+    fn give_wand(world: &mut GameWorld, monster: Entity, wtype: WandType, charges: i8) -> Entity {
         let carrier_id = monster.to_bits().get() as u32;
         let core = ObjectCore {
             otyp: ObjectTypeId(200),
@@ -1105,7 +1050,10 @@ mod tests {
             artifact: None,
         };
         let loc = ObjectLocation::MonsterInventory { carrier_id };
-        let wand_charges = WandCharges { spe: charges, recharged: 0 };
+        let wand_charges = WandCharges {
+            spe: charges,
+            recharged: 0,
+        };
         world.spawn((core, loc, WandTypeTag(wtype), wand_charges))
     }
 
@@ -1199,7 +1147,11 @@ mod tests {
 
         let new_hp = world.get_component::<HitPoints>(player).unwrap().current;
         assert!(new_hp < orig_hp, "fire wand should damage player");
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::HpChange { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::HpChange { .. }))
+        );
     }
 
     #[test]
@@ -1212,7 +1164,10 @@ mod tests {
         let events = use_offensive_item(&mut world, monster, wand, &mut rng);
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::StatusApplied { status: StatusEffect::Sleeping, .. }
+            EngineEvent::StatusApplied {
+                status: StatusEffect::Sleeping,
+                ..
+            }
         )));
     }
 
@@ -1226,7 +1181,10 @@ mod tests {
         let events = use_offensive_item(&mut world, monster, potion, &mut rng);
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::StatusApplied { status: StatusEffect::Paralyzed, .. }
+            EngineEvent::StatusApplied {
+                status: StatusEffect::Paralyzed,
+                ..
+            }
         )));
         // Potion should be consumed.
         assert!(world.get_component::<ObjectCore>(potion).is_none());
@@ -1310,7 +1268,10 @@ mod tests {
         let events = use_misc_item(&mut world, monster, potion, &mut rng);
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::StatusApplied { status: StatusEffect::FastSpeed, .. }
+            EngineEvent::StatusApplied {
+                status: StatusEffect::FastSpeed,
+                ..
+            }
         )));
         // Consumed.
         assert!(world.get_component::<ObjectCore>(potion).is_none());
@@ -1326,7 +1287,10 @@ mod tests {
         let events = use_misc_item(&mut world, monster, potion, &mut rng);
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::StatusApplied { status: StatusEffect::Invisible, .. }
+            EngineEvent::StatusApplied {
+                status: StatusEffect::Invisible,
+                ..
+            }
         )));
     }
 
@@ -1343,11 +1307,7 @@ mod tests {
 
     // ── find_best_weapon ─────────────────────────────────────────
 
-    fn give_weapon(
-        world: &mut GameWorld,
-        monster: Entity,
-        weight: u32,
-    ) -> Entity {
+    fn give_weapon(world: &mut GameWorld, monster: Entity, weight: u32) -> Entity {
         let carrier_id = monster.to_bits().get() as u32;
         let core = ObjectCore {
             otyp: ObjectTypeId(300),
@@ -1362,11 +1322,7 @@ mod tests {
         world.spawn((core, loc))
     }
 
-    fn give_armor(
-        world: &mut GameWorld,
-        monster: Entity,
-        weight: u32,
-    ) -> Entity {
+    fn give_armor(world: &mut GameWorld, monster: Entity, weight: u32) -> Entity {
         let carrier_id = monster.to_bits().get() as u32;
         let core = ObjectCore {
             otyp: ObjectTypeId(400),
@@ -1425,11 +1381,14 @@ mod tests {
 
         let events = monster_wield_weapon(&mut world, monster);
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::ItemWielded { actor, item }
-                if *actor == monster && *item == weapon
-        )), "should emit ItemWielded event");
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                EngineEvent::ItemWielded { actor, item }
+                    if *actor == monster && *item == weapon
+            )),
+            "should emit ItemWielded event"
+        );
     }
 
     #[test]
@@ -1441,11 +1400,14 @@ mod tests {
 
         let events = monster_wear_armor(&mut world, monster);
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::ItemWorn { actor, item }
-                if *actor == monster && *item == armor
-        )), "should emit ItemWorn event");
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                EngineEvent::ItemWorn { actor, item }
+                    if *actor == monster && *item == armor
+            )),
+            "should emit ItemWorn event"
+        );
     }
 
     #[test]
@@ -1552,15 +1514,13 @@ mod tests {
         let monster = spawn_monster(&mut world, Position::new(12, 8), 20, 20);
 
         // Add StatusEffects with confusion.
-        let _ = world
-            .ecs_mut()
-            .insert_one(
-                monster,
-                StatusEffects {
-                    confusion: 10,
-                    ..StatusEffects::default()
-                },
-            );
+        let _ = world.ecs_mut().insert_one(
+            monster,
+            StatusEffects {
+                confusion: 10,
+                ..StatusEffects::default()
+            },
+        );
         let _horn = give_unicorn_horn(&mut world, monster);
 
         let action = monster_item_decision(&world, monster, false, false);
@@ -1656,19 +1616,35 @@ mod tests {
 
     #[test]
     fn should_not_dig_all_false_allows_digging() {
-        assert!(!should_not_dig(false, false, false, false, false, false, false));
+        assert!(!should_not_dig(
+            false, false, false, false, false, false, false
+        ));
     }
 
     #[test]
     fn should_not_dig_each_condition_blocks() {
         // Each individual condition should block digging.
-        assert!(should_not_dig(true, false, false, false, false, false, false)); // noteleport
-        assert!(should_not_dig(false, true, false, false, false, false, false)); // sokoban
-        assert!(should_not_dig(false, false, true, false, false, false, false)); // trapped
-        assert!(should_not_dig(false, false, false, true, false, false, false)); // underwater
-        assert!(should_not_dig(false, false, false, false, true, false, false)); // holding
-        assert!(should_not_dig(false, false, false, false, false, true, false)); // no stairs
-        assert!(should_not_dig(false, false, false, false, false, false, true)); // rogue level
+        assert!(should_not_dig(
+            true, false, false, false, false, false, false
+        )); // noteleport
+        assert!(should_not_dig(
+            false, true, false, false, false, false, false
+        )); // sokoban
+        assert!(should_not_dig(
+            false, false, true, false, false, false, false
+        )); // trapped
+        assert!(should_not_dig(
+            false, false, false, true, false, false, false
+        )); // underwater
+        assert!(should_not_dig(
+            false, false, false, false, true, false, false
+        )); // holding
+        assert!(should_not_dig(
+            false, false, false, false, false, true, false
+        )); // no stairs
+        assert!(should_not_dig(
+            false, false, false, false, false, false, true
+        )); // rogue level
     }
 
     #[test]

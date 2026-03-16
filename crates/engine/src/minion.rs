@@ -70,11 +70,7 @@ pub struct SummonResult {
 ///   an Archon may appear (`llord()`).
 /// - Neutral: picks a random elemental from the four basic types.
 /// - Chaotic: picks a demon via `ndemon()`.  May also get succubus/incubus.
-pub fn summon_minion(
-    alignment: Alignment,
-    player_level: u8,
-    rng: &mut impl Rng,
-) -> SummonResult {
+pub fn summon_minion(alignment: Alignment, player_level: u8, rng: &mut impl Rng) -> SummonResult {
     let minion_type = match alignment {
         Alignment::Lawful => {
             if player_level >= 20 && rng.random_range(0..20) == 0 {
@@ -150,10 +146,7 @@ pub struct GuardianAngel {
 ///
 /// In C, the player gets a guardian angel on entering the Astral Plane
 /// if `u.ualign.record > 8` (fervent) and no Conflict is active.
-pub fn worthy_of_guardian(
-    alignment_record: i32,
-    has_conflict: bool,
-) -> bool {
+pub fn worthy_of_guardian(alignment_record: i32, has_conflict: bool) -> bool {
     !has_conflict && alignment_record > 8
 }
 
@@ -386,44 +379,28 @@ mod tests {
     #[test]
     fn test_demon_talk_angry_with_excalibur() {
         let mut rng = test_rng();
-        let result = demon_talk(
-            1000, 0, 500,
-            10, true, false, false,
-            &mut rng,
-        );
+        let result = demon_talk(1000, 0, 500, 10, true, false, false, &mut rng);
         assert_eq!(result, DemonTalkResult::Angry);
     }
 
     #[test]
     fn test_demon_talk_fellow_demon() {
         let mut rng = test_rng();
-        let result = demon_talk(
-            1000, 0, 500,
-            10, false, true, false,
-            &mut rng,
-        );
+        let result = demon_talk(1000, 0, 500, 10, false, true, false, &mut rng);
         assert_eq!(result, DemonTalkResult::FellowDemon);
     }
 
     #[test]
     fn test_demon_talk_bribed() {
         let mut rng = test_rng();
-        let result = demon_talk(
-            1000, 500, 400,
-            10, false, false, false,
-            &mut rng,
-        );
+        let result = demon_talk(1000, 500, 400, 10, false, false, false, &mut rng);
         assert_eq!(result, DemonTalkResult::Bribed { amount: 500 });
     }
 
     #[test]
     fn test_demon_talk_unbribable_with_amulet() {
         let mut rng = test_rng();
-        let result = demon_talk(
-            1000, 500, 400,
-            10, false, false, true,
-            &mut rng,
-        );
+        let result = demon_talk(1000, 500, 400, 10, false, false, true, &mut rng);
         assert_eq!(result, DemonTalkResult::Unbribable);
     }
 }

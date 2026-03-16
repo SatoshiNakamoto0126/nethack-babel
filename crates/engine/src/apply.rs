@@ -13,15 +13,11 @@
 use hecs::Entity;
 use rand::Rng;
 
-use nethack_babel_data::{
-    BucStatus, Enchantment, ObjectLocation,
-};
+use nethack_babel_data::{BucStatus, Enchantment, ObjectLocation};
 
 use crate::action::{Direction, Position};
 use crate::event::EngineEvent;
-use crate::world::{
-    GameWorld, HitPoints, Monster, Name, Positioned, Tame,
-};
+use crate::world::{GameWorld, HitPoints, Monster, Name, Positioned, Tame};
 
 // ---------------------------------------------------------------------------
 // Unified dispatch — top-level entry point for #apply
@@ -182,9 +178,7 @@ pub fn apply_ext_tool(
         ExtToolType::FrostHorn => apply_horn(world, player, item, "frost", &buc, rng),
         ExtToolType::FireHorn => apply_horn(world, player, item, "fire", &buc, rng),
         ExtToolType::TooledHorn => apply_tooled_horn(world, player, rng),
-        ExtToolType::DrumOfEarthquake => {
-            apply_drum(world, player, item, &buc, rng)
-        }
+        ExtToolType::DrumOfEarthquake => apply_drum(world, player, item, &buc, rng),
         ExtToolType::Polearm => apply_polearm(world, player, item, rng),
         ExtToolType::Saddle => apply_saddle(world, player, rng),
         ExtToolType::Bullwhip => apply_bullwhip(world, player, item, rng),
@@ -579,11 +573,7 @@ fn apply_figurine(
 // ---------------------------------------------------------------------------
 
 /// Apply a leash to leash/unleash adjacent tame monsters.
-fn apply_leash(
-    world: &mut GameWorld,
-    player: Entity,
-    _rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+fn apply_leash(world: &mut GameWorld, player: Entity, _rng: &mut impl Rng) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let player_pos = match world.get_component::<Positioned>(player) {
@@ -593,11 +583,7 @@ fn apply_leash(
 
     // Find an adjacent tame monster to leash.
     let mut found_pet = false;
-    for (_entity, (pos, _tame, name)) in world
-        .ecs()
-        .query::<(&Positioned, &Tame, &Name)>()
-        .iter()
-    {
+    for (_entity, (pos, _tame, name)) in world.ecs().query::<(&Positioned, &Tame, &Name)>().iter() {
         let dx = (pos.0.x - player_pos.x).abs();
         let dy = (pos.0.y - player_pos.y).abs();
         if dx <= 1 && dy <= 1 {
@@ -681,10 +667,7 @@ fn apply_horn(
             hit_any = true;
             events.push(EngineEvent::msg_with(
                 &format!("tool-horn-{element}-hit"),
-                vec![
-                    ("name", name),
-                    ("damage", damage.to_string()),
-                ],
+                vec![("name", name), ("damage", damage.to_string())],
             ));
         }
     }
@@ -769,10 +752,7 @@ fn apply_drum(
             hp.current -= damage;
             events.push(EngineEvent::msg_with(
                 "tool-drum-damage",
-                vec![
-                    ("name", name),
-                    ("damage", damage.to_string()),
-                ],
+                vec![("name", name), ("damage", damage.to_string())],
             ));
         }
     }
@@ -846,7 +826,9 @@ fn apply_polearm(
             events.push(EngineEvent::EntityDied {
                 entity: *target_entity,
                 killer: Some(player),
-                cause: crate::event::DeathCause::KilledBy { killer_name: "a tool".to_string() },
+                cause: crate::event::DeathCause::KilledBy {
+                    killer_name: "a tool".to_string(),
+                },
             });
         }
     }
@@ -861,11 +843,7 @@ fn apply_polearm(
 /// Apply a saddle to an adjacent tame monster to make it a steed.
 ///
 /// Simplified: checks for an adjacent tame monster, reports success/failure.
-fn apply_saddle(
-    world: &mut GameWorld,
-    player: Entity,
-    _rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+fn apply_saddle(world: &mut GameWorld, player: Entity, _rng: &mut impl Rng) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let player_pos = match world.get_component::<Positioned>(player) {
@@ -875,11 +853,7 @@ fn apply_saddle(
 
     // Find an adjacent tame monster to saddle.
     let mut found_mount = false;
-    for (_entity, (pos, _tame, name)) in world
-        .ecs()
-        .query::<(&Positioned, &Tame, &Name)>()
-        .iter()
-    {
+    for (_entity, (pos, _tame, name)) in world.ecs().query::<(&Positioned, &Tame, &Name)>().iter() {
         let dx = (pos.0.x - player_pos.x).abs();
         let dy = (pos.0.y - player_pos.y).abs();
         if dx <= 1 && dy <= 1 {
@@ -964,10 +938,10 @@ fn apply_bullwhip(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nethack_babel_data::{Enchantment, KnowledgeState, ObjectClass, ObjectCore, ObjectTypeId};
     use crate::status::StatusEffects;
-    use rand::rngs::SmallRng;
+    use nethack_babel_data::{Enchantment, KnowledgeState, ObjectClass, ObjectCore, ObjectTypeId};
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     type TestRng = SmallRng;
 
@@ -1026,10 +1000,7 @@ mod tests {
         offset: (i32, i32),
         hp: i32,
     ) -> Entity {
-        let player_pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(world.player()).unwrap().0;
         let pos = Position::new(player_pos.x + offset.0, player_pos.y + offset.1);
         let entity = world.spawn((
             Positioned(pos),
@@ -1057,8 +1028,8 @@ mod tests {
         crate::status::make_blinded(&mut world, player, 10);
 
         let tool = spawn_tool(&mut world, "towel", false, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize towel");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize towel");
 
         assert!(
             events.iter().any(|e| {
@@ -1075,8 +1046,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "towel", true, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize towel");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize towel");
 
         // Should have a cursed-related message.
         assert!(
@@ -1096,8 +1067,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "bell of opening", false, true, Some(3));
-        let _events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize bell");
+        let _events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize bell");
 
         let charges = world
             .get_component::<Enchantment>(tool)
@@ -1113,8 +1084,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "bell of opening", false, false, Some(0));
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize bell");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize bell");
 
         assert!(
             events.iter().any(|e| {
@@ -1133,8 +1104,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "tallow candle", false, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize candle");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize candle");
 
         assert!(
             events.iter().any(|e| {
@@ -1144,8 +1115,8 @@ mod tests {
         );
 
         // Apply again to extinguish.
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize candle");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize candle");
 
         assert!(
             events.iter().any(|e| {
@@ -1202,8 +1173,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "can of grease", false, false, Some(0));
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize grease");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize grease");
 
         assert!(
             events.iter().any(|e| {
@@ -1220,8 +1191,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "can of grease", false, false, Some(10));
-        let _events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize grease");
+        let _events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize grease");
 
         let charges = world
             .get_component::<Enchantment>(tool)
@@ -1259,8 +1230,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "cream pie", false, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize cream pie");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize cream pie");
 
         assert!(
             events.iter().any(|e| {
@@ -1285,8 +1256,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "figurine", false, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize figurine");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize figurine");
 
         assert!(
             events.iter().any(|e| {
@@ -1310,8 +1281,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "leash", false, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize leash");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize leash");
 
         assert!(
             events.iter().any(|e| {
@@ -1328,23 +1299,23 @@ mod tests {
         let player = world.player();
 
         // Spawn a tame monster adjacent.
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
         let pet_pos = Position::new(player_pos.x + 1, player_pos.y);
         let _pet = world.spawn((
             Positioned(pet_pos),
             Monster,
             Tame,
-            HitPoints { current: 10, max: 10 },
+            HitPoints {
+                current: 10,
+                max: 10,
+            },
             Name("kitten".to_string()),
             crate::world::Speed(12),
         ));
 
         let tool = spawn_tool(&mut world, "leash", false, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize leash");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize leash");
 
         assert!(
             events.iter().any(|e| {
@@ -1381,8 +1352,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "fire horn", false, false, Some(0));
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize fire horn");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize fire horn");
 
         assert!(
             events.iter().any(|e| {
@@ -1401,15 +1372,9 @@ mod tests {
         let player = world.player();
 
         let mon = spawn_adjacent_monster(&mut world, "orc", (1, 1), 40);
-        let tool = spawn_tool(
-            &mut world,
-            "drum of earthquake",
-            false,
-            false,
-            Some(3),
-        );
-        let _events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize drum");
+        let tool = spawn_tool(&mut world, "drum of earthquake", false, false, Some(3));
+        let _events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize drum");
 
         let hp = world.get_component::<HitPoints>(mon).unwrap();
         assert!(hp.current < 40, "drum should deal earthquake damage");
@@ -1426,8 +1391,8 @@ mod tests {
         // Spawn monster at distance 2.
         let mon = spawn_adjacent_monster(&mut world, "troll", (2, 0), 50);
         let tool = spawn_tool(&mut world, "halberd", false, false, Some(2));
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize polearm");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize polearm");
 
         assert!(
             events.iter().any(|e| {
@@ -1447,8 +1412,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "glaive", false, false, Some(0));
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize polearm");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize polearm");
 
         assert!(
             events.iter().any(|e| {
@@ -1467,8 +1432,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "saddle", false, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize saddle");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize saddle");
 
         assert!(
             events.iter().any(|e| {
@@ -1484,23 +1449,23 @@ mod tests {
         let mut rng = test_rng();
         let player = world.player();
 
-        let player_pos = world
-            .get_component::<Positioned>(player)
-            .unwrap()
-            .0;
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
         let pet_pos = Position::new(player_pos.x + 1, player_pos.y);
         let _pet = world.spawn((
             Positioned(pet_pos),
             Monster,
             Tame,
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Name("pony".to_string()),
             crate::world::Speed(12),
         ));
 
         let tool = spawn_tool(&mut world, "saddle", false, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize saddle");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize saddle");
 
         assert!(
             events.iter().any(|e| {
@@ -1519,8 +1484,8 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "bullwhip", false, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize bullwhip");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize bullwhip");
 
         assert!(
             events.iter().any(|e| {
@@ -1538,8 +1503,8 @@ mod tests {
 
         let _mon = spawn_adjacent_monster(&mut world, "kobold", (1, 0), 10);
         let tool = spawn_tool(&mut world, "bullwhip", false, false, None);
-        let events = apply_ext_tool(&mut world, player, tool, &mut rng)
-            .expect("should recognize bullwhip");
+        let events =
+            apply_ext_tool(&mut world, player, tool, &mut rng).expect("should recognize bullwhip");
 
         assert!(
             events.iter().any(|e| {
@@ -1555,20 +1520,47 @@ mod tests {
     #[test]
     fn classify_ext_tool_recognizes_all_types() {
         assert_eq!(classify_ext_tool("towel"), Some(ExtToolType::Towel));
-        assert_eq!(classify_ext_tool("bell of opening"), Some(ExtToolType::BellOfOpening));
+        assert_eq!(
+            classify_ext_tool("bell of opening"),
+            Some(ExtToolType::BellOfOpening)
+        );
         assert_eq!(classify_ext_tool("bell"), Some(ExtToolType::Bell));
-        assert_eq!(classify_ext_tool("tallow candle"), Some(ExtToolType::TallowCandle));
-        assert_eq!(classify_ext_tool("wax candle"), Some(ExtToolType::WaxCandle));
-        assert_eq!(classify_ext_tool("candelabrum"), Some(ExtToolType::Candelabrum));
-        assert_eq!(classify_ext_tool("can of grease"), Some(ExtToolType::CanOfGrease));
-        assert_eq!(classify_ext_tool("touchstone"), Some(ExtToolType::Touchstone));
+        assert_eq!(
+            classify_ext_tool("tallow candle"),
+            Some(ExtToolType::TallowCandle)
+        );
+        assert_eq!(
+            classify_ext_tool("wax candle"),
+            Some(ExtToolType::WaxCandle)
+        );
+        assert_eq!(
+            classify_ext_tool("candelabrum"),
+            Some(ExtToolType::Candelabrum)
+        );
+        assert_eq!(
+            classify_ext_tool("can of grease"),
+            Some(ExtToolType::CanOfGrease)
+        );
+        assert_eq!(
+            classify_ext_tool("touchstone"),
+            Some(ExtToolType::Touchstone)
+        );
         assert_eq!(classify_ext_tool("cream pie"), Some(ExtToolType::CreamPie));
         assert_eq!(classify_ext_tool("figurine"), Some(ExtToolType::Figurine));
         assert_eq!(classify_ext_tool("leash"), Some(ExtToolType::Leash));
-        assert_eq!(classify_ext_tool("frost horn"), Some(ExtToolType::FrostHorn));
+        assert_eq!(
+            classify_ext_tool("frost horn"),
+            Some(ExtToolType::FrostHorn)
+        );
         assert_eq!(classify_ext_tool("fire horn"), Some(ExtToolType::FireHorn));
-        assert_eq!(classify_ext_tool("tooled horn"), Some(ExtToolType::TooledHorn));
-        assert_eq!(classify_ext_tool("drum of earthquake"), Some(ExtToolType::DrumOfEarthquake));
+        assert_eq!(
+            classify_ext_tool("tooled horn"),
+            Some(ExtToolType::TooledHorn)
+        );
+        assert_eq!(
+            classify_ext_tool("drum of earthquake"),
+            Some(ExtToolType::DrumOfEarthquake)
+        );
         assert_eq!(classify_ext_tool("halberd"), Some(ExtToolType::Polearm));
         assert_eq!(classify_ext_tool("saddle"), Some(ExtToolType::Saddle));
         assert_eq!(classify_ext_tool("bullwhip"), Some(ExtToolType::Bullwhip));
@@ -1614,7 +1606,10 @@ mod tests {
         let tool = spawn_tool(&mut world, "mirror", false, false, None);
         let events = apply_tool(&mut world, player, tool, None, &mut rng);
         // tools::apply_mirror should produce events.
-        assert!(!events.is_empty(), "unified dispatch should delegate to tools.rs");
+        assert!(
+            !events.is_empty(),
+            "unified dispatch should delegate to tools.rs"
+        );
     }
 
     #[test]

@@ -11,8 +11,7 @@ use hecs::Entity;
 use rand::Rng;
 
 use nethack_babel_data::{
-    ArmorCategory, BucStatus, Enchantment, Erosion, Material, ObjectClass,
-    ObjectCore, ObjectDef,
+    ArmorCategory, BucStatus, Enchantment, Erosion, Material, ObjectClass, ObjectCore, ObjectDef,
 };
 
 use crate::combat::WeaponStats;
@@ -54,7 +53,7 @@ pub const ARMOR_SLOTS: &[EquipSlot] = &[
 /// Take-off order for the "take off all" command (`A`).
 /// Outer layers first, then inner layers.
 pub const TAKEOFF_ORDER: &[EquipSlot] = &[
-    EquipSlot::OffHand,     // blindfold/towel in off-hand
+    EquipSlot::OffHand, // blindfold/towel in off-hand
     EquipSlot::Weapon,
     EquipSlot::Shield,
     EquipSlot::Gloves,
@@ -200,7 +199,10 @@ impl EquipmentSlots {
 
     /// Count how many armor slots are occupied.
     pub fn armor_count(&self) -> usize {
-        ARMOR_SLOTS.iter().filter(|&&s| self.get(s).is_some()).count()
+        ARMOR_SLOTS
+            .iter()
+            .filter(|&&s| self.get(s).is_some())
+            .count()
     }
 }
 
@@ -485,9 +487,7 @@ pub fn equip_item(
             .unwrap()
             .weapon;
         if let Some(wep_ent) = weapon_item {
-            let wep_otyp = world
-                .get_component::<ObjectCore>(wep_ent)
-                .map(|c| c.otyp);
+            let wep_otyp = world.get_component::<ObjectCore>(wep_ent).map(|c| c.otyp);
             if let Some(otyp) = wep_otyp {
                 let wep_bimanual = obj_defs
                     .iter()
@@ -523,9 +523,7 @@ pub fn equip_item(
 
     // Place item in slot.
     {
-        let mut equip = world
-            .get_component_mut::<EquipmentSlots>(player)
-            .unwrap();
+        let mut equip = world.get_component_mut::<EquipmentSlots>(player).unwrap();
         equip.set(slot, Some(item));
     }
 
@@ -592,9 +590,7 @@ pub fn unequip_slot(
 
     // Clear the slot.
     {
-        let mut equip = world
-            .get_component_mut::<EquipmentSlots>(player)
-            .unwrap();
+        let mut equip = world.get_component_mut::<EquipmentSlots>(player).unwrap();
         equip.set(slot, None);
     }
 
@@ -707,11 +703,7 @@ pub fn get_weapon_stats(
 ///
 /// `base_ac` is 10 for a normal human (from the player entity's ArmorClass
 /// default). Each worn armor piece contributes via `ARM_BONUS`.
-pub fn calculate_ac(
-    world: &GameWorld,
-    player: Entity,
-    obj_defs: &[ObjectDef],
-) -> i32 {
+pub fn calculate_ac(world: &GameWorld, player: Entity, obj_defs: &[ObjectDef]) -> i32 {
     let base_ac = 10;
 
     let equip = match world.get_component::<EquipmentSlots>(player) {
@@ -736,18 +728,19 @@ pub fn calculate_ac(
         let item = *slot_item;
         if let Some(core) = world.get_component::<ObjectCore>(item) {
             if let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
-                && let Some(ref armor_info) = def.armor {
-                    let a_ac = -(armor_info.ac_bonus as i32); // ac_bonus is negative in data
-                    let spe = world
-                        .get_component::<Enchantment>(item)
-                        .map(|e| e.spe as i32)
-                        .unwrap_or(0);
-                    let (eroded, eroded2) = world
-                        .get_component::<Erosion>(item)
-                        .map(|e| (e.eroded, e.eroded2))
-                        .unwrap_or((0, 0));
-                    ac -= arm_bonus(a_ac, spe, eroded, eroded2);
-                }
+                && let Some(ref armor_info) = def.armor
+            {
+                let a_ac = -(armor_info.ac_bonus as i32); // ac_bonus is negative in data
+                let spe = world
+                    .get_component::<Enchantment>(item)
+                    .map(|e| e.spe as i32)
+                    .unwrap_or(0);
+                let (eroded, eroded2) = world
+                    .get_component::<Erosion>(item)
+                    .map(|e| (e.eroded, e.eroded2))
+                    .unwrap_or((0, 0));
+                ac -= arm_bonus(a_ac, spe, eroded, eroded2);
+            }
         }
     }
 
@@ -757,13 +750,14 @@ pub fn calculate_ac(
         if let Some(ring) = ring_slot {
             if let Some(core) = world.get_component::<ObjectCore>(ring)
                 && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
-                && def.conferred_property == Some(nethack_babel_data::Property::Protection) {
-                    let spe = world
-                        .get_component::<Enchantment>(ring)
-                        .map(|e| e.spe as i32)
-                        .unwrap_or(0);
-                    ac -= spe;
-                }
+                && def.conferred_property == Some(nethack_babel_data::Property::Protection)
+            {
+                let spe = world
+                    .get_component::<Enchantment>(ring)
+                    .map(|e| e.spe as i32)
+                    .unwrap_or(0);
+                ac -= spe;
+            }
         }
     }
 
@@ -771,9 +765,10 @@ pub fn calculate_ac(
     if let Some(amulet) = equip.amulet {
         if let Some(core) = world.get_component::<ObjectCore>(amulet)
             && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
-            && def.name == "amulet of guarding" {
-                ac -= 2;
-            }
+            && def.name == "amulet of guarding"
+        {
+            ac -= 2;
+        }
     }
 
     // Clamp to [-99, 99].
@@ -790,11 +785,7 @@ pub fn calculate_ac(
 /// not their sum. Additional bonuses from protection items/spells.
 ///
 /// MC range is 0..3.
-pub fn magic_cancellation(
-    world: &GameWorld,
-    player: Entity,
-    obj_defs: &[ObjectDef],
-) -> u8 {
+pub fn magic_cancellation(world: &GameWorld, player: Entity, obj_defs: &[ObjectDef]) -> u8 {
     let equip = match world.get_component::<EquipmentSlots>(player) {
         Some(e) => e,
         None => return 0,
@@ -819,11 +810,12 @@ pub fn magic_cancellation(
         }
         if let Some(core) = world.get_component::<ObjectCore>(item)
             && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
-            && let Some(ref armor_info) = def.armor {
-                if armor_info.magic_cancel > mc {
-                    mc = armor_info.magic_cancel;
-                }
+            && let Some(ref armor_info) = def.armor
+        {
+            if armor_info.magic_cancel > mc {
+                mc = armor_info.magic_cancel;
             }
+        }
     }
 
     mc.max(0).min(3) as u8
@@ -1261,10 +1253,7 @@ pub fn cursed_item_penalties(
 
         match slot {
             EquipSlot::Weapon => {
-                penalties.push(format!(
-                    "cursed {} cannot be unwielded",
-                    item_name
-                ));
+                penalties.push(format!("cursed {} cannot be unwielded", item_name));
             }
             EquipSlot::Cloak => {
                 penalties.push(format!(
@@ -1273,56 +1262,29 @@ pub fn cursed_item_penalties(
                 ));
             }
             EquipSlot::BodyArmor => {
-                penalties.push(format!(
-                    "cursed {} cannot be removed",
-                    item_name
-                ));
+                penalties.push(format!("cursed {} cannot be removed", item_name));
             }
             EquipSlot::Helmet => {
-                penalties.push(format!(
-                    "cursed {} is welded to your head",
-                    item_name
-                ));
+                penalties.push(format!("cursed {} is welded to your head", item_name));
             }
             EquipSlot::Gloves => {
-                penalties.push(format!(
-                    "cursed {} are welded to your hands",
-                    item_name
-                ));
-                penalties.push(format!(
-                    "cursed {} prevent removing rings",
-                    item_name
-                ));
+                penalties.push(format!("cursed {} are welded to your hands", item_name));
+                penalties.push(format!("cursed {} prevent removing rings", item_name));
             }
             EquipSlot::Boots => {
-                penalties.push(format!(
-                    "cursed {} are welded to your feet",
-                    item_name
-                ));
+                penalties.push(format!("cursed {} are welded to your feet", item_name));
             }
             EquipSlot::Shield => {
-                penalties.push(format!(
-                    "cursed {} is welded to your arm",
-                    item_name
-                ));
+                penalties.push(format!("cursed {} is welded to your arm", item_name));
             }
             EquipSlot::RingLeft | EquipSlot::RingRight => {
-                penalties.push(format!(
-                    "cursed {} cannot be removed",
-                    item_name
-                ));
+                penalties.push(format!("cursed {} cannot be removed", item_name));
             }
             EquipSlot::Amulet => {
-                penalties.push(format!(
-                    "cursed {} is stuck to your neck",
-                    item_name
-                ));
+                penalties.push(format!("cursed {} is stuck to your neck", item_name));
             }
             _ => {
-                penalties.push(format!(
-                    "cursed {} cannot be removed",
-                    item_name
-                ));
+                penalties.push(format!("cursed {} cannot be removed", item_name));
             }
         }
     }
@@ -1577,10 +1539,10 @@ pub fn gloves_off_effect(glove_name: &str) -> Vec<IntrinsicChange> {
 mod tests {
     use super::*;
     use crate::action::Position;
-    use crate::items::{spawn_item, SpawnLocation};
+    use crate::items::{SpawnLocation, spawn_item};
     use nethack_babel_data::{
-        ArmorCategory, ArmorInfo, Color, Material, ObjectClass, ObjectTypeId,
-        WeaponInfo, WeaponSkill,
+        ArmorCategory, ArmorInfo, Color, Material, ObjectClass, ObjectTypeId, WeaponInfo,
+        WeaponSkill,
     };
 
     /// Helper: build a minimal weapon ObjectDef.
@@ -1619,12 +1581,7 @@ mod tests {
     }
 
     /// Helper: build an armor ObjectDef.
-    fn armor_def(
-        id: u16,
-        name: &str,
-        category: ArmorCategory,
-        ac_bonus: i8,
-    ) -> ObjectDef {
+    fn armor_def(id: u16, name: &str, category: ArmorCategory, ac_bonus: i8) -> ObjectDef {
         ObjectDef {
             id: ObjectTypeId(id),
             name: name.to_string(),
@@ -1738,7 +1695,7 @@ mod tests {
             weapon: None,
             armor: None,
             spellbook: None,
-            conferred_property: None,  // guarding identified by name, not property enum
+            conferred_property: None, // guarding identified by name, not property enum
             use_delay: 0,
         }
     }
@@ -1808,13 +1765,13 @@ mod tests {
         assert!(result.is_ok());
 
         let events = result.unwrap();
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::ItemWielded { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::ItemWielded { .. }))
+        );
 
-        let equip = world
-            .get_component::<EquipmentSlots>(player)
-            .unwrap();
+        let equip = world.get_component::<EquipmentSlots>(player).unwrap();
         assert_eq!(equip.weapon, Some(item));
     }
 
@@ -1834,13 +1791,13 @@ mod tests {
         assert!(result.is_ok());
 
         let events = result.unwrap();
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::ItemRemoved { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::ItemRemoved { .. }))
+        );
 
-        let equip = world
-            .get_component::<EquipmentSlots>(player)
-            .unwrap();
+        let equip = world.get_component::<EquipmentSlots>(player).unwrap();
         assert_eq!(equip.weapon, None);
     }
 
@@ -1864,9 +1821,7 @@ mod tests {
         let result = unequip_item(&mut world, player, item);
         assert!(matches!(result, Err(EquipError::CursedCannotRemove)));
 
-        let equip = world
-            .get_component::<EquipmentSlots>(player)
-            .unwrap();
+        let equip = world.get_component::<EquipmentSlots>(player).unwrap();
         assert_eq!(equip.weapon, Some(item));
     }
 
@@ -1880,26 +1835,11 @@ mod tests {
         let shield = armor_def(2, "small shield", ArmorCategory::Shield, -1);
         let defs = vec![two_h.clone(), shield.clone()];
 
-        let weapon_item =
-            spawn_item(&mut world, &two_h, SpawnLocation::Inventory, Some(0));
-        equip_item(
-            &mut world,
-            player,
-            weapon_item,
-            EquipSlot::Weapon,
-            &defs,
-        )
-        .unwrap();
+        let weapon_item = spawn_item(&mut world, &two_h, SpawnLocation::Inventory, Some(0));
+        equip_item(&mut world, player, weapon_item, EquipSlot::Weapon, &defs).unwrap();
 
-        let shield_item =
-            spawn_item(&mut world, &shield, SpawnLocation::Inventory, Some(0));
-        let result = equip_item(
-            &mut world,
-            player,
-            shield_item,
-            EquipSlot::Shield,
-            &defs,
-        );
+        let shield_item = spawn_item(&mut world, &shield, SpawnLocation::Inventory, Some(0));
+        let result = equip_item(&mut world, player, shield_item, EquipSlot::Shield, &defs);
         assert!(matches!(result, Err(EquipError::TwoHandedConflict)));
     }
 
@@ -1913,39 +1853,26 @@ mod tests {
         let two_h = two_handed_weapon_def(1, "two-handed sword");
         let defs = vec![two_h.clone(), shield.clone()];
 
-        let shield_item =
-            spawn_item(&mut world, &shield, SpawnLocation::Inventory, Some(0));
-        equip_item(
-            &mut world,
-            player,
-            shield_item,
-            EquipSlot::Shield,
-            &defs,
-        )
-        .unwrap();
+        let shield_item = spawn_item(&mut world, &shield, SpawnLocation::Inventory, Some(0));
+        equip_item(&mut world, player, shield_item, EquipSlot::Shield, &defs).unwrap();
 
-        let weapon_item =
-            spawn_item(&mut world, &two_h, SpawnLocation::Inventory, Some(0));
-        let result = equip_item(
-            &mut world,
-            player,
-            weapon_item,
-            EquipSlot::Weapon,
-            &defs,
-        );
+        let weapon_item = spawn_item(&mut world, &two_h, SpawnLocation::Inventory, Some(0));
+        let result = equip_item(&mut world, player, weapon_item, EquipSlot::Weapon, &defs);
         assert!(result.is_ok());
 
         let events = result.unwrap();
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::ItemRemoved { item, .. } if *item == shield_item)));
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::ItemWielded { item, .. } if *item == weapon_item)));
+        assert!(
+            events.iter().any(
+                |e| matches!(e, EngineEvent::ItemRemoved { item, .. } if *item == shield_item)
+            )
+        );
+        assert!(
+            events.iter().any(
+                |e| matches!(e, EngineEvent::ItemWielded { item, .. } if *item == weapon_item)
+            )
+        );
 
-        let equip = world
-            .get_component::<EquipmentSlots>(player)
-            .unwrap();
+        let equip = world.get_component::<EquipmentSlots>(player).unwrap();
         assert_eq!(equip.weapon, Some(weapon_item));
         assert_eq!(equip.shield, None);
     }
@@ -1960,32 +1887,15 @@ mod tests {
         let two_h = two_handed_weapon_def(1, "two-handed sword");
         let defs = vec![two_h.clone(), shield.clone()];
 
-        let shield_item =
-            spawn_item(&mut world, &shield, SpawnLocation::Inventory, Some(0));
+        let shield_item = spawn_item(&mut world, &shield, SpawnLocation::Inventory, Some(0));
         {
-            let mut buc = world
-                .get_component_mut::<BucStatus>(shield_item)
-                .unwrap();
+            let mut buc = world.get_component_mut::<BucStatus>(shield_item).unwrap();
             buc.cursed = true;
         }
-        equip_item(
-            &mut world,
-            player,
-            shield_item,
-            EquipSlot::Shield,
-            &defs,
-        )
-        .unwrap();
+        equip_item(&mut world, player, shield_item, EquipSlot::Shield, &defs).unwrap();
 
-        let weapon_item =
-            spawn_item(&mut world, &two_h, SpawnLocation::Inventory, Some(0));
-        let result = equip_item(
-            &mut world,
-            player,
-            weapon_item,
-            EquipSlot::Weapon,
-            &defs,
-        );
+        let weapon_item = spawn_item(&mut world, &two_h, SpawnLocation::Inventory, Some(0));
+        let result = equip_item(&mut world, player, weapon_item, EquipSlot::Weapon, &defs);
         assert!(matches!(result, Err(EquipError::TwoHandedConflict)));
     }
 
@@ -1996,45 +1906,20 @@ mod tests {
         let mut world = test_world();
         let player = world.player();
 
-        let plate_mail =
-            armor_def(1, "plate mail", ArmorCategory::Suit, -7);
+        let plate_mail = armor_def(1, "plate mail", ArmorCategory::Suit, -7);
         let shield = armor_def(2, "small shield", ArmorCategory::Shield, -1);
         let defs = vec![plate_mail.clone(), shield.clone()];
 
         assert_eq!(calculate_ac(&world, player, &defs), 10);
 
-        let pm_item = spawn_item(
-            &mut world,
-            &plate_mail,
-            SpawnLocation::Inventory,
-            Some(2),
-        );
-        equip_item(
-            &mut world,
-            player,
-            pm_item,
-            EquipSlot::BodyArmor,
-            &defs,
-        )
-        .unwrap();
+        let pm_item = spawn_item(&mut world, &plate_mail, SpawnLocation::Inventory, Some(2));
+        equip_item(&mut world, player, pm_item, EquipSlot::BodyArmor, &defs).unwrap();
 
         // AC = 10 - (7 + 2 - 0) = 1.
         assert_eq!(calculate_ac(&world, player, &defs), 1);
 
-        let sh_item = spawn_item(
-            &mut world,
-            &shield,
-            SpawnLocation::Inventory,
-            Some(0),
-        );
-        equip_item(
-            &mut world,
-            player,
-            sh_item,
-            EquipSlot::Shield,
-            &defs,
-        )
-        .unwrap();
+        let sh_item = spawn_item(&mut world, &shield, SpawnLocation::Inventory, Some(0));
+        equip_item(&mut world, player, sh_item, EquipSlot::Shield, &defs).unwrap();
 
         // AC = 10 - (7 + 2 - 0) - (1 + 0 - 0) = 0.
         assert_eq!(calculate_ac(&world, player, &defs), 0);
@@ -2046,29 +1931,16 @@ mod tests {
     fn test_ac_with_erosion() {
         let mut world = test_world();
         let player = world.player();
-        let plate_mail =
-            armor_def(1, "plate mail", ArmorCategory::Suit, -7);
+        let plate_mail = armor_def(1, "plate mail", ArmorCategory::Suit, -7);
         let defs = vec![plate_mail.clone()];
 
-        let pm_item = spawn_item(
-            &mut world,
-            &plate_mail,
-            SpawnLocation::Inventory,
-            Some(0),
-        );
+        let pm_item = spawn_item(&mut world, &plate_mail, SpawnLocation::Inventory, Some(0));
         // Set erosion to 2.
         {
             let mut erosion = world.get_component_mut::<Erosion>(pm_item).unwrap();
             erosion.eroded = 2;
         }
-        equip_item(
-            &mut world,
-            player,
-            pm_item,
-            EquipSlot::BodyArmor,
-            &defs,
-        )
-        .unwrap();
+        equip_item(&mut world, player, pm_item, EquipSlot::BodyArmor, &defs).unwrap();
 
         // ARM_BONUS = 7 + 0 - min(2, 7) = 5
         // AC = 10 - 5 = 5
@@ -2085,14 +1957,7 @@ mod tests {
         let defs = vec![ring.clone()];
 
         let ring_item = spawn_item(&mut world, &ring, SpawnLocation::Inventory, Some(3));
-        equip_item(
-            &mut world,
-            player,
-            ring_item,
-            EquipSlot::RingLeft,
-            &defs,
-        )
-        .unwrap();
+        equip_item(&mut world, player, ring_item, EquipSlot::RingLeft, &defs).unwrap();
 
         // AC = 10 - 3 = 7
         assert_eq!(calculate_ac(&world, player, &defs), 7);
@@ -2108,14 +1973,7 @@ mod tests {
         let defs = vec![amulet.clone()];
 
         let amulet_item = spawn_item(&mut world, &amulet, SpawnLocation::Inventory, None);
-        equip_item(
-            &mut world,
-            player,
-            amulet_item,
-            EquipSlot::Amulet,
-            &defs,
-        )
-        .unwrap();
+        equip_item(&mut world, player, amulet_item, EquipSlot::Amulet, &defs).unwrap();
 
         // AC = 10 - 2 = 8
         assert_eq!(calculate_ac(&world, player, &defs), 8);
@@ -2182,8 +2040,11 @@ mod tests {
         let mut rng = rand::rng();
         for _ in 0..200 {
             let val = ac_value(&mut rng, -20);
-            assert!(val >= -20 && val <= -1,
-                "ac_value(-20) should be in [-20, -1], got {}", val);
+            assert!(
+                val >= -20 && val <= -1,
+                "ac_value(-20) should be in [-20, -1], got {}",
+                val
+            );
         }
     }
 
@@ -2262,27 +2123,11 @@ mod tests {
         let ring_item = spawn_item(&mut world, &ring, SpawnLocation::Inventory, None);
         let ring2_item = spawn_item(&mut world, &ring2, SpawnLocation::Inventory, None);
 
-        equip_item(
-            &mut world,
-            player,
-            ring_item,
-            EquipSlot::RingLeft,
-            &defs,
-        )
-        .unwrap();
+        equip_item(&mut world, player, ring_item, EquipSlot::RingLeft, &defs).unwrap();
 
-        equip_item(
-            &mut world,
-            player,
-            ring2_item,
-            EquipSlot::RingRight,
-            &defs,
-        )
-        .unwrap();
+        equip_item(&mut world, player, ring2_item, EquipSlot::RingRight, &defs).unwrap();
 
-        let equip = world
-            .get_component::<EquipmentSlots>(player)
-            .unwrap();
+        let equip = world.get_component::<EquipmentSlots>(player).unwrap();
         assert_eq!(equip.ring_left, Some(ring_item));
         assert_eq!(equip.ring_right, Some(ring2_item));
     }
@@ -2297,8 +2142,7 @@ mod tests {
         let defs = vec![def.clone()];
         let item = spawn_item(&mut world, &def, SpawnLocation::Inventory, Some(0));
 
-        let result =
-            equip_item(&mut world, player, item, EquipSlot::Helmet, &defs);
+        let result = equip_item(&mut world, player, item, EquipSlot::Helmet, &defs);
         assert!(matches!(result, Err(EquipError::WrongSlot)));
     }
 
@@ -2314,14 +2158,7 @@ mod tests {
         assert!(!wearing_body_armor(&world, player));
 
         let item = spawn_item(&mut world, &plate, SpawnLocation::Inventory, Some(0));
-        equip_item(
-            &mut world,
-            player,
-            item,
-            EquipSlot::BodyArmor,
-            &defs,
-        )
-        .unwrap();
+        equip_item(&mut world, player, item, EquipSlot::BodyArmor, &defs).unwrap();
 
         assert!(wearing_body_armor(&world, player));
     }
@@ -2336,40 +2173,27 @@ mod tests {
         let axe = weapon_def(2, "battle-axe", 8, 8);
         let defs = vec![sword.clone(), axe.clone()];
 
-        let sword_item =
-            spawn_item(&mut world, &sword, SpawnLocation::Inventory, Some(0));
-        let axe_item =
-            spawn_item(&mut world, &axe, SpawnLocation::Inventory, Some(0));
+        let sword_item = spawn_item(&mut world, &sword, SpawnLocation::Inventory, Some(0));
+        let axe_item = spawn_item(&mut world, &axe, SpawnLocation::Inventory, Some(0));
 
-        equip_item(
-            &mut world,
-            player,
-            sword_item,
-            EquipSlot::Weapon,
-            &defs,
-        )
-        .unwrap();
+        equip_item(&mut world, player, sword_item, EquipSlot::Weapon, &defs).unwrap();
 
-        let result = equip_item(
-            &mut world,
-            player,
-            axe_item,
-            EquipSlot::Weapon,
-            &defs,
-        );
+        let result = equip_item(&mut world, player, axe_item, EquipSlot::Weapon, &defs);
         assert!(result.is_ok());
 
         let events = result.unwrap();
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::ItemRemoved { item, .. } if *item == sword_item)));
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, EngineEvent::ItemWielded { item, .. } if *item == axe_item)));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::ItemRemoved { item, .. } if *item == sword_item))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::ItemWielded { item, .. } if *item == axe_item))
+        );
 
-        let equip = world
-            .get_component::<EquipmentSlots>(player)
-            .unwrap();
+        let equip = world.get_component::<EquipmentSlots>(player).unwrap();
         assert_eq!(equip.weapon, Some(axe_item));
     }
 
@@ -2731,10 +2555,13 @@ mod tests {
     #[test]
     fn test_helm_brilliance() {
         let effects = helm_on_effect("helm of brilliance");
-        assert_eq!(effects, vec![
-            IntrinsicChange::StatBonus("intelligence"),
-            IntrinsicChange::StatBonus("wisdom"),
-        ]);
+        assert_eq!(
+            effects,
+            vec![
+                IntrinsicChange::StatBonus("intelligence"),
+                IntrinsicChange::StatBonus("wisdom"),
+            ]
+        );
     }
 
     #[test]

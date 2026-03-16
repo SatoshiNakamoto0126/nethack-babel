@@ -557,9 +557,7 @@ pub fn tick_regions(
                             damage /= 2;
                         }
                         if damage > 0 {
-                            if let Some(mut hp) =
-                                world.get_component_mut::<HitPoints>(entity)
-                            {
+                            if let Some(mut hp) = world.get_component_mut::<HitPoints>(entity) {
                                 hp.current -= damage as i32;
                             }
                             events.push(EngineEvent::HpChange {
@@ -733,13 +731,7 @@ mod tests {
         ));
 
         let mut rm = RegionMap::default();
-        create_region(
-            &mut rm,
-            Position::new(10, 5),
-            1,
-            RegionType::PoisonGas,
-            3,
-        );
+        create_region(&mut rm, Position::new(10, 5), 1, RegionType::PoisonGas, 3);
 
         let _events = tick_regions(&mut world, &mut rm, &mut rng);
         // Poison-resistant: no HP change.
@@ -752,13 +744,7 @@ mod tests {
         let mut world = GameWorld::new(Position::new(40, 10));
         let mut rng = make_rng();
         let mut rm = RegionMap::default();
-        create_region(
-            &mut rm,
-            Position::new(10, 5),
-            1,
-            RegionType::Fog,
-            2,
-        );
+        create_region(&mut rm, Position::new(10, 5), 1, RegionType::Fog, 2);
         assert_eq!(rm.regions[0].duration, 2);
 
         tick_regions(&mut world, &mut rm, &mut rng);
@@ -783,13 +769,7 @@ mod tests {
         ));
 
         let mut rm = RegionMap::default();
-        create_region(
-            &mut rm,
-            Position::new(10, 5),
-            1,
-            RegionType::Fog,
-            3,
-        );
+        create_region(&mut rm, Position::new(10, 5), 1, RegionType::Fog, 3);
 
         tick_regions(&mut world, &mut rm, &mut rng);
         let hp = world.get_component::<HitPoints>(mon).unwrap();
@@ -800,13 +780,7 @@ mod tests {
 
     #[test]
     fn gas_cloud_creation() {
-        let cloud = create_gas_cloud(
-            Position::new(5, 5),
-            3,
-            10,
-            GasCloudType::Poison,
-            8,
-        );
+        let cloud = create_gas_cloud(Position::new(5, 5), 3, 10, GasCloudType::Poison, 8);
         assert_eq!(cloud.position, Position::new(5, 5));
         assert_eq!(cloud.radius, 3);
         assert_eq!(cloud.turns_remaining, 10);
@@ -816,13 +790,7 @@ mod tests {
 
     #[test]
     fn gas_cloud_in_range() {
-        let cloud = create_gas_cloud(
-            Position::new(10, 10),
-            2,
-            5,
-            GasCloudType::Poison,
-            4,
-        );
+        let cloud = create_gas_cloud(Position::new(10, 10), 2, 5, GasCloudType::Poison, 4);
         assert!(in_gas_cloud(&cloud, Position::new(10, 10)));
         assert!(in_gas_cloud(&cloud, Position::new(11, 11)));
         assert!(in_gas_cloud(&cloud, Position::new(12, 10)));
@@ -989,9 +957,7 @@ mod tests {
 
     #[test]
     fn force_field_blocks_position() {
-        let fields = vec![
-            create_force_field(Position::new(10, 10), 2, 5),
-        ];
+        let fields = vec![create_force_field(Position::new(10, 10), 2, 5)];
 
         assert!(in_force_field(Position::new(10, 10), &fields));
         assert!(in_force_field(Position::new(11, 11), &fields));
@@ -1019,9 +985,7 @@ mod tests {
 
     #[test]
     fn force_field_tick_expiry() {
-        let mut fields = vec![
-            create_force_field(Position::new(5, 5), 2, 2),
-        ];
+        let mut fields = vec![create_force_field(Position::new(5, 5), 2, 2)];
         assert_eq!(fields.len(), 1);
 
         tick_force_fields(&mut fields);
@@ -1029,7 +993,10 @@ mod tests {
         assert_eq!(fields[0].duration, 1);
 
         tick_force_fields(&mut fields);
-        assert!(fields.is_empty(), "field should be removed when duration hits 0");
+        assert!(
+            fields.is_empty(),
+            "field should be removed when duration hits 0"
+        );
     }
 
     // ── Level flag tests ──────────────────────────────────────────────
@@ -1147,13 +1114,7 @@ mod tests {
         ));
 
         let mut rm = RegionMap::default();
-        create_region(
-            &mut rm,
-            Position::new(10, 5),
-            1,
-            RegionType::AcidCloud,
-            3,
-        );
+        create_region(&mut rm, Position::new(10, 5), 1, RegionType::AcidCloud, 3);
 
         let events = tick_regions(&mut world, &mut rm, &mut rng);
         assert!(events.iter().any(|e| matches!(
@@ -1185,16 +1146,13 @@ mod tests {
         ));
 
         let mut rm = RegionMap::default();
-        create_region(
-            &mut rm,
-            Position::new(10, 5),
-            1,
-            RegionType::FireCloud,
-            3,
-        );
+        create_region(&mut rm, Position::new(10, 5), 1, RegionType::FireCloud, 3);
 
         let _events = tick_regions(&mut world, &mut rm, &mut rng);
         let hp = world.get_component::<HitPoints>(mon).unwrap();
-        assert_eq!(hp.current, 30, "fire-resistant entity takes no fire cloud damage");
+        assert_eq!(
+            hp.current, 30,
+            "fire-resistant entity takes no fire cloud damage"
+        );
     }
 }

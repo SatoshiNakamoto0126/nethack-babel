@@ -99,11 +99,7 @@ pub enum StealResult {
 /// caller should transfer the item between inventories and emit events.
 ///
 /// Returns which item was selected (or why theft failed).
-pub fn pick_steal_target<R: Rng>(
-    rng: &mut R,
-    world: &GameWorld,
-    victim: Entity,
-) -> StealResult {
+pub fn pick_steal_target<R: Rng>(rng: &mut R, world: &GameWorld, victim: Entity) -> StealResult {
     let inv = match world.get_component::<Inventory>(victim) {
         Some(inv) => inv,
         None => return StealResult::NothingToSteal,
@@ -114,7 +110,9 @@ pub fn pick_steal_target<R: Rng>(
     }
 
     let idx = rng.random_range(0..inv.items.len());
-    StealResult::Stolen { item: inv.items[idx] }
+    StealResult::Stolen {
+        item: inv.items[idx],
+    }
 }
 
 /// Execute an item theft: remove from victim, add to thief.
@@ -210,11 +208,7 @@ pub fn stolen_value(obj_def: &ObjectDef, quantity: u32) -> u32 {
 ///
 /// Returns events describing the unequipping.  If the item is not
 /// currently equipped, returns an empty vec.
-pub fn remove_worn_item(
-    world: &mut GameWorld,
-    entity: Entity,
-    item: Entity,
-) -> Vec<EngineEvent> {
+pub fn remove_worn_item(world: &mut GameWorld, entity: Entity, item: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     // Check if item is equipped
@@ -320,10 +314,7 @@ impl ArmorTheftState {
 ///
 /// Returns events for each item dropped.  The caller is responsible for
 /// actually spawning the items on the map.
-pub fn thief_died_inventory(
-    world: &mut GameWorld,
-    thief: Entity,
-) -> Vec<EngineEvent> {
+pub fn thief_died_inventory(world: &mut GameWorld, thief: Entity) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
     let items: Vec<Entity> = {
@@ -366,8 +357,8 @@ mod tests {
     use super::*;
     use crate::action::Position;
     use crate::world::GameWorld;
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_world() -> GameWorld {
         GameWorld::new(Position::new(5, 5))
@@ -458,7 +449,9 @@ mod tests {
         // Add a dummy item to the player's inventory
         let item = world.spawn(());
         {
-            let mut inv = world.get_component_mut::<Inventory>(world.player()).unwrap();
+            let mut inv = world
+                .get_component_mut::<Inventory>(world.player())
+                .unwrap();
             inv.add(item);
         }
 
@@ -478,7 +471,9 @@ mod tests {
 
         // Add item to player inventory
         {
-            let mut inv = world.get_component_mut::<Inventory>(world.player()).unwrap();
+            let mut inv = world
+                .get_component_mut::<Inventory>(world.player())
+                .unwrap();
             inv.add(item);
         }
 
@@ -563,7 +558,10 @@ mod tests {
 
         let def = MonsterDef {
             id: MonsterId(0),
-            names: MonsterNames { male: "leprechaun".to_string(), female: None },
+            names: MonsterNames {
+                male: "leprechaun".to_string(),
+                female: None,
+            },
             symbol: 'l',
             color: Color::Green,
             base_level: 5,
@@ -601,7 +599,10 @@ mod tests {
 
         let def = MonsterDef {
             id: MonsterId(1),
-            names: MonsterNames { male: "gnome".to_string(), female: None },
+            names: MonsterNames {
+                male: "gnome".to_string(),
+                female: None,
+            },
             symbol: 'G',
             color: Color::Brown,
             base_level: 1,
@@ -689,9 +690,7 @@ mod tests {
 
         // Equip the weapon
         {
-            let mut equip = world
-                .get_component_mut::<EquipmentSlots>(player)
-                .unwrap();
+            let mut equip = world.get_component_mut::<EquipmentSlots>(player).unwrap();
             equip.weapon = Some(weapon);
         }
 

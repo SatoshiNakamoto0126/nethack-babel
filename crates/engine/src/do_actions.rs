@@ -30,10 +30,7 @@ pub enum WipeResult {
 ///
 /// `creamed` is the hero's current creamed counter (0 = not creamed).
 /// Returns the result and any events.
-pub fn do_wipe(
-    creamed: u32,
-    is_blind_from_towel: bool,
-) -> (WipeResult, Vec<EngineEvent>) {
+pub fn do_wipe(creamed: u32, is_blind_from_towel: bool) -> (WipeResult, Vec<EngineEvent>) {
     let mut events = Vec::new();
 
     if is_blind_from_towel {
@@ -159,7 +156,12 @@ pub fn do_rub<R: Rng>(
         } else {
             events.push(EngineEvent::msg("rub-lamp-nothing"));
         }
-        return (RubResult::Lamp { djinni_appears: djinni }, events);
+        return (
+            RubResult::Lamp {
+                djinni_appears: djinni,
+            },
+            events,
+        );
     }
 
     events.push(EngineEvent::msg("rub-no-effect"));
@@ -394,7 +396,12 @@ pub fn do_turn_undead(
         "turn-undead-success",
         vec![("count", affected.to_string())],
     ));
-    (TurnUndeadResult::Turned { affected_count: affected }, events)
+    (
+        TurnUndeadResult::Turned {
+            affected_count: affected,
+        },
+        events,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -535,10 +542,7 @@ pub fn do_call_type(class: char, name: &str) -> Vec<EngineEvent> {
     } else {
         events.push(EngineEvent::msg_with(
             "call-type-named",
-            vec![
-                ("class", class.to_string()),
-                ("name", name.to_string()),
-            ],
+            vec![("class", class.to_string()), ("name", name.to_string())],
         ));
     }
     events
@@ -804,8 +808,8 @@ pub fn is_wizard_mode(config_wizards: &str, username: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_rng() -> SmallRng {
         SmallRng::seed_from_u64(42)
@@ -869,7 +873,12 @@ mod tests {
         let mut rng = test_rng();
         for _ in 0..100 {
             let (result, _) = do_rub(&mut rng, true, true, false);
-            assert!(matches!(result, RubResult::Lamp { djinni_appears: true }));
+            assert!(matches!(
+                result,
+                RubResult::Lamp {
+                    djinni_appears: true
+                }
+            ));
         }
     }
 
@@ -879,7 +888,10 @@ mod tests {
         let mut djinni_count = 0;
         for _ in 0..3000 {
             let (result, _) = do_rub(&mut rng, true, false, false);
-            if let RubResult::Lamp { djinni_appears: true } = result {
+            if let RubResult::Lamp {
+                djinni_appears: true,
+            } = result
+            {
                 djinni_count += 1;
             }
         }
@@ -943,7 +955,9 @@ mod tests {
         let (result, _) = do_invoke(true, true, true, 50, "Excalibur");
         assert!(matches!(
             result,
-            InvokeResult::OnCooldown { turns_remaining: 50 }
+            InvokeResult::OnCooldown {
+                turns_remaining: 50
+            }
         ));
     }
 
@@ -1175,7 +1189,10 @@ mod tests {
 
     #[test]
     fn known_items_with_entries() {
-        let items = vec!["potion of healing".to_string(), "scroll of identify".to_string()];
+        let items = vec![
+            "potion of healing".to_string(),
+            "scroll of identify".to_string(),
+        ];
         let events = do_known_items(&items);
         assert!(events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "known-items")));
@@ -1192,10 +1209,7 @@ mod tests {
 
     #[test]
     fn vanquished_with_kills() {
-        let kills = vec![
-            ("grid bug".to_string(), 3u32),
-            ("newt".to_string(), 1u32),
-        ];
+        let kills = vec![("grid bug".to_string(), 3u32), ("newt".to_string(), 1u32)];
         let events = do_vanquished(&kills);
         assert!(events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "vanquished-list")));
@@ -1302,10 +1316,7 @@ mod tests {
 
     #[test]
     fn wiz_where_event() {
-        let topology = vec![
-            ("Oracle".to_string(), 5),
-            ("Rogue".to_string(), 15),
-        ];
+        let topology = vec![("Oracle".to_string(), 5), ("Rogue".to_string(), 15)];
         let events = do_wiz_where(&topology);
         assert_eq!(events.len(), 2);
         assert!(matches!(&events[0],

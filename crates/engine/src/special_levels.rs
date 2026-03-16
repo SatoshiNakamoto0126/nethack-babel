@@ -406,8 +406,7 @@ fn carve_cavern_room(map: &mut LevelMap, room: &Room, rng: &mut impl Rng) {
             if !map.in_bounds(pos) {
                 continue;
             }
-            let on_edge =
-                x == lx || x == hx || y == ly || y == hy;
+            let on_edge = x == lx || x == hx || y == ly || y == hy;
             if on_edge {
                 map.set_terrain(pos, Terrain::Wall);
             } else {
@@ -417,8 +416,7 @@ fn carve_cavern_room(map: &mut LevelMap, room: &Room, rng: &mut impl Rng) {
                 let ry = (y - ly) as usize;
                 let rw = (hx - lx) as usize;
                 let rh = (hy - ly) as usize;
-                let is_corner = (rx <= 1 || rx >= rw - 1)
-                    && (ry <= 1 || ry >= rh - 1);
+                let is_corner = (rx <= 1 || rx >= rw - 1) && (ry <= 1 || ry >= rh - 1);
                 if is_corner && rng.random_bool(0.4) {
                     map.set_terrain(pos, Terrain::Wall);
                 } else {
@@ -484,9 +482,10 @@ fn dig_line(map: &mut LevelMap, from: i32, to: i32, fixed: i32, horizontal: bool
             Position::new(fixed, v)
         };
         if let Some(cell) = map.get(pos)
-            && matches!(cell.terrain, Terrain::Stone | Terrain::Wall) {
-                map.set_terrain(pos, Terrain::Corridor);
-            }
+            && matches!(cell.terrain, Terrain::Stone | Terrain::Wall)
+        {
+            map.set_terrain(pos, Terrain::Corridor);
+        }
     }
 }
 
@@ -503,10 +502,11 @@ fn scatter_mines_features(map: &mut LevelMap, rng: &mut impl Rng) {
         let y = rng.random_range(2..map.height - 2) as i32;
         let pos = Position::new(x, y);
         if let Some(cell) = map.get(pos)
-            && cell.terrain == Terrain::Floor {
-                map.set_terrain(pos, Terrain::Fountain);
-                placed += 1;
-            }
+            && cell.terrain == Terrain::Floor
+        {
+            map.set_terrain(pos, Terrain::Fountain);
+            placed += 1;
+        }
     }
 }
 
@@ -842,27 +842,18 @@ pub fn generate_minetown(rng: &mut impl Rng) -> MinetownLevel {
     for x in town_x..=(town_x + town_w) {
         let px = x as i32;
         map.set_terrain(Position::new(px, town_y as i32), Terrain::Wall);
-        map.set_terrain(
-            Position::new(px, (town_y + town_h) as i32),
-            Terrain::Wall,
-        );
+        map.set_terrain(Position::new(px, (town_y + town_h) as i32), Terrain::Wall);
     }
     for y in town_y..=(town_y + town_h) {
         let py = y as i32;
         map.set_terrain(Position::new(town_x as i32, py), Terrain::Wall);
-        map.set_terrain(
-            Position::new((town_x + town_w) as i32, py),
-            Terrain::Wall,
-        );
+        map.set_terrain(Position::new((town_x + town_w) as i32, py), Terrain::Wall);
     }
 
     // Fill town interior with floor.
     for y in (town_y + 1)..(town_y + town_h) {
         for x in (town_x + 1)..(town_x + town_w) {
-            map.set_terrain(
-                Position::new(x as i32, y as i32),
-                Terrain::Floor,
-            );
+            map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
         }
     }
 
@@ -931,9 +922,7 @@ pub fn generate_minetown(rng: &mut impl Rng) -> MinetownLevel {
             lit: true,
         };
 
-        let overlaps = rooms
-            .iter()
-            .any(|r| candidate.overlaps_with_margin(r, 2));
+        let overlaps = rooms.iter().any(|r| candidate.overlaps_with_margin(r, 2));
         if overlaps {
             continue;
         }
@@ -970,10 +959,7 @@ pub fn generate_minetown(rng: &mut impl Rng) -> MinetownLevel {
     {
         let temple = &rooms[temple_idx];
         let (cx, cy) = temple.center();
-        map.set_terrain(
-            Position::new(cx as i32, cy as i32),
-            Terrain::Altar,
-        );
+        map.set_terrain(Position::new(cx as i32, cy as i32), Terrain::Altar);
     }
 
     // Place fountain in town square (open area).
@@ -985,10 +971,8 @@ pub fn generate_minetown(rng: &mut impl Rng) -> MinetownLevel {
     }
 
     // Place stairs outside the town perimeter.
-    let up_stairs =
-        place_stair_outside_town(&mut map, town_x, town_y, town_w, town_h, rng);
-    let down_stairs =
-        place_stair_outside_town(&mut map, town_x, town_y, town_w, town_h, rng);
+    let up_stairs = place_stair_outside_town(&mut map, town_x, town_y, town_w, town_h, rng);
+    let down_stairs = place_stair_outside_town(&mut map, town_x, town_y, town_w, town_h, rng);
 
     // Connect stairs to town via corridors.
     if let Some(up) = up_stairs {
@@ -1079,9 +1063,7 @@ fn place_stair_outside_town(
         // Must be outside town walls.
         let ux = x as usize;
         let uy = y as usize;
-        if ux >= town_x && ux <= town_x + town_w
-            && uy >= town_y && uy <= town_y + town_h
-        {
+        if ux >= town_x && ux <= town_x + town_w && uy >= town_y && uy <= town_y + town_h {
             continue;
         }
 
@@ -1103,9 +1085,7 @@ fn dig_toward_town(
     town_h: usize,
     rng: &mut impl Rng,
 ) {
-    let target_x = rng.random_range(
-        (town_x + 2)..(town_x + town_w - 1),
-    ) as i32;
+    let target_x = rng.random_range((town_x + 2)..(town_x + town_w - 1)) as i32;
     let target_y = if stair.y < town_y as i32 {
         town_y as i32
     } else {
@@ -1162,8 +1142,7 @@ pub fn generate_castle(rng: &mut impl Rng) -> SpecialLevel {
     for x in moat_x..=(moat_x + moat_w) {
         for y in moat_y..=(moat_y + moat_h) {
             let on_moat_edge =
-                x == moat_x || x == moat_x + moat_w
-                || y == moat_y || y == moat_y + moat_h;
+                x == moat_x || x == moat_x + moat_w || y == moat_y || y == moat_y + moat_h;
             if on_moat_edge {
                 let pos = Position::new(x as i32, y as i32);
                 if map.in_bounds(pos) {
@@ -1176,10 +1155,7 @@ pub fn generate_castle(rng: &mut impl Rng) -> SpecialLevel {
     // 2. Castle outer walls.
     for x in castle_x..=(castle_x + castle_w) {
         let px = x as i32;
-        map.set_terrain(
-            Position::new(px, castle_y as i32),
-            Terrain::Wall,
-        );
+        map.set_terrain(Position::new(px, castle_y as i32), Terrain::Wall);
         map.set_terrain(
             Position::new(px, (castle_y + castle_h) as i32),
             Terrain::Wall,
@@ -1187,10 +1163,7 @@ pub fn generate_castle(rng: &mut impl Rng) -> SpecialLevel {
     }
     for y in castle_y..=(castle_y + castle_h) {
         let py = y as i32;
-        map.set_terrain(
-            Position::new(castle_x as i32, py),
-            Terrain::Wall,
-        );
+        map.set_terrain(Position::new(castle_x as i32, py), Terrain::Wall);
         map.set_terrain(
             Position::new((castle_x + castle_w) as i32, py),
             Terrain::Wall,
@@ -1200,45 +1173,28 @@ pub fn generate_castle(rng: &mut impl Rng) -> SpecialLevel {
     // 3. Fill castle interior with floor.
     for y in (castle_y + 1)..(castle_y + castle_h) {
         for x in (castle_x + 1)..(castle_x + castle_w) {
-            map.set_terrain(
-                Position::new(x as i32, y as i32),
-                Terrain::Floor,
-            );
+            map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
         }
     }
 
     // 4. Internal partition wall (horizontal, dividing castle into halves).
     let partition_y = castle_y + castle_h / 2;
     for x in castle_x..=(castle_x + castle_w) {
-        map.set_terrain(
-            Position::new(x as i32, partition_y as i32),
-            Terrain::Wall,
-        );
+        map.set_terrain(Position::new(x as i32, partition_y as i32), Terrain::Wall);
     }
     // Doors in the partition.
     let door_count = rng.random_range(2..=4u32);
     for _ in 0..door_count {
-        let dx = rng.random_range(
-            (castle_x + 2)..(castle_x + castle_w - 1),
-        ) as i32;
-        map.set_terrain(
-            Position::new(dx, partition_y as i32),
-            Terrain::DoorClosed,
-        );
+        let dx = rng.random_range((castle_x + 2)..(castle_x + castle_w - 1)) as i32;
+        map.set_terrain(Position::new(dx, partition_y as i32), Terrain::DoorClosed);
     }
 
     // 5. Drawbridge on the south wall.
     let drawbridge_x = castle_x + castle_w / 2;
-    let drawbridge_pos = Position::new(
-        drawbridge_x as i32,
-        (castle_y + castle_h) as i32,
-    );
+    let drawbridge_pos = Position::new(drawbridge_x as i32, (castle_y + castle_h) as i32);
     map.set_terrain(drawbridge_pos, Terrain::Drawbridge);
     // Also open the moat tile below the drawbridge.
-    let moat_below = Position::new(
-        drawbridge_x as i32,
-        (castle_y + castle_h + 1) as i32,
-    );
+    let moat_below = Position::new(drawbridge_x as i32, (castle_y + castle_h + 1) as i32);
     if map.in_bounds(moat_below) {
         map.set_terrain(moat_below, Terrain::Drawbridge);
     }
@@ -1272,14 +1228,8 @@ pub fn generate_castle(rng: &mut impl Rng) -> SpecialLevel {
         rng,
     );
     // Stairs down outside the castle (below moat).
-    let down_pos = place_stair_outside_castle(
-        &mut map,
-        castle_x,
-        castle_y,
-        castle_w,
-        castle_h,
-        rng,
-    );
+    let down_pos =
+        place_stair_outside_castle(&mut map, castle_x, castle_y, castle_w, castle_h, rng);
 
     // Dig corridor from stairs down to drawbridge approach.
     if let Some(down) = down_pos {
@@ -1342,9 +1292,7 @@ fn place_stair_outside_castle(
     if target_y >= map.height {
         return None;
     }
-    let target_x = rng.random_range(
-        (castle_x + 2)..(castle_x + castle_w - 1),
-    );
+    let target_x = rng.random_range((castle_x + 2)..(castle_x + castle_w - 1));
     let pos = Position::new(target_x as i32, target_y as i32);
     if map.in_bounds(pos) {
         map.set_terrain(pos, Terrain::StairsDown);
@@ -1371,10 +1319,7 @@ pub fn generate_medusa(variant: u8, rng: &mut impl Rng) -> SpecialLevel {
     // Fill entire map with water first.
     for y in 0..h {
         for x in 0..w {
-            map.set_terrain(
-                Position::new(x as i32, y as i32),
-                Terrain::Water,
-            );
+            map.set_terrain(Position::new(x as i32, y as i32), Terrain::Water);
         }
     }
 
@@ -1400,8 +1345,10 @@ pub fn generate_medusa(variant: u8, rng: &mut impl Rng) -> SpecialLevel {
     for y in island_y..=(island_y + island_h) {
         for x in island_x..=(island_x + island_w) {
             let pos = Position::new(x as i32, y as i32);
-            let on_edge = x == island_x || x == island_x + island_w
-                || y == island_y || y == island_y + island_h;
+            let on_edge = x == island_x
+                || x == island_x + island_w
+                || y == island_y
+                || y == island_y + island_h;
             if on_edge {
                 map.set_terrain(pos, Terrain::Wall);
             } else {
@@ -1413,30 +1360,18 @@ pub fn generate_medusa(variant: u8, rng: &mut impl Rng) -> SpecialLevel {
     // Internal partition: divide the island into two sections.
     let mid_x = island_x + island_w / 2;
     for y in island_y..=(island_y + island_h) {
-        map.set_terrain(
-            Position::new(mid_x as i32, y as i32),
-            Terrain::Wall,
-        );
+        map.set_terrain(Position::new(mid_x as i32, y as i32), Terrain::Wall);
     }
     // Door in partition.
-    let door_y = rng.random_range(
-        (island_y + 1)..(island_y + island_h),
-    ) as i32;
-    map.set_terrain(
-        Position::new(mid_x as i32, door_y),
-        Terrain::DoorClosed,
-    );
+    let door_y = rng.random_range((island_y + 1)..(island_y + island_h)) as i32;
+    map.set_terrain(Position::new(mid_x as i32, door_y), Terrain::DoorClosed);
 
     // Place statues (represented as Grave terrain -- closest available
     // terrain to "statue" without adding a new variant).
     let statue_count = rng.random_range(3..=6u32);
     for _ in 0..statue_count {
-        let sx = rng.random_range(
-            (island_x + 1)..(island_x + island_w),
-        ) as i32;
-        let sy = rng.random_range(
-            (island_y + 1)..(island_y + island_h),
-        ) as i32;
+        let sx = rng.random_range((island_x + 1)..(island_x + island_w)) as i32;
+        let sy = rng.random_range((island_y + 1)..(island_y + island_h)) as i32;
         let pos = Position::new(sx, sy);
         if map.get(pos).is_some_and(|c| c.terrain == Terrain::Floor) {
             map.set_terrain(pos, Terrain::Grave);
@@ -1492,8 +1427,7 @@ pub fn generate_medusa(variant: u8, rng: &mut impl Rng) -> SpecialLevel {
             for y in si_y..=(si_y + si_h) {
                 for x in si_x..=(si_x + si_w) {
                     let pos = Position::new(x as i32, y as i32);
-                    let on_edge = x == si_x || x == si_x + si_w
-                        || y == si_y || y == si_y + si_h;
+                    let on_edge = x == si_x || x == si_x + si_w || y == si_y || y == si_y + si_h;
                     if on_edge {
                         map.set_terrain(pos, Terrain::Wall);
                     } else {
@@ -1623,10 +1557,11 @@ pub fn generate_vlad_tower(level: VladLevel, rng: &mut impl Rng) -> SpecialLevel
         let gy = rng.random_range(oy..oy + tower_h) as i32;
         let pos = Position::new(gx, gy);
         if let Some(cell) = map.get(pos)
-            && cell.terrain == Terrain::Floor {
-                map.set_terrain(pos, Terrain::Grave);
-                placed += 1;
-            }
+            && cell.terrain == Terrain::Floor
+        {
+            map.set_terrain(pos, Terrain::Grave);
+            placed += 1;
+        }
     }
 
     SpecialLevel {
@@ -1832,10 +1767,7 @@ pub fn generate_sanctum(_rng: &mut impl Rng) -> SpecialLevel {
     // Bridge across the moat (one cell wide on the south side).
     let bridge_x = tx + temple_w / 2;
     for y_off in 0..=3 {
-        let pos = Position::new(
-            bridge_x as i32,
-            (ty + temple_h + y_off) as i32,
-        );
+        let pos = Position::new(bridge_x as i32, (ty + temple_h + y_off) as i32);
         if map.in_bounds(pos) {
             map.set_terrain(pos, Terrain::Floor);
         }
@@ -1894,10 +1826,7 @@ pub enum ElementalPlane {
 ///
 /// Each plane has characteristic terrain and a magic portal to the next
 /// plane in sequence: Earth -> Air -> Fire -> Water -> Astral.
-pub fn generate_elemental_plane(
-    plane: ElementalPlane,
-    rng: &mut impl Rng,
-) -> SpecialLevel {
+pub fn generate_elemental_plane(plane: ElementalPlane, rng: &mut impl Rng) -> SpecialLevel {
     let map_w = LevelMap::DEFAULT_WIDTH;
     let map_h = LevelMap::DEFAULT_HEIGHT;
     let mut map = LevelMap::new(map_w, map_h);
@@ -1938,12 +1867,7 @@ pub fn generate_elemental_plane(
 }
 
 /// Earth plane: dense stone with tunnels carved through.
-fn generate_earth_plane(
-    map: &mut LevelMap,
-    w: usize,
-    h: usize,
-    rng: &mut impl Rng,
-) {
+fn generate_earth_plane(map: &mut LevelMap, w: usize, h: usize, rng: &mut impl Rng) {
     // Fill with stone.
     for y in 0..h {
         for x in 0..w {
@@ -1987,12 +1911,7 @@ fn generate_earth_plane(
 }
 
 /// Air plane: open space everywhere.
-fn generate_air_plane(
-    map: &mut LevelMap,
-    w: usize,
-    h: usize,
-    rng: &mut impl Rng,
-) {
+fn generate_air_plane(map: &mut LevelMap, w: usize, h: usize, rng: &mut impl Rng) {
     // Fill with Air terrain.
     for y in 0..h {
         for x in 0..w {
@@ -2024,12 +1943,7 @@ fn generate_air_plane(
 }
 
 /// Fire plane: lava everywhere with some narrow stone paths.
-fn generate_fire_plane(
-    map: &mut LevelMap,
-    w: usize,
-    h: usize,
-    rng: &mut impl Rng,
-) {
+fn generate_fire_plane(map: &mut LevelMap, w: usize, h: usize, rng: &mut impl Rng) {
     // Fill with lava.
     for y in 0..h {
         for x in 0..w {
@@ -2070,12 +1984,7 @@ fn generate_fire_plane(
 }
 
 /// Water plane: underwater level.
-fn generate_water_plane(
-    map: &mut LevelMap,
-    w: usize,
-    h: usize,
-    rng: &mut impl Rng,
-) {
+fn generate_water_plane(map: &mut LevelMap, w: usize, h: usize, rng: &mut impl Rng) {
     // Fill with water.
     for y in 0..h {
         for x in 0..w {
@@ -2110,9 +2019,10 @@ fn generate_water_plane(
             let pos = Position::new(cx, cy);
             if map.in_bounds(pos)
                 && let Some(cell) = map.get(pos)
-                    && cell.terrain == Terrain::Water {
-                        map.set_terrain(pos, Terrain::Corridor);
-                    }
+                && cell.terrain == Terrain::Water
+            {
+                map.set_terrain(pos, Terrain::Corridor);
+            }
             match rng.random_range(0..4u32) {
                 0 => cx = (cx + 1).min(w as i32 - 2),
                 1 => cx = (cx - 1).max(1),
@@ -2177,9 +2087,9 @@ pub fn generate_astral_plane(rng: &mut impl Rng) -> SpecialLevel {
     let spacing = map_w / 4;
 
     let temple_positions = [
-        (spacing - temple_w / 2, map_h / 2 - temple_h / 2),           // Left (Lawful)
-        (2 * spacing - temple_w / 2, map_h / 2 - temple_h / 2),       // Center (Neutral)
-        (3 * spacing - temple_w / 2, map_h / 2 - temple_h / 2),       // Right (Chaotic)
+        (spacing - temple_w / 2, map_h / 2 - temple_h / 2), // Left (Lawful)
+        (2 * spacing - temple_w / 2, map_h / 2 - temple_h / 2), // Center (Neutral)
+        (3 * spacing - temple_w / 2, map_h / 2 - temple_h / 2), // Right (Chaotic)
     ];
 
     let mut rooms = Vec::new();
@@ -2240,9 +2150,10 @@ pub fn generate_astral_plane(rng: &mut impl Rng) -> SpecialLevel {
         let cy = rng.random_range(1..map_h - 1) as i32;
         let pos = Position::new(cx, cy);
         if let Some(cell) = map.get(pos)
-            && cell.terrain == Terrain::Floor {
-                map.set_terrain(pos, Terrain::Cloud);
-            }
+            && cell.terrain == Terrain::Floor
+        {
+            map.set_terrain(pos, Terrain::Cloud);
+        }
     }
 
     SpecialLevel {
@@ -2294,8 +2205,8 @@ pub fn generate_fort_ludios(rng: &mut impl Rng) -> SpecialLevel {
 
     for x in moat_x..=(moat_x + moat_w) {
         for y in moat_y..=(moat_y + moat_h) {
-            let on_moat_edge = x == moat_x || x == moat_x + moat_w
-                || y == moat_y || y == moat_y + moat_h;
+            let on_moat_edge =
+                x == moat_x || x == moat_x + moat_w || y == moat_y || y == moat_y + moat_h;
             if on_moat_edge {
                 let pos = Position::new(x as i32, y as i32);
                 if map.in_bounds(pos) {
@@ -2308,11 +2219,17 @@ pub fn generate_fort_ludios(rng: &mut impl Rng) -> SpecialLevel {
     // 2. Fort outer walls.
     for x in fort_x..=(fort_x + fort_w) {
         map.set_terrain(Position::new(x as i32, fort_y as i32), Terrain::Wall);
-        map.set_terrain(Position::new(x as i32, (fort_y + fort_h) as i32), Terrain::Wall);
+        map.set_terrain(
+            Position::new(x as i32, (fort_y + fort_h) as i32),
+            Terrain::Wall,
+        );
     }
     for y in fort_y..=(fort_y + fort_h) {
         map.set_terrain(Position::new(fort_x as i32, y as i32), Terrain::Wall);
-        map.set_terrain(Position::new((fort_x + fort_w) as i32, y as i32), Terrain::Wall);
+        map.set_terrain(
+            Position::new((fort_x + fort_w) as i32, y as i32),
+            Terrain::Wall,
+        );
     }
 
     // 3. Fill interior with floor.
@@ -2338,11 +2255,11 @@ pub fn generate_fort_ludios(rng: &mut impl Rng) -> SpecialLevel {
 
     // Doors between sections.
     let door_positions = [
-        (col_mid, (fort_y + row1) / 2),      // vertical partition door
-        (fort_x + fort_w / 4, row1),          // top-left to middle
-        (fort_x + 3 * fort_w / 4, row1),      // top-right to middle
-        (fort_x + fort_w / 3, row2),           // middle to bottom
-        (fort_x + 2 * fort_w / 3, row2),       // middle to bottom (second)
+        (col_mid, (fort_y + row1) / 2),  // vertical partition door
+        (fort_x + fort_w / 4, row1),     // top-left to middle
+        (fort_x + 3 * fort_w / 4, row1), // top-right to middle
+        (fort_x + fort_w / 3, row2),     // middle to bottom
+        (fort_x + 2 * fort_w / 3, row2), // middle to bottom (second)
     ];
     for (dx, dy) in door_positions {
         let pos = Position::new(dx as i32, dy as i32);
@@ -2354,7 +2271,10 @@ pub fn generate_fort_ludios(rng: &mut impl Rng) -> SpecialLevel {
     // 5. Throne in the center of the middle section (commander's room).
     let throne_x = fort_x + fort_w / 2;
     let throne_y = (row1 + row2) / 2;
-    map.set_terrain(Position::new(throne_x as i32, throne_y as i32), Terrain::Throne);
+    map.set_terrain(
+        Position::new(throne_x as i32, throne_y as i32),
+        Terrain::Throne,
+    );
 
     // 6. Drawbridge on the south wall.
     let drawbridge_x = fort_x + fort_w / 2;
@@ -2402,7 +2322,9 @@ pub fn generate_fort_ludios(rng: &mut impl Rng) -> SpecialLevel {
     let portal_y = row2 + 2;
     let portal_pos = Position::new(portal_x as i32, portal_y as i32);
     if map.in_bounds(portal_pos)
-        && map.get(portal_pos).is_some_and(|c| c.terrain == Terrain::Floor)
+        && map
+            .get(portal_pos)
+            .is_some_and(|c| c.terrain == Terrain::Floor)
     {
         map.set_terrain(portal_pos, Terrain::MagicPortal);
     }
@@ -2527,41 +2449,35 @@ pub fn identify_special_level(
                 None
             }
         }
-        DungeonBranch::Gehennom => {
-            match depth {
-                1 => Some(SpecialLevelId::Valley),
-                5 => Some(SpecialLevelId::Juiblex),
-                7 => Some(SpecialLevelId::Asmodeus),
-                10 => Some(SpecialLevelId::Baalzebub),
-                12 => Some(SpecialLevelId::Orcus),
-                14 => Some(SpecialLevelId::FakeWizard(1)),
-                15 => Some(SpecialLevelId::FakeWizard(2)),
-                17 => Some(SpecialLevelId::WizardTower),
-                18 => Some(SpecialLevelId::WizardTower2),
-                19 => Some(SpecialLevelId::WizardTower3),
-                20 => Some(SpecialLevelId::Sanctum),
-                _ => None,
-            }
-        }
-        DungeonBranch::Endgame => {
-            match depth {
-                1 => Some(SpecialLevelId::EarthPlane),
-                2 => Some(SpecialLevelId::AirPlane),
-                3 => Some(SpecialLevelId::FirePlane),
-                4 => Some(SpecialLevelId::WaterPlane),
-                5 => Some(SpecialLevelId::AstralPlane),
-                _ => None,
-            }
-        }
-        DungeonBranch::Quest => {
-            match depth {
-                1 => Some(SpecialLevelId::QuestStart),
-                4 => Some(SpecialLevelId::QuestLocator),
-                7 => Some(SpecialLevelId::QuestGoal),
-                d if d >= 2 => Some(SpecialLevelId::QuestFiller(d as u8)),
-                _ => None,
-            }
-        }
+        DungeonBranch::Gehennom => match depth {
+            1 => Some(SpecialLevelId::Valley),
+            5 => Some(SpecialLevelId::Juiblex),
+            7 => Some(SpecialLevelId::Asmodeus),
+            10 => Some(SpecialLevelId::Baalzebub),
+            12 => Some(SpecialLevelId::Orcus),
+            14 => Some(SpecialLevelId::FakeWizard(1)),
+            15 => Some(SpecialLevelId::FakeWizard(2)),
+            17 => Some(SpecialLevelId::WizardTower),
+            18 => Some(SpecialLevelId::WizardTower2),
+            19 => Some(SpecialLevelId::WizardTower3),
+            20 => Some(SpecialLevelId::Sanctum),
+            _ => None,
+        },
+        DungeonBranch::Endgame => match depth {
+            1 => Some(SpecialLevelId::EarthPlane),
+            2 => Some(SpecialLevelId::AirPlane),
+            3 => Some(SpecialLevelId::FirePlane),
+            4 => Some(SpecialLevelId::WaterPlane),
+            5 => Some(SpecialLevelId::AstralPlane),
+            _ => None,
+        },
+        DungeonBranch::Quest => match depth {
+            1 => Some(SpecialLevelId::QuestStart),
+            4 => Some(SpecialLevelId::QuestLocator),
+            7 => Some(SpecialLevelId::QuestGoal),
+            d if d >= 2 => Some(SpecialLevelId::QuestFiller(d as u8)),
+            _ => None,
+        },
     }
 }
 
@@ -2588,9 +2504,7 @@ pub fn dispatch_special_level(
                 flags: SpecialLevelFlags::default(),
             })
         }
-        SpecialLevelId::MinesEnd => {
-            Some(generate_mines_end(rng.random_range(0..3u8), rng))
-        }
+        SpecialLevelId::MinesEnd => Some(generate_mines_end(rng.random_range(0..3u8), rng)),
         SpecialLevelId::Sokoban(n) => Some(generate_sokoban(n, rng)),
         SpecialLevelId::Castle => Some(generate_castle(rng)),
         SpecialLevelId::Medusa(v) => Some(generate_medusa(v, rng)),
@@ -2598,18 +2512,10 @@ pub fn dispatch_special_level(
         SpecialLevelId::VladsTower(n) => Some(generate_vlad_tower(n, rng)),
         SpecialLevelId::WizardTower => Some(generate_wizard_tower(rng)),
         SpecialLevelId::Sanctum => Some(generate_sanctum(rng)),
-        SpecialLevelId::EarthPlane => {
-            Some(generate_elemental_plane(ElementalPlane::Earth, rng))
-        }
-        SpecialLevelId::AirPlane => {
-            Some(generate_elemental_plane(ElementalPlane::Air, rng))
-        }
-        SpecialLevelId::FirePlane => {
-            Some(generate_elemental_plane(ElementalPlane::Fire, rng))
-        }
-        SpecialLevelId::WaterPlane => {
-            Some(generate_elemental_plane(ElementalPlane::Water, rng))
-        }
+        SpecialLevelId::EarthPlane => Some(generate_elemental_plane(ElementalPlane::Earth, rng)),
+        SpecialLevelId::AirPlane => Some(generate_elemental_plane(ElementalPlane::Air, rng)),
+        SpecialLevelId::FirePlane => Some(generate_elemental_plane(ElementalPlane::Fire, rng)),
+        SpecialLevelId::WaterPlane => Some(generate_elemental_plane(ElementalPlane::Water, rng)),
         SpecialLevelId::AstralPlane => Some(generate_astral_plane(rng)),
         SpecialLevelId::Valley => Some(generate_valley(rng)),
         SpecialLevelId::BigRoom(v) => Some(generate_big_room(v, rng)),
@@ -2621,15 +2527,11 @@ pub fn dispatch_special_level(
         SpecialLevelId::FakeWizard(_) => Some(generate_fake_wizard(rng)),
         SpecialLevelId::WizardTower2 => Some(generate_wizard_tower_upper(2, rng)),
         SpecialLevelId::WizardTower3 => Some(generate_wizard_tower_upper(3, rng)),
-        SpecialLevelId::QuestStart => {
-            Some(generate_quest_start(_role.unwrap_or("valkyrie"), rng))
-        }
+        SpecialLevelId::QuestStart => Some(generate_quest_start(_role.unwrap_or("valkyrie"), rng)),
         SpecialLevelId::QuestLocator => {
             Some(generate_quest_locator(_role.unwrap_or("valkyrie"), rng))
         }
-        SpecialLevelId::QuestGoal => {
-            Some(generate_quest_goal(_role.unwrap_or("valkyrie"), rng))
-        }
+        SpecialLevelId::QuestGoal => Some(generate_quest_goal(_role.unwrap_or("valkyrie"), rng)),
         SpecialLevelId::QuestFiller(_) => {
             Some(generate_quest_filler(_role.unwrap_or("valkyrie"), rng))
         }
@@ -2664,10 +2566,7 @@ pub fn generate_valley(rng: &mut impl Rng) -> SpecialLevel {
 
     for y in (ry + 1)..(ry + room_h) {
         for x in (rx + 1)..(rx + room_w) {
-            map.set_terrain(
-                Position::new(x as i32, y as i32),
-                Terrain::Floor,
-            );
+            map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
         }
     }
 
@@ -2684,10 +2583,7 @@ pub fn generate_valley(rng: &mut impl Rng) -> SpecialLevel {
         let gx = rx + 2 + (i as usize * 3) % (room_w - 4);
         let gy = ry + 2 + (i as usize) % (room_h - 4);
         if map.cells[gy][gx].terrain == Terrain::Floor {
-            map.set_terrain(
-                Position::new(gx as i32, gy as i32),
-                Terrain::Grave,
-            );
+            map.set_terrain(Position::new(gx as i32, gy as i32), Terrain::Grave);
         }
     }
 
@@ -2761,20 +2657,14 @@ pub fn generate_asmodeus(rng: &mut impl Rng) -> SpecialLevel {
     // Carve interior.
     for y in (oy + 1)..(oy + lair_h) {
         for x in (ox + 1)..(ox + lair_w) {
-            map.set_terrain(
-                Position::new(x as i32, y as i32),
-                Terrain::Floor,
-            );
+            map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
         }
     }
 
     // Internal partition creating two chambers.
     let mid_x = ox + lair_w / 2;
     for y in (oy + 1)..(oy + lair_h) {
-        map.set_terrain(
-            Position::new(mid_x as i32, y as i32),
-            Terrain::Wall,
-        );
+        map.set_terrain(Position::new(mid_x as i32, y as i32), Terrain::Wall);
     }
     // Doorway.
     let door_y = oy + lair_h / 2;
@@ -2786,21 +2676,12 @@ pub fn generate_asmodeus(rng: &mut impl Rng) -> SpecialLevel {
     // Corridors to edges.
     let corr_x = ox + lair_w / 4;
     for y in 1..oy {
-        map.set_terrain(
-            Position::new(corr_x as i32, y as i32),
-            Terrain::Corridor,
-        );
+        map.set_terrain(Position::new(corr_x as i32, y as i32), Terrain::Corridor);
     }
     // Opening into lair.
-    map.set_terrain(
-        Position::new(corr_x as i32, oy as i32),
-        Terrain::DoorOpen,
-    );
+    map.set_terrain(Position::new(corr_x as i32, oy as i32), Terrain::DoorOpen);
     for y in (oy + lair_h)..map_h.saturating_sub(1) {
-        map.set_terrain(
-            Position::new(corr_x as i32, y as i32),
-            Terrain::Corridor,
-        );
+        map.set_terrain(Position::new(corr_x as i32, y as i32), Terrain::Corridor);
     }
     map.set_terrain(
         Position::new(corr_x as i32, (oy + lair_h) as i32),
@@ -2859,10 +2740,7 @@ pub fn generate_baalzebub(rng: &mut impl Rng) -> SpecialLevel {
 
     for y in (oy + 1)..(oy + lair_h) {
         for x in (ox + 1)..(ox + lair_w) {
-            map.set_terrain(
-                Position::new(x as i32, y as i32),
-                Terrain::Floor,
-            );
+            map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
         }
     }
 
@@ -2871,30 +2749,18 @@ pub fn generate_baalzebub(rng: &mut impl Rng) -> SpecialLevel {
         let lx = ox + 2 + (i as usize * 4) % (lair_w - 4);
         let ly = oy + 2 + (i as usize * 2) % (lair_h - 4);
         if map.cells[ly][lx].terrain == Terrain::Floor {
-            map.set_terrain(
-                Position::new(lx as i32, ly as i32),
-                Terrain::Lava,
-            );
+            map.set_terrain(Position::new(lx as i32, ly as i32), Terrain::Lava);
         }
     }
 
     // Corridors north and south.
     let corr_x = ox + lair_w / 2;
     for y in 1..oy {
-        map.set_terrain(
-            Position::new(corr_x as i32, y as i32),
-            Terrain::Corridor,
-        );
+        map.set_terrain(Position::new(corr_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(
-        Position::new(corr_x as i32, oy as i32),
-        Terrain::DoorOpen,
-    );
+    map.set_terrain(Position::new(corr_x as i32, oy as i32), Terrain::DoorOpen);
     for y in (oy + lair_h)..map_h.saturating_sub(1) {
-        map.set_terrain(
-            Position::new(corr_x as i32, y as i32),
-            Terrain::Corridor,
-        );
+        map.set_terrain(Position::new(corr_x as i32, y as i32), Terrain::Corridor);
     }
     map.set_terrain(
         Position::new(corr_x as i32, (oy + lair_h) as i32),
@@ -2958,39 +2824,24 @@ pub fn generate_juiblex(rng: &mut impl Rng) -> SpecialLevel {
             } else {
                 Terrain::Floor
             };
-            map.set_terrain(
-                Position::new(x as i32, y as i32),
-                terrain,
-            );
+            map.set_terrain(Position::new(x as i32, y as i32), terrain);
         }
     }
 
     // Ensure a walkable path through the center row.
     let center_y = sy + swamp_h / 2;
     for x in (sx + 1)..(sx + swamp_w) {
-        map.set_terrain(
-            Position::new(x as i32, center_y as i32),
-            Terrain::Floor,
-        );
+        map.set_terrain(Position::new(x as i32, center_y as i32), Terrain::Floor);
     }
 
     // Corridors.
     let corr_x = sx + swamp_w / 2;
     for y in 1..sy {
-        map.set_terrain(
-            Position::new(corr_x as i32, y as i32),
-            Terrain::Corridor,
-        );
+        map.set_terrain(Position::new(corr_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(
-        Position::new(corr_x as i32, sy as i32),
-        Terrain::Floor,
-    );
+    map.set_terrain(Position::new(corr_x as i32, sy as i32), Terrain::Floor);
     for y in (sy + swamp_h)..map_h.saturating_sub(1) {
-        map.set_terrain(
-            Position::new(corr_x as i32, y as i32),
-            Terrain::Corridor,
-        );
+        map.set_terrain(Position::new(corr_x as i32, y as i32), Terrain::Corridor);
     }
     map.set_terrain(
         Position::new(corr_x as i32, (sy + swamp_h) as i32),
@@ -3049,10 +2900,7 @@ pub fn generate_orcus(rng: &mut impl Rng) -> SpecialLevel {
     // Carve out the town as floor.
     for y in (ty + 1)..(ty + town_h) {
         for x in (tx + 1)..(tx + town_w) {
-            map.set_terrain(
-                Position::new(x as i32, y as i32),
-                Terrain::Floor,
-            );
+            map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
         }
     }
 
@@ -3061,10 +2909,7 @@ pub fn generate_orcus(rng: &mut impl Rng) -> SpecialLevel {
         let gx = tx + 2 + (i as usize * 3) % (town_w - 4);
         let gy = ty + 2 + (i as usize * 2) % (town_h - 4);
         if map.cells[gy][gx].terrain == Terrain::Floor {
-            map.set_terrain(
-                Position::new(gx as i32, gy as i32),
-                Terrain::Grave,
-            );
+            map.set_terrain(Position::new(gx as i32, gy as i32), Terrain::Grave);
         }
     }
 
@@ -3079,20 +2924,11 @@ pub fn generate_orcus(rng: &mut impl Rng) -> SpecialLevel {
     // Corridors.
     let corr_x = tx + town_w / 2;
     for y in 1..ty {
-        map.set_terrain(
-            Position::new(corr_x as i32, y as i32),
-            Terrain::Corridor,
-        );
+        map.set_terrain(Position::new(corr_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(
-        Position::new(corr_x as i32, ty as i32),
-        Terrain::DoorOpen,
-    );
+    map.set_terrain(Position::new(corr_x as i32, ty as i32), Terrain::DoorOpen);
     for y in (ty + town_h)..map_h.saturating_sub(1) {
-        map.set_terrain(
-            Position::new(corr_x as i32, y as i32),
-            Terrain::Corridor,
-        );
+        map.set_terrain(Position::new(corr_x as i32, y as i32), Terrain::Corridor);
     }
     map.set_terrain(
         Position::new(corr_x as i32, (ty + town_h) as i32),
@@ -3150,20 +2986,14 @@ pub fn generate_fake_wizard(rng: &mut impl Rng) -> SpecialLevel {
 
     for y in (oy + 1)..(oy + tower_h) {
         for x in (ox + 1)..(ox + tower_w) {
-            map.set_terrain(
-                Position::new(x as i32, y as i32),
-                Terrain::Floor,
-            );
+            map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
         }
     }
 
     // Internal walls to create maze-like rooms.
     let mid_x = ox + tower_w / 2;
     for y in (oy + 1)..(oy + tower_h) {
-        map.set_terrain(
-            Position::new(mid_x as i32, y as i32),
-            Terrain::Wall,
-        );
+        map.set_terrain(Position::new(mid_x as i32, y as i32), Terrain::Wall);
     }
     // Doorways.
     let door_y = oy + tower_h / 3;
@@ -3180,20 +3010,11 @@ pub fn generate_fake_wizard(rng: &mut impl Rng) -> SpecialLevel {
     // Corridors.
     let corr_x = ox + tower_w / 4;
     for y in 1..oy {
-        map.set_terrain(
-            Position::new(corr_x as i32, y as i32),
-            Terrain::Corridor,
-        );
+        map.set_terrain(Position::new(corr_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(
-        Position::new(corr_x as i32, oy as i32),
-        Terrain::DoorOpen,
-    );
+    map.set_terrain(Position::new(corr_x as i32, oy as i32), Terrain::DoorOpen);
     for y in (oy + tower_h)..map_h.saturating_sub(1) {
-        map.set_terrain(
-            Position::new(corr_x as i32, y as i32),
-            Terrain::Corridor,
-        );
+        map.set_terrain(Position::new(corr_x as i32, y as i32), Terrain::Corridor);
     }
     map.set_terrain(
         Position::new(corr_x as i32, (oy + tower_h) as i32),
@@ -3253,10 +3074,7 @@ pub fn generate_wizard_tower_upper(level: u8, rng: &mut impl Rng) -> SpecialLeve
     // Carve interior.
     for y in (oy + 1)..(oy + tower_h) {
         for x in (ox + 1)..(ox + tower_w) {
-            map.set_terrain(
-                Position::new(x as i32, y as i32),
-                Terrain::Floor,
-            );
+            map.set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
         }
     }
 
@@ -3269,10 +3087,7 @@ pub fn generate_wizard_tower_upper(level: u8, rng: &mut impl Rng) -> SpecialLeve
         None
     };
 
-    let down_pos = Position::new(
-        (ox + tower_w - 2) as i32,
-        (oy + tower_h - 2) as i32,
-    );
+    let down_pos = Position::new((ox + tower_w - 2) as i32, (oy + tower_h - 2) as i32);
     map.set_terrain(down_pos, Terrain::StairsDown);
 
     let rooms = vec![Room {
@@ -3309,10 +3124,7 @@ pub fn generate_wizard_tower_upper(level: u8, rng: &mut impl Rng) -> SpecialLeve
 /// 1. Parse ASCII map into terrain grid
 /// 2. Place stairs from map characters and explicit placements
 /// 3. Set special level flags from the `flags` list
-pub fn build_level_from_toml(
-    def: &LevelDefinition,
-    _rng: &mut impl Rng,
-) -> SpecialLevel {
+pub fn build_level_from_toml(def: &LevelDefinition, _rng: &mut impl Rng) -> SpecialLevel {
     let map_w = LevelMap::DEFAULT_WIDTH;
     let map_h = LevelMap::DEFAULT_HEIGHT;
     let mut map = LevelMap::new(map_w, map_h);
@@ -3511,8 +3323,10 @@ pub fn generate_big_room(variant: u8, rng: &mut impl Rng) -> SpecialLevel {
                     if dx * dx + dy * dy <= pool_r * pool_r {
                         let px = cx as i32 + dx;
                         let py = cy as i32 + dy;
-                        if px > room_x1 as i32 && px < room_x2 as i32
-                            && py > room_y1 as i32 && py < room_y2 as i32
+                        if px > room_x1 as i32
+                            && px < room_x2 as i32
+                            && py > room_y1 as i32
+                            && py < room_y2 as i32
                         {
                             map.set_terrain(Position::new(px, py), Terrain::Pool);
                         }
@@ -3700,18 +3514,12 @@ pub fn generate_rogue_level(_depth: i32, rng: &mut impl Rng) -> SpecialLevel {
 
     // Place stairs in the first and last rooms.
     let (s0x, s0y, s0w, s0h) = room_rects[0];
-    let up_pos = Position::new(
-        (s0x + s0w / 2) as i32,
-        (s0y + s0h / 2) as i32,
-    );
+    let up_pos = Position::new((s0x + s0w / 2) as i32, (s0y + s0h / 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
 
     let last = room_rects.len() - 1;
     let (slx, sly, slw, slh) = room_rects[last];
-    let down_pos = Position::new(
-        (slx + slw / 2) as i32,
-        (sly + slh / 2) as i32,
-    );
+    let down_pos = Position::new((slx + slw / 2) as i32, (sly + slh / 2) as i32);
     map.set_terrain(down_pos, Terrain::StairsDown);
 
     SpecialLevel {
@@ -3799,8 +3607,10 @@ pub fn generate_mines_end(variant: u8, rng: &mut impl Rng) -> SpecialLevel {
                     if dx * dx / 4 + dy * dy <= 9 {
                         let px = cx + dx;
                         let py = cy + dy;
-                        if px > cav_x1 as i32 && px < cav_x2 as i32
-                            && py > cav_y1 as i32 && py < cav_y2 as i32
+                        if px > cav_x1 as i32
+                            && px < cav_x2 as i32
+                            && py > cav_y1 as i32
+                            && py < cav_y2 as i32
                         {
                             map.set_terrain(Position::new(px, py), Terrain::Pool);
                         }
@@ -3812,10 +3622,7 @@ pub fn generate_mines_end(variant: u8, rng: &mut impl Rng) -> SpecialLevel {
     }
 
     // Stairs: up only (this is the bottom of the mines).
-    let up_pos = Position::new(
-        ((cav_x1 + cav_x2) / 2) as i32,
-        (cav_y1 + 1) as i32,
-    );
+    let up_pos = Position::new(((cav_x1 + cav_x2) / 2) as i32, (cav_y1 + 1) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
 
     let rooms = vec![Room {
@@ -3845,24 +3652,23 @@ pub fn generate_mines_end(variant: u8, rng: &mut impl Rng) -> SpecialLevel {
 
 /// Draw a rectangular room (walls + floor interior) on the map.
 /// Returns the Room struct (interior only, excluding walls).
-fn draw_quest_room(
-    map: &mut LevelMap,
-    x: usize,
-    y: usize,
-    w: usize,
-    h: usize,
-    lit: bool,
-) -> Room {
+fn draw_quest_room(map: &mut LevelMap, x: usize, y: usize, w: usize, h: usize, lit: bool) -> Room {
     let map_w = map.width;
     let map_h = map.height;
     // Walls
     for cx in x..=(x + w).min(map_w - 1) {
         map.set_terrain(Position::new(cx as i32, y as i32), Terrain::Wall);
-        map.set_terrain(Position::new(cx as i32, (y + h).min(map_h - 1) as i32), Terrain::Wall);
+        map.set_terrain(
+            Position::new(cx as i32, (y + h).min(map_h - 1) as i32),
+            Terrain::Wall,
+        );
     }
     for cy in y..=(y + h).min(map_h - 1) {
         map.set_terrain(Position::new(x as i32, cy as i32), Terrain::Wall);
-        map.set_terrain(Position::new((x + w).min(map_w - 1) as i32, cy as i32), Terrain::Wall);
+        map.set_terrain(
+            Position::new((x + w).min(map_w - 1) as i32, cy as i32),
+            Terrain::Wall,
+        );
     }
     // Floor
     for cy in (y + 1)..(y + h).min(map_h) {
@@ -3880,14 +3686,7 @@ fn draw_quest_room(
 }
 
 /// Fill rectangular area with a single terrain type.
-fn fill_terrain(
-    map: &mut LevelMap,
-    x: usize,
-    y: usize,
-    w: usize,
-    h: usize,
-    terrain: Terrain,
-) {
+fn fill_terrain(map: &mut LevelMap, x: usize, y: usize, w: usize, h: usize, terrain: Terrain) {
     let map_w = map.width;
     let map_h = map.height;
     for cy in y..(y + h).min(map_h) {
@@ -3957,13 +3756,22 @@ fn generate_valkyrie_start(rng: &mut impl Rng) -> SpecialLevel {
     for y in by..(by + bh) {
         map.set_terrain(Position::new(part_x as i32, y as i32), Terrain::Wall);
     }
-    map.set_terrain(Position::new(part_x as i32, (by + bh / 2) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(part_x as i32, (by + bh / 2) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Fountain in the east chamber.
-    map.set_terrain(Position::new((part_x + 5) as i32, (by + bh / 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((part_x + 5) as i32, (by + bh / 2) as i32),
+        Terrain::Fountain,
+    );
 
     // South entrance.
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Stairs.
     let up_pos = Position::new((bx + 5) as i32, (map.height - 2) as i32);
@@ -4000,21 +3808,36 @@ fn generate_wizard_quest_start(_rng: &mut impl Rng) -> SpecialLevel {
     let lib_x = tx + tw - 10;
     let lib_y = ty + 2;
     draw_quest_room(&mut map, lib_x, lib_y, 8, 5, true);
-    map.set_terrain(Position::new(lib_x as i32, (lib_y + 2) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(lib_x as i32, (lib_y + 2) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Summoning chamber (inner room, west side).
     let sum_x = tx + 2;
     let sum_y = ty + 2;
     draw_quest_room(&mut map, sum_x, sum_y, 8, 5, true);
-    map.set_terrain(Position::new((sum_x + 8) as i32, (sum_y + 2) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((sum_x + 8) as i32, (sum_y + 2) as i32),
+        Terrain::DoorClosed,
+    );
     // Altar in summoning chamber.
-    map.set_terrain(Position::new((sum_x + 4) as i32, (sum_y + 3) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((sum_x + 4) as i32, (sum_y + 3) as i32),
+        Terrain::Altar,
+    );
 
     // Fountain in main tower.
-    map.set_terrain(Position::new((tx + tw / 2) as i32, (ty + th / 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((tx + tw / 2) as i32, (ty + th / 2) as i32),
+        Terrain::Fountain,
+    );
 
     // South entrance.
-    map.set_terrain(Position::new((tx + tw / 2) as i32, (ty + th) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((tx + tw / 2) as i32, (ty + th) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Stairs.
     let up_pos = Position::new((tx + tw / 2) as i32, (map.height - 2) as i32);
@@ -4044,10 +3867,16 @@ fn generate_archeologist_start(rng: &mut impl Rng) -> SpecialLevel {
     let bw = 30usize;
     let bh = 8usize;
     let room = draw_quest_room(&mut map, bx, by, bw, bh, true);
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Fountain inside.
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh / 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh / 2) as i32),
+        Terrain::Fountain,
+    );
 
     // Dig sites: scattered graves representing excavation pits.
     for i in 0..rng.random_range(5..=8u32) {
@@ -4093,10 +3922,16 @@ fn generate_barbarian_start(rng: &mut impl Rng) -> SpecialLevel {
     let bw = 24usize;
     let bh = 8usize;
     let room = draw_quest_room(&mut map, bx, by, bw, bh, true);
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Fountain (water source).
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh / 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh / 2) as i32),
+        Terrain::Fountain,
+    );
 
     // Scattered trees around camp.
     for _ in 0..rng.random_range(6..=12u32) {
@@ -4163,7 +3998,10 @@ fn generate_caveman_start(rng: &mut impl Rng) -> SpecialLevel {
     }
 
     // Fountain (pool).
-    map.set_terrain(Position::new((cx + cw / 2) as i32, (cy + ch / 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((cx + cw / 2) as i32, (cy + ch / 2) as i32),
+        Terrain::Fountain,
+    );
 
     let room = Room {
         x: cx + 2,
@@ -4200,14 +4038,26 @@ fn generate_healer_start(rng: &mut impl Rng) -> SpecialLevel {
     let bw = 36usize;
     let bh = 10usize;
     let room = draw_quest_room(&mut map, bx, by, bw, bh, true);
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Altar inside.
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + 2) as i32),
+        Terrain::Altar,
+    );
 
     // Fountains (healing pools) — two flanking the altar.
-    map.set_terrain(Position::new((bx + bw / 2 - 4) as i32, (by + 2) as i32), Terrain::Fountain);
-    map.set_terrain(Position::new((bx + bw / 2 + 4) as i32, (by + 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((bx + bw / 2 - 4) as i32, (by + 2) as i32),
+        Terrain::Fountain,
+    );
+    map.set_terrain(
+        Position::new((bx + bw / 2 + 4) as i32, (by + 2) as i32),
+        Terrain::Fountain,
+    );
 
     // Gardens: trees around the temple exterior.
     for _ in 0..rng.random_range(10..=18u32) {
@@ -4248,9 +4098,10 @@ fn generate_knight_start(_rng: &mut impl Rng) -> SpecialLevel {
     // Moat ring.
     for x in (cx.saturating_sub(1))..=(cx + cw + 1).min(map.width - 1) {
         for y in (cy.saturating_sub(1))..=(cy + ch + 1).min(map.height - 1) {
-            let on_edge =
-                x == cx.saturating_sub(1) || x == (cx + cw + 1).min(map.width - 1)
-                || y == cy.saturating_sub(1) || y == (cy + ch + 1).min(map.height - 1);
+            let on_edge = x == cx.saturating_sub(1)
+                || x == (cx + cw + 1).min(map.width - 1)
+                || y == cy.saturating_sub(1)
+                || y == (cy + ch + 1).min(map.height - 1);
             if on_edge {
                 map.set_terrain(Position::new(x as i32, y as i32), Terrain::Moat);
             }
@@ -4265,19 +4116,37 @@ fn generate_knight_start(_rng: &mut impl Rng) -> SpecialLevel {
         map.set_terrain(Position::new(x as i32, part_y as i32), Terrain::Wall);
     }
     // Doors through partition.
-    map.set_terrain(Position::new((cx + cw / 3) as i32, part_y as i32), Terrain::DoorClosed);
-    map.set_terrain(Position::new((cx + 2 * cw / 3) as i32, part_y as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((cx + cw / 3) as i32, part_y as i32),
+        Terrain::DoorClosed,
+    );
+    map.set_terrain(
+        Position::new((cx + 2 * cw / 3) as i32, part_y as i32),
+        Terrain::DoorClosed,
+    );
 
     // Drawbridge on south wall.
     let db_x = cx + cw / 2;
-    map.set_terrain(Position::new(db_x as i32, (cy + ch) as i32), Terrain::Drawbridge);
-    map.set_terrain(Position::new(db_x as i32, (cy + ch + 1).min(map.height - 1) as i32), Terrain::Drawbridge);
+    map.set_terrain(
+        Position::new(db_x as i32, (cy + ch) as i32),
+        Terrain::Drawbridge,
+    );
+    map.set_terrain(
+        Position::new(db_x as i32, (cy + ch + 1).min(map.height - 1) as i32),
+        Terrain::Drawbridge,
+    );
 
     // Throne room.
-    map.set_terrain(Position::new((cx + cw / 2) as i32, (cy + 2) as i32), Terrain::Throne);
+    map.set_terrain(
+        Position::new((cx + cw / 2) as i32, (cy + 2) as i32),
+        Terrain::Throne,
+    );
 
     // Fountain in courtyard.
-    map.set_terrain(Position::new((cx + cw / 2) as i32, (part_y + 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((cx + cw / 2) as i32, (part_y + 2) as i32),
+        Terrain::Fountain,
+    );
 
     let up_pos = Position::new(5, (map.height - 2) as i32);
     let down_pos = Position::new((cx + 2) as i32, (cy + 1) as i32);
@@ -4306,7 +4175,10 @@ fn generate_monk_start(rng: &mut impl Rng) -> SpecialLevel {
     let bw = 36usize;
     let bh = 12usize;
     let room = draw_quest_room(&mut map, bx, by, bw, bh, true);
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Meditation garden: inner courtyard.
     let gy = by + 3;
@@ -4320,10 +4192,16 @@ fn generate_monk_start(rng: &mut impl Rng) -> SpecialLevel {
     }
 
     // Fountain at garden center.
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (gy + 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (gy + 2) as i32),
+        Terrain::Fountain,
+    );
 
     // Altar.
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + 1) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + 1) as i32),
+        Terrain::Altar,
+    );
 
     let up_pos = Position::new(5, (map.height - 2) as i32);
     let down_pos = Position::new(75, 1);
@@ -4354,17 +4232,35 @@ fn generate_priest_start(_rng: &mut impl Rng) -> SpecialLevel {
     let room = draw_quest_room(&mut map, bx, by, bw, bh, true);
 
     // Grand entrance (double door).
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh) as i32), Terrain::DoorClosed);
-    map.set_terrain(Position::new((bx + bw / 2 + 1) as i32, (by + bh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
+    map.set_terrain(
+        Position::new((bx + bw / 2 + 1) as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Three altars in a row (lawful, neutral, chaotic).
     let altar_y = by + 2;
-    map.set_terrain(Position::new((bx + bw / 4) as i32, altar_y as i32), Terrain::Altar);
-    map.set_terrain(Position::new((bx + bw / 2) as i32, altar_y as i32), Terrain::Altar);
-    map.set_terrain(Position::new((bx + 3 * bw / 4) as i32, altar_y as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((bx + bw / 4) as i32, altar_y as i32),
+        Terrain::Altar,
+    );
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, altar_y as i32),
+        Terrain::Altar,
+    );
+    map.set_terrain(
+        Position::new((bx + 3 * bw / 4) as i32, altar_y as i32),
+        Terrain::Altar,
+    );
 
     // Fountain.
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh / 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh / 2) as i32),
+        Terrain::Fountain,
+    );
 
     let up_pos = Position::new(5, (map.height - 2) as i32);
     let down_pos = Position::new(75, 1);
@@ -4400,17 +4296,29 @@ fn generate_ranger_start(_rng: &mut impl Rng) -> SpecialLevel {
     let lw = 20usize;
     let lh = 6usize;
     let room = draw_quest_room(&mut map, lx, ly, lw, lh, true);
-    map.set_terrain(Position::new((lx + lw / 2) as i32, (ly + lh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((lx + lw / 2) as i32, (ly + lh) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Fountain.
-    map.set_terrain(Position::new((lx + lw / 2) as i32, (ly + lh / 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((lx + lw / 2) as i32, (ly + lh / 2) as i32),
+        Terrain::Fountain,
+    );
 
     // Paths through the forest (corridors).
     for y in 1..clr_y {
-        map.set_terrain(Position::new((lx + lw / 2) as i32, y as i32), Terrain::Floor);
+        map.set_terrain(
+            Position::new((lx + lw / 2) as i32, y as i32),
+            Terrain::Floor,
+        );
     }
     for y in (clr_y + clr_h)..map.height - 1 {
-        map.set_terrain(Position::new((lx + lw / 2) as i32, y as i32), Terrain::Floor);
+        map.set_terrain(
+            Position::new((lx + lw / 2) as i32, y as i32),
+            Terrain::Floor,
+        );
     }
 
     let up_pos = Position::new((lx + lw / 2) as i32, (map.height - 2) as i32);
@@ -4451,7 +4359,10 @@ fn generate_rogue_quest_start(_rng: &mut impl Rng) -> SpecialLevel {
     for x in (bx + bw + 1)..map.width - 1 {
         map.set_terrain(Position::new(x as i32, mid_y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new((bx + bw) as i32, mid_y as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((bx + bw) as i32, mid_y as i32),
+        Terrain::DoorClosed,
+    );
 
     // North corridor.
     let mid_x = bx + bw / 2;
@@ -4463,10 +4374,16 @@ fn generate_rogue_quest_start(_rng: &mut impl Rng) -> SpecialLevel {
     for y in (by + bh + 1)..map.height - 1 {
         map.set_terrain(Position::new(mid_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(mid_x as i32, (by + bh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(mid_x as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Fountain inside.
-    map.set_terrain(Position::new(mid_x as i32, (by + bh / 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new(mid_x as i32, (by + bh / 2) as i32),
+        Terrain::Fountain,
+    );
 
     let up_pos = Position::new(1, mid_y as i32);
     let down_pos = Position::new((map.width - 2) as i32, mid_y as i32);
@@ -4501,10 +4418,16 @@ fn generate_samurai_start(rng: &mut impl Rng) -> SpecialLevel {
     for y in by..(by + bh) {
         map.set_terrain(Position::new(part_x as i32, y as i32), Terrain::Wall);
     }
-    map.set_terrain(Position::new(part_x as i32, (by + bh / 2) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(part_x as i32, (by + bh / 2) as i32),
+        Terrain::DoorClosed,
+    );
 
     // South entrance.
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Zen garden: pool + trees in courtyard area.
     let gy = by + bh + 2;
@@ -4516,10 +4439,16 @@ fn generate_samurai_start(rng: &mut impl Rng) -> SpecialLevel {
         }
     }
     // Pool.
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (gy + 1) as i32), Terrain::Pool);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (gy + 1) as i32),
+        Terrain::Pool,
+    );
 
     // Fountain inside castle.
-    map.set_terrain(Position::new((bx + bw / 4) as i32, (by + bh / 2) as i32), Terrain::Fountain);
+    map.set_terrain(
+        Position::new((bx + bw / 4) as i32, (by + bh / 2) as i32),
+        Terrain::Fountain,
+    );
 
     let up_pos = Position::new(5, (map.height - 2) as i32);
     let down_pos = Position::new((bx + 2) as i32, (by + 1) as i32);
@@ -4548,7 +4477,10 @@ fn generate_tourist_start(_rng: &mut impl Rng) -> SpecialLevel {
     let bw = 30usize;
     let bh = 8usize;
     let room = draw_quest_room(&mut map, bx, by, bw, bh, true);
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
 
     // Shop stalls (small rooms flanking the plaza).
     let s1 = draw_quest_room(&mut map, 5, 4, 12, 6, true);
@@ -4586,7 +4518,10 @@ fn generate_generic_quest_start(rng: &mut impl Rng) -> SpecialLevel {
     let bx = (map.width - bw) / 2;
     let by = (map.height - bh) / 2;
     let room = draw_quest_room(&mut map, bx, by, bw, bh, true);
-    map.set_terrain(Position::new((bx + bw / 2) as i32, (by + bh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new((bx + bw / 2) as i32, (by + bh) as i32),
+        Terrain::DoorClosed,
+    );
     map.set_terrain(
         Position::new((bx + bw / 2) as i32, (by + bh / 2) as i32),
         Terrain::Fountain,
@@ -4650,30 +4585,54 @@ pub fn generate_quest_locator(role: &str, rng: &mut impl Rng) -> SpecialLevel {
     for x in corr_start..=corr_end {
         let pos = Position::new(x as i32, corr_y as i32);
         let t = map.cells[corr_y][x].terrain;
-        if matches!(t, Terrain::Stone | Terrain::Wall | Terrain::Tree | Terrain::Ice) {
+        if matches!(
+            t,
+            Terrain::Stone | Terrain::Wall | Terrain::Tree | Terrain::Ice
+        ) {
             map.set_terrain(pos, Terrain::Corridor);
         }
     }
-    map.set_terrain(Position::new(corr_start as i32, corr_y as i32), Terrain::DoorClosed);
-    map.set_terrain(Position::new(corr_end as i32, corr_y as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(corr_start as i32, corr_y as i32),
+        Terrain::DoorClosed,
+    );
+    map.set_terrain(
+        Position::new(corr_end as i32, corr_y as i32),
+        Terrain::DoorClosed,
+    );
 
     // Role-specific feature in room 1.
     match role {
         "valkyrie" => {
             // Ice pool.
-            map.set_terrain(Position::new((r1_x + r1_w / 2) as i32, (r1_y + r1_h / 2) as i32), Terrain::Ice);
+            map.set_terrain(
+                Position::new((r1_x + r1_w / 2) as i32, (r1_y + r1_h / 2) as i32),
+                Terrain::Ice,
+            );
         }
         "wizard" => {
-            map.set_terrain(Position::new((r1_x + r1_w / 2) as i32, (r1_y + r1_h / 2) as i32), Terrain::Altar);
+            map.set_terrain(
+                Position::new((r1_x + r1_w / 2) as i32, (r1_y + r1_h / 2) as i32),
+                Terrain::Altar,
+            );
         }
         "priest" => {
-            map.set_terrain(Position::new((r1_x + r1_w / 2) as i32, (r1_y + r1_h / 2) as i32), Terrain::Altar);
+            map.set_terrain(
+                Position::new((r1_x + r1_w / 2) as i32, (r1_y + r1_h / 2) as i32),
+                Terrain::Altar,
+            );
         }
         "knight" => {
-            map.set_terrain(Position::new((r1_x + r1_w / 2) as i32, (r1_y + r1_h / 2) as i32), Terrain::Fountain);
+            map.set_terrain(
+                Position::new((r1_x + r1_w / 2) as i32, (r1_y + r1_h / 2) as i32),
+                Terrain::Fountain,
+            );
         }
         _ => {
-            map.set_terrain(Position::new((r1_x + r1_w / 2) as i32, (r1_y + r1_h / 2) as i32), Terrain::Fountain);
+            map.set_terrain(
+                Position::new((r1_x + r1_w / 2) as i32, (r1_y + r1_h / 2) as i32),
+                Terrain::Fountain,
+            );
         }
     }
 
@@ -4738,14 +4697,20 @@ fn generate_valkyrie_goal(rng: &mut impl Rng) -> SpecialLevel {
     }
 
     // Nemesis position — altar at center.
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     // Corridor from south.
     let entry_x = rx + rw / 2;
     for y in (ry + rh)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Floor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + rh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + rh) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -4777,7 +4742,10 @@ fn generate_wizard_quest_goal(_rng: &mut impl Rng) -> SpecialLevel {
     let room = draw_quest_room(&mut map, rx, ry, rw, rh, false);
 
     // Altar at center.
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     // Pools of water around the edges (moats of darkness).
     for x in (rx + 2)..(rx + rw - 2) {
@@ -4789,7 +4757,10 @@ fn generate_wizard_quest_goal(_rng: &mut impl Rng) -> SpecialLevel {
     for y in (ry + rh)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + rh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + rh) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -4824,17 +4795,26 @@ fn generate_archeologist_goal(_rng: &mut impl Rng) -> SpecialLevel {
     for i in 0..8u32 {
         let gx = rx + 2 + (i as usize * 4) % (rw - 4);
         map.set_terrain(Position::new(gx as i32, (ry + 1) as i32), Terrain::Grave);
-        map.set_terrain(Position::new(gx as i32, (ry + rh - 1) as i32), Terrain::Grave);
+        map.set_terrain(
+            Position::new(gx as i32, (ry + rh - 1) as i32),
+            Terrain::Grave,
+        );
     }
 
     // Altar at center (nemesis/artifact location).
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     let entry_x = rx + rw / 2;
     for y in (ry + rh)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + rh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + rh) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -4872,13 +4852,19 @@ fn generate_barbarian_goal(rng: &mut impl Rng) -> SpecialLevel {
         map.set_terrain(Position::new(lx, ly), Terrain::Lava);
     }
 
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     let entry_x = rx + rw / 2;
     for y in (ry + rh)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + rh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + rh) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -4916,13 +4902,19 @@ fn generate_caveman_goal(_rng: &mut impl Rng) -> SpecialLevel {
         }
     }
 
-    map.set_terrain(Position::new((rx + 3 * rw / 4) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + 3 * rw / 4) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     let entry_x = rx + rw / 2;
     for y in (ry + rh)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + rh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + rh) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -4960,13 +4952,19 @@ fn generate_healer_goal(rng: &mut impl Rng) -> SpecialLevel {
         map.set_terrain(Position::new(px, py), Terrain::Pool);
     }
 
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     let entry_x = rx + rw / 2;
     for y in (ry + rh)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + rh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + rh) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -4999,9 +4997,10 @@ fn generate_knight_goal(_rng: &mut impl Rng) -> SpecialLevel {
     // Moat around the ruin.
     for x in (rx.saturating_sub(1))..=(rx + rw + 1).min(map.width - 1) {
         for y in (ry.saturating_sub(1))..=(ry + rh + 1).min(map.height - 1) {
-            let on_edge =
-                x == rx.saturating_sub(1) || x == (rx + rw + 1).min(map.width - 1)
-                || y == ry.saturating_sub(1) || y == (ry + rh + 1).min(map.height - 1);
+            let on_edge = x == rx.saturating_sub(1)
+                || x == (rx + rw + 1).min(map.width - 1)
+                || y == ry.saturating_sub(1)
+                || y == (ry + rh + 1).min(map.height - 1);
             if on_edge {
                 map.set_terrain(Position::new(x as i32, y as i32), Terrain::Moat);
             }
@@ -5012,10 +5011,19 @@ fn generate_knight_goal(_rng: &mut impl Rng) -> SpecialLevel {
 
     // Drawbridge entrance.
     let db_x = rx + rw / 2;
-    map.set_terrain(Position::new(db_x as i32, (ry + rh) as i32), Terrain::Drawbridge);
-    map.set_terrain(Position::new(db_x as i32, (ry + rh + 1).min(map.height - 1) as i32), Terrain::Drawbridge);
+    map.set_terrain(
+        Position::new(db_x as i32, (ry + rh) as i32),
+        Terrain::Drawbridge,
+    );
+    map.set_terrain(
+        Position::new(db_x as i32, (ry + rh + 1).min(map.height - 1) as i32),
+        Terrain::Drawbridge,
+    );
 
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     // Corridor south of moat.
     for y in ((ry + rh + 2).min(map.height - 1))..(map.height - 1) {
@@ -5052,17 +5060,29 @@ fn generate_monk_goal(_rng: &mut impl Rng) -> SpecialLevel {
     let room = draw_quest_room(&mut map, rx, ry, rw, rh, false);
 
     // Corrupted altars.
-    map.set_terrain(Position::new((rx + rw / 3) as i32, (ry + 2) as i32), Terrain::Altar);
-    map.set_terrain(Position::new((rx + 2 * rw / 3) as i32, (ry + 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 3) as i32, (ry + 2) as i32),
+        Terrain::Altar,
+    );
+    map.set_terrain(
+        Position::new((rx + 2 * rw / 3) as i32, (ry + 2) as i32),
+        Terrain::Altar,
+    );
 
     // Central altar (nemesis position).
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     let entry_x = rx + rw / 2;
     for y in (ry + rh)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + rh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + rh) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -5094,21 +5114,36 @@ fn generate_priest_goal(_rng: &mut impl Rng) -> SpecialLevel {
     let room = draw_quest_room(&mut map, rx, ry, rw, rh, false);
 
     // Three desecrated altars.
-    map.set_terrain(Position::new((rx + rw / 4) as i32, (ry + rh / 2) as i32), Terrain::Altar);
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
-    map.set_terrain(Position::new((rx + 3 * rw / 4) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 4) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
+    map.set_terrain(
+        Position::new((rx + 3 * rw / 4) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     // Graves.
     for i in 0..6u32 {
         let gx = rx + 2 + (i as usize * 5) % (rw - 4);
-        map.set_terrain(Position::new(gx as i32, (ry + rh - 2) as i32), Terrain::Grave);
+        map.set_terrain(
+            Position::new(gx as i32, (ry + rh - 2) as i32),
+            Terrain::Grave,
+        );
     }
 
     let entry_x = rx + rw / 2;
     for y in (ry + rh)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + rh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + rh) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -5148,7 +5183,10 @@ fn generate_ranger_goal(rng: &mut impl Rng) -> SpecialLevel {
         map.set_terrain(Position::new(tx, ty), Terrain::Tree);
     }
 
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     // Path south through forest.
     let path_x = rx + rw / 2;
@@ -5196,16 +5234,25 @@ fn generate_rogue_quest_goal(_rng: &mut impl Rng) -> SpecialLevel {
 
     // Inner vault.
     draw_quest_room(&mut map, rx + 8, ry + 4, 14, 6, false);
-    map.set_terrain(Position::new((rx + 8) as i32, (ry + 7) as i32), Terrain::DoorLocked);
+    map.set_terrain(
+        Position::new((rx + 8) as i32, (ry + 7) as i32),
+        Terrain::DoorLocked,
+    );
 
     // Altar inside vault.
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     let entry_x = rx + rw / 2;
     for y in (ry + rh)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + rh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + rh) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -5238,9 +5285,10 @@ fn generate_samurai_goal(_rng: &mut impl Rng) -> SpecialLevel {
     // Moat.
     for x in (rx.saturating_sub(1))..=(rx + rw + 1).min(map.width - 1) {
         for y in (ry.saturating_sub(1))..=(ry + rh + 1).min(map.height - 1) {
-            let on_edge =
-                x == rx.saturating_sub(1) || x == (rx + rw + 1).min(map.width - 1)
-                || y == ry.saturating_sub(1) || y == (ry + rh + 1).min(map.height - 1);
+            let on_edge = x == rx.saturating_sub(1)
+                || x == (rx + rw + 1).min(map.width - 1)
+                || y == ry.saturating_sub(1)
+                || y == (ry + rh + 1).min(map.height - 1);
             if on_edge {
                 map.set_terrain(Position::new(x as i32, y as i32), Terrain::Moat);
             }
@@ -5251,10 +5299,19 @@ fn generate_samurai_goal(_rng: &mut impl Rng) -> SpecialLevel {
 
     // Drawbridge.
     let db_x = rx + rw / 2;
-    map.set_terrain(Position::new(db_x as i32, (ry + rh) as i32), Terrain::Drawbridge);
-    map.set_terrain(Position::new(db_x as i32, (ry + rh + 1).min(map.height - 1) as i32), Terrain::Drawbridge);
+    map.set_terrain(
+        Position::new(db_x as i32, (ry + rh) as i32),
+        Terrain::Drawbridge,
+    );
+    map.set_terrain(
+        Position::new(db_x as i32, (ry + rh + 1).min(map.height - 1) as i32),
+        Terrain::Drawbridge,
+    );
 
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     for y in ((ry + rh + 2).min(map.height - 1))..(map.height - 1) {
         map.set_terrain(Position::new(db_x as i32, y as i32), Terrain::Corridor);
@@ -5296,13 +5353,19 @@ fn generate_tourist_goal(rng: &mut impl Rng) -> SpecialLevel {
         map.set_terrain(Position::new(fx, fy), Terrain::Grave);
     }
 
-    map.set_terrain(Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + rw / 2) as i32, (ry + rh / 2) as i32),
+        Terrain::Altar,
+    );
 
     let entry_x = rx + rw / 2;
     for y in (ry + rh)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + rh) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + rh) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -5333,13 +5396,19 @@ fn generate_generic_quest_goal(rng: &mut impl Rng) -> SpecialLevel {
     let ry = (map.height - room_h) / 2;
     let room = draw_quest_room(&mut map, rx, ry, room_w, room_h, true);
 
-    map.set_terrain(Position::new((rx + room_w / 2) as i32, (ry + room_h / 2) as i32), Terrain::Altar);
+    map.set_terrain(
+        Position::new((rx + room_w / 2) as i32, (ry + room_h / 2) as i32),
+        Terrain::Altar,
+    );
 
     let entry_x = rx + room_w / 2;
     for y in (ry + room_h)..(map.height - 1) {
         map.set_terrain(Position::new(entry_x as i32, y as i32), Terrain::Corridor);
     }
-    map.set_terrain(Position::new(entry_x as i32, (ry + room_h) as i32), Terrain::DoorClosed);
+    map.set_terrain(
+        Position::new(entry_x as i32, (ry + room_h) as i32),
+        Terrain::DoorClosed,
+    );
 
     let up_pos = Position::new(entry_x as i32, (map.height - 2) as i32);
     map.set_terrain(up_pos, Terrain::StairsUp);
@@ -5387,18 +5456,21 @@ pub fn generate_quest_filler(role: &str, rng: &mut impl Rng) -> SpecialLevel {
     for y in 1..ry {
         let pos = Position::new(corr_x as i32, y as i32);
         let t = map.cells[y][corr_x].terrain;
-        if matches!(t, Terrain::Stone | Terrain::Wall | Terrain::Tree | Terrain::Ice) {
+        if matches!(
+            t,
+            Terrain::Stone | Terrain::Wall | Terrain::Tree | Terrain::Ice
+        ) {
             map.set_terrain(pos, Terrain::Corridor);
         }
     }
-    map.set_terrain(
-        Position::new(corr_x as i32, ry as i32),
-        Terrain::DoorClosed,
-    );
+    map.set_terrain(Position::new(corr_x as i32, ry as i32), Terrain::DoorClosed);
     for y in ((ry + room_h).min(map.height - 1) + 1)..map.height.saturating_sub(1) {
         let pos = Position::new(corr_x as i32, y as i32);
         let t = map.cells[y][corr_x].terrain;
-        if matches!(t, Terrain::Stone | Terrain::Wall | Terrain::Tree | Terrain::Ice) {
+        if matches!(
+            t,
+            Terrain::Stone | Terrain::Wall | Terrain::Tree | Terrain::Ice
+        ) {
             map.set_terrain(pos, Terrain::Corridor);
         }
     }
@@ -5468,10 +5540,7 @@ mod tests {
     fn sokoban_has_no_dig_flag() {
         let mut rng = test_rng();
         let sl = generate_sokoban(0, &mut rng);
-        assert!(
-            sl.flags.no_dig,
-            "Sokoban should have no_dig flag set"
-        );
+        assert!(sl.flags.no_dig, "Sokoban should have no_dig flag set");
         assert!(
             sl.flags.no_teleport,
             "Sokoban should have no_teleport flag set"
@@ -5538,20 +5607,14 @@ mod tests {
         let level = generate_mines_level(5, &mut rng);
         let map = &level.map;
 
-        let start = find_first_walkable(map)
-            .expect("Mines should have walkable cells");
+        let start = find_first_walkable(map).expect("Mines should have walkable cells");
         let reachable = flood_fill(map, start);
 
         // Every room should be reachable.
         for (i, room) in level.rooms.iter().enumerate() {
-            let room_reachable = (room.y..=room.bottom()).any(|y| {
-                (room.x..=room.right()).any(|x| reachable[y][x])
-            });
-            assert!(
-                room_reachable,
-                "Mines room {} is not reachable",
-                i
-            );
+            let room_reachable =
+                (room.y..=room.bottom()).any(|y| (room.x..=room.right()).any(|x| reachable[y][x]));
+            assert!(room_reachable, "Mines room {} is not reachable", i);
         }
     }
 
@@ -5595,19 +5658,13 @@ mod tests {
         let level = generate_oracle_level(&mut rng);
         let map = &level.map;
 
-        let start = find_first_walkable(map)
-            .expect("Oracle level should have walkable cells");
+        let start = find_first_walkable(map).expect("Oracle level should have walkable cells");
         let reachable = flood_fill(map, start);
 
         for (i, room) in level.rooms.iter().enumerate() {
-            let room_reachable = (room.y..=room.bottom()).any(|y| {
-                (room.x..=room.right()).any(|x| reachable[y][x])
-            });
-            assert!(
-                room_reachable,
-                "Oracle room {} is not reachable",
-                i
-            );
+            let room_reachable =
+                (room.y..=room.bottom()).any(|y| (room.x..=room.right()).any(|x| reachable[y][x]));
+            assert!(room_reachable, "Oracle room {} is not reachable", i);
         }
     }
 
@@ -5634,10 +5691,7 @@ mod tests {
             .flat_map(|y| (0..map.width).map(move |x| (x, y)))
             .filter(|&(x, y)| map.cells[y][x].terrain == Terrain::Floor)
             .count();
-        assert!(
-            floor_count > 0,
-            "Sokoban 1a should have floor tiles"
-        );
+        assert!(floor_count > 0, "Sokoban 1a should have floor tiles");
     }
 
     #[test]
@@ -5743,10 +5797,7 @@ mod tests {
         let mut rng = test_rng();
         let mt = generate_minetown(&mut rng);
 
-        let has_temple = mt
-            .room_types
-            .iter()
-            .any(|t| *t == MinetownRoomType::Temple);
+        let has_temple = mt.room_types.iter().any(|t| *t == MinetownRoomType::Temple);
         assert!(has_temple, "Minetown should have a temple");
 
         let map = &mt.generated.map;
@@ -5906,8 +5957,7 @@ mod tests {
     // ── Shared test helpers ──────────────────────────────────────────
 
     fn is_passable(terrain: Terrain) -> bool {
-        terrain.is_walkable()
-            || matches!(terrain, Terrain::DoorClosed | Terrain::DoorLocked)
+        terrain.is_walkable() || matches!(terrain, Terrain::DoorClosed | Terrain::DoorLocked)
     }
 
     fn find_first_walkable(map: &LevelMap) -> Option<(usize, usize)> {
@@ -6032,10 +6082,7 @@ mod tests {
 
         // Should have moat terrain.
         let moat_count = count_terrain(map, Terrain::Moat);
-        assert!(
-            moat_count > 0,
-            "Sanctum should have moat terrain, got 0"
-        );
+        assert!(moat_count > 0, "Sanctum should have moat terrain, got 0");
 
         // Flags.
         assert!(sanctum.flags.no_prayer, "Sanctum should have no_prayer");
@@ -6247,7 +6294,10 @@ mod tests {
         let mut rng = test_rng();
         let sl = generate_fort_ludios(&mut rng);
         assert!(!sl.flags.no_dig, "Fort Ludios should allow digging");
-        assert!(!sl.flags.no_teleport, "Fort Ludios should allow teleporting");
+        assert!(
+            !sl.flags.no_teleport,
+            "Fort Ludios should allow teleporting"
+        );
         assert!(!sl.flags.is_endgame, "Fort Ludios is not endgame");
     }
 
@@ -6315,10 +6365,7 @@ mod tests {
                 Some(SpecialLevelId::Sokoban(depth as u8))
             );
         }
-        assert_eq!(
-            identify_special_level(DungeonBranch::Sokoban, 5),
-            None
-        );
+        assert_eq!(identify_special_level(DungeonBranch::Sokoban, 5), None);
     }
 
     #[test]
@@ -6448,7 +6495,12 @@ mod tests {
             for variant in 0..2u8 {
                 let sl = generate_medusa(variant, &mut rng);
                 let water = count_terrain(&sl.generated.map, Terrain::Water);
-                assert!(water > 0, "seed {}, variant {}: Medusa should have water", seed, variant);
+                assert!(
+                    water > 0,
+                    "seed {}, variant {}: Medusa should have water",
+                    seed,
+                    variant
+                );
             }
         }
     }
@@ -6463,7 +6515,8 @@ mod tests {
                 assert!(
                     floor > 10,
                     "seed {}, level {}: Vlad should have floor",
-                    seed, level
+                    seed,
+                    level
                 );
             }
         }
@@ -6498,7 +6551,9 @@ mod tests {
                 seed
             );
             assert!(
-                mt.room_types.iter().any(|t| *t == MinetownRoomType::GeneralStore),
+                mt.room_types
+                    .iter()
+                    .any(|t| *t == MinetownRoomType::GeneralStore),
                 "seed {}: Minetown should have a general store",
                 seed
             );
@@ -6592,7 +6647,10 @@ mod tests {
         let result = dispatch_special_level(SpecialLevelId::MinesEnd, None, &mut rng);
         assert!(result.is_some(), "MinesEnd should dispatch successfully");
         let result = dispatch_special_level(SpecialLevelId::QuestLocator, None, &mut rng);
-        assert!(result.is_some(), "QuestLocator should dispatch successfully");
+        assert!(
+            result.is_some(),
+            "QuestLocator should dispatch successfully"
+        );
         let result = dispatch_special_level(SpecialLevelId::QuestGoal, None, &mut rng);
         assert!(result.is_some(), "QuestGoal should dispatch successfully");
         let result = dispatch_special_level(SpecialLevelId::QuestFiller(3), None, &mut rng);
@@ -6614,11 +6672,14 @@ mod tests {
         ];
         for (id, name) in &ids {
             let result = dispatch_special_level(*id, None, &mut rng);
-            assert!(result.is_some(), "Generator for {} should produce a level", name);
+            assert!(
+                result.is_some(),
+                "Generator for {} should produce a level",
+                name
+            );
             let level = result.unwrap();
             assert!(
-                level.generated.up_stairs.is_some()
-                    || level.generated.down_stairs.is_some(),
+                level.generated.up_stairs.is_some() || level.generated.down_stairs.is_some(),
                 "{} should have at least one staircase",
                 name
             );
@@ -6632,7 +6693,11 @@ mod tests {
         let mut rng = test_rng();
         let sl = generate_valley(&mut rng);
         let altar_count = count_terrain(&sl.generated.map, Terrain::Altar);
-        assert!(altar_count >= 1, "Valley should have an altar, got {}", altar_count);
+        assert!(
+            altar_count >= 1,
+            "Valley should have an altar, got {}",
+            altar_count
+        );
     }
 
     #[test]
@@ -6640,7 +6705,11 @@ mod tests {
         let mut rng = test_rng();
         let sl = generate_valley(&mut rng);
         let grave_count = count_terrain(&sl.generated.map, Terrain::Grave);
-        assert!(grave_count >= 4, "Valley should have graves, got {}", grave_count);
+        assert!(
+            grave_count >= 4,
+            "Valley should have graves, got {}",
+            grave_count
+        );
     }
 
     #[test]
@@ -6658,7 +6727,11 @@ mod tests {
         let mut rng = test_rng();
         let sl = generate_orcus(&mut rng);
         let grave_count = count_terrain(&sl.generated.map, Terrain::Grave);
-        assert!(grave_count >= 4, "Orcus should have graves, got {}", grave_count);
+        assert!(
+            grave_count >= 4,
+            "Orcus should have graves, got {}",
+            grave_count
+        );
     }
 
     // ── Juiblex tests ───────────────────────────────────────────────
@@ -6668,7 +6741,11 @@ mod tests {
         let mut rng = test_rng();
         let sl = generate_juiblex(&mut rng);
         let water_count = count_terrain(&sl.generated.map, Terrain::Water);
-        assert!(water_count >= 10, "Juiblex should have water, got {}", water_count);
+        assert!(
+            water_count >= 10,
+            "Juiblex should have water, got {}",
+            water_count
+        );
     }
 
     // ── Gehennom generator stability tests ───────────────────────────
@@ -6692,7 +6769,12 @@ mod tests {
                 assert!(result.is_some(), "seed {}: {:?} should generate", seed, id);
                 let level = result.unwrap();
                 let floor = count_terrain(&level.generated.map, Terrain::Floor);
-                assert!(floor > 10, "seed {}: {:?} should have floor tiles", seed, id);
+                assert!(
+                    floor > 10,
+                    "seed {}: {:?} should have floor tiles",
+                    seed,
+                    id
+                );
             }
         }
     }
@@ -6831,7 +6913,11 @@ data = """
 
         assert!(sl.flags.no_teleport, "Valley TOML should set noteleport");
         let floor = count_terrain(&sl.generated.map, Terrain::Floor);
-        assert!(floor > 50, "Valley from TOML should have many floor tiles, got {}", floor);
+        assert!(
+            floor > 50,
+            "Valley from TOML should have many floor tiles, got {}",
+            floor
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -6845,7 +6931,11 @@ data = """
         assert!(sl.generated.up_stairs.is_some());
         assert!(sl.generated.down_stairs.is_some());
         let floor = count_terrain(&sl.generated.map, Terrain::Floor);
-        assert!(floor > 200, "Big room variant 0 should have lots of floor, got {}", floor);
+        assert!(
+            floor > 200,
+            "Big room variant 0 should have lots of floor, got {}",
+            floor
+        );
     }
 
     #[test]
@@ -6855,7 +6945,10 @@ data = """
         assert!(sl.generated.up_stairs.is_some());
         // Pillar variant has some walls inside the room.
         let floor = count_terrain(&sl.generated.map, Terrain::Floor);
-        assert!(floor > 100, "Pillar variant should still have plenty of floor");
+        assert!(
+            floor > 100,
+            "Pillar variant should still have plenty of floor"
+        );
     }
 
     #[test]
@@ -6863,7 +6956,11 @@ data = """
         let mut rng = test_rng();
         let sl = generate_big_room(2, &mut rng);
         let pool = count_terrain(&sl.generated.map, Terrain::Pool);
-        assert!(pool > 0, "Pool variant should have pool tiles, got {}", pool);
+        assert!(
+            pool > 0,
+            "Pool variant should have pool tiles, got {}",
+            pool
+        );
     }
 
     #[test]
@@ -6884,7 +6981,11 @@ data = """
                 "BigRoom variant {} should have stairs",
                 v
             );
-            assert!(!sl.generated.rooms.is_empty(), "BigRoom variant {} should have a room", v);
+            assert!(
+                !sl.generated.rooms.is_empty(),
+                "BigRoom variant {} should have a room",
+                v
+            );
         }
     }
 
@@ -6898,7 +6999,8 @@ data = """
                 assert!(
                     floor > 50,
                     "seed {}, variant {}: Big room should have floor tiles",
-                    seed, v
+                    seed,
+                    v
                 );
             }
         }
@@ -6912,7 +7014,11 @@ data = """
     fn test_rogue_level_has_rooms() {
         let mut rng = test_rng();
         let sl = generate_rogue_level(15, &mut rng);
-        assert_eq!(sl.generated.rooms.len(), 9, "Rogue level should have 9 rooms (3x3 grid)");
+        assert_eq!(
+            sl.generated.rooms.len(),
+            9,
+            "Rogue level should have 9 rooms (3x3 grid)"
+        );
     }
 
     #[test]
@@ -6928,7 +7034,11 @@ data = """
         let mut rng = test_rng();
         let sl = generate_rogue_level(15, &mut rng);
         let corridor = count_terrain(&sl.generated.map, Terrain::Corridor);
-        assert!(corridor > 0, "Rogue level should have corridor tiles, got {}", corridor);
+        assert!(
+            corridor > 0,
+            "Rogue level should have corridor tiles, got {}",
+            corridor
+        );
     }
 
     #[test]
@@ -6938,7 +7048,12 @@ data = """
             let sl = generate_rogue_level(15, &mut rng);
             assert_eq!(sl.generated.rooms.len(), 9);
             let floor = count_terrain(&sl.generated.map, Terrain::Floor);
-            assert!(floor > 20, "seed {}: Rogue should have floor, got {}", seed, floor);
+            assert!(
+                floor > 20,
+                "seed {}: Rogue should have floor, got {}",
+                seed,
+                floor
+            );
         }
     }
 
@@ -6951,7 +7066,10 @@ data = """
         let mut rng = test_rng();
         let sl = generate_mines_end(0, &mut rng);
         assert!(sl.generated.up_stairs.is_some());
-        assert!(sl.generated.down_stairs.is_none(), "Mines End has no down stairs");
+        assert!(
+            sl.generated.down_stairs.is_none(),
+            "Mines End has no down stairs"
+        );
         let floor = count_terrain(&sl.generated.map, Terrain::Floor);
         assert!(floor > 100, "Mines End should have floor, got {}", floor);
     }
@@ -6961,7 +7079,11 @@ data = """
         let mut rng = test_rng();
         let sl = generate_mines_end(1, &mut rng);
         let fountain = count_terrain(&sl.generated.map, Terrain::Fountain);
-        assert!(fountain > 0, "Mines End variant 1 should have fountains, got {}", fountain);
+        assert!(
+            fountain > 0,
+            "Mines End variant 1 should have fountains, got {}",
+            fountain
+        );
     }
 
     #[test]
@@ -6969,7 +7091,11 @@ data = """
         let mut rng = test_rng();
         let sl = generate_mines_end(2, &mut rng);
         let pool = count_terrain(&sl.generated.map, Terrain::Pool);
-        assert!(pool > 0, "Mines End variant 2 should have pool, got {}", pool);
+        assert!(
+            pool > 0,
+            "Mines End variant 2 should have pool, got {}",
+            pool
+        );
     }
 
     #[test]
@@ -6990,9 +7116,19 @@ data = """
     // ═══════════════════════════════════════════════════════════════════
 
     const ALL_ROLES: [&str; 13] = [
-        "valkyrie", "wizard", "archeologist", "barbarian", "caveman",
-        "healer", "knight", "monk", "priest", "ranger", "rogue",
-        "samurai", "tourist",
+        "valkyrie",
+        "wizard",
+        "archeologist",
+        "barbarian",
+        "caveman",
+        "healer",
+        "knight",
+        "monk",
+        "priest",
+        "ranger",
+        "rogue",
+        "samurai",
+        "tourist",
     ];
 
     #[test]
@@ -7020,14 +7156,21 @@ data = """
             let sl = generate_quest_start(role, &mut rng);
             assert!(
                 sl.generated.up_stairs.is_some(),
-                "Quest start for {} missing up stairs", role
+                "Quest start for {} missing up stairs",
+                role
             );
             assert!(
                 sl.generated.down_stairs.is_some(),
-                "Quest start for {} missing down stairs", role
+                "Quest start for {} missing down stairs",
+                role
             );
             let floor = count_terrain(&sl.generated.map, Terrain::Floor);
-            assert!(floor > 20, "Quest start for {} should have floor, got {}", role, floor);
+            assert!(
+                floor > 20,
+                "Quest start for {} should have floor, got {}",
+                role,
+                floor
+            );
         }
     }
 
@@ -7037,7 +7180,10 @@ data = """
         let sl = generate_quest_locator("valkyrie", &mut rng);
         assert!(sl.generated.up_stairs.is_some());
         assert!(sl.generated.down_stairs.is_some());
-        assert!(sl.generated.rooms.len() >= 2, "Quest locator should have at least 2 rooms");
+        assert!(
+            sl.generated.rooms.len() >= 2,
+            "Quest locator should have at least 2 rooms"
+        );
     }
 
     #[test]
@@ -7047,15 +7193,18 @@ data = """
             let sl = generate_quest_locator(role, &mut rng);
             assert!(
                 sl.generated.up_stairs.is_some(),
-                "Quest locator for {} missing up stairs", role
+                "Quest locator for {} missing up stairs",
+                role
             );
             assert!(
                 sl.generated.down_stairs.is_some(),
-                "Quest locator for {} missing down stairs", role
+                "Quest locator for {} missing down stairs",
+                role
             );
             assert!(
                 sl.generated.rooms.len() >= 2,
-                "Quest locator for {} should have >= 2 rooms", role
+                "Quest locator for {} should have >= 2 rooms",
+                role
             );
         }
     }
@@ -7065,7 +7214,10 @@ data = """
         let mut rng = test_rng();
         let sl = generate_quest_goal("valkyrie", &mut rng);
         assert!(sl.generated.up_stairs.is_some());
-        assert!(sl.generated.down_stairs.is_none(), "Quest goal has no down stairs");
+        assert!(
+            sl.generated.down_stairs.is_none(),
+            "Quest goal has no down stairs"
+        );
         assert!(sl.flags.no_teleport, "Quest goal should be no-teleport");
     }
 
@@ -7084,18 +7236,26 @@ data = """
             let sl = generate_quest_goal(role, &mut rng);
             assert!(
                 sl.generated.up_stairs.is_some(),
-                "Quest goal for {} missing up stairs", role
+                "Quest goal for {} missing up stairs",
+                role
             );
             assert!(
                 sl.generated.down_stairs.is_none(),
-                "Quest goal for {} should have no down stairs", role
+                "Quest goal for {} should have no down stairs",
+                role
             );
             assert!(
                 sl.flags.no_teleport,
-                "Quest goal for {} should be no-teleport", role
+                "Quest goal for {} should be no-teleport",
+                role
             );
             let altar = count_terrain(&sl.generated.map, Terrain::Altar);
-            assert!(altar >= 1, "Quest goal for {} should have altar, got {}", role, altar);
+            assert!(
+                altar >= 1,
+                "Quest goal for {} should have altar, got {}",
+                role,
+                altar
+            );
         }
     }
 
@@ -7116,11 +7276,13 @@ data = """
             let sl = generate_quest_filler(role, &mut rng);
             assert!(
                 sl.generated.up_stairs.is_some(),
-                "Quest filler for {} missing up stairs", role
+                "Quest filler for {} missing up stairs",
+                role
             );
             assert!(
                 sl.generated.down_stairs.is_some(),
-                "Quest filler for {} missing down stairs", role
+                "Quest filler for {} missing down stairs",
+                role
             );
         }
     }
@@ -7209,7 +7371,11 @@ data = """
         let mut rng = test_rng();
         let sl = generate_quest_start("priest", &mut rng);
         let altars = count_terrain(&sl.generated.map, Terrain::Altar);
-        assert!(altars >= 3, "Priest quest start should have multiple altars, got {}", altars);
+        assert!(
+            altars >= 3,
+            "Priest quest start should have multiple altars, got {}",
+            altars
+        );
     }
 
     #[test]
@@ -7217,7 +7383,10 @@ data = """
         let mut rng = test_rng();
         let sl = generate_quest_goal("valkyrie", &mut rng);
         let lava = count_terrain(&sl.generated.map, Terrain::Lava);
-        assert!(lava > 0, "Valkyrie quest goal should have lava (Surtur's lair)");
+        assert!(
+            lava > 0,
+            "Valkyrie quest goal should have lava (Surtur's lair)"
+        );
     }
 
     #[test]

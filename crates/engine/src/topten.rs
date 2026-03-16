@@ -415,8 +415,9 @@ pub fn killed_by_prefix(how: &EndHow) -> &'static str {
         EndHow::Stoning => "petrified by ",
         EndHow::Slimed => "turned to slime by ",
         EndHow::Genocided => "killed by ",
-        EndHow::Panicked | EndHow::Trickery | EndHow::Quit
-        | EndHow::Escaped | EndHow::Ascended => "",
+        EndHow::Panicked | EndHow::Trickery | EndHow::Quit | EndHow::Escaped | EndHow::Ascended => {
+            ""
+        }
     }
 }
 
@@ -476,9 +477,7 @@ impl TopTenList {
     /// Returns the rank (1-based) of the inserted entry, or None if it
     /// didn't make the cut.
     pub fn add_entry(&mut self, entry: TopTenEntry) -> Option<usize> {
-        let rank = self
-            .entries
-            .partition_point(|e| e.points >= entry.points);
+        let rank = self.entries.partition_point(|e| e.points >= entry.points);
 
         // If full and would be placed beyond the end, it doesn't make it.
         if rank >= self.max_entries {
@@ -599,8 +598,7 @@ impl Leaderboard {
         }
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| format!("Failed to serialize: {}", e))?;
-        std::fs::write(path, json)
-            .map_err(|e| format!("Failed to write: {}", e))
+        std::fs::write(path, json).map_err(|e| format!("Failed to write: {}", e))
     }
 
     /// Add a new entry and keep only the top 100.

@@ -19,9 +19,7 @@ use crate::monster_ai::Spellcaster;
 use crate::world::{GameWorld, HitPoints};
 
 // Re-export the spell types so consumers can `use mcastu::MageSpell` etc.
-pub use crate::monster_ai::{
-    choose_cleric_spell, choose_mage_spell, ClericSpell, MageSpell,
-};
+pub use crate::monster_ai::{ClericSpell, MageSpell, choose_cleric_spell, choose_mage_spell};
 
 // ---------------------------------------------------------------------------
 // castmu — primary entry point
@@ -53,16 +51,38 @@ pub fn castmu(
         let spell = choose_cleric_spell(caster.monster_level, rng);
         events.push(EngineEvent::msg_with(
             "monster-casts-cleric",
-            vec![("monster", mon_name.clone()), ("spell", format!("{spell:?}"))],
+            vec![
+                ("monster", mon_name.clone()),
+                ("spell", format!("{spell:?}")),
+            ],
         ));
-        apply_cleric_spell(world, monster, player, spell, caster.monster_level, rng, &mut events);
+        apply_cleric_spell(
+            world,
+            monster,
+            player,
+            spell,
+            caster.monster_level,
+            rng,
+            &mut events,
+        );
     } else {
         let spell = choose_mage_spell(caster.monster_level, rng);
         events.push(EngineEvent::msg_with(
             "monster-casts-mage",
-            vec![("monster", mon_name.clone()), ("spell", format!("{spell:?}"))],
+            vec![
+                ("monster", mon_name.clone()),
+                ("spell", format!("{spell:?}")),
+            ],
         ));
-        apply_mage_spell(world, monster, player, spell, caster.monster_level, rng, &mut events);
+        apply_mage_spell(
+            world,
+            monster,
+            player,
+            spell,
+            caster.monster_level,
+            rng,
+            &mut events,
+        );
     }
 
     events
@@ -251,12 +271,7 @@ fn deal_damage(
 }
 
 /// Heal a monster and emit `HpChange` if any healing actually occurred.
-fn heal_monster(
-    world: &mut GameWorld,
-    monster: Entity,
-    heal: i32,
-    events: &mut Vec<EngineEvent>,
-) {
+fn heal_monster(world: &mut GameWorld, monster: Entity, heal: i32, events: &mut Vec<EngineEvent>) {
     if let Some(mut hp) = world.get_component_mut::<HitPoints>(monster) {
         let old = hp.current;
         hp.current = (hp.current + heal).min(hp.max);
@@ -282,11 +297,11 @@ mod tests {
     use crate::action::Position;
     use crate::monster_ai::Spellcaster;
     use crate::world::{
-        ArmorClass, Attributes, ExperienceLevel, HitPoints, Monster,
-        MovementPoints, Name, Positioned, Speed, NORMAL_SPEED,
+        ArmorClass, Attributes, ExperienceLevel, HitPoints, Monster, MovementPoints, NORMAL_SPEED,
+        Name, Positioned, Speed,
     };
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_rng() -> SmallRng {
         SmallRng::seed_from_u64(42)
@@ -305,16 +320,14 @@ mod tests {
         world
     }
 
-    fn spawn_caster(
-        world: &mut GameWorld,
-        pos: Position,
-        level: u8,
-        is_cleric: bool,
-    ) -> Entity {
+    fn spawn_caster(world: &mut GameWorld, pos: Position, level: u8, is_cleric: bool) -> Entity {
         world.spawn((
             Monster,
             Positioned(pos),
-            HitPoints { current: 40, max: 40 },
+            HitPoints {
+                current: 40,
+                max: 40,
+            },
             ArmorClass(5),
             Attributes::default(),
             ExperienceLevel(level),
@@ -339,7 +352,10 @@ mod tests {
         let monster = world.spawn((
             Monster,
             Positioned(Position::new(12, 8)),
-            HitPoints { current: 20, max: 20 },
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
             Name("dummy".to_string()),
         ));
         let events = castmu(&mut world, monster, player, &mut rng);
@@ -356,7 +372,9 @@ mod tests {
         let events = castmu(&mut world, caster, player, &mut rng);
         assert!(!events.is_empty(), "mage spell should produce events");
         // First event should be the cast message.
-        assert!(matches!(&events[0], EngineEvent::Message { key, .. } if key == "monster-casts-mage"));
+        assert!(
+            matches!(&events[0], EngineEvent::Message { key, .. } if key == "monster-casts-mage")
+        );
     }
 
     #[test]
@@ -368,7 +386,9 @@ mod tests {
 
         let events = castmu(&mut world, caster, player, &mut rng);
         assert!(!events.is_empty(), "cleric spell should produce events");
-        assert!(matches!(&events[0], EngineEvent::Message { key, .. } if key == "monster-casts-cleric"));
+        assert!(
+            matches!(&events[0], EngineEvent::Message { key, .. } if key == "monster-casts-cleric")
+        );
     }
 
     // ── Cleric spells ────────────────────────────────────────────
@@ -381,9 +401,21 @@ mod tests {
         let monster = spawn_caster(&mut world, Position::new(12, 8), 5, true);
 
         let mut events = Vec::new();
-        apply_cleric_spell(&mut world, monster, player, ClericSpell::OpenWounds, 5, &mut rng, &mut events);
+        apply_cleric_spell(
+            &mut world,
+            monster,
+            player,
+            ClericSpell::OpenWounds,
+            5,
+            &mut rng,
+            &mut events,
+        );
 
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::HpChange { amount, .. } if *amount < 0)));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::HpChange { amount, .. } if *amount < 0))
+        );
     }
 
     #[test]
@@ -399,7 +431,15 @@ mod tests {
         }
 
         let mut events = Vec::new();
-        apply_cleric_spell(&mut world, monster, player, ClericSpell::CureSelf, 10, &mut rng, &mut events);
+        apply_cleric_spell(
+            &mut world,
+            monster,
+            player,
+            ClericSpell::CureSelf,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         let hp = world.get_component::<HitPoints>(monster).unwrap();
         assert!(hp.current > 10, "cure self should heal monster");
@@ -413,11 +453,22 @@ mod tests {
         let monster = spawn_caster(&mut world, Position::new(12, 8), 10, true);
 
         let mut events = Vec::new();
-        apply_cleric_spell(&mut world, monster, player, ClericSpell::ConfuseYou, 10, &mut rng, &mut events);
+        apply_cleric_spell(
+            &mut world,
+            monster,
+            player,
+            ClericSpell::ConfuseYou,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::StatusApplied { status: StatusEffect::Confused, .. }
+            EngineEvent::StatusApplied {
+                status: StatusEffect::Confused,
+                ..
+            }
         )));
     }
 
@@ -429,11 +480,22 @@ mod tests {
         let monster = spawn_caster(&mut world, Position::new(12, 8), 10, true);
 
         let mut events = Vec::new();
-        apply_cleric_spell(&mut world, monster, player, ClericSpell::Paralyze, 10, &mut rng, &mut events);
+        apply_cleric_spell(
+            &mut world,
+            monster,
+            player,
+            ClericSpell::Paralyze,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::StatusApplied { status: StatusEffect::Paralyzed, .. }
+            EngineEvent::StatusApplied {
+                status: StatusEffect::Paralyzed,
+                ..
+            }
         )));
     }
 
@@ -445,11 +507,22 @@ mod tests {
         let monster = spawn_caster(&mut world, Position::new(12, 8), 10, true);
 
         let mut events = Vec::new();
-        apply_cleric_spell(&mut world, monster, player, ClericSpell::BlindYou, 10, &mut rng, &mut events);
+        apply_cleric_spell(
+            &mut world,
+            monster,
+            player,
+            ClericSpell::BlindYou,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::StatusApplied { status: StatusEffect::Blind, .. }
+            EngineEvent::StatusApplied {
+                status: StatusEffect::Blind,
+                ..
+            }
         )));
     }
 
@@ -463,14 +536,28 @@ mod tests {
         let orig_hp = world.get_component::<HitPoints>(player).unwrap().current;
 
         let mut events = Vec::new();
-        apply_cleric_spell(&mut world, monster, player, ClericSpell::Geyser, 10, &mut rng, &mut events);
+        apply_cleric_spell(
+            &mut world,
+            monster,
+            player,
+            ClericSpell::Geyser,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         let new_hp = world.get_component::<HitPoints>(player).unwrap().current;
         assert!(new_hp < orig_hp, "geyser should deal damage");
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::StatusApplied { status: StatusEffect::Stunned, .. }
-        )), "geyser should stun");
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                EngineEvent::StatusApplied {
+                    status: StatusEffect::Stunned,
+                    ..
+                }
+            )),
+            "geyser should stun"
+        );
     }
 
     #[test]
@@ -483,7 +570,15 @@ mod tests {
         let orig_hp = world.get_component::<HitPoints>(player).unwrap().current;
 
         let mut events = Vec::new();
-        apply_cleric_spell(&mut world, monster, player, ClericSpell::FirePillar, 10, &mut rng, &mut events);
+        apply_cleric_spell(
+            &mut world,
+            monster,
+            player,
+            ClericSpell::FirePillar,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         let new_hp = world.get_component::<HitPoints>(player).unwrap().current;
         assert!(new_hp < orig_hp, "fire pillar should deal damage");
@@ -499,7 +594,15 @@ mod tests {
         let orig_hp = world.get_component::<HitPoints>(player).unwrap().current;
 
         let mut events = Vec::new();
-        apply_cleric_spell(&mut world, monster, player, ClericSpell::Lightning, 10, &mut rng, &mut events);
+        apply_cleric_spell(
+            &mut world,
+            monster,
+            player,
+            ClericSpell::Lightning,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         let new_hp = world.get_component::<HitPoints>(player).unwrap().current;
         assert!(new_hp < orig_hp, "lightning should deal damage");
@@ -517,7 +620,15 @@ mod tests {
         let orig_hp = world.get_component::<HitPoints>(player).unwrap().current;
 
         let mut events = Vec::new();
-        apply_mage_spell(&mut world, monster, player, MageSpell::PsiBolt, 10, &mut rng, &mut events);
+        apply_mage_spell(
+            &mut world,
+            monster,
+            player,
+            MageSpell::PsiBolt,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         let new_hp = world.get_component::<HitPoints>(player).unwrap().current;
         assert!(new_hp < orig_hp, "psi bolt should deal damage");
@@ -537,12 +648,23 @@ mod tests {
         }
 
         let mut events = Vec::new();
-        apply_mage_spell(&mut world, monster, player, MageSpell::DeathTouch, 22, &mut rng, &mut events);
+        apply_mage_spell(
+            &mut world,
+            monster,
+            player,
+            MageSpell::DeathTouch,
+            22,
+            &mut rng,
+            &mut events,
+        );
 
         let new_hp = world.get_component::<HitPoints>(player).unwrap().current;
         // 8d6 minimum 8, maximum 48.
         assert!(new_hp < 200, "death touch should deal damage");
-        assert!(new_hp <= 200 - 8, "death touch should deal at least 8 damage");
+        assert!(
+            new_hp <= 200 - 8,
+            "death touch should deal at least 8 damage"
+        );
     }
 
     #[test]
@@ -553,7 +675,15 @@ mod tests {
         let monster = spawn_caster(&mut world, Position::new(12, 8), 10, false);
 
         let mut events = Vec::new();
-        apply_mage_spell(&mut world, monster, player, MageSpell::HasteSelf, 10, &mut rng, &mut events);
+        apply_mage_spell(
+            &mut world,
+            monster,
+            player,
+            MageSpell::HasteSelf,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         assert!(events.iter().any(|e| matches!(
             e,
@@ -573,11 +703,22 @@ mod tests {
         let monster = spawn_caster(&mut world, Position::new(12, 8), 10, false);
 
         let mut events = Vec::new();
-        apply_mage_spell(&mut world, monster, player, MageSpell::StunYou, 10, &mut rng, &mut events);
+        apply_mage_spell(
+            &mut world,
+            monster,
+            player,
+            MageSpell::StunYou,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::StatusApplied { status: StatusEffect::Stunned, .. }
+            EngineEvent::StatusApplied {
+                status: StatusEffect::Stunned,
+                ..
+            }
         )));
     }
 
@@ -589,7 +730,15 @@ mod tests {
         let monster = spawn_caster(&mut world, Position::new(12, 8), 10, false);
 
         let mut events = Vec::new();
-        apply_mage_spell(&mut world, monster, player, MageSpell::Disappear, 10, &mut rng, &mut events);
+        apply_mage_spell(
+            &mut world,
+            monster,
+            player,
+            MageSpell::Disappear,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         assert!(events.iter().any(|e| matches!(
             e,
@@ -613,7 +762,15 @@ mod tests {
         }
 
         let mut events = Vec::new();
-        apply_mage_spell(&mut world, monster, player, MageSpell::CureSelf, 10, &mut rng, &mut events);
+        apply_mage_spell(
+            &mut world,
+            monster,
+            player,
+            MageSpell::CureSelf,
+            10,
+            &mut rng,
+            &mut events,
+        );
 
         let hp = world.get_component::<HitPoints>(monster).unwrap();
         assert!(hp.current > 10, "mage cure self should heal");
@@ -647,7 +804,10 @@ mod tests {
                 break;
             }
         }
-        assert!(saw_death, "level 24 mage should occasionally pick death touch");
+        assert!(
+            saw_death,
+            "level 24 mage should occasionally pick death touch"
+        );
     }
 
     #[test]
@@ -660,6 +820,9 @@ mod tests {
                 break;
             }
         }
-        assert!(saw_geyser, "level 24 cleric should occasionally pick geyser");
+        assert!(
+            saw_geyser,
+            "level 24 cleric should occasionally pick geyser"
+        );
     }
 }

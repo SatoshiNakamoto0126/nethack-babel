@@ -296,11 +296,20 @@ fn test_status_mask_bits() {
     assert_eq!(status_bits::STUNNED, 4);
     assert_eq!(status_bits::PUNISHED, 1 << 13);
     // Verify no overlap
-    let all = status_bits::BLIND | status_bits::CONFUSED | status_bits::STUNNED
-        | status_bits::HALLUCINATING | status_bits::LEVITATING | status_bits::INVISIBLE
-        | status_bits::SICK | status_bits::STONED | status_bits::SLIMED
-        | status_bits::STRANGLED | status_bits::DEAF | status_bits::FUMBLING
-        | status_bits::SLEEPING | status_bits::PUNISHED;
+    let all = status_bits::BLIND
+        | status_bits::CONFUSED
+        | status_bits::STUNNED
+        | status_bits::HALLUCINATING
+        | status_bits::LEVITATING
+        | status_bits::INVISIBLE
+        | status_bits::SICK
+        | status_bits::STONED
+        | status_bits::SLIMED
+        | status_bits::STRANGLED
+        | status_bits::DEAF
+        | status_bits::FUMBLING
+        | status_bits::SLEEPING
+        | status_bits::PUNISHED;
     assert_eq!(all, (1 << 14) - 1, "14 non-overlapping status bits");
 }
 
@@ -312,48 +321,67 @@ fn test_diagonal_squeeze_detection() {
     // C recording shows: player at (40,10), tries to move NE (key 'u'=117),
     // but is overloaded and walls block diagonal. Position stays (40,10).
     let jsonl = concat!(
-        r#"{"turn":1,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":900,"inv_weight":3000,"status_mask":0},"action":{"type":"key","key":117},"rng_calls":[]}"#, "\n",
+        r#"{"turn":1,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":900,"inv_weight":3000,"status_mask":0},"action":{"type":"key","key":117},"rng_calls":[]}"#,
+        "\n",
         r#"{"turn":2,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":899,"inv_weight":3000,"status_mask":0},"action":{"type":"key","key":117},"rng_calls":[]}"#,
     );
 
-    let turns: Vec<CTurnSnapshot> = jsonl.lines()
+    let turns: Vec<CTurnSnapshot> = jsonl
+        .lines()
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
 
     // After attempting diagonal move while overloaded, position should NOT change
-    assert_eq!(turns[0].player.x, turns[1].player.x,
-        "Diagonal squeeze: x should not change when overloaded");
-    assert_eq!(turns[0].player.y, turns[1].player.y,
-        "Diagonal squeeze: y should not change when overloaded");
+    assert_eq!(
+        turns[0].player.x, turns[1].player.x,
+        "Diagonal squeeze: x should not change when overloaded"
+    );
+    assert_eq!(
+        turns[0].player.y, turns[1].player.y,
+        "Diagonal squeeze: y should not change when overloaded"
+    );
     // But hunger should decrease (turn was consumed)
-    assert!(turns[1].player.hunger < turns[0].player.hunger,
-        "Turn was consumed even though movement was blocked");
+    assert!(
+        turns[1].player.hunger < turns[0].player.hunger,
+        "Turn was consumed even though movement was blocked"
+    );
 }
 
 #[test]
 fn test_stoning_countdown_from_recording() {
     // Scenario: Player gets stoned, countdown ticks 5->4->3->2->1->0 (death)
     let jsonl = concat!(
-        r#"{"turn":10,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":800,"status_mask":128},"action":{"type":"key","key":46},"rng_calls":[]}"#, "\n",
-        r#"{"turn":11,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":799,"status_mask":128},"action":{"type":"key","key":46},"rng_calls":[]}"#, "\n",
-        r#"{"turn":12,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":798,"status_mask":128},"action":{"type":"key","key":46},"rng_calls":[]}"#, "\n",
-        r#"{"turn":13,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":797,"status_mask":128},"action":{"type":"key","key":46},"rng_calls":[]}"#, "\n",
+        r#"{"turn":10,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":800,"status_mask":128},"action":{"type":"key","key":46},"rng_calls":[]}"#,
+        "\n",
+        r#"{"turn":11,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":799,"status_mask":128},"action":{"type":"key","key":46},"rng_calls":[]}"#,
+        "\n",
+        r#"{"turn":12,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":798,"status_mask":128},"action":{"type":"key","key":46},"rng_calls":[]}"#,
+        "\n",
+        r#"{"turn":13,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":797,"status_mask":128},"action":{"type":"key","key":46},"rng_calls":[]}"#,
+        "\n",
         r#"{"turn":14,"player":{"hp":0,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":796,"status_mask":128},"action":{"type":"key","key":46},"rng_calls":[]}"#,
     );
 
-    let turns: Vec<CTurnSnapshot> = jsonl.lines()
+    let turns: Vec<CTurnSnapshot> = jsonl
+        .lines()
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
 
     // Stoning bit (1<<7 = 128) should be set throughout
     for t in &turns {
-        assert!(t.player.status_mask.unwrap_or(0) & status_bits::STONED != 0,
-            "Turn {}: stoning status should be active", t.turn);
+        assert!(
+            t.player.status_mask.unwrap_or(0) & status_bits::STONED != 0,
+            "Turn {}: stoning status should be active",
+            t.turn
+        );
     }
 
     // Final turn: HP drops to 0 (death by petrification)
-    assert_eq!(turns.last().unwrap().player.hp, 0,
-        "Stoning should kill at end of countdown");
+    assert_eq!(
+        turns.last().unwrap().player.hp,
+        0,
+        "Stoning should kill at end of countdown"
+    );
 }
 
 #[test]
@@ -370,7 +398,8 @@ fn test_hp_regen_rate_from_recording() {
     }
     let jsonl = jsonl_lines.join("\n");
 
-    let turns: Vec<CTurnSnapshot> = jsonl.lines()
+    let turns: Vec<CTurnSnapshot> = jsonl
+        .lines()
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
 
@@ -383,48 +412,63 @@ fn test_hp_regen_rate_from_recording() {
         }
     }
 
-    assert!(regen_turn.is_some(), "HP should regenerate at some point during 35 rest turns");
+    assert!(
+        regen_turn.is_some(),
+        "HP should regenerate at some point during 35 rest turns"
+    );
     let rt = regen_turn.unwrap();
     // At level 1, regen period = 30-1 = 29, so first regen around turn 29-30
-    assert!(rt >= 28 && rt <= 32,
-        "Level 1 regen should happen around turn 29-30, got turn {}", rt);
+    assert!(
+        rt >= 28 && rt <= 32,
+        "Level 1 regen should happen around turn 29-30, got turn {}",
+        rt
+    );
 }
 
 #[test]
 fn test_inventory_weight_tracking() {
     let jsonl = concat!(
-        r#"{"turn":1,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":900,"inv_weight":150},"action":{"type":"key","key":46},"rng_calls":[]}"#, "\n",
+        r#"{"turn":1,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":900,"inv_weight":150},"action":{"type":"key","key":46},"rng_calls":[]}"#,
+        "\n",
         r#"{"turn":2,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":899,"inv_weight":150},"action":{"type":"key","key":46},"rng_calls":[]}"#,
     );
 
-    let turns: Vec<CTurnSnapshot> = jsonl.lines()
+    let turns: Vec<CTurnSnapshot> = jsonl
+        .lines()
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
 
     // Resting should not change inventory weight
-    assert_eq!(turns[0].player.inv_weight.unwrap_or(0),
-               turns[1].player.inv_weight.unwrap_or(0),
-        "Inventory weight should not change while resting");
+    assert_eq!(
+        turns[0].player.inv_weight.unwrap_or(0),
+        turns[1].player.inv_weight.unwrap_or(0),
+        "Inventory weight should not change while resting"
+    );
 }
 
 #[test]
 fn test_monster_count_consistency() {
     let jsonl = concat!(
-        r#"{"turn":1,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":900},"action":{"type":"key","key":46},"rng_calls":[],"monster_count":5}"#, "\n",
+        r#"{"turn":1,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":900},"action":{"type":"key","key":46},"rng_calls":[],"monster_count":5}"#,
+        "\n",
         r#"{"turn":2,"player":{"hp":16,"maxhp":16,"x":40,"y":10,"ac":10,"level":1,"hunger":899},"action":{"type":"key","key":46},"rng_calls":[],"monster_count":5}"#,
     );
 
-    let turns: Vec<CTurnSnapshot> = jsonl.lines()
+    let turns: Vec<CTurnSnapshot> = jsonl
+        .lines()
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
 
     // Monster count should not change when just resting (no combat, no spawn)
     // Note: C has 1/70 random spawn chance, so this may vary
     let delta = (turns[1].monster_count.unwrap_or(0) as i32
-        - turns[0].monster_count.unwrap_or(0) as i32).abs();
-    assert!(delta <= 1,
+        - turns[0].monster_count.unwrap_or(0) as i32)
+        .abs();
+    assert!(
+        delta <= 1,
         "Monster count should not wildly change between rest turns (delta={})",
-        delta);
+        delta
+    );
 }
 
 #[test]
@@ -455,13 +499,13 @@ fn test_validate_all_fuzz_recordings() {
             // Validate RNG calls
             for call in &snapshot.rng_calls {
                 total_rng_calls += 1;
-                if call.func == "rn2"
-                    && (call.result < 0 || call.result >= call.arg)
-                {
+                if call.func == "rn2" && (call.result < 0 || call.result >= call.arg) {
                     divergences.push(format!(
                         "{}: turn {}: rn2({}) = {} OUT OF RANGE",
-                        entry.path().display(), snapshot.turn,
-                        call.arg, call.result
+                        entry.path().display(),
+                        snapshot.turn,
+                        call.arg,
+                        call.result
                     ));
                 }
             }
@@ -470,27 +514,38 @@ fn test_validate_all_fuzz_recordings() {
             if snapshot.player.hp > snapshot.player.maxhp {
                 divergences.push(format!(
                     "{}: turn {}: HP {} > MaxHP {}",
-                    entry.path().display(), snapshot.turn,
-                    snapshot.player.hp, snapshot.player.maxhp
+                    entry.path().display(),
+                    snapshot.turn,
+                    snapshot.player.hp,
+                    snapshot.player.maxhp
                 ));
             }
 
             if snapshot.player.hunger < -1000 {
                 divergences.push(format!(
                     "{}: turn {}: hunger {} is extremely negative",
-                    entry.path().display(), snapshot.turn,
+                    entry.path().display(),
+                    snapshot.turn,
                     snapshot.player.hunger
                 ));
             }
         }
     }
 
-    eprintln!("Validated {} fuzz recordings: {} turns, {} RNG calls",
-        total_files, total_turns, total_rng_calls);
+    eprintln!(
+        "Validated {} fuzz recordings: {} turns, {} RNG calls",
+        total_files, total_turns, total_rng_calls
+    );
 
-    assert!(divergences.is_empty(),
+    assert!(
+        divergences.is_empty(),
         "Found {} state invariant violations:\n{}",
         divergences.len(),
-        divergences.iter().take(20).cloned().collect::<Vec<_>>().join("\n")
+        divergences
+            .iter()
+            .take(20)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }

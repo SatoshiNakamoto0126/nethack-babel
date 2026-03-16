@@ -948,25 +948,28 @@ pub fn spec_applies(artifact: &ArtifactDef, defender: &DefenderInfo) -> bool {
     if artifact.spfx.contains(ArtifactFlags::DCLAS) {
         // Match by monster symbol.
         if let ArtifactTarget::MonsterSymbol(sym) = artifact.target
-            && defender.symbol != sym {
-                return false;
-            }
+            && defender.symbol != sym
+        {
+            return false;
+        }
     }
 
     if artifact.spfx.contains(ArtifactFlags::DFLAG2) {
         // Match by M2 flag.
         if let ArtifactTarget::MonsterFlag(flag) = artifact.target
-            && !defender.flags.intersects(flag) {
-                return false;
-            }
+            && !defender.flags.intersects(flag)
+        {
+            return false;
+        }
     }
 
     if artifact.spfx.contains(ArtifactFlags::DALIGN) {
         // Match non-aligned targets.
         if let (Some(art_align), Some(def_align)) = (artifact.alignment, defender.alignment)
-            && art_align == def_align {
-                return false;
-            }
+            && art_align == def_align
+        {
+            return false;
+        }
     }
 
     // If ATTK, check element resistance.
@@ -1017,11 +1020,7 @@ pub fn spec_applies(artifact: &ArtifactDef, defender: &DefenderInfo) -> bool {
 ///
 /// Returns `rnd(damn)` if the artifact's attack applies, else 0.
 /// Matches the C `spec_abon()` logic.
-pub fn spec_abon<R: Rng>(
-    artifact: &ArtifactDef,
-    defender: &DefenderInfo,
-    rng: &mut R,
-) -> i8 {
+pub fn spec_abon<R: Rng>(artifact: &ArtifactDef, defender: &DefenderInfo, rng: &mut R) -> i8 {
     if artifact.attack_bonus.sides > 0 && spec_applies(artifact, defender) {
         rng.random_range(1..=artifact.attack_bonus.sides as i8)
     } else {
@@ -1108,9 +1107,7 @@ pub fn touch_artifact<R: Rng>(
     // Check alignment mismatch.
     let badalign = if artifact.spfx.contains(ArtifactFlags::RESTR) {
         match artifact.alignment {
-            Some(art_align) => {
-                art_align != toucher.alignment || toucher.alignment_record < 0
-            }
+            Some(art_align) => art_align != toucher.alignment || toucher.alignment_record < 0,
             None => false, // A_NONE artifacts never blast for alignment
         }
     } else {
@@ -1335,10 +1332,11 @@ pub fn artifact_gift<R: Rng>(
 
         // Check if this is the player's role-specific artifact.
         if let Some(art_role) = art.role
-            && art_role == player_role {
-                role_artifact = Some(art.id);
-                break; // Role artifacts take priority.
-            }
+            && art_role == player_role
+        {
+            role_artifact = Some(art.id);
+            break; // Role artifacts take priority.
+        }
 
         // Check alignment compatibility.
         let align_ok = match art.alignment {
@@ -1795,16 +1793,7 @@ mod tests {
         let trials = 6000;
 
         for _ in 0..trials {
-            if artifact_gift(
-                0,
-                0,
-                Alignment::Lawful,
-                ROLE_KNIGHT,
-                &[],
-                &mut rng,
-            )
-            .is_some()
-            {
+            if artifact_gift(0, 0, Alignment::Lawful, ROLE_KNIGHT, &[], &mut rng).is_some() {
                 successes += 1;
             }
         }
@@ -1878,14 +1867,8 @@ mod tests {
 
         // Try many times since it's 1/6 for a knight.
         for _ in 0..100 {
-            let result = try_create_excalibur(
-                OBJ_LONG_SWORD,
-                5,
-                Alignment::Lawful,
-                true,
-                false,
-                &mut rng,
-            );
+            let result =
+                try_create_excalibur(OBJ_LONG_SWORD, 5, Alignment::Lawful, true, false, &mut rng);
             if result == ExcaliburResult::Success {
                 found = true;
                 break;
@@ -1941,7 +1924,9 @@ mod tests {
         // First invoke should succeed.
         let events1 = invoke_artifact(frost_brand, 100, &mut state, &mut rng);
         assert!(
-            events1.iter().any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("artifact-invoke"))),
+            events1.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key.contains("artifact-invoke"))
+            ),
             "first invoke should succeed"
         );
 
@@ -2000,7 +1985,10 @@ mod tests {
     #[test]
     fn quest_artifact_identified() {
         let orb = get_artifact(ArtifactId(21)).unwrap();
-        assert!(is_quest_artifact(orb), "Orb of Detection is a quest artifact");
+        assert!(
+            is_quest_artifact(orb),
+            "Orb of Detection is a quest artifact"
+        );
         assert_eq!(orb.role, Some(ROLE_ARCHEOLOGIST));
     }
 
@@ -2018,7 +2006,10 @@ mod tests {
     #[test]
     fn excalibur_confers_drain_resistance() {
         let excalibur = get_artifact(ArtifactId(1)).unwrap();
-        assert!(artifact_confers_when_wielded(excalibur, DamageType::DrainLife));
+        assert!(artifact_confers_when_wielded(
+            excalibur,
+            DamageType::DrainLife
+        ));
         assert!(!artifact_confers_when_wielded(excalibur, DamageType::Fire));
     }
 
@@ -2032,7 +2023,10 @@ mod tests {
     fn orb_of_detection_confers_magic_resistance_when_carried() {
         let orb = get_artifact(ArtifactId(21)).unwrap();
         assert!(artifact_confers_when_carried(orb, DamageType::MagicMissile));
-        assert!(!artifact_confers_when_wielded(orb, DamageType::MagicMissile));
+        assert!(!artifact_confers_when_wielded(
+            orb,
+            DamageType::MagicMissile
+        ));
     }
 
     // ── Test 12: Vorpal Blade beheading ───────────────────────

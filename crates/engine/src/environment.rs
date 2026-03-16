@@ -41,10 +41,7 @@ pub enum FountainEffect {
 ///   - Otherwise 1/5 water moccasin.
 ///   - Then 1/20 see invisible, 1/20 poison, 1/10 attribute change.
 ///   - Otherwise nothing.
-pub fn quaff_fountain(
-    world: &mut GameWorld,
-    rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+pub fn quaff_fountain(world: &mut GameWorld, rng: &mut impl Rng) -> Vec<EngineEvent> {
     let player = world.player();
     let player_pos = match world.get_component::<Positioned>(player) {
         Some(p) => p.0,
@@ -114,9 +111,17 @@ pub fn quaff_fountain(
             if let Some(mut attrs) = world.get_component_mut::<Attributes>(player) {
                 match stat_index {
                     0 => attrs.strength = (attrs.strength as i16 + delta as i16).clamp(3, 25) as u8,
-                    1 => attrs.dexterity = (attrs.dexterity as i16 + delta as i16).clamp(3, 25) as u8,
-                    2 => attrs.constitution = (attrs.constitution as i16 + delta as i16).clamp(3, 25) as u8,
-                    3 => attrs.intelligence = (attrs.intelligence as i16 + delta as i16).clamp(3, 25) as u8,
+                    1 => {
+                        attrs.dexterity = (attrs.dexterity as i16 + delta as i16).clamp(3, 25) as u8
+                    }
+                    2 => {
+                        attrs.constitution =
+                            (attrs.constitution as i16 + delta as i16).clamp(3, 25) as u8
+                    }
+                    3 => {
+                        attrs.intelligence =
+                            (attrs.intelligence as i16 + delta as i16).clamp(3, 25) as u8
+                    }
                     4 => attrs.wisdom = (attrs.wisdom as i16 + delta as i16).clamp(3, 25) as u8,
                     _ => attrs.charisma = (attrs.charisma as i16 + delta as i16).clamp(3, 25) as u8,
                 }
@@ -150,10 +155,9 @@ pub fn quaff_fountain(
 /// Roll the fountain effect without side effects (for testing).
 pub fn roll_fountain_effect(rng: &mut impl Rng) -> FountainEffect {
     // Wish: 1/30 * 1/10 = 1/300.
-    if rng.random_range(0..30) == 0
-        && rng.random_range(0..10) == 0 {
-            return FountainEffect::Wish;
-        }
+    if rng.random_range(0..30) == 0 && rng.random_range(0..10) == 0 {
+        return FountainEffect::Wish;
+    }
 
     // Water moccasin: 1/5.
     if rng.random_range(0..5) == 0 {
@@ -201,10 +205,7 @@ pub enum ThroneEffect {
 ///
 /// NetHack's `dosit()` for thrones: each positive effect is ~1/13.
 /// After a positive effect, the throne disappears.
-pub fn sit_throne(
-    world: &mut GameWorld,
-    rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+pub fn sit_throne(world: &mut GameWorld, rng: &mut impl Rng) -> Vec<EngineEvent> {
     let player = world.player();
     let player_pos = match world.get_component::<Positioned>(player) {
         Some(p) => p.0,
@@ -436,11 +437,7 @@ pub fn try_kick_door(strength: u8, rng: &mut impl Rng) -> KickResult {
 /// Find a monster entity at the given position (excluding the player).
 fn find_monster_at(world: &GameWorld, pos: Position) -> Option<Entity> {
     let player = world.player();
-    for (entity, (positioned, _monster)) in world
-        .ecs()
-        .query::<(&Positioned, &Monster)>()
-        .iter()
-    {
+    for (entity, (positioned, _monster)) in world.ecs().query::<(&Positioned, &Monster)>().iter() {
         if entity != player && positioned.0 == pos {
             return Some(entity);
         }
@@ -452,9 +449,11 @@ fn find_monster_at(world: &GameWorld, pos: Position) -> Option<Entity> {
 fn find_floor_item_at(world: &GameWorld, pos: Position) -> Option<Entity> {
     for (entity, loc) in world.ecs().query::<&ObjectLocation>().iter() {
         if let ObjectLocation::Floor { x, y } = *loc
-            && x == pos.x as i16 && y == pos.y as i16 {
-                return Some(entity);
-            }
+            && x == pos.x as i16
+            && y == pos.y as i16
+        {
+            return Some(entity);
+        }
     }
     None
 }
@@ -508,26 +507,23 @@ pub fn container_contents(
 
     for (entity, core) in world.query::<ObjectCore>().iter() {
         if let Some(loc) = world.get_component::<ObjectLocation>(entity)
-            && let ObjectLocation::Contained {
-                container_id: cid,
-            } = *loc
-                && cid == container_id {
-                    items.push((entity, core.clone()));
-                }
+            && let ObjectLocation::Contained { container_id: cid } = *loc
+            && cid == container_id
+        {
+            items.push((entity, core.clone()));
+        }
     }
     items
 }
 
 /// Open a container: list its contents and emit events.
-pub fn open_container(
-    world: &GameWorld,
-    container_entity: Entity,
-) -> Vec<EngineEvent> {
+pub fn open_container(world: &GameWorld, container_entity: Entity) -> Vec<EngineEvent> {
     // Check if locked.
     if let Some(container) = world.get_component::<Container>(container_entity)
-        && container.locked {
-            return vec![EngineEvent::msg("container-locked")];
-        }
+        && container.locked
+    {
+        return vec![EngineEvent::msg("container-locked")];
+    }
 
     let contents = container_contents(world, container_entity);
     let mut events = Vec::new();
@@ -555,9 +551,10 @@ pub fn put_in_container(
 ) -> Vec<EngineEvent> {
     // Verify the container is not locked.
     if let Some(container) = world.get_component::<Container>(container_entity)
-        && container.locked {
-            return vec![EngineEvent::msg("container-locked")];
-        }
+        && container.locked
+    {
+        return vec![EngineEvent::msg("container-locked")];
+    }
 
     // Update item location.
     let container_id = container_entity.to_bits().get() as u32;
@@ -601,10 +598,7 @@ pub fn take_from_container(
 /// For a bag of holding, contents weigh 1/4.  For other containers,
 /// the weight is the container's own weight plus the full weight of
 /// its contents.
-pub fn container_weight(
-    world: &GameWorld,
-    container_entity: Entity,
-) -> u32 {
+pub fn container_weight(world: &GameWorld, container_entity: Entity) -> u32 {
     let own_weight = world
         .get_component::<ObjectCore>(container_entity)
         .map(|c| c.weight)
@@ -704,7 +698,11 @@ mod tests {
         let events = quaff_fountain(&mut world, &mut rng);
 
         // Should at least have the FountainDrank event.
-        assert!(events.iter().any(|e| matches!(e, EngineEvent::FountainDrank { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::FountainDrank { .. }))
+        );
     }
 
     #[test]
@@ -845,7 +843,10 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
             let events = kick(&mut world, Direction::East, false, &mut rng);
 
-            if events.iter().any(|e| matches!(e, EngineEvent::DoorBroken { .. })) {
+            if events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::DoorBroken { .. }))
+            {
                 broke = true;
                 break;
             }
@@ -935,10 +936,7 @@ mod tests {
 
     // ── Container tests ─────────────────────────────────────────────
 
-    fn spawn_container(
-        world: &mut GameWorld,
-        ctype: ContainerType,
-    ) -> Entity {
+    fn spawn_container(world: &mut GameWorld, ctype: ContainerType) -> Entity {
         let core = ObjectCore {
             otyp: ObjectTypeId(200), // dummy
             object_class: ObjectClass::Tool,
@@ -1027,7 +1025,9 @@ mod tests {
         // Verify item is no longer in player inventory.
         let player = world.player();
         {
-            let inv = world.get_component::<crate::inventory::Inventory>(player).unwrap();
+            let inv = world
+                .get_component::<crate::inventory::Inventory>(player)
+                .unwrap();
             assert!(!inv.items.contains(&item));
         }
 
@@ -1040,7 +1040,9 @@ mod tests {
 
         // Verify item is back in player inventory.
         {
-            let inv = world.get_component::<crate::inventory::Inventory>(player).unwrap();
+            let inv = world
+                .get_component::<crate::inventory::Inventory>(player)
+                .unwrap();
             assert!(inv.items.contains(&item));
         }
 
@@ -1060,7 +1062,10 @@ mod tests {
 
         // Container weight: own (15) + contents (100/4 = 25) = 40.
         let weight = container_weight(&world, boh);
-        assert_eq!(weight, 40, "Bag of holding should reduce contents weight to 1/4");
+        assert_eq!(
+            weight, 40,
+            "Bag of holding should reduce contents weight to 1/4"
+        );
 
         // Compare with a regular sack.
         let mut world2 = setup_world_at(Position::new(5, 5));
@@ -1069,7 +1074,10 @@ mod tests {
         put_in_container(&mut world2, item2, sack);
 
         let sack_weight = container_weight(&world2, sack);
-        assert_eq!(sack_weight, 115, "Regular sack: own (15) + contents (100) = 115");
+        assert_eq!(
+            sack_weight, 115,
+            "Regular sack: own (15) + contents (100) = 115"
+        );
     }
 
     #[test]

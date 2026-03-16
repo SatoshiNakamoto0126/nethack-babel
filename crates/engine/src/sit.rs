@@ -24,7 +24,11 @@ use crate::event::EngineEvent;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ThroneEffect {
     /// Case 1: lose 1-4 from a random attribute, take rnd(10) damage.
-    AttributeLossAndDamage { attr_index: u8, attr_loss: u8, damage: u32 },
+    AttributeLossAndDamage {
+        attr_index: u8,
+        attr_loss: u8,
+        damage: u32,
+    },
     /// Case 2: gain +1 to a random attribute.
     AttributeGain { attr_index: u8 },
     /// Case 3: electric shock (rnd(6) if resistant, rnd(30) otherwise).
@@ -40,9 +44,17 @@ pub enum ThroneEffect {
     /// Case 8: genocide offer.
     Genocide,
     /// Case 9: blindness + luck loss (if Luck > 0), or random curse.
-    CurseOrBlind { blind_duration: u32, luck_loss: i32, is_blind: bool },
+    CurseOrBlind {
+        blind_duration: u32,
+        luck_loss: i32,
+        is_blind: bool,
+    },
     /// Case 10: see invisible, or map, or confusion.
-    VisionOrMap { gained_see_invis: bool, mapped: bool, confused: u32 },
+    VisionOrMap {
+        gained_see_invis: bool,
+        mapped: bool,
+        confused: u32,
+    },
     /// Case 11: teleport (if Luck >= 0) or aggravate monsters.
     TeleportOrAggravate { teleported: bool },
     /// Case 12: identify some inventory items.
@@ -151,11 +163,9 @@ pub fn roll_throne_effect<R: Rng>(
                 }
             }
         }
-        11 => {
-            ThroneEffect::TeleportOrAggravate {
-                teleported: luck >= 0,
-            }
-        }
+        11 => ThroneEffect::TeleportOrAggravate {
+            teleported: luck >= 0,
+        },
         12 => {
             let count = rng.random_range(0..5u32); // rn2(5)
             ThroneEffect::Identify { count }
@@ -200,10 +210,7 @@ pub enum SpecialThroneEffect {
 }
 
 /// Roll a special throne effect (Vlad's Tower).
-pub fn roll_special_throne<R: Rng>(
-    rng: &mut R,
-    has_acid_resist: bool,
-) -> SpecialThroneEffect {
+pub fn roll_special_throne<R: Rng>(rng: &mut R, has_acid_resist: bool) -> SpecialThroneEffect {
     let effect = rng.random_range(1..=13);
 
     match effect {
@@ -371,11 +378,7 @@ pub struct CurseResult {
 /// Determine how many items to curse based on Antimagic and Half_spell_damage.
 ///
 /// Mirrors C `rndcurse`: cnt = rnd(6 / (1 + !!Antimagic + !!Half_spell_damage)).
-pub fn curse_count<R: Rng>(
-    rng: &mut R,
-    has_antimagic: bool,
-    has_half_spell: bool,
-) -> u32 {
+pub fn curse_count<R: Rng>(rng: &mut R, has_antimagic: bool, has_half_spell: bool) -> u32 {
     let divisor = 1u32 + has_antimagic as u32 + has_half_spell as u32;
     let max = 6 / divisor;
     rng.random_range(1..=max.max(1))
@@ -449,8 +452,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::rngs::SmallRng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
 
     fn test_rng() -> SmallRng {
         SmallRng::seed_from_u64(42)
@@ -581,9 +584,7 @@ mod tests {
     #[test]
     fn sit_on_throne_emits_message() {
         let mut rng = test_rng();
-        let events = do_sit(
-            &mut rng, Terrain::Throne, false, false, false, true, 0,
-        );
+        let events = do_sit(&mut rng, Terrain::Throne, false, false, false, true, 0);
         assert!(events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "sit-on-throne")));
     }
@@ -591,9 +592,7 @@ mod tests {
     #[test]
     fn sit_while_riding_blocked() {
         let mut rng = test_rng();
-        let events = do_sit(
-            &mut rng, Terrain::Floor, true, false, false, true, 0,
-        );
+        let events = do_sit(&mut rng, Terrain::Floor, true, false, false, true, 0);
         assert!(events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "sit-already-riding")));
     }
@@ -601,9 +600,7 @@ mod tests {
     #[test]
     fn sit_while_levitating_blocked() {
         let mut rng = test_rng();
-        let events = do_sit(
-            &mut rng, Terrain::Floor, false, true, false, false, 0,
-        );
+        let events = do_sit(&mut rng, Terrain::Floor, false, true, false, false, 0);
         assert!(events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "sit-tumble-in-place")));
     }
@@ -611,9 +608,7 @@ mod tests {
     #[test]
     fn sit_while_swallowed_blocked() {
         let mut rng = test_rng();
-        let events = do_sit(
-            &mut rng, Terrain::Floor, false, false, true, false, 0,
-        );
+        let events = do_sit(&mut rng, Terrain::Floor, false, false, true, false, 0);
         assert!(events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "sit-no-seats")));
     }
@@ -621,9 +616,7 @@ mod tests {
     #[test]
     fn sit_on_sink() {
         let mut rng = test_rng();
-        let events = do_sit(
-            &mut rng, Terrain::Sink, false, false, false, true, 0,
-        );
+        let events = do_sit(&mut rng, Terrain::Sink, false, false, false, true, 0);
         assert!(events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "sit-on-sink")));
     }
@@ -631,9 +624,7 @@ mod tests {
     #[test]
     fn sit_on_lava() {
         let mut rng = test_rng();
-        let events = do_sit(
-            &mut rng, Terrain::Lava, false, false, false, true, 0,
-        );
+        let events = do_sit(&mut rng, Terrain::Lava, false, false, false, true, 0);
         assert!(events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "sit-on-lava")));
     }
