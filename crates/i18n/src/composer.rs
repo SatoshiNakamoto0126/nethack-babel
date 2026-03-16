@@ -38,10 +38,7 @@ impl<'a> MessageComposer<'a> {
                         args.set("weapon", wpn_name.clone());
                         let msg = self.locale.translate("melee-hit-weapon", Some(&args));
                         if msg == "melee-hit-weapon" {
-                            Some(format!(
-                                "{} hits {} with {}!",
-                                att_name, def_name, wpn_name
-                            ))
+                            Some(format!("{} hits {} with {}!", att_name, def_name, wpn_name))
                         } else {
                             Some(msg)
                         }
@@ -111,9 +108,7 @@ impl<'a> MessageComposer<'a> {
                 }
             }
 
-            EngineEvent::HpChange {
-                entity, amount, ..
-            } => {
+            EngineEvent::HpChange { entity, amount, .. } => {
                 if !world.is_player(*entity) {
                     return None;
                 }
@@ -177,11 +172,7 @@ impl<'a> MessageComposer<'a> {
     fn entity_display_name(&self, entity: hecs::Entity, world: &GameWorld) -> String {
         if world.is_player(entity) {
             let msg = self.locale.translate("you", None);
-            if msg == "you" {
-                "You".to_string()
-            } else {
-                msg
-            }
+            if msg == "you" { "You".to_string() } else { msg }
         } else {
             let en_name = world.entity_name(entity);
             self.locale.translate_monster_name(&en_name).to_string()

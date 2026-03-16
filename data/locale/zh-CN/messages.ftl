@@ -1673,8 +1673,11 @@ chat-nobody-there = 那里没有人可以交谈。
 ## 移动/旅行
 ride-not-available = 这里没有可以骑乘的东西。
 enhance-not-available = 你现在无法提升任何技能。
+enhance-success = 你的 { $skill } 提升到了 { $level }。
 travel-not-implemented = 旅行功能尚未实现。
 two-weapon-not-implemented = 双武器战斗尚未实现。
+two-weapon-enabled = 你开始双武器战斗。
+two-weapon-disabled = 你停止双武器战斗。
 name-not-implemented = 命名功能尚未实现。
 adjust-not-implemented = 物品调整功能尚未实现。
 
@@ -3179,4 +3182,3 @@ write-spellbook-fail = The spellbook warps strangely, then turns blank.
 
 # TODO: translate
 write-spellbook-success = You successfully write the spellbook!
-

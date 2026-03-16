@@ -9,7 +9,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::widgets::Widget;
 
 use crate::colors::to_ratatui_color;
-use crate::port::{MapView, StatusLine, MAP_COLS, MAP_ROWS};
+use crate::port::{MAP_COLS, MAP_ROWS, MapView, StatusLine};
 
 // ---------------------------------------------------------------------------
 // MapWidget
@@ -48,8 +48,7 @@ impl Widget for MapWidget<'_> {
                 let fg = to_ratatui_color(cell.fg);
                 let bg = to_ratatui_color(cell.bg);
 
-                let is_cursor =
-                    col as i16 == self.cursor.0 && row as i16 == self.cursor.1;
+                let is_cursor = col as i16 == self.cursor.0 && row as i16 == self.cursor.1;
 
                 let mut style = Style::default().fg(fg).bg(bg);
                 if cell.bold {
@@ -101,27 +100,13 @@ impl Widget for StatusWidget<'_> {
         // Line 2
         if area.height >= 2 {
             let line2_y = area.y + 1;
-            render_status_line(
-                buf,
-                area.x,
-                line2_y,
-                area.width,
-                &self.status.line2,
-                style,
-            );
+            render_status_line(buf, area.x, line2_y, area.width, &self.status.line2, style);
         }
     }
 }
 
 /// Write a single status line into the buffer, truncating or padding to fit.
-fn render_status_line(
-    buf: &mut Buffer,
-    x: u16,
-    y: u16,
-    width: u16,
-    text: &str,
-    style: Style,
-) {
+fn render_status_line(buf: &mut Buffer, x: u16, y: u16, width: u16, text: &str, style: Style) {
     let chars: Vec<char> = text.chars().collect();
     for col in 0..width {
         let bx = x + col;

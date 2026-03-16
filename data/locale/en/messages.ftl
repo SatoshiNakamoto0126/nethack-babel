@@ -1721,8 +1721,11 @@ chat-nobody-there = There is nobody there to talk to.
 ## Movement / travel
 ride-not-available = There is nothing here to ride.
 enhance-not-available = You cannot enhance any skills right now.
+enhance-success = You improve { $skill } to { $level }.
 travel-not-implemented = Travel is not yet available.
 two-weapon-not-implemented = Two-weapon combat is not yet available.
+two-weapon-enabled = You begin fighting with two weapons.
+two-weapon-disabled = You stop fighting with two weapons.
 name-not-implemented = Naming is not yet available.
 adjust-not-implemented = Inventory adjustment is not yet available.
 

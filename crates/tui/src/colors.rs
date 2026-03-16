@@ -22,13 +22,13 @@ pub enum NHColor {
     Black = 0,
     Red = 1,
     Green = 2,
-    Brown = 3,          // on IBM, low-intensity yellow is brown
+    Brown = 3, // on IBM, low-intensity yellow is brown
     Blue = 4,
     Magenta = 5,
     Cyan = 6,
-    Gray = 7,           // low-intensity white (default fg)
-    NoColor = 8,        // use terminal default
-    Orange = 9,         // bright red
+    Gray = 7,    // low-intensity white (default fg)
+    NoColor = 8, // use terminal default
+    Orange = 9,  // bright red
     BrightGreen = 10,
     Yellow = 11,
     BrightBlue = 12,
@@ -323,9 +323,7 @@ pub fn default_status_highlights() -> Vec<StatusHighlight> {
 /// Returns `true` if the condition matches.
 pub fn highlight_matches_numeric(condition: &HighlightCondition, value: i32, max: i32) -> bool {
     match condition {
-        HighlightCondition::PercentBelow(pct) => {
-            max > 0 && (value as f32) < (*pct * max as f32)
-        }
+        HighlightCondition::PercentBelow(pct) => max > 0 && (value as f32) < (*pct * max as f32),
         HighlightCondition::Changed => false, // caller must track state
         HighlightCondition::Always => true,
         HighlightCondition::Equals(_) => false,
@@ -445,11 +443,11 @@ fn dim_color(color: TermColor) -> TermColor {
 /// Map message urgency to a foreground color.
 pub fn message_color(urgency: MessageUrgency) -> TermColor {
     match urgency {
-        MessageUrgency::Damage => TermColor::Rgb(255, 80, 80),       // red
-        MessageUrgency::Healing => TermColor::Rgb(80, 255, 80),      // green
-        MessageUrgency::Danger => TermColor::Rgb(255, 165, 0),       // orange
-        MessageUrgency::NpcDialogue => TermColor::Rgb(0, 255, 255),  // cyan
-        MessageUrgency::System => TermColor::Rgb(160, 160, 160),     // gray
+        MessageUrgency::Damage => TermColor::Rgb(255, 80, 80), // red
+        MessageUrgency::Healing => TermColor::Rgb(80, 255, 80), // green
+        MessageUrgency::Danger => TermColor::Rgb(255, 165, 0), // orange
+        MessageUrgency::NpcDialogue => TermColor::Rgb(0, 255, 255), // cyan
+        MessageUrgency::System => TermColor::Rgb(160, 160, 160), // gray
         MessageUrgency::Normal => TermColor::Default,
     }
 }
@@ -469,8 +467,8 @@ pub enum BucLabel {
 /// Map BUC status to a foreground color.
 pub fn buc_color(buc: BucLabel) -> TermColor {
     match buc {
-        BucLabel::Blessed => TermColor::Rgb(0, 220, 220),    // cyan
-        BucLabel::Cursed => TermColor::Rgb(220, 50, 50),     // red
+        BucLabel::Blessed => TermColor::Rgb(0, 220, 220), // cyan
+        BucLabel::Cursed => TermColor::Rgb(220, 50, 50),  // red
         BucLabel::Uncursed => TermColor::Rgb(220, 220, 220), // white
     }
 }
@@ -591,17 +589,35 @@ mod tests {
 
     #[test]
     fn nhcolor_to_ratatui_conversion() {
-        assert_eq!(nhcolor_to_ratatui(NHColor::NoColor), ratatui::style::Color::Reset);
-        assert_eq!(nhcolor_to_ratatui(NHColor::Red), ratatui::style::Color::Indexed(1));
-        assert_eq!(nhcolor_to_ratatui(NHColor::White), ratatui::style::Color::Indexed(15));
-        assert_eq!(nhcolor_to_ratatui(NHColor::Yellow), ratatui::style::Color::Indexed(11));
-        assert_eq!(nhcolor_to_ratatui(NHColor::Brown), ratatui::style::Color::Indexed(3));
+        assert_eq!(
+            nhcolor_to_ratatui(NHColor::NoColor),
+            ratatui::style::Color::Reset
+        );
+        assert_eq!(
+            nhcolor_to_ratatui(NHColor::Red),
+            ratatui::style::Color::Indexed(1)
+        );
+        assert_eq!(
+            nhcolor_to_ratatui(NHColor::White),
+            ratatui::style::Color::Indexed(15)
+        );
+        assert_eq!(
+            nhcolor_to_ratatui(NHColor::Yellow),
+            ratatui::style::Color::Indexed(11)
+        );
+        assert_eq!(
+            nhcolor_to_ratatui(NHColor::Brown),
+            ratatui::style::Color::Indexed(3)
+        );
     }
 
     #[test]
     fn default_highlights_not_empty() {
         let highlights = default_status_highlights();
-        assert!(highlights.len() >= 5, "expected at least 5 default highlights");
+        assert!(
+            highlights.len() >= 5,
+            "expected at least 5 default highlights"
+        );
 
         // Verify HP highlights exist
         let hp_highlights: Vec<_> = highlights
@@ -614,9 +630,9 @@ mod tests {
     #[test]
     fn highlight_numeric_percent_below() {
         let cond = HighlightCondition::PercentBelow(0.5);
-        assert!(highlight_matches_numeric(&cond, 40, 100));  // 40% < 50%
+        assert!(highlight_matches_numeric(&cond, 40, 100)); // 40% < 50%
         assert!(!highlight_matches_numeric(&cond, 60, 100)); // 60% >= 50%
-        assert!(highlight_matches_numeric(&cond, 0, 100));   // 0% < 50%
+        assert!(highlight_matches_numeric(&cond, 0, 100)); // 0% < 50%
         assert!(!highlight_matches_numeric(&cond, 50, 100)); // 50% is not < 50%
 
         let cond25 = HighlightCondition::PercentBelow(0.25);

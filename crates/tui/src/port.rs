@@ -95,8 +95,7 @@ pub struct StatusLine {
 // ---------------------------------------------------------------------------
 
 /// Urgency level for display messages, controlling color and behavior.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MessageUrgency {
     #[default]
     Normal,
@@ -106,7 +105,6 @@ pub enum MessageUrgency {
     NpcDialogue,
     System,
 }
-
 
 // ---------------------------------------------------------------------------
 // Menus

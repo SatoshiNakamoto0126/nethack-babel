@@ -3,15 +3,13 @@
 //!
 //! Scenario 10: i18n No Leak
 
+use nethack_babel_data::{Material, ObjectClass, ObjectCore, ObjectDef, ObjectTypeId};
 use nethack_babel_engine::action::Position;
 use nethack_babel_engine::event::{DeathCause, EngineEvent, StatusEffect};
 use nethack_babel_engine::world::{GameWorld, Name};
-use nethack_babel_data::{
-    Material, ObjectClass, ObjectCore, ObjectDef, ObjectTypeId,
-};
-use nethack_babel_i18n::item_names::{doname, NamingContext};
-use nethack_babel_i18n::locale::LocaleManager;
 use nethack_babel_i18n::MessageComposer;
+use nethack_babel_i18n::item_names::{NamingContext, doname};
+use nethack_babel_i18n::locale::LocaleManager;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -130,7 +128,9 @@ fn touchstone_10_doname_en_us_no_cjk() {
             assert!(
                 !contains_cjk(&result),
                 "CJK characters leaked into English doname() for '{}' qty={}: \"{}\"",
-                name, qty, result
+                name,
+                qty,
+                result
             );
         }
     }
@@ -138,10 +138,25 @@ fn touchstone_10_doname_en_us_no_cjk() {
     // Also test unidentified potions, scrolls, wands, rings (with appearances)
     let magic_items: Vec<(&str, ObjectClass, Material, &str)> = vec![
         ("healing", ObjectClass::Potion, Material::Glass, "milky"),
-        ("identify", ObjectClass::Scroll, Material::Paper, "ZELGO MER"),
+        (
+            "identify",
+            ObjectClass::Scroll,
+            Material::Paper,
+            "ZELGO MER",
+        ),
         ("fire", ObjectClass::Wand, Material::Wood, "oak"),
-        ("teleportation", ObjectClass::Ring, Material::Gemstone, "jade"),
-        ("force bolt", ObjectClass::Spellbook, Material::Paper, "vellum"),
+        (
+            "teleportation",
+            ObjectClass::Ring,
+            Material::Gemstone,
+            "jade",
+        ),
+        (
+            "force bolt",
+            ObjectClass::Spellbook,
+            Material::Paper,
+            "vellum",
+        ),
         ("emerald", ObjectClass::Gem, Material::Gemstone, "green"),
     ];
 
@@ -166,7 +181,9 @@ fn touchstone_10_doname_en_us_no_cjk() {
             assert!(
                 !contains_cjk(&result),
                 "CJK leaked (identified) for '{}' qty={}: \"{}\"",
-                name, qty, result
+                name,
+                qty,
+                result
             );
 
             // Test unidentified
@@ -178,7 +195,9 @@ fn touchstone_10_doname_en_us_no_cjk() {
             assert!(
                 !contains_cjk(&result2),
                 "CJK leaked (unidentified) for '{}' qty={}: \"{}\"",
-                name, qty, result2
+                name,
+                qty,
+                result2
             );
         }
     }
@@ -283,11 +302,41 @@ fn touchstone_10_message_no_cjk() {
 fn touchstone_10_doname_format_matches_original() {
     let cases: Vec<(&str, ObjectClass, Material, i32, &str)> = vec![
         // (item_name, class, material, quantity, expected_output)
-        ("long sword", ObjectClass::Weapon, Material::Iron, 1, "a long sword"),
-        ("dagger", ObjectClass::Weapon, Material::Iron, 3, "3 daggers"),
-        ("food ration", ObjectClass::Food, Material::Flesh, 1, "a food ration"),
-        ("gold piece", ObjectClass::Coin, Material::Gold, 1, "a gold piece"),
-        ("gold piece", ObjectClass::Coin, Material::Gold, 42, "42 gold pieces"),
+        (
+            "long sword",
+            ObjectClass::Weapon,
+            Material::Iron,
+            1,
+            "a long sword",
+        ),
+        (
+            "dagger",
+            ObjectClass::Weapon,
+            Material::Iron,
+            3,
+            "3 daggers",
+        ),
+        (
+            "food ration",
+            ObjectClass::Food,
+            Material::Flesh,
+            1,
+            "a food ration",
+        ),
+        (
+            "gold piece",
+            ObjectClass::Coin,
+            Material::Gold,
+            1,
+            "a gold piece",
+        ),
+        (
+            "gold piece",
+            ObjectClass::Coin,
+            Material::Gold,
+            42,
+            "42 gold pieces",
+        ),
     ];
 
     for (name, class, material, qty, expected) in &cases {

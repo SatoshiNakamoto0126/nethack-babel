@@ -5,8 +5,8 @@
 
 use fluent::FluentArgs;
 use nethack_babel_data::{
-    BucStatus, Enchantment, Erosion, Material, ObjectClass, ObjectCore, ObjectDef,
-    ObjectExtra, KnowledgeState,
+    BucStatus, Enchantment, Erosion, KnowledgeState, Material, ObjectClass, ObjectCore, ObjectDef,
+    ObjectExtra,
 };
 
 use crate::locale::LocaleManager;
@@ -69,7 +69,17 @@ pub fn doname(
     extra: Option<&ObjectExtra>,
     ctx: &NamingContext,
 ) -> String {
-    doname_locale(core, def, buc, knowledge, enchantment, erosion, extra, ctx, None)
+    doname_locale(
+        core,
+        def,
+        buc,
+        knowledge,
+        enchantment,
+        erosion,
+        extra,
+        ctx,
+        None,
+    )
 }
 
 /// Like [`doname`] but accepts an optional locale for i18n translation.
@@ -88,7 +98,17 @@ pub fn doname_locale(
     ctx: &NamingContext,
     locale: Option<&LocaleManager>,
 ) -> String {
-    let mut np = build_noun_phrase(core, def, buc, knowledge, enchantment, erosion, extra, ctx, locale);
+    let mut np = build_noun_phrase(
+        core,
+        def,
+        buc,
+        knowledge,
+        enchantment,
+        erosion,
+        extra,
+        ctx,
+        locale,
+    );
 
     if let Some(loc) = locale {
         // Translate the base name and retrieve grammatical metadata.
@@ -152,9 +172,10 @@ pub fn xname(
     // Append "named X" if the object has an individual name.
     if let Some(extra) = extra
         && let Some(ref oname) = extra.name
-            && knowledge.is_none_or(|k| k.dknown) {
-                return format!("{} named {}", name, oname);
-            }
+        && knowledge.is_none_or(|k| k.dknown)
+    {
+        return format!("{} named {}", name, oname);
+    }
 
     name
 }
@@ -196,10 +217,9 @@ fn base_name(
         | ObjectClass::Chain
         | ObjectClass::Ball
         | ObjectClass::Rock => {
-            if !dknown
-                && let Some(ref appearance) = def.appearance {
-                    return appearance.clone();
-                }
+            if !dknown && let Some(ref appearance) = def.appearance {
+                return appearance.clone();
+            }
             if ctx.type_known {
                 def.name.clone()
             } else if let Some(ref called) = ctx.type_called {
@@ -224,7 +244,12 @@ fn base_name(
     }
 }
 
-fn potion_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: Option<&LocaleManager>) -> String {
+fn potion_base_name(
+    def: &ObjectDef,
+    dknown: bool,
+    ctx: &NamingContext,
+    locale: Option<&LocaleManager>,
+) -> String {
     if !dknown {
         return locale_or_hardcoded(locale, "item-potion-generic", "potion");
     }
@@ -257,7 +282,12 @@ fn potion_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: 
     }
 }
 
-fn scroll_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: Option<&LocaleManager>) -> String {
+fn scroll_base_name(
+    def: &ObjectDef,
+    dknown: bool,
+    ctx: &NamingContext,
+    locale: Option<&LocaleManager>,
+) -> String {
     if !dknown {
         return locale_or_hardcoded(locale, "item-scroll-generic", "scroll");
     }
@@ -300,7 +330,12 @@ fn scroll_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: 
     }
 }
 
-fn wand_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: Option<&LocaleManager>) -> String {
+fn wand_base_name(
+    def: &ObjectDef,
+    dknown: bool,
+    ctx: &NamingContext,
+    locale: Option<&LocaleManager>,
+) -> String {
     if !dknown {
         return locale_or_hardcoded(locale, "item-wand-generic", "wand");
     }
@@ -333,7 +368,12 @@ fn wand_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: Op
     }
 }
 
-fn ring_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: Option<&LocaleManager>) -> String {
+fn ring_base_name(
+    def: &ObjectDef,
+    dknown: bool,
+    ctx: &NamingContext,
+    locale: Option<&LocaleManager>,
+) -> String {
     if !dknown {
         return locale_or_hardcoded(locale, "item-ring-generic", "ring");
     }
@@ -366,7 +406,12 @@ fn ring_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: Op
     }
 }
 
-fn amulet_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: Option<&LocaleManager>) -> String {
+fn amulet_base_name(
+    def: &ObjectDef,
+    dknown: bool,
+    ctx: &NamingContext,
+    locale: Option<&LocaleManager>,
+) -> String {
     if !dknown {
         return locale_or_hardcoded(locale, "item-amulet-generic", "amulet");
     }
@@ -394,7 +439,12 @@ fn amulet_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: 
     }
 }
 
-fn spellbook_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: Option<&LocaleManager>) -> String {
+fn spellbook_base_name(
+    def: &ObjectDef,
+    dknown: bool,
+    ctx: &NamingContext,
+    locale: Option<&LocaleManager>,
+) -> String {
     if !dknown {
         return locale_or_hardcoded(locale, "item-spellbook-generic", "spellbook");
     }
@@ -427,7 +477,12 @@ fn spellbook_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, local
     }
 }
 
-fn gem_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: Option<&LocaleManager>) -> String {
+fn gem_base_name(
+    def: &ObjectDef,
+    dknown: bool,
+    ctx: &NamingContext,
+    locale: Option<&LocaleManager>,
+) -> String {
     let is_stone = def.material == Material::Mineral;
 
     if !dknown {
@@ -482,7 +537,11 @@ fn gem_base_name(def: &ObjectDef, dknown: bool, ctx: &NamingContext, locale: Opt
 fn locale_or_hardcoded(locale: Option<&LocaleManager>, msg_id: &str, fallback: &str) -> String {
     if let Some(loc) = locale {
         let result = loc.translate(msg_id, None);
-        if result == msg_id { fallback.to_string() } else { result }
+        if result == msg_id {
+            fallback.to_string()
+        } else {
+            result
+        }
     } else {
         fallback.to_string()
     }
@@ -660,22 +719,24 @@ fn build_noun_phrase(
 
     // 4. BUC prefix
     if let Some(buc) = buc
-        && buc.bknown {
-            if buc.blessed {
-                np = np.with_buc(BucLabel::Blessed);
-            } else if buc.cursed {
-                np = np.with_buc(BucLabel::Cursed);
-            } else if should_show_uncursed(def, knowledge, ctx) {
-                np = np.with_buc(BucLabel::Uncursed);
-            }
+        && buc.bknown
+    {
+        if buc.blessed {
+            np = np.with_buc(BucLabel::Blessed);
+        } else if buc.cursed {
+            np = np.with_buc(BucLabel::Cursed);
+        } else if should_show_uncursed(def, knowledge, ctx) {
+            np = np.with_buc(BucLabel::Uncursed);
         }
+    }
 
     // 5. Erosion adjectives (only for damageable items)
     if let Some(erosion) = erosion
         && is_damageable(def.material)
-            && let Some(erosion_str) = erosion_string(erosion, def.material) {
-                np = np.with_erosion(erosion_str);
-            }
+        && let Some(erosion_str) = erosion_string(erosion, def.material)
+    {
+        np = np.with_erosion(erosion_str);
+    }
 
     // 6. Enchantment (only if known)
     if let Some(ench) = enchantment {
@@ -687,12 +748,13 @@ fn build_noun_phrase(
 
     // 7. Individual name ("named X")
     if let Some(extra) = extra
-        && let Some(ref oname) = extra.name {
-            let dknown = knowledge.is_none_or(|k| k.dknown);
-            if dknown {
-                np = np.with_name(oname.clone());
-            }
+        && let Some(ref oname) = extra.name
+    {
+        let dknown = knowledge.is_none_or(|k| k.dknown);
+        if dknown {
+            np = np.with_name(oname.clone());
         }
+    }
 
     np
 }
@@ -703,11 +765,7 @@ fn build_noun_phrase(
 
 /// Create a minimal ObjectDef for testing.
 #[cfg(test)]
-fn test_object_def(
-    name: &str,
-    class: ObjectClass,
-    material: Material,
-) -> ObjectDef {
+fn test_object_def(name: &str, class: ObjectClass, material: Material) -> ObjectDef {
     ObjectDef {
         id: nethack_babel_data::ObjectTypeId(0),
         name: name.to_string(),
@@ -819,7 +877,16 @@ mod tests {
             bknown: true,
         };
 
-        let result = doname(&c, &def, Some(&buc), Some(&k), Some(&ench), None, None, &ctx);
+        let result = doname(
+            &c,
+            &def,
+            Some(&buc),
+            Some(&k),
+            Some(&ench),
+            None,
+            None,
+            &ctx,
+        );
         assert_eq!(result, "a blessed +2 long sword");
     }
 
@@ -866,7 +933,16 @@ mod tests {
             greased: false,
         };
 
-        let result = doname(&c, &def, None, Some(&k), Some(&ench), Some(&erosion), None, &ctx);
+        let result = doname(
+            &c,
+            &def,
+            None,
+            Some(&k),
+            Some(&ench),
+            Some(&erosion),
+            None,
+            &ctx,
+        );
         assert_eq!(result, "a rusty +1 long sword");
     }
 
@@ -982,7 +1058,16 @@ mod tests {
             bknown: true,
         };
 
-        let result = doname(&c, &def, Some(&buc), Some(&k), Some(&ench), None, None, &ctx);
+        let result = doname(
+            &c,
+            &def,
+            Some(&buc),
+            Some(&k),
+            Some(&ench),
+            None,
+            None,
+            &ctx,
+        );
         assert_eq!(result, "an uncursed +0 plate mail");
     }
 
@@ -1010,7 +1095,16 @@ mod tests {
             bknown: true,
         };
 
-        let result = doname(&c, &def, Some(&buc), Some(&k), Some(&ench), None, None, &ctx);
+        let result = doname(
+            &c,
+            &def,
+            Some(&buc),
+            Some(&k),
+            Some(&ench),
+            None,
+            None,
+            &ctx,
+        );
         // known + charged + WEAPON -> omit "uncursed"
         assert_eq!(result, "a +1 long sword");
     }
@@ -1199,10 +1293,7 @@ mod tests {
             None,
             &ctx,
         );
-        assert_eq!(
-            result,
-            "a blessed rustproof +5 long sword (weapon in hand)"
-        );
+        assert_eq!(result, "a blessed rustproof +5 long sword (weapon in hand)");
     }
 
     // -- Test 21: xname standalone
@@ -1251,7 +1342,16 @@ mod tests {
             bknown: true,
         };
 
-        let result = doname(&c, &def, Some(&buc), Some(&k), Some(&ench), None, None, &ctx);
+        let result = doname(
+            &c,
+            &def,
+            Some(&buc),
+            Some(&k),
+            Some(&ench),
+            None,
+            None,
+            &ctx,
+        );
         assert_eq!(result, "an uncursed +1 long sword");
     }
 
@@ -1305,9 +1405,7 @@ mod tests {
             quote_left: Some("\u{300c}".to_string()),
             quote_right: Some("\u{300d}".to_string()),
         };
-        locale
-            .load_locale("zh-CN", manifest, &[])
-            .unwrap();
+        locale.load_locale("zh-CN", manifest, &[]).unwrap();
         // Load object translations.
         let monsters_toml = "[translations]\n";
         let objects_toml = concat!(
@@ -1369,10 +1467,7 @@ mod tests {
             Some(&locale),
         );
         // 祝福的+2长剑
-        assert_eq!(
-            result,
-            "\u{795d}\u{798f}\u{7684}+2\u{957f}\u{5251}"
-        );
+        assert_eq!(result, "\u{795d}\u{798f}\u{7684}+2\u{957f}\u{5251}");
     }
 
     #[test]
@@ -1512,9 +1607,12 @@ mod tests {
                     let ctx = default_ctx();
                     let k = knowledge_known();
 
-                    for (eroded, eroded2, label) in
-                        [(1, 0, "rusty"), (2, 0, "very_rusty"), (0, 1, "corroded"), (2, 1, "very_rusty+corroded")]
-                    {
+                    for (eroded, eroded2, label) in [
+                        (1, 0, "rusty"),
+                        (2, 0, "very_rusty"),
+                        (0, 1, "corroded"),
+                        (2, 1, "very_rusty+corroded"),
+                    ] {
                         let erosion = Erosion {
                             eroded,
                             eroded2,
@@ -1532,12 +1630,8 @@ mod tests {
                             None,
                             &ctx,
                         );
-                        writeln!(
-                            output,
-                            "qty={} erosion={} -> {}",
-                            quantity, label, result
-                        )
-                        .unwrap();
+                        writeln!(output, "qty={} erosion={} -> {}", quantity, label, result)
+                            .unwrap();
                     }
                 }
 
@@ -1762,10 +1856,7 @@ mod tests {
         use std::fmt::Write;
         let mut output = String::new();
 
-        let wands = [
-            ("fire", Some("oak")),
-            ("death", Some("ebony")),
-        ];
+        let wands = [("fire", Some("oak")), ("death", Some("ebony"))];
 
         for (name, appearance) in &wands {
             writeln!(output, "=== wand of {} ===", name).unwrap();
@@ -1954,11 +2045,7 @@ mod tests {
         use std::fmt::Write;
         let mut output = String::new();
 
-        let foods = [
-            "food ration",
-            "apple",
-            "tripe ration",
-        ];
+        let foods = ["food ration", "apple", "tripe ration"];
 
         for name in &foods {
             writeln!(output, "=== {} ===", name).unwrap();
@@ -1970,12 +2057,7 @@ mod tests {
                 for bc in buc_configs() {
                     let ctx = default_ctx();
                     let result = doname(&c, &def, bc.buc.as_ref(), None, None, None, None, &ctx);
-                    writeln!(
-                        output,
-                        "qty={} buc={} -> {}",
-                        quantity, bc.label, result
-                    )
-                    .unwrap();
+                    writeln!(output, "qty={} buc={} -> {}", quantity, bc.label, result).unwrap();
                 }
             }
         }
@@ -2006,12 +2088,7 @@ mod tests {
                 for bc in buc_configs() {
                     let ctx = default_ctx();
                     let result = doname(&c, &def, bc.buc.as_ref(), None, None, None, None, &ctx);
-                    writeln!(
-                        output,
-                        "qty={} buc={} -> {}",
-                        quantity, bc.label, result
-                    )
-                    .unwrap();
+                    writeln!(output, "qty={} buc={} -> {}", quantity, bc.label, result).unwrap();
                 }
 
                 // Named tool.
@@ -2201,20 +2278,62 @@ mod tests {
             &str,
             ObjectClass,
             Material,
-            bool,             // type_known
-            Option<&str>,     // appearance
+            bool,         // type_known
+            Option<&str>, // appearance
         )> = vec![
             ("dagger", ObjectClass::Weapon, Material::Iron, true, None),
             ("arrow", ObjectClass::Weapon, Material::Iron, true, None),
             ("plate mail", ObjectClass::Armor, Material::Iron, true, None),
-            ("healing", ObjectClass::Potion, Material::Glass, true, Some("milky")),
-            ("identify", ObjectClass::Scroll, Material::Paper, true, Some("ZELGO MER")),
+            (
+                "healing",
+                ObjectClass::Potion,
+                Material::Glass,
+                true,
+                Some("milky"),
+            ),
+            (
+                "identify",
+                ObjectClass::Scroll,
+                Material::Paper,
+                true,
+                Some("ZELGO MER"),
+            ),
             ("fire", ObjectClass::Wand, Material::Wood, true, Some("oak")),
-            ("teleportation", ObjectClass::Ring, Material::Gemstone, true, Some("jade")),
-            ("food ration", ObjectClass::Food, Material::Flesh, true, None),
-            ("skeleton key", ObjectClass::Tool, Material::Bone, true, None),
-            ("emerald", ObjectClass::Gem, Material::Gemstone, true, Some("green")),
-            ("force bolt", ObjectClass::Spellbook, Material::Paper, true, Some("vellum")),
+            (
+                "teleportation",
+                ObjectClass::Ring,
+                Material::Gemstone,
+                true,
+                Some("jade"),
+            ),
+            (
+                "food ration",
+                ObjectClass::Food,
+                Material::Flesh,
+                true,
+                None,
+            ),
+            (
+                "skeleton key",
+                ObjectClass::Tool,
+                Material::Bone,
+                true,
+                None,
+            ),
+            (
+                "emerald",
+                ObjectClass::Gem,
+                Material::Gemstone,
+                true,
+                Some("green"),
+            ),
+            (
+                "force bolt",
+                ObjectClass::Spellbook,
+                Material::Paper,
+                true,
+                Some("vellum"),
+            ),
             ("gold piece", ObjectClass::Coin, Material::Gold, true, None),
         ];
 
@@ -2279,10 +2398,8 @@ mod tests {
                 }
                 let ctx = default_ctx();
 
-                let via_doname =
-                    doname(&c, &def, None, None, None, None, None, &ctx);
-                let via_locale =
-                    doname_locale(&c, &def, None, None, None, None, None, &ctx, None);
+                let via_doname = doname(&c, &def, None, None, None, None, None, &ctx);
+                let via_locale = doname_locale(&c, &def, None, None, None, None, None, &ctx, None);
 
                 assert_eq!(
                     via_doname, via_locale,

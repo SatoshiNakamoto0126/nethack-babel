@@ -187,10 +187,7 @@ impl NounPhrase {
                             let mut args = FluentArgs::new();
                             args.set("gender", gender.to_string());
                             args.set("case", case.to_string());
-                            parts.push(locale.translate(
-                                "item-article-indefinite",
-                                Some(&args),
-                            ));
+                            parts.push(locale.translate("item-article-indefinite", Some(&args)));
                         }
                         // For English: defer a/an until we know the next word
                     } else {
@@ -478,9 +475,9 @@ fn buc_label_en(buc: BucLabel) -> &'static str {
 /// CJK BUC label (legacy fallback).
 fn buc_label_cjk(buc: BucLabel) -> &'static str {
     match buc {
-        BucLabel::Blessed => "\u{795d}\u{798f}\u{7684}",        // 祝福的
+        BucLabel::Blessed => "\u{795d}\u{798f}\u{7684}", // 祝福的
         BucLabel::Uncursed => "\u{672a}\u{8bc5}\u{5492}\u{7684}", // 未诅咒的
-        BucLabel::Cursed => "\u{88ab}\u{8bc5}\u{5492}\u{7684}",   // 被诅咒的
+        BucLabel::Cursed => "\u{88ab}\u{8bc5}\u{5492}\u{7684}", // 被诅咒的
     }
 }
 
@@ -575,9 +572,10 @@ pub(crate) fn english_plural_fallback(word: &str) -> String {
     // Words ending in consonant + y -> change y to ies.
     if word.ends_with('y')
         && let Some(prev) = word.chars().rev().nth(1)
-            && !"aeiou".contains(prev) {
-                return format!("{}ies", &word[..word.len() - 1]);
-            }
+        && !"aeiou".contains(prev)
+    {
+        return format!("{}ies", &word[..word.len() - 1]);
+    }
 
     // Words ending in f/fe -> ves (knife -> knives, wolf -> wolves).
     if let Some(prefix) = word.strip_suffix("fe") {
@@ -730,7 +728,9 @@ mod tests {
     #[test]
     fn test_english_plural() {
         let locale = LocaleManager::new();
-        let np = NounPhrase::new("arrow").with_article(Article::A).with_quantity(5);
+        let np = NounPhrase::new("arrow")
+            .with_article(Article::A)
+            .with_quantity(5);
         assert_eq!(np.render(&locale), "5 arrows");
     }
 
@@ -842,7 +842,9 @@ mod tests {
     #[test]
     fn test_fluent_english_plural() {
         let locale = locale_with_en_ftl();
-        let np = NounPhrase::new("arrow").with_article(Article::A).with_quantity(5);
+        let np = NounPhrase::new("arrow")
+            .with_article(Article::A)
+            .with_quantity(5);
         assert_eq!(np.render(&locale), "5 arrows");
     }
 
@@ -937,11 +939,7 @@ mod tests {
         for np in &cases {
             let english = np.render(&locale_bare);
             let fluent = np.render(&locale_ftl);
-            assert_eq!(
-                english, fluent,
-                "Parity mismatch for {:?}",
-                np.base_name
-            );
+            assert_eq!(english, fluent, "Parity mismatch for {:?}", np.base_name);
         }
     }
 
@@ -953,7 +951,10 @@ mod tests {
         let np = NounPhrase::new("\u{957f}\u{5251}") // 长剑
             .with_buc(BucLabel::Blessed)
             .with_enchantment(2);
-        assert_eq!(np.render(&locale), "\u{795d}\u{798f}\u{7684}+2\u{957f}\u{5251}");
+        assert_eq!(
+            np.render(&locale),
+            "\u{795d}\u{798f}\u{7684}+2\u{957f}\u{5251}"
+        );
     }
 
     #[test]

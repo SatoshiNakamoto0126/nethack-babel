@@ -154,9 +154,9 @@ impl LocaleManager {
         manifest: LanguageManifest,
         ftl_sources: &[(&str, &str)],
     ) -> Result<(), LocaleError> {
-        let langid: LanguageIdentifier = code
-            .parse()
-            .map_err(|e| LocaleError::ParseError(format!("invalid language id '{}': {}", code, e)))?;
+        let langid: LanguageIdentifier = code.parse().map_err(|e| {
+            LocaleError::ParseError(format!("invalid language id '{}': {}", code, e))
+        })?;
 
         let mut bundle = FluentBundle::new(vec![langid]);
         bundle.set_use_isolating(false);
@@ -212,16 +212,18 @@ impl LocaleManager {
         // Try fallback from manifest.
         if let Some(manifest) = self.manifests.get(&self.current)
             && let Some(ref fallback) = manifest.fallback
-                && fallback != &self.current
-                    && let Some(result) = self.try_format(fallback, msg_id, args) {
-                        return result;
-                    }
+            && fallback != &self.current
+            && let Some(result) = self.try_format(fallback, msg_id, args)
+        {
+            return result;
+        }
 
         // Try English.
         if self.current != "en"
-            && let Some(result) = self.try_format("en", msg_id, args) {
-                return result;
-            }
+            && let Some(result) = self.try_format("en", msg_id, args)
+        {
+            return result;
+        }
 
         // Last resort: return the raw message id.
         msg_id.to_string()
@@ -274,14 +276,12 @@ impl LocaleManager {
         objects_toml: &str,
     ) -> Result<(), LocaleError> {
         // Monsters are always simple strings (no gender metadata needed).
-        let monsters: SimpleEntityTranslations = toml::from_str(monsters_toml).map_err(|e| {
-            LocaleError::ParseError(format!("monsters.toml for '{}': {}", code, e))
-        })?;
+        let monsters: SimpleEntityTranslations = toml::from_str(monsters_toml)
+            .map_err(|e| LocaleError::ParseError(format!("monsters.toml for '{}': {}", code, e)))?;
 
         // Objects support both simple strings and metadata entries.
-        let objects: EntityTranslations = toml::from_str(objects_toml).map_err(|e| {
-            LocaleError::ParseError(format!("objects.toml for '{}': {}", code, e))
-        })?;
+        let objects: EntityTranslations = toml::from_str(objects_toml)
+            .map_err(|e| LocaleError::ParseError(format!("objects.toml for '{}': {}", code, e)))?;
 
         // Extract name strings and metadata from object entries.
         let mut obj_names = HashMap::new();
@@ -346,9 +346,8 @@ impl LocaleManager {
 
     /// Load a CJK classifier from TOML.
     pub fn load_classifier(&mut self, toml_str: &str) -> Result<(), LocaleError> {
-        let clf = Classifier::load_from_toml(toml_str).map_err(|e| {
-            LocaleError::ParseError(format!("classifiers.toml: {}", e))
-        })?;
+        let clf = Classifier::load_from_toml(toml_str)
+            .map_err(|e| LocaleError::ParseError(format!("classifiers.toml: {}", e)))?;
         self.classifier = Some(clf);
         Ok(())
     }
@@ -358,7 +357,9 @@ impl LocaleManager {
     /// Lookup order: current language, then fallback, then returns `en_name`.
     pub fn translate_monster_name<'a>(&'a self, en_name: &'a str) -> &'a str {
         // Try current language.
-        if let Some(translated) = self.monster_names.get(&self.current)
+        if let Some(translated) = self
+            .monster_names
+            .get(&self.current)
             .and_then(|map| map.get(en_name))
         {
             return translated;
@@ -367,7 +368,8 @@ impl LocaleManager {
         if let Some(manifest) = self.manifests.get(&self.current)
             && let Some(ref fallback) = manifest.fallback
             && fallback != &self.current
-            && let Some(translated) = self.monster_names
+            && let Some(translated) = self
+                .monster_names
                 .get(fallback.as_str())
                 .and_then(|map| map.get(en_name))
         {
@@ -381,7 +383,9 @@ impl LocaleManager {
     /// Lookup order: current language, then fallback, then returns `en_name`.
     pub fn translate_object_name<'a>(&'a self, en_name: &'a str) -> &'a str {
         // Try current language.
-        if let Some(translated) = self.object_names.get(&self.current)
+        if let Some(translated) = self
+            .object_names
+            .get(&self.current)
             .and_then(|map| map.get(en_name))
         {
             return translated;
@@ -390,7 +394,8 @@ impl LocaleManager {
         if let Some(manifest) = self.manifests.get(&self.current)
             && let Some(ref fallback) = manifest.fallback
             && fallback != &self.current
-            && let Some(translated) = self.object_names
+            && let Some(translated) = self
+                .object_names
                 .get(fallback.as_str())
                 .and_then(|map| map.get(en_name))
         {
@@ -513,9 +518,7 @@ mod tests {
             quote_left: Some("\u{300c}".to_string()),
             quote_right: Some("\u{300d}".to_string()),
         };
-        locale
-            .load_locale("zh-CN", manifest, &[])
-            .unwrap();
+        locale.load_locale("zh-CN", manifest, &[]).unwrap();
         locale.set_language("zh-CN").unwrap();
         locale
     }
@@ -562,10 +565,7 @@ mod tests {
         assert_eq!(locale.translate_object_name("short sword"), "短剑");
         assert_eq!(locale.translate_object_name("dagger"), "匕首");
         // Unknown object returns English name.
-        assert_eq!(
-            locale.translate_object_name("mystery item"),
-            "mystery item"
-        );
+        assert_eq!(locale.translate_object_name("mystery item"), "mystery item");
     }
 
     #[test]

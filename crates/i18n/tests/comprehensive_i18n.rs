@@ -28,8 +28,7 @@ const DE_MONSTERS_TOML: &str = include_str!("../../../data/locale/de/monsters.to
 const ZH_TW_OBJECTS_TOML: &str = include_str!("../../../data/locale/zh-TW/objects.toml");
 const ZH_TW_MONSTERS_TOML: &str = include_str!("../../../data/locale/zh-TW/monsters.toml");
 
-const ZH_CN_CLASSIFIERS_TOML: &str =
-    include_str!("../../../data/locale/zh-CN/classifiers.toml");
+const ZH_CN_CLASSIFIERS_TOML: &str = include_str!("../../../data/locale/zh-CN/classifiers.toml");
 
 // ---------------------------------------------------------------------------
 // Helper: manifest constructors
@@ -323,7 +322,8 @@ fn is_ascii_latin(s: &str) -> bool {
 fn assert_key_exists(lm: &LocaleManager, key: &str) {
     let result = lm.translate(key, None);
     assert_ne!(
-        result, key,
+        result,
+        key,
         "FTL key '{}' not found in locale '{}'",
         key,
         lm.current_language()
@@ -341,11 +341,7 @@ fn assert_key_in_locales(lm: &mut LocaleManager, key: &str, locales: &[&str]) {
 #[test]
 fn ftl_coverage_buc_keys_all_locales() {
     let mut lm = setup_all();
-    let buc_keys = [
-        "item-buc-blessed",
-        "item-buc-cursed",
-        "item-buc-uncursed",
-    ];
+    let buc_keys = ["item-buc-blessed", "item-buc-cursed", "item-buc-uncursed"];
     let locales = ["en", "zh-CN", "zh-TW", "fr", "de"];
     for key in &buc_keys {
         assert_key_in_locales(&mut lm, key, &locales);
@@ -440,11 +436,7 @@ fn ftl_coverage_ui_keys_en_zh_cn() {
 #[test]
 fn ftl_coverage_event_keys_en_zh_cn() {
     let mut lm = setup_all();
-    let event_keys = [
-        "entity-killed",
-        "entity-destroyed",
-        "entity-dissolved",
-    ];
+    let event_keys = ["entity-killed", "entity-destroyed", "entity-dissolved"];
     // These keys require $entity arg.
     let locales = ["en", "zh-CN"];
     for key in &event_keys {
@@ -474,7 +466,11 @@ fn ftl_coverage_melee_keys_en_zh_cn() {
         args.set("defender", "goblin".to_string());
 
         let hit = lm.translate("melee-hit-bare", Some(&args));
-        assert_ne!(hit, "melee-hit-bare", "melee-hit-bare missing in {}", locale);
+        assert_ne!(
+            hit, "melee-hit-bare",
+            "melee-hit-bare missing in {}",
+            locale
+        );
 
         let miss = lm.translate("melee-miss", Some(&args));
         assert_ne!(miss, "melee-miss", "melee-miss missing in {}", locale);
@@ -657,10 +653,7 @@ fn cjk_leak_guard_translate_object_name_english() {
             translated
         );
         // Should be identity for English.
-        assert_eq!(
-            translated, *name,
-            "English object name should be unchanged"
-        );
+        assert_eq!(translated, *name, "English object name should be unchanged");
     }
 }
 
@@ -819,9 +812,18 @@ fn english_parity_quantity_plurals() {
 fn cjk_buc_labels_render_correctly() {
     let lm = setup_zh_cn();
     // Direct FTL lookup.
-    assert_eq!(lm.translate("item-buc-blessed", None), "\u{795d}\u{798f}\u{7684}");
-    assert_eq!(lm.translate("item-buc-cursed", None), "\u{88ab}\u{8bc5}\u{5492}\u{7684}");
-    assert_eq!(lm.translate("item-buc-uncursed", None), "\u{672a}\u{8bc5}\u{5492}\u{7684}");
+    assert_eq!(
+        lm.translate("item-buc-blessed", None),
+        "\u{795d}\u{798f}\u{7684}"
+    );
+    assert_eq!(
+        lm.translate("item-buc-cursed", None),
+        "\u{88ab}\u{8bc5}\u{5492}\u{7684}"
+    );
+    assert_eq!(
+        lm.translate("item-buc-uncursed", None),
+        "\u{672a}\u{8bc5}\u{5492}\u{7684}"
+    );
 }
 
 #[test]
@@ -876,10 +878,7 @@ fn cjk_named_rendering() {
         .with_name("Excalibur");
     let rendered = np.render(&lm);
     // 长剑「Excalibur」
-    assert_eq!(
-        rendered,
-        "\u{957f}\u{5251}\u{300c}Excalibur\u{300d}"
-    );
+    assert_eq!(rendered, "\u{957f}\u{5251}\u{300c}Excalibur\u{300d}");
 }
 
 #[test]
@@ -893,10 +892,7 @@ fn cjk_object_name_translation() {
 #[test]
 fn cjk_monster_name_translation() {
     let lm = setup_zh_cn();
-    assert_eq!(
-        lm.translate_monster_name("giant ant"),
-        "\u{5de8}\u{8681}"
-    );
+    assert_eq!(lm.translate_monster_name("giant ant"), "\u{5de8}\u{8681}");
     assert_eq!(
         lm.translate_monster_name("goblin"),
         "\u{54e5}\u{5e03}\u{6797}"
@@ -1002,10 +998,7 @@ fn french_articles_gender_based() {
     let mut args_m = FluentArgs::new();
     args_m.set("gender", "masculine".to_string());
     args_m.set("case", "nominative".to_string());
-    assert_eq!(
-        lm.translate("item-article-indefinite", Some(&args_m)),
-        "un"
-    );
+    assert_eq!(lm.translate("item-article-indefinite", Some(&args_m)), "un");
 
     let mut args_f = FluentArgs::new();
     args_f.set("gender", "feminine".to_string());
@@ -1433,7 +1426,10 @@ fn fallback_fr_to_english() {
 
     // French now has its own ui-inventory-title translation.
     let result = lm.translate("ui-inventory-title", None);
-    assert_eq!(result, "Inventaire", "French should have its own ui-inventory-title");
+    assert_eq!(
+        result, "Inventaire",
+        "French should have its own ui-inventory-title"
+    );
 
     // Unknown object name falls back to English.
     let result = lm.translate_object_name("nonexistent weapon");
@@ -1447,7 +1443,10 @@ fn fallback_de_to_english() {
 
     // German FTL does not have UI keys; should fall back to English.
     let result = lm.translate("ui-more", None);
-    assert_eq!(result, "--More--", "German should fall back to English for ui-more");
+    assert_eq!(
+        result, "--More--",
+        "German should fall back to English for ui-more"
+    );
 }
 
 #[test]
@@ -1778,7 +1777,7 @@ fn full_rendering_roundtrip_all_locales() {
     // in production), for European locales we use the English name.
     let locales_and_names: &[(&str, &str, bool)] = &[
         ("en", "long sword", false),
-        ("zh-CN", "\u{957f}\u{5251}", true),   // 长剑
+        ("zh-CN", "\u{957f}\u{5251}", true),    // 长剑
         ("zh-TW", "\u{9577}\u{528d}", true),    // 長劍 (zh-TW objects.toml)
         ("fr", "\u{e9}p\u{e9}e longue", false), // epee longue
         ("de", "Langschwert", false),
@@ -1822,17 +1821,39 @@ fn full_rendering_roundtrip_all_locales() {
 #[test]
 fn help_keys_resolve_in_all_locales() {
     let keys = [
-        "help-title", "help-move", "help-attack", "help-wait",
-        "help-search", "help-inventory", "help-pickup", "help-drop",
-        "help-stairs-up", "help-stairs-down", "help-eat", "help-quaff",
-        "help-read", "help-wield", "help-wear", "help-remove", "help-zap",
-        "help-move-diagram", "help-symbols-title",
-        "help-symbol-player", "help-symbol-floor", "help-symbol-corridor",
-        "help-symbol-door-closed", "help-symbol-door-open",
-        "help-symbol-stairs-up", "help-symbol-stairs-down",
-        "help-symbol-water", "help-symbol-fountain",
-        "help-options", "help-look", "help-history",
-        "help-shift-run", "help-arrows",
+        "help-title",
+        "help-move",
+        "help-attack",
+        "help-wait",
+        "help-search",
+        "help-inventory",
+        "help-pickup",
+        "help-drop",
+        "help-stairs-up",
+        "help-stairs-down",
+        "help-eat",
+        "help-quaff",
+        "help-read",
+        "help-wield",
+        "help-wear",
+        "help-remove",
+        "help-zap",
+        "help-move-diagram",
+        "help-symbols-title",
+        "help-symbol-player",
+        "help-symbol-floor",
+        "help-symbol-corridor",
+        "help-symbol-door-closed",
+        "help-symbol-door-open",
+        "help-symbol-stairs-up",
+        "help-symbol-stairs-down",
+        "help-symbol-water",
+        "help-symbol-fountain",
+        "help-options",
+        "help-look",
+        "help-history",
+        "help-shift-run",
+        "help-arrows",
     ];
     for setup in [setup_en, setup_zh_cn, setup_zh_tw, setup_fr, setup_de] {
         let lm = setup();
@@ -1848,12 +1869,23 @@ fn help_keys_resolve_in_all_locales() {
 #[test]
 fn inv_class_keys_resolve_in_all_locales() {
     let keys = [
-        "inv-class-weapon", "inv-class-armor", "inv-class-ring",
-        "inv-class-amulet", "inv-class-tool", "inv-class-food",
-        "inv-class-potion", "inv-class-scroll", "inv-class-spellbook",
-        "inv-class-wand", "inv-class-coin", "inv-class-gem",
-        "inv-class-rock", "inv-class-ball", "inv-class-chain",
-        "inv-class-venom", "inv-class-other",
+        "inv-class-weapon",
+        "inv-class-armor",
+        "inv-class-ring",
+        "inv-class-amulet",
+        "inv-class-tool",
+        "inv-class-food",
+        "inv-class-potion",
+        "inv-class-scroll",
+        "inv-class-spellbook",
+        "inv-class-wand",
+        "inv-class-coin",
+        "inv-class-gem",
+        "inv-class-rock",
+        "inv-class-ball",
+        "inv-class-chain",
+        "inv-class-venom",
+        "inv-class-other",
     ];
     for setup in [setup_en, setup_zh_cn, setup_zh_tw, setup_fr, setup_de] {
         let lm = setup();
@@ -1869,10 +1901,19 @@ fn inv_class_keys_resolve_in_all_locales() {
 #[test]
 fn stat_label_keys_resolve_in_all_locales() {
     let keys = [
-        "stat-label-str", "stat-label-dex", "stat-label-con",
-        "stat-label-int", "stat-label-wis", "stat-label-cha",
-        "stat-label-dlvl", "stat-label-gold", "stat-label-hp",
-        "stat-label-pw", "stat-label-ac", "stat-label-xp", "stat-label-turn",
+        "stat-label-str",
+        "stat-label-dex",
+        "stat-label-con",
+        "stat-label-int",
+        "stat-label-wis",
+        "stat-label-cha",
+        "stat-label-dlvl",
+        "stat-label-gold",
+        "stat-label-hp",
+        "stat-label-pw",
+        "stat-label-ac",
+        "stat-label-xp",
+        "stat-label-turn",
     ];
     for setup in [setup_en, setup_zh_cn, setup_zh_tw, setup_fr, setup_de] {
         let lm = setup();
@@ -1888,12 +1929,23 @@ fn stat_label_keys_resolve_in_all_locales() {
 #[test]
 fn options_keys_resolve_in_all_locales() {
     let keys = [
-        "ui-options-title", "ui-options-game", "ui-options-display",
-        "ui-options-sound", "opt-autopickup", "opt-autopickup-types",
-        "opt-legacy", "opt-map-colors", "opt-message-colors",
-        "opt-buc-highlight", "opt-minimap", "opt-mouse-hover",
-        "opt-nerd-fonts", "opt-sound-enabled", "opt-volume",
-        "opt-on", "opt-off",
+        "ui-options-title",
+        "ui-options-game",
+        "ui-options-display",
+        "ui-options-sound",
+        "opt-autopickup",
+        "opt-autopickup-types",
+        "opt-legacy",
+        "opt-map-colors",
+        "opt-message-colors",
+        "opt-buc-highlight",
+        "opt-minimap",
+        "opt-mouse-hover",
+        "opt-nerd-fonts",
+        "opt-sound-enabled",
+        "opt-volume",
+        "opt-on",
+        "opt-off",
     ];
     for setup in [setup_en, setup_zh_cn, setup_zh_tw, setup_fr, setup_de] {
         let lm = setup();
@@ -1909,8 +1961,12 @@ fn options_keys_resolve_in_all_locales() {
 #[test]
 fn tui_message_keys_resolve_in_all_locales() {
     let keys = [
-        "ui-never-mind", "ui-no-such-item", "ui-not-implemented",
-        "ui-empty-handed", "ui-inventory-title", "ui-inventory-empty",
+        "ui-never-mind",
+        "ui-no-such-item",
+        "ui-not-implemented",
+        "ui-empty-handed",
+        "ui-inventory-title",
+        "ui-inventory-empty",
         "ui-pickup-title",
     ];
     for setup in [setup_en, setup_zh_cn, setup_zh_tw, setup_fr, setup_de] {
@@ -1973,7 +2029,10 @@ fn stat_labels_zh_cn_are_chinese() {
 fn inv_class_zh_cn_is_chinese() {
     let lm = setup_zh_cn();
     let weapons = lm.translate("inv-class-weapon", None);
-    assert_ne!(weapons, "Weapons", "zh-CN inv-class-weapon should not be English");
+    assert_ne!(
+        weapons, "Weapons",
+        "zh-CN inv-class-weapon should not be English"
+    );
     assert!(
         contains_cjk(&weapons),
         "zh-CN inv-class-weapon should be CJK, got: {weapons}"
@@ -2007,7 +2066,9 @@ fn ftl_key_parity_across_locales() {
                     return None;
                 }
                 if trimmed.contains(" = ") || trimmed.ends_with(" =") {
-                    trimmed.split(' ').next()
+                    trimmed
+                        .split(' ')
+                        .next()
                         .filter(|k| !k.is_empty() && !k.starts_with('-'))
                         .map(|k| k.to_string())
                 } else {

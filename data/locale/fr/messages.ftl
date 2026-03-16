@@ -357,8 +357,11 @@ chat-nobody-there = Il n'y a personne à qui parler.
 ## Déplacement / voyage
 ride-not-available = Il n'y a rien à chevaucher ici.
 enhance-not-available = Vous ne pouvez améliorer aucune compétence pour le moment.
+enhance-success = Vous améliorez { $skill } au niveau { $level }.
 travel-not-implemented = Le voyage n'est pas encore disponible.
 two-weapon-not-implemented = Le combat à deux armes n'est pas encore disponible.
+two-weapon-enabled = Vous commencez à combattre avec deux armes.
+two-weapon-disabled = Vous cessez de combattre avec deux armes.
 name-not-implemented = Le nommage n'est pas encore disponible.
 adjust-not-implemented = L'ajustement d'inventaire n'est pas encore disponible.
 

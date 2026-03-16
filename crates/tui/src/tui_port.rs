@@ -10,18 +10,18 @@ use crossterm::event::{self, Event, KeyCode};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{cursor, execute};
 use nethack_babel_engine::action::{Direction, Position};
+use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
-use ratatui::Terminal;
 
 use unicode_width::UnicodeWidthChar;
 
 use crate::colors::{message_color, to_ratatui_color};
 use crate::input::{crossterm_to_input, map_direction_key};
 use crate::port::{
-    InputEvent, MapView, Menu, MenuHow, MenuResult, MessageUrgency,
-    StatusLine, WindowPort, MAP_COLS, MAP_ROWS,
+    InputEvent, MAP_COLS, MAP_ROWS, MapView, Menu, MenuHow, MenuResult, MessageUrgency, StatusLine,
+    WindowPort,
 };
 use crate::widgets::{MapWidget, StatusWidget};
 
@@ -41,15 +41,9 @@ pub fn init_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 
 /// Restore the terminal to its original state: show cursor, leave alternate
 /// screen, and disable raw mode.
-pub fn restore_terminal(
-    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
-) -> io::Result<()> {
+pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
     terminal::disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        cursor::Show
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, cursor::Show)?;
     terminal.show_cursor()?;
     Ok(())
 }
@@ -84,9 +78,7 @@ impl TuiPort {
     /// call [`WindowPort::init`] for that.
     ///
     /// `terminal` should come from [`init_terminal()`].
-    pub fn new(
-        terminal: Terminal<CrosstermBackend<Stdout>>,
-    ) -> Self {
+    pub fn new(terminal: Terminal<CrosstermBackend<Stdout>>) -> Self {
         Self {
             terminal,
             map: MapView::new(),
@@ -128,7 +120,7 @@ impl TuiPort {
             //
             // If the terminal is too small, we shrink the map.
             let chunks = Layout::vertical([
-                Constraint::Length(2),  // messages
+                Constraint::Length(2), // messages
                 Constraint::Min(1),    // map (fills remaining)
                 Constraint::Length(2), // status bar
             ])
@@ -171,10 +163,7 @@ impl TuiPort {
     /// Read one crossterm event with an optional timeout. Returns None
     /// on timeout.
     #[allow(dead_code)]
-    fn read_crossterm_event_timeout(
-        &self,
-        timeout: Duration,
-    ) -> Option<Event> {
+    fn read_crossterm_event_timeout(&self, timeout: Duration) -> Option<Event> {
         if event::poll(timeout).unwrap_or(false) {
             event::read().ok()
         } else {
@@ -217,9 +206,7 @@ fn put_str(
 // ---------------------------------------------------------------------------
 
 fn display_width(s: &str) -> u16 {
-    s.chars()
-        .map(|c| c.width().unwrap_or(0) as u16)
-        .sum()
+    s.chars().map(|c| c.width().unwrap_or(0) as u16).sum()
 }
 
 // ---------------------------------------------------------------------------
@@ -418,13 +405,10 @@ impl WindowPort for TuiPort {
                 let hint = match menu.how {
                     MenuHow::None => "(press any key to continue)",
                     MenuHow::PickOne => "(type letter to select, Esc to cancel)",
-                    MenuHow::PickAny => {
-                        "(type letters to toggle, Enter to confirm, Esc to cancel)"
-                    }
+                    MenuHow::PickAny => "(type letters to toggle, Enter to confirm, Esc to cancel)",
                 };
                 let hint_y = area.bottom().saturating_sub(1);
-                let hint_style = Style::default()
-                    .fg(ratatui::style::Color::DarkGray);
+                let hint_style = Style::default().fg(ratatui::style::Color::DarkGray);
                 put_str(buf, hint, area.x, hint_y, area.right(), hint_style);
             });
 
@@ -516,8 +500,7 @@ impl WindowPort for TuiPort {
                 // Footer
                 let hint = "(Space/PgDn: next, b/PgUp: prev, q/Esc: close)";
                 let hint_y = area.bottom().saturating_sub(1);
-                let hint_style = Style::default()
-                    .fg(ratatui::style::Color::DarkGray);
+                let hint_style = Style::default().fg(ratatui::style::Color::DarkGray);
                 put_str(buf, hint, area.x, hint_y, area.right(), hint_style);
             });
 
@@ -531,9 +514,8 @@ impl WindowPort for TuiPort {
             match key.code {
                 KeyCode::Esc | KeyCode::Char('q') => break,
                 KeyCode::Char(' ') | KeyCode::PageDown => {
-                    scroll = (scroll + content_height).min(
-                        lines.len().saturating_sub(content_height),
-                    );
+                    scroll =
+                        (scroll + content_height).min(lines.len().saturating_sub(content_height));
                 }
                 KeyCode::Char('b') | KeyCode::PageUp => {
                     scroll = scroll.saturating_sub(content_height);
@@ -616,12 +598,7 @@ impl WindowPort for TuiPort {
         }
     }
 
-    fn ask_yn(
-        &mut self,
-        prompt: &str,
-        choices: &str,
-        default: char,
-    ) -> char {
+    fn ask_yn(&mut self, prompt: &str, choices: &str, default: char) -> char {
         let display = format!("{} [{}] ", prompt, choices);
         self.show_message(&display, MessageUrgency::Normal);
 
@@ -664,11 +641,7 @@ impl WindowPort for TuiPort {
                 KeyCode::Enter => {
                     self.current_message = None;
                     self.draw_frame();
-                    return if input.is_empty() {
-                        None
-                    } else {
-                        Some(input)
-                    };
+                    return if input.is_empty() { None } else { Some(input) };
                 }
                 KeyCode::Esc => {
                     self.current_message = None;
@@ -723,10 +696,8 @@ impl WindowPort for TuiPort {
                 "  _____| ___________      |_____",
             ];
 
-            let stone_style = Style::default()
-                .fg(ratatui::style::Color::White);
-            let text_style = Style::default()
-                .fg(ratatui::style::Color::Yellow);
+            let stone_style = Style::default().fg(ratatui::style::Color::White);
+            let text_style = Style::default().fg(ratatui::style::Color::Yellow);
 
             let start_y = area.y + 1;
             let center_x = area.x + area.width / 2;
@@ -747,12 +718,18 @@ impl WindowPort for TuiPort {
             if text_start_y < area.bottom() {
                 let w = display_width(epitaph);
                 let epi_start = center_x.saturating_sub(w / 2);
-                put_str(buf, epitaph, epi_start, text_start_y, area.right(), text_style);
+                put_str(
+                    buf,
+                    epitaph,
+                    epi_start,
+                    text_start_y,
+                    area.right(),
+                    text_style,
+                );
             }
 
             // Death info lines on subsequent rows inside the stone
-            let info_style = Style::default()
-                .fg(ratatui::style::Color::Red);
+            let info_style = Style::default().fg(ratatui::style::Color::Red);
             for (i, line) in info_lines.iter().enumerate() {
                 let y = text_start_y + 1 + i as u16;
                 if y >= area.bottom() || y >= text_start_y + 4 {
@@ -766,11 +743,17 @@ impl WindowPort for TuiPort {
             // "Press any key" at bottom
             let footer = "(Press any key to continue)";
             let footer_y = area.bottom().saturating_sub(1);
-            let footer_style = Style::default()
-                .fg(ratatui::style::Color::DarkGray);
+            let footer_style = Style::default().fg(ratatui::style::Color::DarkGray);
             let w = display_width(footer);
             let footer_start = center_x.saturating_sub(w / 2);
-            put_str(buf, footer, footer_start, footer_y, area.right(), footer_style);
+            put_str(
+                buf,
+                footer,
+                footer_start,
+                footer_y,
+                area.right(),
+                footer_style,
+            );
         });
 
         // Wait for any key.

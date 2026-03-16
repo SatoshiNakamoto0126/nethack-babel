@@ -164,8 +164,8 @@ impl BucKnowledge {
     /// Map to a foreground color for display.
     pub fn color(self) -> TermColor {
         match self {
-            BucKnowledge::Blessed => TermColor::Rgb(0, 220, 220),  // cyan
-            BucKnowledge::Cursed => TermColor::Rgb(220, 50, 50),   // red
+            BucKnowledge::Blessed => TermColor::Rgb(0, 220, 220), // cyan
+            BucKnowledge::Cursed => TermColor::Rgb(220, 50, 50),  // red
             BucKnowledge::Uncursed => TermColor::Rgb(220, 220, 220), // white
             BucKnowledge::Unknown => TermColor::Default,
         }
@@ -236,10 +236,7 @@ pub fn show_inventory(
                 BucKnowledge::Cursed => format!(" {}", strings.buc_marker_cursed),
                 BucKnowledge::Uncursed | BucKnowledge::Unknown => String::new(),
             };
-            lines.push(format!(
-                "  {} - {}{}",
-                item.letter, item.name, buc_prefix
-            ));
+            lines.push(format!("  {} - {}{}", item.letter, item.name, buc_prefix));
         }
 
         // Blank line between groups.
@@ -377,9 +374,10 @@ pub fn select_items(
             for (menu_idx, menu_item) in menu.items.iter().enumerate() {
                 if menu_item.selectable {
                     if sel_indices.contains(&menu_idx)
-                        && let Some(&orig_idx) = index_map.get(selectable_counter) {
-                            result.push(orig_idx);
-                        }
+                        && let Some(&orig_idx) = index_map.get(selectable_counter)
+                    {
+                        result.push(orig_idx);
+                    }
                     selectable_counter += 1;
                 }
             }
