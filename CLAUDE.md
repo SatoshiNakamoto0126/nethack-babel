@@ -39,6 +39,11 @@ cargo test -p nethack-babel-engine -- test_combat_monk_armor_penalty
 
 # Lint
 cargo clippy --workspace -- -D warnings
+
+# Differential test pipeline (C→Rust cross-validation)
+bash scripts/generate_c_recording.sh rest 20    # Generate C recording (20 turns)
+cargo test -p nethack-babel-engine --test differential  # Run differential tests
+bash scripts/fuzz_c_recordings.sh 10 50          # Fuzz: 10 runs × 50 turns
 ```
 
 ## Workspace Layout
@@ -121,7 +126,7 @@ Mandatory test categories:
 - **Golden Master**: Capture C engine outputs as test oracles when feasible (see `tests/TEST_ORACLES.md`).
 - **Property-based**: proptest/quickcheck for serialization roundtrips, item name parsing, map generation validity.
 
-Target: 5,000+ tests (currently 3,984).
+Target: 5,000+ tests (currently 4,086+).
 
 ### D8: Entity Hard Limits
 
@@ -168,3 +173,5 @@ When running multiple agents, partition by file to avoid conflicts:
 - **Steed + polymorph**: `polymorph_self()` must dismount first. `movement.rs` uses steed speed when mounted. `combat.rs` applies `mounted_combat_modifier()`.
 - **Blind + scrolls**: `read_scroll()` caller must check blindness first — blind players cannot read.
 - **Stunned/confused + wands**: Wand direction is randomized when stunned or confused.
+- **Differential test harness**: C NetHack must be built with `#define DIFF_TEST` in `include/config.h` and `make WANT_SOURCE_INSTALL=1 all`. Recording script uses Python `pty` (not `expect`) because `--More--` prompts block expect. Tutorial is skipped via `#ifndef DIFF_TEST` guard in `allmain.c`.
+- **C build HACKDIR**: Always use `make WANT_SOURCE_INSTALL=1 all` from the NetHack root. Running `make -C src` uses the wrong HACKDIR and the binary can't find data files.

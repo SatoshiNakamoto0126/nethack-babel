@@ -6,7 +6,7 @@
 
 [![License: NGPL](https://img.shields.io/badge/License-NGPL-blue.svg)](LICENSE)
 ![Rust: nightly](https://img.shields.io/badge/Rust-nightly-orange.svg)
-![Tests: 3984](https://img.shields.io/badge/tests-3984_passing-brightgreen.svg)
+![Tests: 4086](https://img.shields.io/badge/tests-4086_passing-brightgreen.svg)
 ![LOC: 133K](https://img.shields.io/badge/LOC-133K-informational.svg)
 
 ## 概述
@@ -20,7 +20,7 @@ NetHack Babel 是 [NetHack 3.7](https://github.com/NetHack/NetHack) 的 Rust 从
 - **CJK 物品命名** — 量词系统："3把匕首"而非"3 daggers"；BUC 前缀："祝福的+2长剑"
 - **数据驱动架构** — 394 种怪物、430 种物品、33 件神器，TOML 定义，无需重编译即可修改
 - **ECS 游戏状态** — hecs 实体组件系统，显式回合解算与类型化事件
-- **公式级精确** — 29 份机制规格从原版 C 源码提取；3,984 个测试验证忠实度
+- **公式级精确** — 29 份机制规格从原版 C 源码提取；4,086+ 个测试验证忠实度
 - **99.8% 覆盖率** — 原版 C NetHack 全部游戏系统均已实现：战斗、魔法、物品、怪物、地牢、宗教、宠物、陷阱、商店、变形、骑乘、遗骨、操守等
 - **逐局外观洗牌** — 每局游戏随机化药水颜色、卷轴标签、戒指材质
 - **完整特殊关卡** — 30+ 生成器：推箱子（8 关）、城堡、美杜莎、冥界全部恶魔巢穴、弗拉德之塔、巫师塔、至圣所、元素位面、星界、13 个职业任务
@@ -154,7 +154,7 @@ NetHack Babel 将所有玩家可见文本与游戏逻辑分离：
 
 ```sh
 cargo build                              # 构建
-cargo test --workspace                   # 运行全部 3,984 个测试
+cargo test --workspace                   # 运行全部 4,086+ 个测试
 cargo run -- --data-dir data             # 运行游戏（英文）
 cargo run -- --data-dir data --language zh_CN  # 运行游戏（简体中文）
 cargo run -- --data-dir data -D          # 巫师模式
@@ -164,7 +164,7 @@ cargo build --release                    # 发布构建
 
 ## 项目状态
 
-游戏引擎已完成，覆盖 NetHack 3.7 游戏系统的 99.8%。所有核心系统均已实现并通过 3,984 个测试与原版源码交叉验证。
+游戏引擎已完成，覆盖 NetHack 3.7 游戏系统的 99.8%。所有核心系统均已实现并通过 4,086+ 个测试与原版源码交叉验证。
 
 详见 [GAP_STATUS.md](GAP_STATUS.md)（状态报告）和 [DIFFERENCES.md](DIFFERENCES.md)（已知差异）。
 

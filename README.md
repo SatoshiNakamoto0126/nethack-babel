@@ -6,7 +6,7 @@
 
 [![License: NGPL](https://img.shields.io/badge/License-NGPL-blue.svg)](LICENSE)
 ![Rust: nightly](https://img.shields.io/badge/Rust-nightly-orange.svg)
-![Tests: 3984](https://img.shields.io/badge/tests-3984_passing-brightgreen.svg)
+![Tests: 4086](https://img.shields.io/badge/tests-4086_passing-brightgreen.svg)
 ![LOC: 133K](https://img.shields.io/badge/LOC-133K-informational.svg)
 
 ## Overview
@@ -20,7 +20,7 @@ NetHack Babel is a ground-up reimplementation of [NetHack 3.7](https://github.co
 - **CJK-aware item naming** — Chinese counter words (量词) system: "3把匕首" instead of "3 daggers"; BUC prefix: "祝福的+2长剑"
 - **Data-driven architecture** — 394 monsters, 430 items, 33 artifacts defined in TOML; modify content without recompiling
 - **ECS-based game state** — hecs entity-component-system with explicit turn resolution and typed events
-- **Formula-precise mechanics** — 29 mechanism specs extracted from the original C source; 3,984 tests verify fidelity
+- **Formula-precise mechanics** — 29 mechanism specs extracted from the original C source; 4,086 tests verify fidelity
 - **99.8% coverage** — all C NetHack gameplay systems implemented: combat, magic, items, monsters, dungeon, religion, pets, traps, shops, polymorph, riding, bones, conducts, and more
 - **Per-game appearance shuffling** — each game randomizes potion colors, scroll labels, ring materials
 - **Complete special levels** — 30+ generators: Sokoban (8 puzzles), Castle, Medusa, all Gehennom levels, Vlad's Tower, Wizard Tower, Sanctum, Elemental Planes, Astral Plane, 13 role-specific quest branches
@@ -188,7 +188,7 @@ The `specs/` directory contains 29 mechanism specifications extracted from the o
 
 NetHack Babel uses a 4-layer test pyramid plus a differential execution harness for compiler-grade cross-validation against the original C engine.
 
-### Test Pyramid (4,086 tests)
+### Test Pyramid (4,086+ tests)
 
 | Layer | Tests | Purpose |
 |-------|-------|---------|
@@ -219,6 +219,8 @@ bash scripts/fuzz_c_recordings.sh 100 200
 
 When a divergence is found (e.g., "C says player is Punished, Rust says not"), the exact turn, RNG calls, and state delta are reported for targeted debugging.
 
+The harness has been validated end-to-end: a 20-turn C recording was successfully generated and consumed by the Rust differential tests.
+
 ## Building
 
 ### Prerequisites
@@ -227,7 +229,7 @@ Rust nightly is the only requirement:
 
 ```sh
 cargo build                              # Build
-cargo test --workspace                   # Run all 3,984 tests
+cargo test --workspace                   # Run all 4,086+ tests
 cargo run -- --data-dir data             # Run (English)
 cargo run -- --data-dir data --language zh_CN  # Run (Chinese)
 cargo run -- --data-dir data -D          # Wizard mode
@@ -237,7 +239,7 @@ cargo build --release                    # Release build
 
 ## Project Status
 
-The game engine is feature-complete with 99.8% coverage of NetHack 3.7 gameplay systems. All core systems — combat, magic, items, monsters, dungeon generation, special levels, quests, pets, religion, traps, shops, hunger, status effects, identification, polymorph, riding, conducts, bones, save/load, leaderboard, and the terminal UI — are implemented and verified against the original NetHack source with 3,984 passing tests.
+The game engine is feature-complete with 99.8% coverage of NetHack 3.7 gameplay systems. All core systems — combat, magic, items, monsters, dungeon generation, special levels, quests, pets, religion, traps, shops, hunger, status effects, identification, polymorph, riding, conducts, bones, save/load, leaderboard, and the terminal UI — are implemented and verified against the original NetHack source with 4,086+ passing tests.
 
 See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENCES.md](DIFFERENCES.md) for known deviations from NetHack 3.7 behavior.
 
