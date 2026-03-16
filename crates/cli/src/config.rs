@@ -687,8 +687,8 @@ pub struct MapConfig {
     #[serde(default = "default_true")]
     pub spot_monsters: bool,
     /// Show gold as 'X' instead of '$'.
-    #[serde(default)]
-    pub goldX: bool,
+    #[serde(default, rename = "goldX")]
+    pub gold_x: bool,
     /// Show monster movement.
     #[serde(default)]
     pub mon_movement: bool,
@@ -717,7 +717,7 @@ impl Default for MapConfig {
             mention_map: false,
             mention_walls: false,
             spot_monsters: true,
-            goldX: false,
+            gold_x: false,
             mon_movement: false,
             whatis_coord: String::new(),
             whatis_filter: String::new(),
@@ -1211,7 +1211,6 @@ fn default_menu_invert_all() -> String {
 pub enum OptionType {
     Boolean,
     Compound,
-    Other,
 }
 
 /// Which section an option belongs to.
@@ -1240,159 +1239,1025 @@ pub struct OptionInfo {
 /// that a player might set via the config file or the in-game `O` menu.
 pub const ALL_OPTIONS: &[OptionInfo] = &[
     // ── General / game options ──────────────────────────────────────
-    OptionInfo { name: "name", section: OptionSection::General, opt_type: OptionType::Compound, description: "your character's name", default_val: "" },
-    OptionInfo { name: "role", section: OptionSection::General, opt_type: OptionType::Compound, description: "your starting role", default_val: "" },
-    OptionInfo { name: "race", section: OptionSection::General, opt_type: OptionType::Compound, description: "your starting race", default_val: "" },
-    OptionInfo { name: "gender", section: OptionSection::General, opt_type: OptionType::Compound, description: "your starting gender", default_val: "" },
-    OptionInfo { name: "alignment", section: OptionSection::General, opt_type: OptionType::Compound, description: "your starting alignment", default_val: "" },
-    OptionInfo { name: "playmode", section: OptionSection::General, opt_type: OptionType::Compound, description: "normal, explore, or debug mode", default_val: "normal" },
-    OptionInfo { name: "windowtype", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "windowing system to use", default_val: "" },
-    OptionInfo { name: "fruit", section: OptionSection::General, opt_type: OptionType::Compound, description: "name of a fruit you enjoy eating", default_val: "slime mold" },
-    OptionInfo { name: "language", section: OptionSection::General, opt_type: OptionType::Compound, description: "display language", default_val: "en" },
-    OptionInfo { name: "catname", section: OptionSection::General, opt_type: OptionType::Compound, description: "name of your starting cat", default_val: "" },
-    OptionInfo { name: "dogname", section: OptionSection::General, opt_type: OptionType::Compound, description: "name of your starting dog", default_val: "" },
-    OptionInfo { name: "horsename", section: OptionSection::General, opt_type: OptionType::Compound, description: "name of your starting horse", default_val: "" },
-    OptionInfo { name: "pettype", section: OptionSection::General, opt_type: OptionType::Compound, description: "preferred type of pet", default_val: "" },
-    OptionInfo { name: "packorder", section: OptionSection::General, opt_type: OptionType::Compound, description: "inventory pack order", default_val: "\")[%?+!=/(*`0_" },
-    OptionInfo { name: "disclose", section: OptionSection::General, opt_type: OptionType::Compound, description: "end-of-game disclosure options", default_val: "" },
-    OptionInfo { name: "scores", section: OptionSection::General, opt_type: OptionType::Compound, description: "score display format", default_val: "3 top/2 around/own" },
-    OptionInfo { name: "paranoid_confirmation", section: OptionSection::General, opt_type: OptionType::Compound, description: "extra confirmations for dangerous actions", default_val: "confirm" },
-
+    OptionInfo {
+        name: "name",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "your character's name",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "role",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "your starting role",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "race",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "your starting race",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "gender",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "your starting gender",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "alignment",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "your starting alignment",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "playmode",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "normal, explore, or debug mode",
+        default_val: "normal",
+    },
+    OptionInfo {
+        name: "windowtype",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "windowing system to use",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "fruit",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "name of a fruit you enjoy eating",
+        default_val: "slime mold",
+    },
+    OptionInfo {
+        name: "language",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "display language",
+        default_val: "en",
+    },
+    OptionInfo {
+        name: "catname",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "name of your starting cat",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "dogname",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "name of your starting dog",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "horsename",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "name of your starting horse",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "pettype",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "preferred type of pet",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "packorder",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "inventory pack order",
+        default_val: "\")[%?+!=/(*`0_",
+    },
+    OptionInfo {
+        name: "disclose",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "end-of-game disclosure options",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "scores",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "score display format",
+        default_val: "3 top/2 around/own",
+    },
+    OptionInfo {
+        name: "paranoid_confirmation",
+        section: OptionSection::General,
+        opt_type: OptionType::Compound,
+        description: "extra confirmations for dangerous actions",
+        default_val: "confirm",
+    },
     // ── Behavior options ────────────────────────────────────────────
-    OptionInfo { name: "autopickup", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "automatically pick up objects", default_val: "false" },
-    OptionInfo { name: "pickup_types", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "types of objects to pick up", default_val: "$?!/=" },
-    OptionInfo { name: "pickup_burden", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "max burden for autopickup", default_val: "stressed" },
-    OptionInfo { name: "pickup_thrown", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "pick up items you threw", default_val: "true" },
-    OptionInfo { name: "pickup_stolen", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "pick up stolen items", default_val: "true" },
-    OptionInfo { name: "dropped_nopick", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "don't re-pick up dropped items", default_val: "true" },
-    OptionInfo { name: "autodig", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "dig when wielding digging tool", default_val: "false" },
-    OptionInfo { name: "autoopen", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "open doors when walking into them", default_val: "true" },
-    OptionInfo { name: "autoquiver", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "fill quiver automatically", default_val: "false" },
-    OptionInfo { name: "autounlock", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "auto-unlock locked doors/chests", default_val: "apply" },
-    OptionInfo { name: "confirm", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "confirm attacks on peaceful monsters", default_val: "true" },
-    OptionInfo { name: "safe_pet", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "avoid attacking pets", default_val: "true" },
-    OptionInfo { name: "safe_wait", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "avoid waiting near hostiles", default_val: "true" },
-    OptionInfo { name: "pushweapon", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "push old weapon to secondary", default_val: "false" },
-    OptionInfo { name: "fixinv", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "fixed inventory letters", default_val: "true" },
-    OptionInfo { name: "sortpack", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "sort inventory by type", default_val: "true" },
-    OptionInfo { name: "sortloot", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "sort loot display", default_val: "full" },
-    OptionInfo { name: "sortdiscoveries", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "sort discovered items", default_val: "by class" },
-    OptionInfo { name: "sortvanquished", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "sort vanquished monsters", default_val: "by class" },
-    OptionInfo { name: "lootabc", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "use a/b/c in loot prompts", default_val: "false" },
-    OptionInfo { name: "force_invmenu", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "force inventory menu", default_val: "false" },
-    OptionInfo { name: "menustyle", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "item selection menu style", default_val: "full" },
-    OptionInfo { name: "verbose", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "verbose game messages", default_val: "true" },
-    OptionInfo { name: "rest_on_space", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "spacebar rests", default_val: "false" },
-    OptionInfo { name: "fireassist", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "help with ranged attacks", default_val: "true" },
-    OptionInfo { name: "cmdassist", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "command assistance", default_val: "true" },
-    OptionInfo { name: "extmenu", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "extended command menu", default_val: "false" },
-    OptionInfo { name: "pile_limit", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "min items for pickup menu", default_val: "5" },
-    OptionInfo { name: "runmode", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "multi-step movement display", default_val: "run" },
-    OptionInfo { name: "travel", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "travel command enabled", default_val: "true" },
-    OptionInfo { name: "number_pad", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "use numpad for movement", default_val: "false" },
-    OptionInfo { name: "suppress_alert", section: OptionSection::Behavior, opt_type: OptionType::Compound, description: "suppress version alerts", default_val: "" },
-    OptionInfo { name: "quick_farsight", section: OptionSection::Behavior, opt_type: OptionType::Boolean, description: "quick farsight after teleport", default_val: "true" },
-
+    OptionInfo {
+        name: "autopickup",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "automatically pick up objects",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "pickup_types",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "types of objects to pick up",
+        default_val: "$?!/=",
+    },
+    OptionInfo {
+        name: "pickup_burden",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "max burden for autopickup",
+        default_val: "stressed",
+    },
+    OptionInfo {
+        name: "pickup_thrown",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "pick up items you threw",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "pickup_stolen",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "pick up stolen items",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "dropped_nopick",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "don't re-pick up dropped items",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "autodig",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "dig when wielding digging tool",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "autoopen",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "open doors when walking into them",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "autoquiver",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "fill quiver automatically",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "autounlock",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "auto-unlock locked doors/chests",
+        default_val: "apply",
+    },
+    OptionInfo {
+        name: "confirm",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "confirm attacks on peaceful monsters",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "safe_pet",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "avoid attacking pets",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "safe_wait",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "avoid waiting near hostiles",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "pushweapon",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "push old weapon to secondary",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "fixinv",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "fixed inventory letters",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "sortpack",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "sort inventory by type",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "sortloot",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "sort loot display",
+        default_val: "full",
+    },
+    OptionInfo {
+        name: "sortdiscoveries",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "sort discovered items",
+        default_val: "by class",
+    },
+    OptionInfo {
+        name: "sortvanquished",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "sort vanquished monsters",
+        default_val: "by class",
+    },
+    OptionInfo {
+        name: "lootabc",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "use a/b/c in loot prompts",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "force_invmenu",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "force inventory menu",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "menustyle",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "item selection menu style",
+        default_val: "full",
+    },
+    OptionInfo {
+        name: "verbose",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "verbose game messages",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "rest_on_space",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "spacebar rests",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "fireassist",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "help with ranged attacks",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "cmdassist",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "command assistance",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "extmenu",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "extended command menu",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "pile_limit",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "min items for pickup menu",
+        default_val: "5",
+    },
+    OptionInfo {
+        name: "runmode",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "multi-step movement display",
+        default_val: "run",
+    },
+    OptionInfo {
+        name: "travel",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "travel command enabled",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "number_pad",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "use numpad for movement",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "suppress_alert",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Compound,
+        description: "suppress version alerts",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "quick_farsight",
+        section: OptionSection::Behavior,
+        opt_type: OptionType::Boolean,
+        description: "quick farsight after teleport",
+        default_val: "true",
+    },
     // ── Map options ─────────────────────────────────────────────────
-    OptionInfo { name: "autodescribe", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "describe terrain under cursor", default_val: "true" },
-    OptionInfo { name: "mention_decor", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "mention decorations", default_val: "true" },
-    OptionInfo { name: "mention_map", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "mention map features", default_val: "false" },
-    OptionInfo { name: "mention_walls", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "mention walls when blind", default_val: "false" },
-    OptionInfo { name: "spot_monsters", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "auto-spot monsters", default_val: "true" },
-    OptionInfo { name: "goldX", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "show gold as X", default_val: "false" },
-    OptionInfo { name: "mon_movement", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "show monster movement", default_val: "false" },
-    OptionInfo { name: "whatis_coord", section: OptionSection::Map, opt_type: OptionType::Compound, description: "coordinate style", default_val: "" },
-    OptionInfo { name: "whatis_filter", section: OptionSection::Map, opt_type: OptionType::Compound, description: "whatis filter", default_val: "" },
-    OptionInfo { name: "whatis_menu", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "whatis uses menu", default_val: "false" },
-    OptionInfo { name: "whatis_moveskip", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "skip positions in whatis", default_val: "false" },
-    OptionInfo { name: "herecmd_menu", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "here-command menu", default_val: "false" },
-    OptionInfo { name: "bgcolors", section: OptionSection::Map, opt_type: OptionType::Boolean, description: "background color highlighting", default_val: "true" },
-
+    OptionInfo {
+        name: "autodescribe",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "describe terrain under cursor",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "mention_decor",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "mention decorations",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "mention_map",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "mention map features",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "mention_walls",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "mention walls when blind",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "spot_monsters",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "auto-spot monsters",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "goldX",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "show gold as X",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "mon_movement",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "show monster movement",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "whatis_coord",
+        section: OptionSection::Map,
+        opt_type: OptionType::Compound,
+        description: "coordinate style",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "whatis_filter",
+        section: OptionSection::Map,
+        opt_type: OptionType::Compound,
+        description: "whatis filter",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "whatis_menu",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "whatis uses menu",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "whatis_moveskip",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "skip positions in whatis",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "herecmd_menu",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "here-command menu",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "bgcolors",
+        section: OptionSection::Map,
+        opt_type: OptionType::Boolean,
+        description: "background color highlighting",
+        default_val: "true",
+    },
     // ── Status options ──────────────────────────────────────────────
-    OptionInfo { name: "showexp", section: OptionSection::Status, opt_type: OptionType::Boolean, description: "show experience points", default_val: "false" },
-    OptionInfo { name: "showscore", section: OptionSection::Status, opt_type: OptionType::Boolean, description: "show score", default_val: "false" },
-    OptionInfo { name: "time", section: OptionSection::Status, opt_type: OptionType::Boolean, description: "show game time", default_val: "false" },
-    OptionInfo { name: "showdamage", section: OptionSection::Status, opt_type: OptionType::Boolean, description: "show damage dealt", default_val: "false" },
-    OptionInfo { name: "showrace", section: OptionSection::Status, opt_type: OptionType::Boolean, description: "show race in status", default_val: "false" },
-    OptionInfo { name: "showvers", section: OptionSection::Status, opt_type: OptionType::Boolean, description: "show version in status", default_val: "false" },
-    OptionInfo { name: "hitpointbar", section: OptionSection::Status, opt_type: OptionType::Boolean, description: "show HP bar", default_val: "false" },
-    OptionInfo { name: "statuslines", section: OptionSection::Status, opt_type: OptionType::Compound, description: "number of status lines", default_val: "2" },
-    OptionInfo { name: "implicit_uncursed", section: OptionSection::Status, opt_type: OptionType::Boolean, description: "hide 'uncursed' for known items", default_val: "true" },
-
+    OptionInfo {
+        name: "showexp",
+        section: OptionSection::Status,
+        opt_type: OptionType::Boolean,
+        description: "show experience points",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "showscore",
+        section: OptionSection::Status,
+        opt_type: OptionType::Boolean,
+        description: "show score",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "time",
+        section: OptionSection::Status,
+        opt_type: OptionType::Boolean,
+        description: "show game time",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "showdamage",
+        section: OptionSection::Status,
+        opt_type: OptionType::Boolean,
+        description: "show damage dealt",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "showrace",
+        section: OptionSection::Status,
+        opt_type: OptionType::Boolean,
+        description: "show race in status",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "showvers",
+        section: OptionSection::Status,
+        opt_type: OptionType::Boolean,
+        description: "show version in status",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "hitpointbar",
+        section: OptionSection::Status,
+        opt_type: OptionType::Boolean,
+        description: "show HP bar",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "statuslines",
+        section: OptionSection::Status,
+        opt_type: OptionType::Compound,
+        description: "number of status lines",
+        default_val: "2",
+    },
+    OptionInfo {
+        name: "implicit_uncursed",
+        section: OptionSection::Status,
+        opt_type: OptionType::Boolean,
+        description: "hide 'uncursed' for known items",
+        default_val: "true",
+    },
     // ── Display / Advanced options ──────────────────────────────────
-    OptionInfo { name: "color", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "use color in display", default_val: "true" },
-    OptionInfo { name: "ascii_map", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "show map as text", default_val: "true" },
-    OptionInfo { name: "tiled_map", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "show map as tiles", default_val: "false" },
-    OptionInfo { name: "sparkle", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "sparkle for resistance", default_val: "true" },
-    OptionInfo { name: "timed_delay", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "timed delay animations", default_val: "true" },
-    OptionInfo { name: "hilite_pet", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "highlight pets", default_val: "false" },
-    OptionInfo { name: "petattr", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "pet highlight attribute", default_val: "" },
-    OptionInfo { name: "hilite_pile", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "highlight object piles", default_val: "false" },
-    OptionInfo { name: "dark_room", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "dark room shading", default_val: "true" },
-    OptionInfo { name: "lit_corridor", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "show lit corridors", default_val: "false" },
-    OptionInfo { name: "use_inverse", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "use inverse video", default_val: "true" },
-    OptionInfo { name: "use_truecolor", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "use truecolor", default_val: "false" },
-    OptionInfo { name: "standout", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "standout for --More--", default_val: "false" },
-    OptionInfo { name: "guicolor", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "GUI colors", default_val: "true" },
-    OptionInfo { name: "menu_overlay", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "overlay menus", default_val: "true" },
-    OptionInfo { name: "fullscreen", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "fullscreen mode", default_val: "false" },
-    OptionInfo { name: "mouse_support", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "mouse support", default_val: "false" },
-    OptionInfo { name: "wraptext", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "wrap text in message window", default_val: "false" },
-    OptionInfo { name: "popup_dialog", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "popup dialogs", default_val: "false" },
-    OptionInfo { name: "perm_invent", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "persistent inventory window", default_val: "false" },
-    OptionInfo { name: "legacy", section: OptionSection::General, opt_type: OptionType::Boolean, description: "show legacy intro", default_val: "true" },
-    OptionInfo { name: "news", section: OptionSection::General, opt_type: OptionType::Boolean, description: "show news on start", default_val: "true" },
-    OptionInfo { name: "splash_screen", section: OptionSection::General, opt_type: OptionType::Boolean, description: "show splash screen", default_val: "true" },
-    OptionInfo { name: "tips", section: OptionSection::General, opt_type: OptionType::Boolean, description: "show tutorial tips", default_val: "true" },
-    OptionInfo { name: "tombstone", section: OptionSection::General, opt_type: OptionType::Boolean, description: "show tombstone on death", default_val: "true" },
-    OptionInfo { name: "toptenwin", section: OptionSection::General, opt_type: OptionType::Boolean, description: "show scores in window", default_val: "false" },
-    OptionInfo { name: "bones", section: OptionSection::General, opt_type: OptionType::Boolean, description: "save bones files", default_val: "true" },
-    OptionInfo { name: "checkpoint", section: OptionSection::General, opt_type: OptionType::Boolean, description: "checkpoint saves", default_val: "true" },
-    OptionInfo { name: "help", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "help on start", default_val: "true" },
-    OptionInfo { name: "ignintr", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "ignore interrupts", default_val: "false" },
-    OptionInfo { name: "eight_bit_tty", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "8-bit character set", default_val: "false" },
-    OptionInfo { name: "mail", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "mail notification", default_val: "true" },
-    OptionInfo { name: "use_darkgray", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "use dark gray color", default_val: "true" },
-    OptionInfo { name: "preload_tiles", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "preload tile images", default_val: "true" },
-    OptionInfo { name: "acoustics", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "character can hear", default_val: "true" },
-    OptionInfo { name: "sounds", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "sound effects enabled", default_val: "true" },
-    OptionInfo { name: "voices", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "voice sounds", default_val: "false" },
-    OptionInfo { name: "msghistory", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "message history size", default_val: "20" },
-    OptionInfo { name: "msg_window", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "message window behavior", default_val: "single" },
-    OptionInfo { name: "menu_headings", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "menu heading style", default_val: "inverse" },
-    OptionInfo { name: "accessiblemsg", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "accessible messages", default_val: "false" },
-    OptionInfo { name: "symset", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "symbol set", default_val: "" },
-    OptionInfo { name: "roguesymset", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "rogue-level symbol set", default_val: "" },
-    OptionInfo { name: "align_message", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "message window alignment", default_val: "" },
-    OptionInfo { name: "align_status", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "status window alignment", default_val: "" },
-    OptionInfo { name: "scroll_margin", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "scroll margin", default_val: "4" },
-    OptionInfo { name: "scroll_amount", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "scroll amount", default_val: "0" },
-    OptionInfo { name: "windowborders", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "window borders style", default_val: "" },
-    OptionInfo { name: "nudist", section: OptionSection::General, opt_type: OptionType::Boolean, description: "start without armor", default_val: "false" },
-    OptionInfo { name: "pauper", section: OptionSection::General, opt_type: OptionType::Boolean, description: "start without gold", default_val: "false" },
-    OptionInfo { name: "reroll", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "allow stat reroll", default_val: "false" },
-    OptionInfo { name: "perminv_mode", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "persistent inventory mode", default_val: "" },
-    OptionInfo { name: "selectsaved", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "show saved game menu", default_val: "false" },
-    OptionInfo { name: "status_updates", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "status line updates", default_val: "true" },
-    OptionInfo { name: "vary_msgcount", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "vary message count", default_val: "false" },
-    OptionInfo { name: "soundlib", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "sound library name", default_val: "" },
-    OptionInfo { name: "font_map", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "map font", default_val: "" },
-    OptionInfo { name: "font_menu", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "menu font", default_val: "" },
-    OptionInfo { name: "font_message", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "message font", default_val: "" },
-    OptionInfo { name: "font_status", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "status font", default_val: "" },
-    OptionInfo { name: "font_text", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "text font", default_val: "" },
-    OptionInfo { name: "font_size_map", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "map font size", default_val: "0" },
-    OptionInfo { name: "font_size_menu", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "menu font size", default_val: "0" },
-    OptionInfo { name: "font_size_message", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "message font size", default_val: "0" },
-    OptionInfo { name: "font_size_status", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "status font size", default_val: "0" },
-    OptionInfo { name: "font_size_text", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "text font size", default_val: "0" },
-    OptionInfo { name: "tile_file", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "tile file path", default_val: "" },
-    OptionInfo { name: "tile_width", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "tile width", default_val: "0" },
-    OptionInfo { name: "tile_height", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "tile height", default_val: "0" },
-    OptionInfo { name: "term_cols", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "terminal columns", default_val: "0" },
-    OptionInfo { name: "term_rows", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "terminal rows", default_val: "0" },
-    OptionInfo { name: "player_selection", section: OptionSection::Advanced, opt_type: OptionType::Compound, description: "player selection method", default_val: "" },
-    OptionInfo { name: "query_menu", section: OptionSection::Advanced, opt_type: OptionType::Boolean, description: "query menu mode", default_val: "false" },
+    OptionInfo {
+        name: "color",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "use color in display",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "ascii_map",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "show map as text",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "tiled_map",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "show map as tiles",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "sparkle",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "sparkle for resistance",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "timed_delay",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "timed delay animations",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "hilite_pet",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "highlight pets",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "petattr",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "pet highlight attribute",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "hilite_pile",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "highlight object piles",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "dark_room",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "dark room shading",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "lit_corridor",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "show lit corridors",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "use_inverse",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "use inverse video",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "use_truecolor",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "use truecolor",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "standout",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "standout for --More--",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "guicolor",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "GUI colors",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "menu_overlay",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "overlay menus",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "fullscreen",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "fullscreen mode",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "mouse_support",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "mouse support",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "wraptext",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "wrap text in message window",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "popup_dialog",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "popup dialogs",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "perm_invent",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "persistent inventory window",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "legacy",
+        section: OptionSection::General,
+        opt_type: OptionType::Boolean,
+        description: "show legacy intro",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "news",
+        section: OptionSection::General,
+        opt_type: OptionType::Boolean,
+        description: "show news on start",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "splash_screen",
+        section: OptionSection::General,
+        opt_type: OptionType::Boolean,
+        description: "show splash screen",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "tips",
+        section: OptionSection::General,
+        opt_type: OptionType::Boolean,
+        description: "show tutorial tips",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "tombstone",
+        section: OptionSection::General,
+        opt_type: OptionType::Boolean,
+        description: "show tombstone on death",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "toptenwin",
+        section: OptionSection::General,
+        opt_type: OptionType::Boolean,
+        description: "show scores in window",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "bones",
+        section: OptionSection::General,
+        opt_type: OptionType::Boolean,
+        description: "save bones files",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "checkpoint",
+        section: OptionSection::General,
+        opt_type: OptionType::Boolean,
+        description: "checkpoint saves",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "help",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "help on start",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "ignintr",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "ignore interrupts",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "eight_bit_tty",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "8-bit character set",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "mail",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "mail notification",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "use_darkgray",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "use dark gray color",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "preload_tiles",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "preload tile images",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "acoustics",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "character can hear",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "sounds",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "sound effects enabled",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "voices",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "voice sounds",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "msghistory",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "message history size",
+        default_val: "20",
+    },
+    OptionInfo {
+        name: "msg_window",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "message window behavior",
+        default_val: "single",
+    },
+    OptionInfo {
+        name: "menu_headings",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "menu heading style",
+        default_val: "inverse",
+    },
+    OptionInfo {
+        name: "accessiblemsg",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "accessible messages",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "symset",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "symbol set",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "roguesymset",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "rogue-level symbol set",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "align_message",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "message window alignment",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "align_status",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "status window alignment",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "scroll_margin",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "scroll margin",
+        default_val: "4",
+    },
+    OptionInfo {
+        name: "scroll_amount",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "scroll amount",
+        default_val: "0",
+    },
+    OptionInfo {
+        name: "windowborders",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "window borders style",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "nudist",
+        section: OptionSection::General,
+        opt_type: OptionType::Boolean,
+        description: "start without armor",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "pauper",
+        section: OptionSection::General,
+        opt_type: OptionType::Boolean,
+        description: "start without gold",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "reroll",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "allow stat reroll",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "perminv_mode",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "persistent inventory mode",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "selectsaved",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "show saved game menu",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "status_updates",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "status line updates",
+        default_val: "true",
+    },
+    OptionInfo {
+        name: "vary_msgcount",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "vary message count",
+        default_val: "false",
+    },
+    OptionInfo {
+        name: "soundlib",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "sound library name",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "font_map",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "map font",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "font_menu",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "menu font",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "font_message",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "message font",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "font_status",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "status font",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "font_text",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "text font",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "font_size_map",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "map font size",
+        default_val: "0",
+    },
+    OptionInfo {
+        name: "font_size_menu",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "menu font size",
+        default_val: "0",
+    },
+    OptionInfo {
+        name: "font_size_message",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "message font size",
+        default_val: "0",
+    },
+    OptionInfo {
+        name: "font_size_status",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "status font size",
+        default_val: "0",
+    },
+    OptionInfo {
+        name: "font_size_text",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "text font size",
+        default_val: "0",
+    },
+    OptionInfo {
+        name: "tile_file",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "tile file path",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "tile_width",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "tile width",
+        default_val: "0",
+    },
+    OptionInfo {
+        name: "tile_height",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "tile height",
+        default_val: "0",
+    },
+    OptionInfo {
+        name: "term_cols",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "terminal columns",
+        default_val: "0",
+    },
+    OptionInfo {
+        name: "term_rows",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "terminal rows",
+        default_val: "0",
+    },
+    OptionInfo {
+        name: "player_selection",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Compound,
+        description: "player selection method",
+        default_val: "",
+    },
+    OptionInfo {
+        name: "query_menu",
+        section: OptionSection::Advanced,
+        opt_type: OptionType::Boolean,
+        description: "query menu mode",
+        default_val: "false",
+    },
 ];
 
 /// Look up option metadata by name.
@@ -1403,7 +2268,32 @@ pub fn find_option(name: &str) -> Option<&'static OptionInfo> {
 
 /// Return all options in a given section.
 pub fn options_in_section(section: OptionSection) -> Vec<&'static OptionInfo> {
-    ALL_OPTIONS.iter().filter(|o| o.section == section).collect()
+    ALL_OPTIONS
+        .iter()
+        .filter(|o| o.section == section)
+        .collect()
+}
+
+/// Return a human-readable description line for an option, using all metadata.
+///
+/// Format: `"name (type, section) — description [default: val]"`
+pub fn describe_option(name: &str) -> Option<String> {
+    let info = find_option(name)?;
+    let type_str = match info.opt_type {
+        OptionType::Boolean => "boolean",
+        OptionType::Compound => "compound",
+    };
+    let section_str = match info.section {
+        OptionSection::General => "general",
+        OptionSection::Behavior => "behavior",
+        OptionSection::Map => "map",
+        OptionSection::Status => "status",
+        OptionSection::Advanced => "advanced",
+    };
+    Some(format!(
+        "{} ({}, {}) — {} [default: {}]",
+        info.name, type_str, section_str, info.description, info.default_val
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -1486,7 +2376,7 @@ pub fn apply_option(config: &mut Config, name: &str, value: Option<&str>) -> Res
         "mention_map" => config.map.mention_map = !negated,
         "mention_walls" => config.map.mention_walls = !negated,
         "spot_monsters" => config.map.spot_monsters = !negated,
-        "goldx" => config.map.goldX = !negated,
+        "goldx" => config.map.gold_x = !negated,
         "mon_movement" => config.map.mon_movement = !negated,
         "whatis_menu" => config.map.whatis_menu = !negated,
         "whatis_moveskip" => config.map.whatis_moveskip = !negated,
@@ -1818,7 +2708,8 @@ pub fn load_nethackrc(path: &str, config: &mut Config) -> Result<(), String> {
             continue;
         }
         // Only process OPTIONS= lines
-        if line.starts_with("OPTIONS=") || line.starts_with("OPTIONS =")
+        if line.starts_with("OPTIONS=")
+            || line.starts_with("OPTIONS =")
             || line.starts_with("OPTION=")
         {
             if let Err(e) = parse_options_line(line, config) {
@@ -1851,14 +2742,29 @@ pub fn options_menu_items(config: &Config) -> Vec<(String, String)> {
     items.push(("extmenu".into(), bool_str(config.behavior.extmenu)));
     items.push(("fireassist".into(), bool_str(config.behavior.fireassist)));
     items.push(("fixinv".into(), bool_str(config.behavior.fixinv)));
-    items.push(("force_invmenu".into(), bool_str(config.behavior.force_invmenu)));
+    items.push((
+        "force_invmenu".into(),
+        bool_str(config.behavior.force_invmenu),
+    ));
     items.push(("lootabc".into(), bool_str(config.behavior.lootabc)));
     items.push(("number_pad".into(), bool_str(config.behavior.number_pad)));
-    items.push(("pickup_stolen".into(), bool_str(config.behavior.pickup_stolen)));
-    items.push(("pickup_thrown".into(), bool_str(config.behavior.pickup_thrown)));
+    items.push((
+        "pickup_stolen".into(),
+        bool_str(config.behavior.pickup_stolen),
+    ));
+    items.push((
+        "pickup_thrown".into(),
+        bool_str(config.behavior.pickup_thrown),
+    ));
     items.push(("pushweapon".into(), bool_str(config.behavior.pushweapon)));
-    items.push(("quick_farsight".into(), bool_str(config.behavior.quick_farsight)));
-    items.push(("rest_on_space".into(), bool_str(config.behavior.rest_on_space)));
+    items.push((
+        "quick_farsight".into(),
+        bool_str(config.behavior.quick_farsight),
+    ));
+    items.push((
+        "rest_on_space".into(),
+        bool_str(config.behavior.rest_on_space),
+    ));
     items.push(("safe_pet".into(), bool_str(config.behavior.safe_pet)));
     items.push(("safe_wait".into(), bool_str(config.behavior.safe_wait)));
     items.push(("sortpack".into(), bool_str(config.behavior.sortpack)));
@@ -1866,11 +2772,23 @@ pub fn options_menu_items(config: &Config) -> Vec<(String, String)> {
     items.push(("verbose".into(), bool_str(config.behavior.verbose)));
 
     // --- Behavior compound ---
-    items.push(("autopickup_types".into(), config.behavior.autopickup_types.clone()));
-    items.push(("menustyle".into(), format!("{:?}", config.behavior.menustyle).to_lowercase()));
+    items.push((
+        "autopickup_types".into(),
+        config.behavior.autopickup_types.clone(),
+    ));
+    items.push((
+        "menustyle".into(),
+        format!("{:?}", config.behavior.menustyle).to_lowercase(),
+    ));
     items.push(("pile_limit".into(), config.behavior.pile_limit.to_string()));
-    items.push(("runmode".into(), format!("{:?}", config.behavior.runmode).to_lowercase()));
-    items.push(("sortloot".into(), format!("{:?}", config.behavior.sortloot).to_lowercase()));
+    items.push((
+        "runmode".into(),
+        format!("{:?}", config.behavior.runmode).to_lowercase(),
+    ));
+    items.push((
+        "sortloot".into(),
+        format!("{:?}", config.behavior.sortloot).to_lowercase(),
+    ));
 
     // --- Display ---
     items.push(("color".into(), bool_str(config.display.color)));
@@ -1929,7 +2847,10 @@ pub fn load_config(path: &str) -> anyhow::Result<Config> {
     let path = Path::new(&expanded);
 
     if !path.exists() {
-        tracing::info!("Config file not found at {}, using defaults", path.display());
+        tracing::info!(
+            "Config file not found at {}, using defaults",
+            path.display()
+        );
         return Ok(Config::default());
     }
 
@@ -1941,9 +2862,10 @@ pub fn load_config(path: &str) -> anyhow::Result<Config> {
 /// Replace a leading `~` with the value of `$HOME`.
 fn expand_tilde(path: &str) -> String {
     if let Some(rest) = path.strip_prefix('~')
-        && let Ok(home) = std::env::var("HOME") {
-            return format!("{home}{rest}");
-        }
+        && let Ok(home) = std::env::var("HOME")
+    {
+        return format!("{home}{rest}");
+    }
     path.to_string()
 }
 
@@ -2144,7 +3066,10 @@ x = "swap"
         let cfg: Config = toml::from_str(toml_str).unwrap();
         assert_eq!(cfg.keybinds.move_left.as_deref(), Some("a"));
         assert_eq!(cfg.keybinds.move_right.as_deref(), Some("d"));
-        assert_eq!(cfg.keybinds.bindings.get("x").map(|s| s.as_str()), Some("swap"));
+        assert_eq!(
+            cfg.keybinds.bindings.get("x").map(|s| s.as_str()),
+            Some("swap")
+        );
     }
 
     #[test]
@@ -2247,7 +3172,11 @@ autopickup_exceptions = [">*corpse", "<*gold piece"]
 
     #[test]
     fn option_metadata_count() {
-        assert!(ALL_OPTIONS.len() >= 120, "should have 120+ options, got {}", ALL_OPTIONS.len());
+        assert!(
+            ALL_OPTIONS.len() >= 120,
+            "should have 120+ options, got {}",
+            ALL_OPTIONS.len()
+        );
     }
 
     #[test]
@@ -2426,7 +3355,11 @@ autopickup_exceptions = [">*corpse", "<*gold piece"]
     fn options_menu_items_has_entries() {
         let cfg = Config::default();
         let items = options_menu_items(&cfg);
-        assert!(items.len() >= 30, "should have 30+ menu items, got {}", items.len());
+        assert!(
+            items.len() >= 30,
+            "should have 30+ menu items, got {}",
+            items.len()
+        );
 
         // Check some specific entries
         let find = |name: &str| items.iter().find(|(n, _)| n == name);

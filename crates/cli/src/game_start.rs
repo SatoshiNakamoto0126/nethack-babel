@@ -4,7 +4,12 @@
 //! dungeon is generated.  When CLI args supply a role/race/alignment the
 //! corresponding menu is skipped.
 
+use nethack_babel_data::{
+    Alignment as DataAlignment, Gender as DataGender, Handedness, PlayerIdentity, PlayerSkills,
+    RaceId, RoleId, SkillState, WeaponSkill,
+};
 use nethack_babel_engine::combat::SkillLevel;
+use nethack_babel_engine::conduct::ConductState;
 use nethack_babel_engine::pets::{self, Role};
 use nethack_babel_engine::world::{Attributes, HitPoints, Power};
 use nethack_babel_i18n::LocaleManager;
@@ -241,9 +246,7 @@ pub fn starting_skills(role: Role) -> Vec<(String, SkillLevel)> {
             ("lance".into(), SkillLevel::Basic),
             ("riding".into(), SkillLevel::Basic),
         ],
-        Role::Monk => vec![
-            ("martial arts".into(), SkillLevel::Basic),
-        ],
+        Role::Monk => vec![("martial arts".into(), SkillLevel::Basic)],
         Role::Priest => vec![
             ("mace".into(), SkillLevel::Basic),
             ("clerical spells".into(), SkillLevel::Basic),
@@ -261,9 +264,7 @@ pub fn starting_skills(role: Role) -> Vec<(String, SkillLevel)> {
             ("bow".into(), SkillLevel::Basic),
             ("martial arts".into(), SkillLevel::Basic),
         ],
-        Role::Tourist => vec![
-            ("dart".into(), SkillLevel::Basic),
-        ],
+        Role::Tourist => vec![("dart".into(), SkillLevel::Basic)],
         Role::Valkyrie => vec![
             ("long sword".into(), SkillLevel::Basic),
             ("dagger".into(), SkillLevel::Basic),
@@ -272,6 +273,75 @@ pub fn starting_skills(role: Role) -> Vec<(String, SkillLevel)> {
             ("quarterstaff".into(), SkillLevel::Basic),
             ("attack spells".into(), SkillLevel::Basic),
         ],
+    }
+}
+
+fn role_to_id(role: Role) -> RoleId {
+    RoleId(role as u8)
+}
+
+fn race_to_id(race: Race) -> RaceId {
+    match race {
+        Race::Human => RaceId(0),
+        Race::Elf => RaceId(1),
+        Race::Dwarf => RaceId(2),
+        Race::Gnome => RaceId(3),
+        Race::Orc => RaceId(4),
+    }
+}
+
+fn alignment_to_data(alignment: Alignment) -> DataAlignment {
+    match alignment {
+        Alignment::Lawful => DataAlignment::Lawful,
+        Alignment::Neutral => DataAlignment::Neutral,
+        Alignment::Chaotic => DataAlignment::Chaotic,
+    }
+}
+
+fn starting_player_skills(role: Role) -> PlayerSkills {
+    let max_level = SkillLevel::GrandMaster as u8;
+    let skills = starting_skills(role)
+        .into_iter()
+        .filter_map(|(name, level)| {
+            skill_name_to_weapon_skill(&name).map(|skill| SkillState {
+                skill,
+                level: level as u8,
+                max_level,
+                advance: 0,
+            })
+        })
+        .collect();
+
+    PlayerSkills {
+        weapon_slots: 0,
+        skills_advanced: 0,
+        skills,
+        two_weapon: false,
+    }
+}
+
+fn skill_name_to_weapon_skill(name: &str) -> Option<WeaponSkill> {
+    match name {
+        "pick-axe" => Some(WeaponSkill::PickAxe),
+        "sling" => Some(WeaponSkill::Sling),
+        "two-handed sword" => Some(WeaponSkill::TwoHandedSword),
+        "axe" => Some(WeaponSkill::Axe),
+        "club" => Some(WeaponSkill::Club),
+        "knife" => Some(WeaponSkill::Knife),
+        "healing spells" => Some(WeaponSkill::HealingSpell),
+        "long sword" => Some(WeaponSkill::LongSword),
+        "lance" => Some(WeaponSkill::Lance),
+        "riding" => Some(WeaponSkill::Riding),
+        "martial arts" => Some(WeaponSkill::BareHanded),
+        "mace" => Some(WeaponSkill::Mace),
+        "clerical spells" => Some(WeaponSkill::ClericSpell),
+        "dagger" => Some(WeaponSkill::Dagger),
+        "bow" => Some(WeaponSkill::Bow),
+        "short sword" => Some(WeaponSkill::ShortSword),
+        "dart" => Some(WeaponSkill::Dart),
+        "quarterstaff" => Some(WeaponSkill::Quarterstaff),
+        "attack spells" => Some(WeaponSkill::AttackSpell),
+        _ => None,
     }
 }
 
@@ -339,9 +409,7 @@ pub fn select_character(
     // 1. Role selection.
     let (role, role_name) = if let Some(r) = role_arg {
         match parse_role(r) {
-            Some((en_name, ftl_key, role)) => {
-                (role, role_display_name(ftl_key, en_name, locale))
-            }
+            Some((en_name, ftl_key, role)) => (role, role_display_name(ftl_key, en_name, locale)),
             None => select_role(port, locale)?,
         }
     } else {
@@ -554,6 +622,35 @@ pub fn apply_character_choice(
     if let Some(mut n) = world.get_component_mut::<nethack_babel_engine::world::Name>(player) {
         n.0 = choice.name.clone();
     }
+
+    let alignment = alignment_to_data(choice.alignment);
+    let identity = PlayerIdentity {
+        name: choice.name.clone(),
+        role: role_to_id(choice.role),
+        race: race_to_id(choice.race),
+        gender: DataGender::Male,
+        alignment,
+        alignment_base: [alignment, alignment],
+        handedness: Handedness::RightHanded,
+    };
+    if let Some(mut existing) = world.get_component_mut::<PlayerIdentity>(player) {
+        *existing = identity;
+    } else {
+        let _ = world.ecs_mut().insert_one(player, identity);
+    }
+
+    let skills = starting_player_skills(choice.role);
+    if let Some(mut existing) = world.get_component_mut::<PlayerSkills>(player) {
+        *existing = skills;
+    } else {
+        let _ = world.ecs_mut().insert_one(player, skills);
+    }
+
+    if let Some(mut existing) = world.get_component_mut::<ConductState>(player) {
+        *existing = ConductState::new();
+    } else {
+        let _ = world.ecs_mut().insert_one(player, ConductState::new());
+    }
 }
 
 /// Spawn the starting pet based on the chosen role.
@@ -581,7 +678,10 @@ pub fn select_character_text(
             .map(|(en, ftl, role)| (role, role_display_name(ftl, en, locale)))
             .unwrap_or_else(|| {
                 eprintln!("Unknown role '{}', defaulting to Valkyrie.", r);
-                (Role::Valkyrie, role_display_name("role-valkyrie", "Valkyrie", locale))
+                (
+                    Role::Valkyrie,
+                    role_display_name("role-valkyrie", "Valkyrie", locale),
+                )
             })
     } else {
         println!("{}", locale.translate("chargen-pick-role", None));
@@ -606,7 +706,10 @@ pub fn select_character_text(
             let (en_name, ftl_key, role) = ALL_ROLES[idx];
             (role, role_display_name(ftl_key, en_name, locale))
         } else {
-            (Role::Valkyrie, role_display_name("role-valkyrie", "Valkyrie", locale))
+            (
+                Role::Valkyrie,
+                role_display_name("role-valkyrie", "Valkyrie", locale),
+            )
         }
     };
 
@@ -621,7 +724,11 @@ pub fn select_character_text(
     } else {
         println!("{}", locale.translate("chargen-pick-race", None));
         for (i, r) in races.iter().enumerate() {
-            println!("  {} - {}", (b'a' + i as u8) as char, r.display_name(locale));
+            println!(
+                "  {} - {}",
+                (b'a' + i as u8) as char,
+                r.display_name(locale)
+            );
         }
         print!("> ");
         io::stdout().flush().ok();
@@ -647,7 +754,11 @@ pub fn select_character_text(
     } else {
         println!("{}", locale.translate("chargen-pick-alignment", None));
         for (i, a) in alignments.iter().enumerate() {
-            println!("  {} - {}", (b'a' + i as u8) as char, a.display_name(locale));
+            println!(
+                "  {} - {}",
+                (b'a' + i as u8) as char,
+                a.display_name(locale)
+            );
         }
         print!("> ");
         io::stdout().flush().ok();
@@ -838,6 +949,28 @@ mod tests {
 
         let name = world.entity_name(player);
         assert_eq!(name, "Conan");
+
+        let identity = world
+            .get_component::<PlayerIdentity>(player)
+            .expect("player should have identity");
+        assert_eq!(identity.role, RoleId(Role::Barbarian as u8));
+        assert_eq!(identity.race, RaceId(4));
+        assert_eq!(identity.alignment, DataAlignment::Chaotic);
+
+        let skills = world
+            .get_component::<PlayerSkills>(player)
+            .expect("player should have starting skills");
+        assert!(
+            skills
+                .skills
+                .iter()
+                .any(|s| s.skill == WeaponSkill::Axe && s.level == SkillLevel::Basic as u8)
+        );
+
+        let conduct = world
+            .get_component::<ConductState>(player)
+            .expect("player should have conduct state");
+        assert_eq!(conduct.gnostic, 0);
     }
 
     #[test]
@@ -865,6 +998,34 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_character_choice_knight_has_riding_skill_component() {
+        use nethack_babel_engine::action::Position;
+        use nethack_babel_engine::world::GameWorld;
+
+        let mut world = GameWorld::new(Position::new(40, 10));
+        let choice = CharacterChoice {
+            role: Role::Knight,
+            role_name: "Knight".to_string(),
+            race: Race::Human,
+            alignment: Alignment::Lawful,
+            name: "Lancelot".to_string(),
+        };
+
+        apply_character_choice(&mut world, &choice);
+
+        let player = world.player();
+        let skills = world
+            .get_component::<PlayerSkills>(player)
+            .expect("player should have starting skills");
+        assert!(
+            skills
+                .skills
+                .iter()
+                .any(|s| s.skill == WeaponSkill::Riding && s.level == SkillLevel::Basic as u8)
+        );
+    }
+
+    #[test]
     fn test_select_character_with_all_cli_args() {
         use nethack_babel_engine::action::{Direction, Position};
         use nethack_babel_tui::{
@@ -878,17 +1039,29 @@ mod tests {
             fn render_map(&mut self, _: &MapView, _: (i16, i16)) {}
             fn render_status(&mut self, _: &StatusLine) {}
             fn show_message(&mut self, _: &str, _: MessageUrgency) {}
-            fn show_more_prompt(&mut self) -> bool { true }
+            fn show_more_prompt(&mut self) -> bool {
+                true
+            }
             fn show_message_history(&mut self, _: &[String]) {}
             fn show_menu(&mut self, _: &Menu) -> MenuResult {
                 panic!("Menu should not be shown when CLI args provide all values");
             }
             fn show_text(&mut self, _: &str, _: &str) {}
-            fn get_key(&mut self) -> InputEvent { InputEvent::None }
-            fn ask_direction(&mut self, _: &str) -> Option<Direction> { None }
-            fn ask_position(&mut self, _: &str) -> Option<Position> { None }
-            fn ask_yn(&mut self, _: &str, _: &str, d: char) -> char { d }
-            fn get_line(&mut self, _: &str) -> Option<String> { None }
+            fn get_key(&mut self) -> InputEvent {
+                InputEvent::None
+            }
+            fn ask_direction(&mut self, _: &str) -> Option<Direction> {
+                None
+            }
+            fn ask_position(&mut self, _: &str) -> Option<Position> {
+                None
+            }
+            fn ask_yn(&mut self, _: &str, _: &str, d: char) -> char {
+                d
+            }
+            fn get_line(&mut self, _: &str) -> Option<String> {
+                None
+            }
             fn render_tombstone(&mut self, _: &str, _: &str) {}
             fn delay(&mut self, _: u32) {}
             fn bell(&mut self) {}
@@ -923,8 +1096,16 @@ mod tests {
     #[test]
     fn test_starting_skills_wizard() {
         let skills = starting_skills(Role::Wizard);
-        assert!(skills.iter().any(|(n, l)| n == "quarterstaff" && *l == SkillLevel::Basic));
-        assert!(skills.iter().any(|(n, l)| n == "attack spells" && *l == SkillLevel::Basic));
+        assert!(
+            skills
+                .iter()
+                .any(|(n, l)| n == "quarterstaff" && *l == SkillLevel::Basic)
+        );
+        assert!(
+            skills
+                .iter()
+                .any(|(n, l)| n == "attack spells" && *l == SkillLevel::Basic)
+        );
     }
 
     #[test]
@@ -953,7 +1134,11 @@ mod tests {
     fn test_starting_skills_all_roles_nonempty() {
         for (_, _, role) in ALL_ROLES {
             let skills = starting_skills(*role);
-            assert!(!skills.is_empty(), "role {:?} should have starting skills", role);
+            assert!(
+                !skills.is_empty(),
+                "role {:?} should have starting skills",
+                role
+            );
         }
     }
 
