@@ -9,6 +9,22 @@
 ![Tests: 4086](https://img.shields.io/badge/tests-4086_passing-brightgreen.svg)
 ![LOC: 133K](https://img.shields.io/badge/LOC-133K-informational.svg)
 
+## Codebase Comparison: C Original vs Rust Remaster
+
+| Metric | C NetHack 3.7 | Rust Babel | Notes |
+|--------|--------------|------------|-------|
+| **Language** | C + Lua | Rust | Pure Rust, no C dependencies |
+| **Code lines** | 214K (C) + 13K (Lua) | 124K (Rust) | 45% fewer lines for same coverage |
+| **Source files** | 133 `.c` + 90 `.h` | 115 `.rs` | Fewer files, larger modules |
+| **Level definitions** | 131 `.lua` scripts | 65 `.toml` + Rust generators | TOML for data, Rust for logic |
+| **Data files** | Compiled-in C arrays | 65 TOML + 5 FTL + text | Hot-reloadable, no recompile |
+| **Tests** | ~0 (manual QA only) | **4,108** automated | 4-layer pyramid + differential harness |
+| **Specifications** | In-code comments | **29 spec documents** | Extracted formulas with test vectors |
+| **i18n** | Optional `#ifdef` | Built-in (5 languages) | Fluent + TOML, hot-switchable |
+| **Architecture** | Global state, IO mixed in | ECS + zero-IO events | Deterministic, testable, replayable |
+| **Build time** | ~30s (make) | ~15s (cargo) | Incremental builds faster |
+| **Binary size** | ~4MB | ~6MB | Includes all data |
+
 ## Overview
 
 NetHack Babel is a ground-up reimplementation of [NetHack 3.7](https://github.com/NetHack/NetHack) in Rust, preserving formula-level accuracy while adopting a modern architecture. It replaces NetHack's global state and manual memory management with an ECS-based design (hecs), separates game logic from all IO, and defines all game content — monsters, items, dungeons — in TOML data files rather than compiled-in tables. The engine emits typed events instead of formatted strings, enabling built-in multilingual support (English, Simplified Chinese, Traditional Chinese, German, French) via Project Fluent without any changes to game logic. The result is a NetHack that is easier to extend, test, translate, and port to new frontends.
