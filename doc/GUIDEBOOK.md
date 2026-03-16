@@ -4,7 +4,7 @@
 
 ## 1. Introduction
 
-NetHack Babel is a faithful reimplementation of NetHack 3.7 in Rust, with 99.8% coverage of the original's gameplay systems and 3,984 passing tests. If you've played NetHack before, everything works as you expect — the same formulas, the same tricks, the same deaths. If you're new, welcome to one of the deepest roguelikes ever made.
+NetHack Babel is a faithful reimplementation of NetHack 3.7 in Rust, with 99.8% coverage of the original's gameplay systems and 4,217 passing tests. If you've played NetHack before, everything works as you expect — the same formulas, the same tricks, the same deaths. If you're new, welcome to one of the deepest roguelikes ever made.
 
 Your goal: descend through the Dungeons of Doom, retrieve the Amulet of Yendor from the bottom, ascend through the Elemental Planes, and offer the Amulet at the correct altar on the Astral Plane. You will die many times before succeeding. That's normal.
 
@@ -16,6 +16,8 @@ Your goal: descend through the Dungeons of Doom, retrieve the Amulet of Yendor f
 cargo run -- --data-dir data                      # English
 cargo run -- --data-dir data --language zh_CN      # Simplified Chinese
 cargo run -- --data-dir data --language zh_TW      # Traditional Chinese
+cargo run -- --replay ./session.cast               # Replay a recorded session
+cargo run -- --server 127.0.0.1:2323               # Start TCP server mode (MVP)
 ```
 
 Press `O` during gameplay to switch languages without restarting.

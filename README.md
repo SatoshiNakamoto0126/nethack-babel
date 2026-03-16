@@ -6,7 +6,7 @@
 
 [![License: NGPL](https://img.shields.io/badge/License-NGPL-blue.svg)](LICENSE)
 ![Rust: nightly](https://img.shields.io/badge/Rust-nightly-orange.svg)
-![Tests: 4086](https://img.shields.io/badge/tests-4086_passing-brightgreen.svg)
+![Tests: 4217](https://img.shields.io/badge/tests-4217_passing-brightgreen.svg)
 ![LOC: 133K](https://img.shields.io/badge/LOC-133K-informational.svg)
 
 ## Codebase Comparison: C Original vs Rust Remaster
@@ -18,7 +18,7 @@
 | **Source files** | 133 `.c` + 90 `.h` | 115 `.rs` | Fewer files, larger modules |
 | **Level definitions** | 131 `.lua` scripts | 65 `.toml` + Rust generators | TOML for data, Rust for logic |
 | **Data files** | Compiled-in C arrays | 65 TOML + 5 FTL + text | Hot-reloadable, no recompile |
-| **Tests** | ~0 (manual QA only) | **4,108** automated | 4-layer pyramid + differential harness |
+| **Tests** | ~0 (manual QA only) | **4,217** automated | 4-layer pyramid + differential harness |
 | **Specifications** | In-code comments | **29 spec documents** | Extracted formulas with test vectors |
 | **i18n** | Optional `#ifdef` | Built-in (5 languages) | Fluent + TOML, hot-switchable |
 | **Architecture** | Global state, IO mixed in | ECS + zero-IO events | Deterministic, testable, replayable |
@@ -36,7 +36,7 @@ NetHack Babel is a ground-up reimplementation of [NetHack 3.7](https://github.co
 - **CJK-aware item naming** — Chinese counter words (量词) system: "3把匕首" instead of "3 daggers"; BUC prefix: "祝福的+2长剑"
 - **Data-driven architecture** — 394 monsters, 430 items, 33 artifacts defined in TOML; modify content without recompiling
 - **ECS-based game state** — hecs entity-component-system with explicit turn resolution and typed events
-- **Formula-precise mechanics** — 29 mechanism specs extracted from the original C source; 4,086 tests verify fidelity
+- **Formula-precise mechanics** — 29 mechanism specs extracted from the original C source; 4,217 tests verify fidelity
 - **99.8% coverage** — all C NetHack gameplay systems implemented: combat, magic, items, monsters, dungeon, religion, pets, traps, shops, polymorph, riding, bones, conducts, and more
 - **Per-game appearance shuffling** — each game randomizes potion colors, scroll labels, ring materials
 - **Complete special levels** — 30+ generators: Sokoban (8 puzzles), Castle, Medusa, all Gehennom levels, Vlad's Tower, Wizard Tower, Sanctum, Elemental Planes, Astral Plane, 13 role-specific quest branches
@@ -46,6 +46,7 @@ NetHack Babel is a ground-up reimplementation of [NetHack 3.7](https://github.co
 - **Bones system** — death leaves a ghost and cursed items for future characters
 - **Leaderboard** — JSON-persisted top-100 score board
 - **Deterministic replay** — explicit RNG threading; same seed + same inputs = same game
+- **Replay + server runtime modes (MVP)** — replay `.cast` sessions and run a TCP multi-connection server endpoint
 - **Wizard mode** — debug commands: create monsters, grant wishes, reveal map, teleport
 
 ## Quick Start
@@ -72,6 +73,13 @@ cargo run -- --data-dir data -D
 ```
 
 Then use Ctrl+W (wish), Ctrl+F (map), Ctrl+G (genesis), Ctrl+I (identify all).
+
+### Replay / Server Modes
+
+```sh
+cargo run -- --replay ./session.cast
+cargo run -- --server 127.0.0.1:2323
+```
 
 Rust nightly is required and will be selected automatically via `rust-toolchain.toml`. If you use [rustup](https://rustup.rs/), no manual setup is needed.
 
@@ -204,7 +212,7 @@ The `specs/` directory contains 29 mechanism specifications extracted from the o
 
 NetHack Babel uses a 4-layer test pyramid plus a differential execution harness for compiler-grade cross-validation against the original C engine.
 
-### Test Pyramid (4,086+ tests)
+### Test Pyramid (4,217+ tests)
 
 | Layer | Tests | Purpose |
 |-------|-------|---------|
@@ -245,7 +253,7 @@ Rust nightly is the only requirement:
 
 ```sh
 cargo build                              # Build
-cargo test --workspace                   # Run all 4,086+ tests
+cargo test --workspace                   # Run all 4,217+ tests
 cargo run -- --data-dir data             # Run (English)
 cargo run -- --data-dir data --language zh_CN  # Run (Chinese)
 cargo run -- --data-dir data -D          # Wizard mode
@@ -255,7 +263,7 @@ cargo build --release                    # Release build
 
 ## Project Status
 
-The game engine is feature-complete with 99.8% coverage of NetHack 3.7 gameplay systems. All core systems — combat, magic, items, monsters, dungeon generation, special levels, quests, pets, religion, traps, shops, hunger, status effects, identification, polymorph, riding, conducts, bones, save/load, leaderboard, and the terminal UI — are implemented and verified against the original NetHack source with 4,086+ passing tests.
+The game engine is feature-complete with 99.8% coverage of NetHack 3.7 gameplay systems. All core systems — combat, magic, items, monsters, dungeon generation, special levels, quests, pets, religion, traps, shops, hunger, status effects, identification, polymorph, riding, conducts, bones, save/load, leaderboard, and the terminal UI — are implemented and verified against the original NetHack source with 4,217+ passing tests.
 
 See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENCES.md](DIFFERENCES.md) for known deviations from NetHack 3.7 behavior.
 

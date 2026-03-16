@@ -13,7 +13,7 @@
 /// - `"o"` — output (terminal data sent to the screen)
 /// - `"i"` — input  (keystrokes from the player)
 use std::fmt;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -28,8 +28,6 @@ pub enum RecordingError {
     Io(std::io::Error),
     /// The recording file has an invalid format.
     InvalidFormat(String),
-    /// Replay is not yet implemented.
-    ReplayNotImplemented,
 }
 
 impl fmt::Display for RecordingError {
@@ -38,9 +36,6 @@ impl fmt::Display for RecordingError {
             RecordingError::Io(e) => write!(f, "Recording I/O error: {e}"),
             RecordingError::InvalidFormat(msg) => {
                 write!(f, "Invalid recording format: {msg}")
-            }
-            RecordingError::ReplayNotImplemented => {
-                write!(f, "Replay is not yet implemented (Phase 5 stub)")
             }
         }
     }
@@ -205,14 +200,10 @@ impl GameRecorder {
 }
 
 // ---------------------------------------------------------------------------
-// Replay stub
+// Replay
 // ---------------------------------------------------------------------------
 
 /// Replay a previously recorded session.
-///
-/// This is a Phase 5 stub — the actual replay implementation will parse the
-/// NDJSON file and feed events back through the terminal at the recorded
-/// pace.
 pub fn replay_session(path: &Path) -> Result<(), RecordingError> {
     if !path.exists() {
         return Err(RecordingError::InvalidFormat(format!(
@@ -220,8 +211,101 @@ pub fn replay_session(path: &Path) -> Result<(), RecordingError> {
             path.display()
         )));
     }
-    eprintln!("Replay: would play back {}", path.display());
-    Err(RecordingError::ReplayNotImplemented)
+
+    let file = std::fs::File::open(path)?;
+    let mut lines = BufReader::new(file).lines().enumerate();
+
+    // Header line: first non-empty line must be a JSON object with version 2.
+    let mut header: Option<(usize, String)> = None;
+    for (idx, line) in lines.by_ref() {
+        let line = line?;
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            header = Some((idx + 1, trimmed.to_string()));
+            break;
+        }
+    }
+    let Some((header_line_no, header_line)) = header else {
+        return Err(RecordingError::InvalidFormat(
+            "recording is empty".to_string(),
+        ));
+    };
+
+    let header_value: serde_json::Value = serde_json::from_str(&header_line).map_err(|e| {
+        RecordingError::InvalidFormat(format!(
+            "header line {header_line_no} is not valid JSON: {e}"
+        ))
+    })?;
+    let version = header_value
+        .get("version")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| {
+            RecordingError::InvalidFormat(format!(
+                "header line {header_line_no} missing numeric 'version'"
+            ))
+        })?;
+    if version != 2 {
+        return Err(RecordingError::InvalidFormat(format!(
+            "unsupported cast version {version} on line {header_line_no}"
+        )));
+    }
+
+    let mut last_ts = 0.0f64;
+    let mut saw_event = false;
+    let mut stdout = std::io::stdout();
+
+    for (idx, line) in lines {
+        let line_no = idx + 1;
+        let line = line?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let parsed: serde_json::Value = serde_json::from_str(trimmed).map_err(|e| {
+            RecordingError::InvalidFormat(format!("event line {line_no} is not valid JSON: {e}"))
+        })?;
+        let arr = parsed.as_array().ok_or_else(|| {
+            RecordingError::InvalidFormat(format!("event line {line_no} is not a JSON array"))
+        })?;
+        if arr.len() < 3 {
+            return Err(RecordingError::InvalidFormat(format!(
+                "event line {line_no} must have at least 3 fields"
+            )));
+        }
+
+        let ts = arr[0].as_f64().ok_or_else(|| {
+            RecordingError::InvalidFormat(format!("event line {line_no} has non-numeric timestamp"))
+        })?;
+        if ts.is_sign_negative() {
+            return Err(RecordingError::InvalidFormat(format!(
+                "event line {line_no} has negative timestamp"
+            )));
+        }
+
+        let event_type = arr[1].as_str().ok_or_else(|| {
+            RecordingError::InvalidFormat(format!("event line {line_no} has non-string event type"))
+        })?;
+        let data = arr[2].as_str().ok_or_else(|| {
+            RecordingError::InvalidFormat(format!("event line {line_no} has non-string payload"))
+        })?;
+
+        if saw_event {
+            let wait = (ts - last_ts).max(0.0);
+            if wait > 0.0 {
+                std::thread::sleep(std::time::Duration::from_secs_f64(wait));
+            }
+        }
+        last_ts = ts;
+        saw_event = true;
+
+        if event_type == "o" {
+            stdout.write_all(data.as_bytes())?;
+            stdout.flush()?;
+        }
+    }
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -256,12 +340,16 @@ fn json_escape(s: &str) -> String {
 mod tests {
     use super::*;
     use std::io::Read;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TMP_ID: AtomicU64 = AtomicU64::new(0);
 
     /// Helper: create a unique temp file path.
     fn temp_path(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join("nethack-babel-rec-test");
         std::fs::create_dir_all(&dir).unwrap();
-        dir.join(name)
+        let unique = NEXT_TMP_ID.fetch_add(1, Ordering::Relaxed);
+        dir.join(format!("{name}-{}-{unique}", std::process::id()))
     }
 
     #[test]
@@ -357,14 +445,33 @@ mod tests {
     }
 
     #[test]
-    fn replay_existing_file_returns_not_implemented() {
+    fn replay_existing_file_returns_ok() {
         let path = temp_path("replay_stub.cast");
-        std::fs::write(&path, "{}").unwrap();
+        std::fs::write(
+            &path,
+            "{\"version\": 2, \"width\": 80, \"height\": 24, \"timestamp\": 1}\n[0.0, \"i\", \"h\"]\n",
+        )
+        .unwrap();
+
+        let result = replay_session(&path);
+        assert!(result.is_ok(), "got: {result:?}");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn replay_invalid_event_line_errors() {
+        let path = temp_path("replay_invalid.cast");
+        std::fs::write(
+            &path,
+            "{\"version\": 2, \"width\": 80, \"height\": 24, \"timestamp\": 1}\n{\"bad\":true}\n",
+        )
+        .unwrap();
 
         let result = replay_session(&path);
         assert!(result.is_err());
         let msg = format!("{}", result.unwrap_err());
-        assert!(msg.contains("not yet implemented"), "got: {msg}");
+        assert!(msg.contains("not a JSON array"), "got: {msg}");
 
         let _ = std::fs::remove_file(&path);
     }

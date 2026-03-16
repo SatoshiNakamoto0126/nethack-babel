@@ -15,27 +15,32 @@ use rand::Rng;
 use rand::SeedableRng;
 use rand_pcg::Pcg64;
 
-use nethack_babel_data::{load_game_data, Color as NhColor, GameData, MonsterDef, ObjectClass};
+use nethack_babel_data::{
+    BucStatus, Color as NhColor, GameData, MonsterDef, ObjectClass, ObjectCore, ObjectDef,
+    load_game_data,
+};
 use nethack_babel_engine::action::{Direction, PlayerAction, Position};
 use nethack_babel_engine::conduct::ConductState;
 use nethack_babel_engine::dungeon::{LevelMap, Terrain};
 use nethack_babel_engine::end::format_conduct_summary;
+use nethack_babel_engine::equipment::EquipmentSlots;
 use nethack_babel_engine::event::{DeathCause, EngineEvent};
 use nethack_babel_engine::fov::FovMap;
-use nethack_babel_engine::map_gen::{generate_level, Room};
-use nethack_babel_engine::topten::{default_leaderboard_path, Leaderboard, LeaderboardEntry};
+use nethack_babel_engine::map_gen::{Room, generate_level};
+use nethack_babel_engine::role::{Race as EngineRace, Role as EngineRole};
+use nethack_babel_engine::topten::{Leaderboard, LeaderboardEntry, default_leaderboard_path};
 use nethack_babel_engine::turn::resolve_turn;
 use nethack_babel_engine::world::{
-    Attributes, ArmorClass, DisplaySymbol, ExperienceLevel,
-    GameWorld, HitPoints, Monster, MovementPoints, Name, Nutrition,
-    Positioned, Power, Speed, NORMAL_SPEED,
+    ArmorClass, Attributes, DisplaySymbol, Encumbrance, EncumbranceLevel, ExperienceLevel,
+    GameWorld, HitPoints, Monster, MovementPoints, NORMAL_SPEED, Name, Nutrition, Positioned,
+    Power, Speed,
 };
 
 use nethack_babel_i18n::locale::{LanguageManifest, LocaleManager};
 use nethack_babel_tui::{
-    App, DisplayCell, InventoryI18n, MapView, Menu, MenuHow, MenuItem, MenuResult,
-    MessageUrgency, StatusLine, TermColor, TuiMessages, TuiPort, WindowPort,
-    MAP_COLS, MAP_ROWS,
+    App, DisplayCell, InventoryI18n, InventoryItem, MAP_COLS, MAP_ROWS, MapView, Menu, MenuHow,
+    MenuItem, MenuResult, MessageUrgency, StatusLine, TermColor, TuiMessages, TuiPort, WindowPort,
+    make_inventory_item,
 };
 
 #[derive(Parser)]
@@ -71,7 +76,6 @@ struct Cli {
 
     /// Start in server mode, listening for SSH/telnet connections.
     /// Optionally specify bind address as addr:port (default: 0.0.0.0:2323).
-    /// (Phase 5 stub -- not yet implemented)
     #[arg(long, value_name = "ADDR:PORT")]
     server: Option<Option<String>>,
 
@@ -79,7 +83,7 @@ struct Cli {
     #[arg(long, value_name = "FILE")]
     record: Option<String>,
 
-    /// Replay a previously recorded session (Phase 5 stub)
+    /// Replay a previously recorded session
     #[arg(long, value_name = "FILE")]
     replay: Option<String>,
 
@@ -152,31 +156,31 @@ fn nh_color_to_term(color: NhColor) -> TermColor {
 /// Map terrain to a foreground TermColor for the 16-color scheme.
 fn terrain_fg_color(terrain: Terrain) -> TermColor {
     match terrain {
-        Terrain::Floor => TermColor::Rgb(170, 170, 170),        // gray
-        Terrain::Corridor => TermColor::Rgb(170, 170, 170),     // gray
-        Terrain::Wall => TermColor::Rgb(170, 170, 170),         // gray
-        Terrain::Stone => TermColor::Rgb(170, 170, 170),        // gray
-        Terrain::DoorOpen => TermColor::Rgb(170, 85, 0),        // brown
-        Terrain::DoorClosed => TermColor::Rgb(170, 85, 0),      // brown/yellow
-        Terrain::DoorLocked => TermColor::Rgb(170, 85, 0),      // brown/yellow
-        Terrain::StairsUp => TermColor::Rgb(255, 255, 255),     // white
-        Terrain::StairsDown => TermColor::Rgb(255, 255, 255),   // white
-        Terrain::Altar => TermColor::Rgb(170, 170, 170),        // gray
-        Terrain::Fountain => TermColor::Rgb(0, 0, 170),         // blue
-        Terrain::Throne => TermColor::Rgb(255, 255, 85),        // yellow
-        Terrain::Sink => TermColor::Rgb(170, 170, 170),         // gray
-        Terrain::Grave => TermColor::Rgb(170, 170, 170),        // gray
-        Terrain::Pool => TermColor::Rgb(0, 0, 170),             // blue
-        Terrain::Moat => TermColor::Rgb(0, 0, 170),             // blue
-        Terrain::Water => TermColor::Rgb(0, 0, 170),            // blue
-        Terrain::Lava => TermColor::Rgb(170, 0, 0),             // red
-        Terrain::Ice => TermColor::Rgb(85, 255, 255),           // bright cyan
-        Terrain::Air => TermColor::Rgb(85, 255, 255),           // bright cyan
-        Terrain::Cloud => TermColor::Rgb(170, 170, 170),        // gray
-        Terrain::Tree => TermColor::Rgb(0, 170, 0),             // green
-        Terrain::IronBars => TermColor::Rgb(0, 170, 170),       // cyan
-        Terrain::Drawbridge => TermColor::Rgb(170, 85, 0),      // brown
-        Terrain::MagicPortal => TermColor::Rgb(255, 85, 255),   // bright magenta
+        Terrain::Floor => TermColor::Rgb(170, 170, 170), // gray
+        Terrain::Corridor => TermColor::Rgb(170, 170, 170), // gray
+        Terrain::Wall => TermColor::Rgb(170, 170, 170),  // gray
+        Terrain::Stone => TermColor::Rgb(170, 170, 170), // gray
+        Terrain::DoorOpen => TermColor::Rgb(170, 85, 0), // brown
+        Terrain::DoorClosed => TermColor::Rgb(170, 85, 0), // brown/yellow
+        Terrain::DoorLocked => TermColor::Rgb(170, 85, 0), // brown/yellow
+        Terrain::StairsUp => TermColor::Rgb(255, 255, 255), // white
+        Terrain::StairsDown => TermColor::Rgb(255, 255, 255), // white
+        Terrain::Altar => TermColor::Rgb(170, 170, 170), // gray
+        Terrain::Fountain => TermColor::Rgb(0, 0, 170),  // blue
+        Terrain::Throne => TermColor::Rgb(255, 255, 85), // yellow
+        Terrain::Sink => TermColor::Rgb(170, 170, 170),  // gray
+        Terrain::Grave => TermColor::Rgb(170, 170, 170), // gray
+        Terrain::Pool => TermColor::Rgb(0, 0, 170),      // blue
+        Terrain::Moat => TermColor::Rgb(0, 0, 170),      // blue
+        Terrain::Water => TermColor::Rgb(0, 0, 170),     // blue
+        Terrain::Lava => TermColor::Rgb(170, 0, 0),      // red
+        Terrain::Ice => TermColor::Rgb(85, 255, 255),    // bright cyan
+        Terrain::Air => TermColor::Rgb(85, 255, 255),    // bright cyan
+        Terrain::Cloud => TermColor::Rgb(170, 170, 170), // gray
+        Terrain::Tree => TermColor::Rgb(0, 170, 0),      // green
+        Terrain::IronBars => TermColor::Rgb(0, 170, 170), // cyan
+        Terrain::Drawbridge => TermColor::Rgb(170, 85, 0), // brown
+        Terrain::MagicPortal => TermColor::Rgb(255, 85, 255), // bright magenta
     }
 }
 
@@ -334,11 +338,7 @@ fn build_status(world: &GameWorld, locale: &LocaleManager) -> StatusLine {
     let l_ch = locale.translate("stat-label-cha", None);
     let line1 = format!(
         "{name}    {l_str}:{str_display} {l_dx}:{} {l_co}:{} {l_in}:{} {l_wi}:{} {l_ch}:{}",
-        attrs.dexterity,
-        attrs.constitution,
-        attrs.intelligence,
-        attrs.wisdom,
-        attrs.charisma,
+        attrs.dexterity, attrs.constitution, attrs.intelligence, attrs.wisdom, attrs.charisma,
     );
 
     // Branch-aware depth label.
@@ -362,32 +362,24 @@ fn build_status(world: &GameWorld, locale: &LocaleManager) -> StatusLine {
             format!("Vlad:{}", world.dungeon().depth)
         }
         nethack_babel_engine::dungeon::DungeonBranch::FortLudios => "Knox".to_string(),
-        nethack_babel_engine::dungeon::DungeonBranch::Endgame => {
-            match world.dungeon().depth {
-                1 => "Earth".to_string(),
-                2 => "Air".to_string(),
-                3 => "Fire".to_string(),
-                4 => "Water".to_string(),
-                5 => "Astral".to_string(),
-                _ => format!("End:{}", world.dungeon().depth),
-            }
-        }
+        nethack_babel_engine::dungeon::DungeonBranch::Endgame => match world.dungeon().depth {
+            1 => "Earth".to_string(),
+            2 => "Air".to_string(),
+            3 => "Fire".to_string(),
+            4 => "Water".to_string(),
+            5 => "Astral".to_string(),
+            _ => format!("End:{}", world.dungeon().depth),
+        },
     };
 
     let hp = world
         .get_component::<HitPoints>(player)
         .map(|h| *h)
-        .unwrap_or(HitPoints {
-            current: 0,
-            max: 0,
-        });
+        .unwrap_or(HitPoints { current: 0, max: 0 });
     let pw = world
         .get_component::<Power>(player)
         .map(|p| *p)
-        .unwrap_or(Power {
-            current: 0,
-            max: 0,
-        });
+        .unwrap_or(Power { current: 0, max: 0 });
     let ac = world
         .get_component::<ArmorClass>(player)
         .map(|a| a.0)
@@ -399,8 +391,11 @@ fn build_status(world: &GameWorld, locale: &LocaleManager) -> StatusLine {
         .unwrap_or(900);
     let hunger = hunger_label(nutrition, locale);
 
-    // Gold: TODO: read actual gold from player inventory/wallet component.
-    let gold = 0i64;
+    let gold = nethack_babel_engine::items::get_inventory(world, player)
+        .into_iter()
+        .filter(|(_, core)| core.object_class == ObjectClass::Coin)
+        .map(|(_, core)| i64::from(core.quantity.max(0)))
+        .sum::<i64>();
 
     // Status effects.
     let mut effects = Vec::new();
@@ -425,6 +420,20 @@ fn build_status(world: &GameWorld, locale: &LocaleManager) -> StatusLine {
             effects.push("Ill");
         }
     }
+    let encumbrance = world
+        .get_component::<EncumbranceLevel>(player)
+        .map(|e| e.0)
+        .unwrap_or(Encumbrance::Unencumbered);
+    if let Some(label) = match encumbrance {
+        Encumbrance::Unencumbered => None,
+        Encumbrance::Burdened => Some("Burdened"),
+        Encumbrance::Stressed => Some("Stressed"),
+        Encumbrance::Strained => Some("Strained"),
+        Encumbrance::Overtaxed => Some("Overtaxed"),
+        Encumbrance::Overloaded => Some("Overloaded"),
+    } {
+        effects.push(label);
+    }
 
     // Line 2: Dlvl:X $:G HP:C(M) Pw:C(M) AC:A Xp:L T:T [Status]
     let l_dlvl = locale.translate("stat-label-dlvl", None);
@@ -447,10 +456,7 @@ fn build_status(world: &GameWorld, locale: &LocaleManager) -> StatusLine {
         line2.push_str(effect);
     }
 
-    StatusLine {
-        line1,
-        line2,
-    }
+    StatusLine { line1, line2 }
 }
 
 // ---------------------------------------------------------------------------
@@ -501,11 +507,7 @@ fn update_fov(world: &mut GameWorld, fov: &mut FovMap) {
             .collect();
 
         fov.compute(player_pos, 12, |x, y| {
-            if x >= 0
-                && y >= 0
-                && (x as usize) < width
-                && (y as usize) < height
-            {
+            if x >= 0 && y >= 0 && (x as usize) < width && (y as usize) < height {
                 cells_snapshot[y as usize][x as usize]
             } else {
                 true
@@ -588,11 +590,7 @@ fn init_locale_manager(data_dir: &Path, language: &str) -> Result<LocaleManager>
                 };
                 if let Err(e) = locale.load_entity_translations(&code, &monsters_str, &objects_str)
                 {
-                    tracing::warn!(
-                        "Failed to load entity translations for '{}': {}",
-                        code,
-                        e
-                    );
+                    tracing::warn!("Failed to load entity translations for '{}': {}", code, e);
                 }
             }
 
@@ -602,11 +600,7 @@ fn init_locale_manager(data_dir: &Path, language: &str) -> Result<LocaleManager>
                 let clf_str = std::fs::read_to_string(&clf_path)
                     .with_context(|| format!("reading {}", clf_path.display()))?;
                 if let Err(e) = locale.load_classifier(&clf_str) {
-                    tracing::warn!(
-                        "Failed to load classifiers for '{}': {}",
-                        code,
-                        e
-                    );
+                    tracing::warn!("Failed to load classifiers for '{}': {}", code, e);
                 }
             }
         }
@@ -650,9 +644,7 @@ fn events_to_messages(
                 // If translation returns the key itself, use it as-is
                 messages.push((translated, MessageUrgency::Normal));
             }
-            EngineEvent::HpChange {
-                amount, ..
-            } => {
+            EngineEvent::HpChange { amount, .. } => {
                 if *amount > 0 {
                     let mut args = FluentArgs::new();
                     args.set("amount", *amount as i64);
@@ -671,21 +663,14 @@ fn events_to_messages(
                 let mut args = FluentArgs::new();
                 args.set("amount", *amount as i64);
                 let msg = locale.translate("event-pw-gained", Some(&args));
-                messages.push((
-                    format!("{} (+{amount})", msg),
-                    MessageUrgency::Healing,
-                ));
+                messages.push((format!("{} (+{amount})", msg), MessageUrgency::Healing));
             }
-            EngineEvent::HungerChange {
-                new_level, ..
-            } => {
+            EngineEvent::HungerChange { new_level, .. } => {
                 let urgency = match new_level {
                     nethack_babel_engine::event::HungerLevel::Weak
                     | nethack_babel_engine::event::HungerLevel::Fainting
                     | nethack_babel_engine::event::HungerLevel::Fainted
-                    | nethack_babel_engine::event::HungerLevel::Starved => {
-                        MessageUrgency::Danger
-                    }
+                    | nethack_babel_engine::event::HungerLevel::Starved => MessageUrgency::Danger,
                     _ => MessageUrgency::Normal,
                 };
                 // Map HungerLevel to FTL key.
@@ -724,14 +709,12 @@ fn events_to_messages(
                 match weapon {
                     Some(w) => {
                         let wpn_en = world.entity_name(*w);
-                        let wpn_name =
-                            locale.translate_object_name(&wpn_en).to_string();
+                        let wpn_name = locale.translate_object_name(&wpn_en).to_string();
                         let mut args = FluentArgs::new();
                         args.set("attacker", att_name.clone());
                         args.set("defender", def_name.clone());
                         args.set("weapon", wpn_name.clone());
-                        let msg =
-                            locale.translate("melee-hit-weapon", Some(&args));
+                        let msg = locale.translate("melee-hit-weapon", Some(&args));
                         let text = format!("{} ({damage})", msg);
                         messages.push((text, MessageUrgency::Normal));
                     }
@@ -739,8 +722,7 @@ fn events_to_messages(
                         let mut args = FluentArgs::new();
                         args.set("attacker", att_name.clone());
                         args.set("defender", def_name.clone());
-                        let msg =
-                            locale.translate("melee-hit-bare", Some(&args));
+                        let msg = locale.translate("melee-hit-bare", Some(&args));
                         let text = format!("{} ({damage})", msg);
                         messages.push((text, MessageUrgency::Normal));
                     }
@@ -777,13 +759,52 @@ fn events_to_messages(
             } => {
                 let actor_name = entity_display_name(*actor, world, locale);
                 let item_en = world.entity_name(*item);
-                let item_name =
-                    locale.translate_object_name(&item_en).to_string();
+                let item_name = locale.translate_object_name(&item_en).to_string();
                 let mut args = FluentArgs::new();
                 args.set("actor", actor_name.clone());
                 args.set("item", item_name.clone());
                 args.set("quantity", *quantity as i64);
                 let text = locale.translate("item-picked-up", Some(&args));
+                messages.push((text, MessageUrgency::Normal));
+            }
+            EngineEvent::ItemDropped { actor, item } => {
+                let actor_name = entity_display_name(*actor, world, locale);
+                let item_en = world.entity_name(*item);
+                let item_name = locale.translate_object_name(&item_en).to_string();
+                let mut args = FluentArgs::new();
+                args.set("actor", actor_name.clone());
+                args.set("item", item_name.clone());
+                let text = locale.translate("item-dropped", Some(&args));
+                messages.push((text, MessageUrgency::Normal));
+            }
+            EngineEvent::ItemWielded { actor, item } => {
+                let actor_name = entity_display_name(*actor, world, locale);
+                let item_en = world.entity_name(*item);
+                let item_name = locale.translate_object_name(&item_en).to_string();
+                let mut args = FluentArgs::new();
+                args.set("actor", actor_name.clone());
+                args.set("item", item_name.clone());
+                let text = locale.translate("item-wielded", Some(&args));
+                messages.push((text, MessageUrgency::Normal));
+            }
+            EngineEvent::ItemWorn { actor, item } => {
+                let actor_name = entity_display_name(*actor, world, locale);
+                let item_en = world.entity_name(*item);
+                let item_name = locale.translate_object_name(&item_en).to_string();
+                let mut args = FluentArgs::new();
+                args.set("actor", actor_name.clone());
+                args.set("item", item_name.clone());
+                let text = locale.translate("item-worn", Some(&args));
+                messages.push((text, MessageUrgency::Normal));
+            }
+            EngineEvent::ItemRemoved { actor, item } => {
+                let actor_name = entity_display_name(*actor, world, locale);
+                let item_en = world.entity_name(*item);
+                let item_name = locale.translate_object_name(&item_en).to_string();
+                let mut args = FluentArgs::new();
+                args.set("actor", actor_name.clone());
+                args.set("item", item_name.clone());
+                let text = locale.translate("item-removed", Some(&args));
                 messages.push((text, MessageUrgency::Normal));
             }
             EngineEvent::GameOver { score, .. } => {
@@ -793,8 +814,7 @@ fn events_to_messages(
                 messages.push((text, MessageUrgency::Danger));
             }
             // Silent events.
-            EngineEvent::EntityMoved { .. }
-            | EngineEvent::TurnEnd { .. } => {}
+            EngineEvent::EntityMoved { .. } | EngineEvent::TurnEnd { .. } => {}
             _ => {}
         }
     }
@@ -804,11 +824,7 @@ fn events_to_messages(
 /// Display name for an entity in the events_to_messages context.
 /// Returns "You" (or translated equivalent) for the player, and a
 /// translated monster name for non-player entities.
-fn entity_display_name(
-    entity: hecs::Entity,
-    world: &GameWorld,
-    locale: &LocaleManager,
-) -> String {
+fn entity_display_name(entity: hecs::Entity, world: &GameWorld, locale: &LocaleManager) -> String {
     if world.is_player(entity) {
         locale.translate("you", None)
     } else {
@@ -822,12 +838,7 @@ fn entity_display_name(
 // ---------------------------------------------------------------------------
 
 /// Handle full game-over sequence: tombstone, disclosure, leaderboard.
-fn handle_game_over(
-    world: &GameWorld,
-    port: &mut TuiPort,
-    cause: &DeathCause,
-    score: u64,
-) {
+fn handle_game_over(world: &GameWorld, port: &mut TuiPort, cause: &DeathCause, score: u64) {
     let player = world.player();
     let player_name = world.entity_name(player);
 
@@ -870,23 +881,26 @@ fn handle_game_over(
     port.render_tombstone(&epitaph, &info);
 
     // -- Disclosure: conducts --
-    // ConductState is not yet tracked in the game world, so use default.
-    let conducts = ConductState::new();
+    let conducts = world
+        .get_component::<ConductState>(player)
+        .map(|state| (*state).clone())
+        .unwrap_or_default();
     let conduct_lines = format_conduct_summary(&conducts);
     let conduct_text = conduct_lines.join("\n");
     port.show_text("Voluntary challenges", &conduct_text);
 
     // -- Leaderboard --
+    let (role, race, gender, alignment) = player_identity_strings(world, player);
     let lb_path = default_leaderboard_path();
     let mut lb = Leaderboard::load(&lb_path);
     let entry = LeaderboardEntry {
         rank: 0,
         score: score as i64,
         player_name: player_name.clone(),
-        role: "Adventurer".to_string(),
-        race: "Human".to_string(),
-        gender: "male".to_string(),
-        alignment: "neutral".to_string(),
+        role,
+        race,
+        gender,
+        alignment,
         death_cause: death_reason,
         dungeon_level: format!("Dlvl:{}", level),
         experience_level: level as u32,
@@ -900,6 +914,41 @@ fn handle_game_over(
     let top_lines = lb.format_top(10);
     let top_text = top_lines.join("\n");
     port.show_text("Top Scores", &top_text);
+}
+
+fn player_identity_strings(
+    world: &GameWorld,
+    player: hecs::Entity,
+) -> (String, String, String, String) {
+    let Some(identity) = world.get_component::<nethack_babel_data::PlayerIdentity>(player) else {
+        return (
+            "Adventurer".to_string(),
+            "Human".to_string(),
+            "male".to_string(),
+            "neutral".to_string(),
+        );
+    };
+
+    let role = EngineRole::from_id(identity.role)
+        .map(|r| r.name().to_string())
+        .unwrap_or_else(|| "Adventurer".to_string());
+    let race = EngineRace::from_id(identity.race)
+        .map(|r| r.name().to_string())
+        .unwrap_or_else(|| "Human".to_string());
+    let gender = match identity.gender {
+        nethack_babel_data::Gender::Male => "male",
+        nethack_babel_data::Gender::Female => "female",
+        nethack_babel_data::Gender::Neuter => "neuter",
+    }
+    .to_string();
+    let alignment = match identity.alignment {
+        nethack_babel_data::Alignment::Lawful => "lawful",
+        nethack_babel_data::Alignment::Neutral => "neutral",
+        nethack_babel_data::Alignment::Chaotic => "chaotic",
+    }
+    .to_string();
+
+    (role, race, gender, alignment)
 }
 
 /// Simple timestamp without requiring chrono crate.
@@ -1015,10 +1064,8 @@ fn render_map_ascii(world: &GameWorld) {
     }
 
     // Overlay monsters.
-    for (_entity, (pos, name, _monster)) in world
-        .ecs()
-        .query::<(&Positioned, &Name, &Monster)>()
-        .iter()
+    for (_entity, (pos, name, _monster)) in
+        world.ecs().query::<(&Positioned, &Name, &Monster)>().iter()
     {
         let x = pos.0.x as usize;
         let y = pos.0.y as usize;
@@ -1066,47 +1113,9 @@ fn render_status_text(world: &GameWorld) {
 }
 
 /// Display events as text messages.
-fn display_events_text(events: &[EngineEvent]) {
-    for event in events {
-        match event {
-            EngineEvent::EntityMoved { .. } | EngineEvent::TurnEnd { .. } => {}
-            EngineEvent::Message { key, args } => {
-                // In text-only mode, just show the key (no locale available here)
-                if args.is_empty() {
-                    println!("  {key}");
-                } else {
-                    let arg_str: Vec<String> = args.iter().map(|(k, v)| format!("{k}={v}")).collect();
-                    println!("  {key} ({})", arg_str.join(", "));
-                }
-            }
-            EngineEvent::HpChange {
-                amount, source, ..
-            } => {
-                println!("  [HP change: {amount:+} ({source:?})]");
-            }
-            EngineEvent::PwChange { amount, .. } => {
-                println!("  [PW regen: +{amount}]");
-            }
-            EngineEvent::HungerChange {
-                old, new_level, ..
-            } => {
-                println!("  You feel {new_level:?}. (was {old:?})");
-            }
-            EngineEvent::DoorOpened { .. } => println!("  The door opens."),
-            EngineEvent::DoorClosed { .. } => println!("  The door closes."),
-            EngineEvent::DoorBroken { .. } => println!("  The door crashes open!"),
-            EngineEvent::MeleeHit { damage, .. } => {
-                println!("  You hit! ({damage} damage)");
-            }
-            EngineEvent::MeleeMiss { .. } => println!("  You miss."),
-            EngineEvent::EntityDied { cause, .. } => {
-                println!("  Something dies. ({cause:?})");
-            }
-            EngineEvent::GameOver { cause, score } => {
-                println!("  *** GAME OVER *** Cause: {cause:?}, Score: {score}");
-            }
-            _ => {}
-        }
+fn display_events_text(events: &[EngineEvent], locale: &LocaleManager, world: &GameWorld) {
+    for (text, _) in events_to_messages(events, locale, world) {
+        println!("  {text}");
     }
 }
 
@@ -1114,39 +1123,770 @@ fn display_events_text(events: &[EngineEvent]) {
 // Input parsing (text mode)
 // ---------------------------------------------------------------------------
 
-/// Parse a single-character command from stdin into a PlayerAction.
-fn parse_command(input: &str) -> Option<PlayerAction> {
-    let ch = input.trim().chars().next()?;
-    match ch {
-        'h' => Some(PlayerAction::Move {
+fn parse_direction_token(token: &str) -> Option<Direction> {
+    match token.trim().to_ascii_lowercase().as_str() {
+        "h" | "w" | "west" => Some(Direction::West),
+        "j" | "s" | "south" => Some(Direction::South),
+        "k" | "n" | "north" => Some(Direction::North),
+        "l" | "e" | "east" => Some(Direction::East),
+        "y" | "nw" | "northwest" | "north-west" => Some(Direction::NorthWest),
+        "u" | "ne" | "northeast" | "north-east" => Some(Direction::NorthEast),
+        "b" | "sw" | "southwest" | "south-west" => Some(Direction::SouthWest),
+        "m" | "se" | "southeast" | "south-east" => Some(Direction::SouthEast),
+        "." | "self" | "here" => Some(Direction::Self_),
+        "<" | "up" => Some(Direction::Up),
+        ">" | "down" => Some(Direction::Down),
+        _ => None,
+    }
+}
+
+fn parse_inventory_letter_token(token: &str) -> Option<char> {
+    token
+        .trim()
+        .chars()
+        .find(|c| c.is_ascii_alphabetic())
+        .map(|c| {
+            if c.is_ascii_lowercase() {
+                c
+            } else {
+                c.to_ascii_uppercase()
+            }
+        })
+}
+
+fn parse_position_tokens(x_token: &str, y_token: &str) -> Option<Position> {
+    let x = x_token.trim().parse::<i32>().ok()?;
+    let y = y_token.trim().parse::<i32>().ok()?;
+    Some(Position::new(x, y))
+}
+
+fn parse_spell_token(token: &str) -> Option<nethack_babel_engine::action::SpellId> {
+    let ch = token
+        .trim()
+        .chars()
+        .find(|c| c.is_ascii_alphabetic())?
+        .to_ascii_lowercase();
+    Some(nethack_babel_engine::action::SpellId(
+        (ch as u8).saturating_sub(b'a'),
+    ))
+}
+
+fn parse_text_mode_contextual_command(input: &str, world: &GameWorld) -> Option<PlayerAction> {
+    let trimmed = input.trim();
+    let lower_trimmed = trimmed.to_ascii_lowercase();
+
+    if lower_trimmed.starts_with("annotate ") {
+        let text = trimmed[9..].trim();
+        if !text.is_empty() {
+            return Some(PlayerAction::Annotate {
+                text: text.to_string(),
+            });
+        }
+    }
+    if lower_trimmed.starts_with("engrave ") {
+        let text = trimmed[8..].trim();
+        if !text.is_empty() {
+            return Some(PlayerAction::Engrave {
+                text: text.to_string(),
+            });
+        }
+    }
+    if lower_trimmed.starts_with("call ") {
+        let rest = trimmed[5..].trim();
+        let mut rest_parts = rest.splitn(2, ' ');
+        let class = rest_parts
+            .next()
+            .and_then(|s| s.chars().find(|c| c.is_ascii_graphic()));
+        let name = rest_parts.next().map(str::trim).filter(|s| !s.is_empty());
+        if let (Some(class), Some(name)) = (class, name) {
+            return Some(PlayerAction::CallType {
+                class,
+                name: name.to_string(),
+            });
+        }
+    }
+    if lower_trimmed.starts_with("name level ") {
+        let name = trimmed[11..].trim();
+        if !name.is_empty() {
+            return Some(PlayerAction::Name {
+                target: nethack_babel_engine::action::NameTarget::Level,
+                name: name.to_string(),
+            });
+        }
+    }
+    if lower_trimmed.starts_with("name item ") {
+        let rest = trimmed[10..].trim();
+        let mut rest_parts = rest.splitn(2, ' ');
+        let item = rest_parts.next().and_then(|tok| {
+            let letter = parse_inventory_letter_token(tok)?;
+            nethack_babel_engine::inventory::find_by_letter(world, world.player(), letter)
+        });
+        let name = rest_parts.next().map(str::trim).filter(|s| !s.is_empty());
+        if let (Some(item), Some(name)) = (item, name) {
+            return Some(PlayerAction::Name {
+                target: nethack_babel_engine::action::NameTarget::Item { item },
+                name: name.to_string(),
+            });
+        }
+    }
+    if lower_trimmed.starts_with("name monster ") {
+        let rest = trimmed[13..].trim();
+        let mut rest_parts = rest.splitn(3, ' ');
+        let x_token = rest_parts.next();
+        let y_token = rest_parts.next();
+        let name = rest_parts.next().map(str::trim).filter(|s| !s.is_empty());
+        if let (Some(x_token), Some(y_token), Some(name)) = (x_token, y_token, name)
+            && let Some(position) = parse_position_tokens(x_token, y_token)
+        {
+            return Some(PlayerAction::Name {
+                target: nethack_babel_engine::action::NameTarget::MonsterAt { position },
+                name: name.to_string(),
+            });
+        }
+    }
+
+    let mut parts = trimmed.split_whitespace();
+    let cmd = parts.next()?.to_ascii_lowercase();
+    let player = world.player();
+
+    let item_by_token = |token: &str| {
+        let letter = parse_inventory_letter_token(token)?;
+        nethack_babel_engine::inventory::find_by_letter(world, player, letter)
+    };
+
+    match cmd.as_str() {
+        "drop" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Drop { item })
+        }
+        "wield" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Wield { item })
+        }
+        "wear" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Wear { item })
+        }
+        "takeoff" | "take-off" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::TakeOff { item })
+        }
+        "puton" | "put-on" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::PutOn { item })
+        }
+        "remove" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Remove { item })
+        }
+        "apply" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Apply { item })
+        }
+        "rub" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Rub { item })
+        }
+        "tip" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Tip { item })
+        }
+        "invoke" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::InvokeArtifact { item })
+        }
+        "offer" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Offer { item: Some(item) })
+        }
+        "force" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::ForceLock { item })
+        }
+        "adjust" => {
+            let item = parts.next().and_then(item_by_token)?;
+            let new_letter = parts.next().and_then(parse_inventory_letter_token)?;
+            Some(PlayerAction::Adjust { item, new_letter })
+        }
+        "eat" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Eat { item: Some(item) })
+        }
+        "quaff" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Quaff { item: Some(item) })
+        }
+        "read" => {
+            let item = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Read { item: Some(item) })
+        }
+        "dip" => {
+            let item = parts.next().and_then(item_by_token)?;
+            let into = parts.next().and_then(item_by_token)?;
+            Some(PlayerAction::Dip { item, into })
+        }
+        "throw" => {
+            let item = parts.next().and_then(item_by_token)?;
+            let direction = parts.next().and_then(parse_direction_token)?;
+            Some(PlayerAction::Throw { item, direction })
+        }
+        "zap" => {
+            let item = parts.next().and_then(item_by_token)?;
+            let direction = parts.next().and_then(parse_direction_token);
+            Some(PlayerAction::ZapWand { item, direction })
+        }
+        "cast" => {
+            let spell = parts.next().and_then(parse_spell_token)?;
+            let direction = parts.next().and_then(parse_direction_token);
+            Some(PlayerAction::CastSpell { spell, direction })
+        }
+        "open" => {
+            let direction = parts.next().and_then(parse_direction_token)?;
+            Some(PlayerAction::Open { direction })
+        }
+        "close" => {
+            let direction = parts.next().and_then(parse_direction_token)?;
+            Some(PlayerAction::Close { direction })
+        }
+        "kick" => {
+            let direction = parts.next().and_then(parse_direction_token)?;
+            Some(PlayerAction::Kick { direction })
+        }
+        "chat" => {
+            let direction = parts.next().and_then(parse_direction_token)?;
+            Some(PlayerAction::Chat { direction })
+        }
+        "fight" => {
+            let direction = parts.next().and_then(parse_direction_token)?;
+            Some(PlayerAction::FightDirection { direction })
+        }
+        "run" => {
+            let direction = parts.next().and_then(parse_direction_token)?;
+            Some(PlayerAction::RunDirection { direction })
+        }
+        "rush" => {
+            let direction = parts.next().and_then(parse_direction_token)?;
+            Some(PlayerAction::RushDirection { direction })
+        }
+        "untrap" => {
+            let direction = parts.next().and_then(parse_direction_token)?;
+            Some(PlayerAction::Untrap { direction })
+        }
+        "travel" | "retravel" => {
+            let x_token = parts.next()?;
+            let y_token = parts.next()?;
+            let destination = parse_position_tokens(x_token, y_token)?;
+            Some(PlayerAction::Travel { destination })
+        }
+        "jump" => {
+            let x_token = parts.next()?;
+            let y_token = parts.next()?;
+            let position = parse_position_tokens(x_token, y_token)?;
+            Some(PlayerAction::Jump { position })
+        }
+        "lookat" | "glance" => {
+            let x_token = parts.next()?;
+            let y_token = parts.next()?;
+            let position = parse_position_tokens(x_token, y_token)?;
+            Some(PlayerAction::LookAt { position })
+        }
+        "whatis" | "showtrap" => {
+            let x_token = parts.next()?;
+            let y_token = parts.next()?;
+            let position = parse_position_tokens(x_token, y_token)?;
+            Some(PlayerAction::WhatIs {
+                position: Some(position),
+            })
+        }
+        "knownclass" => {
+            let class = parts
+                .next()
+                .and_then(|s| s.chars().find(|c| c.is_ascii_graphic()))?;
+            Some(PlayerAction::KnownClass { class })
+        }
+        _ => None,
+    }
+}
+
+/// Parse a text-mode command from stdin into a `PlayerAction`.
+fn parse_command(input: &str, wizard_mode: bool) -> Option<PlayerAction> {
+    let mut trimmed = input.trim();
+    if let Some(rest) = trimmed.strip_prefix('#') {
+        trimmed = rest.trim_start();
+    }
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let lower = trimmed.to_ascii_lowercase();
+    if wizard_mode {
+        if lower.starts_with("wizwish ") {
+            let wish_text = trimmed[8..].trim();
+            if !wish_text.is_empty() {
+                return Some(PlayerAction::WizWish {
+                    wish_text: wish_text.to_string(),
+                });
+            }
+        }
+        if lower.starts_with("wizgenesis ") {
+            let monster_name = trimmed[11..].trim();
+            if !monster_name.is_empty() {
+                return Some(PlayerAction::WizGenesis {
+                    monster_name: monster_name.to_string(),
+                });
+            }
+        }
+        if lower.starts_with("wizlevelport ") {
+            let depth_text = trimmed[13..].trim();
+            if let Ok(depth) = depth_text.parse::<i32>() {
+                return Some(PlayerAction::WizLevelTeleport { depth });
+            }
+        }
+    }
+
+    match lower.as_str() {
+        "h" => Some(PlayerAction::Move {
             direction: Direction::West,
         }),
-        'j' => Some(PlayerAction::Move {
+        "j" => Some(PlayerAction::Move {
             direction: Direction::South,
         }),
-        'k' => Some(PlayerAction::Move {
+        "k" => Some(PlayerAction::Move {
             direction: Direction::North,
         }),
-        'l' => Some(PlayerAction::Move {
+        "l" => Some(PlayerAction::Move {
             direction: Direction::East,
         }),
-        'y' => Some(PlayerAction::Move {
+        "y" => Some(PlayerAction::Move {
             direction: Direction::NorthWest,
         }),
-        'u' => Some(PlayerAction::Move {
+        "u" => Some(PlayerAction::Move {
             direction: Direction::NorthEast,
         }),
-        'b' => Some(PlayerAction::Move {
+        "b" => Some(PlayerAction::Move {
             direction: Direction::SouthWest,
         }),
-        'n' => Some(PlayerAction::Move {
+        "n" => Some(PlayerAction::Move {
             direction: Direction::SouthEast,
         }),
-        '.' => Some(PlayerAction::Rest),
-        's' => Some(PlayerAction::Search),
-        '<' => Some(PlayerAction::GoUp),
-        '>' => Some(PlayerAction::GoDown),
+        "." | "wait" | "rest" => Some(PlayerAction::Rest),
+        "s" | "search" => Some(PlayerAction::Search),
+        "<" | "up" => Some(PlayerAction::GoUp),
+        ">" | "down" => Some(PlayerAction::GoDown),
+        "," | "pickup" | "pick" => Some(PlayerAction::PickUp),
+        "i" | "inv" | "inventory" => Some(PlayerAction::ViewInventory),
+        "eq" | "equip" | "equipment" => Some(PlayerAction::ViewEquipped),
+        "p" | "pray" => Some(PlayerAction::Pray),
+        "eat" => Some(PlayerAction::Eat { item: None }),
+        "quaff" | "drink" => Some(PlayerAction::Quaff { item: None }),
+        "read" => Some(PlayerAction::Read { item: None }),
+        "offer" => Some(PlayerAction::Offer { item: None }),
+        "look" | "lookhere" | ":" => Some(PlayerAction::LookHere),
+        "whatis" => Some(PlayerAction::WhatIs { position: None }),
+        "discoveries" | "discover" | "known" | "genocided" => Some(PlayerAction::ViewDiscoveries),
+        "conduct" => Some(PlayerAction::ViewConduct),
+        "vanquished" => Some(PlayerAction::Vanquished),
+        "chronicle" => Some(PlayerAction::Chronicle),
+        "overview" | "dungeonoverview" => Some(PlayerAction::DungeonOverview),
+        "terrain" => Some(PlayerAction::ViewTerrain),
+        "attributes" | "attr" => Some(PlayerAction::Attributes),
+        "options" | "optionsfull" | "saveoptions" | "autopickup" => Some(PlayerAction::Options),
+        "ride" => Some(PlayerAction::Ride),
+        "swap" => Some(PlayerAction::Swap),
+        "wipe" => Some(PlayerAction::Wipe),
+        "turnundead" | "turn-undead" | "turn" => Some(PlayerAction::TurnUndead),
+        "enhance" | "enhanceskill" => Some(PlayerAction::EnhanceSkill),
+        "fire" => Some(PlayerAction::Fire),
+        "sit" => Some(PlayerAction::Sit),
+        "loot" => Some(PlayerAction::Loot),
+        "pay" => Some(PlayerAction::Pay),
+        "monster" => Some(PlayerAction::Monster),
+        "takeoffall" | "take-off-all" => Some(PlayerAction::TakeOffAll),
+        "twoweapon" | "two-weapon" | "2weapon" => Some(PlayerAction::ToggleTwoWeapon),
+        "save" => Some(PlayerAction::Save),
+        "savequit" | "save-and-quit" | "saveandquit" => Some(PlayerAction::SaveAndQuit),
+        "inventtype" | "showspells" | "seeall" | "seearmor" | "seeamulet" | "seerings"
+        | "seetools" | "seeweapon" => Some(PlayerAction::ViewEquipped),
+        "showgold" => Some(PlayerAction::ViewInventory),
+        "redraw" => Some(PlayerAction::Redraw),
+        "version" | "versionshort" | "v" => Some(PlayerAction::ShowVersion),
+        "whatdoes" => Some(PlayerAction::Help),
+        "history" => Some(PlayerAction::ShowHistory),
+        "help" | "?" => Some(PlayerAction::Help),
+        "wizidentify" if wizard_mode => Some(PlayerAction::WizIdentify),
+        "wizmap" if wizard_mode => Some(PlayerAction::WizMap),
+        "wizdetect" if wizard_mode => Some(PlayerAction::WizDetect),
+        "wizwhere" if wizard_mode => Some(PlayerAction::WizWhere),
+        "wizkill" if wizard_mode => Some(PlayerAction::WizKill),
         _ => None,
+    }
+}
+
+fn is_repeatable_text_action(action: &PlayerAction) -> bool {
+    !matches!(
+        action,
+        PlayerAction::ViewInventory
+            | PlayerAction::ViewEquipped
+            | PlayerAction::ViewDiscoveries
+            | PlayerAction::ViewConduct
+            | PlayerAction::DungeonOverview
+            | PlayerAction::ViewTerrain
+            | PlayerAction::ShowVersion
+            | PlayerAction::Attributes
+            | PlayerAction::LookAt { .. }
+            | PlayerAction::LookHere
+            | PlayerAction::Help
+            | PlayerAction::ShowHistory
+            | PlayerAction::KnownItems
+            | PlayerAction::KnownClass { .. }
+            | PlayerAction::Vanquished
+            | PlayerAction::Chronicle
+            | PlayerAction::Glance { .. }
+            | PlayerAction::Redraw
+            | PlayerAction::WhatIs { .. }
+            | PlayerAction::Options
+            | PlayerAction::Save
+            | PlayerAction::Quit
+            | PlayerAction::SaveAndQuit
+    )
+}
+
+#[cfg(test)]
+mod text_input_tests {
+    use super::*;
+    use nethack_babel_data::{KnowledgeState, ObjectLocation, ObjectTypeId};
+
+    fn spawn_inventory_item(world: &mut GameWorld, letter: char) -> hecs::Entity {
+        world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Weapon,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some(letter),
+                artifact: None,
+            },
+            BucStatus {
+                cursed: false,
+                blessed: false,
+                bknown: false,
+            },
+            KnowledgeState {
+                known: false,
+                dknown: false,
+                rknown: false,
+                cknown: false,
+                lknown: false,
+                tknown: false,
+            },
+            ObjectLocation::Inventory,
+        ))
+    }
+
+    #[test]
+    fn parse_text_mode_pickup_and_inventory_commands() {
+        assert!(matches!(
+            parse_command(",", false),
+            Some(PlayerAction::PickUp)
+        ));
+        assert!(matches!(
+            parse_command("pickup", false),
+            Some(PlayerAction::PickUp)
+        ));
+        assert!(matches!(
+            parse_command("inventory", false),
+            Some(PlayerAction::ViewInventory)
+        ));
+        assert!(matches!(
+            parse_command("equipment", false),
+            Some(PlayerAction::ViewEquipped)
+        ));
+    }
+
+    #[test]
+    fn parse_text_mode_wait_and_pray_commands() {
+        assert!(matches!(
+            parse_command(".", false),
+            Some(PlayerAction::Rest)
+        ));
+        assert!(matches!(
+            parse_command("wait", false),
+            Some(PlayerAction::Rest)
+        ));
+        assert!(matches!(
+            parse_command("pray", false),
+            Some(PlayerAction::Pray)
+        ));
+    }
+
+    #[test]
+    fn parse_text_mode_extended_non_wizard_commands() {
+        assert!(matches!(
+            parse_command("look", false),
+            Some(PlayerAction::LookHere)
+        ));
+        assert!(matches!(
+            parse_command("conduct", false),
+            Some(PlayerAction::ViewConduct)
+        ));
+        assert!(matches!(
+            parse_command("discoveries", false),
+            Some(PlayerAction::ViewDiscoveries)
+        ));
+        assert!(matches!(
+            parse_command("attributes", false),
+            Some(PlayerAction::Attributes)
+        ));
+        assert!(matches!(
+            parse_command("twoweapon", false),
+            Some(PlayerAction::ToggleTwoWeapon)
+        ));
+        assert!(matches!(
+            parse_command("turnundead", false),
+            Some(PlayerAction::TurnUndead)
+        ));
+        assert!(matches!(
+            parse_command("offer", false),
+            Some(PlayerAction::Offer { item: None })
+        ));
+        assert!(matches!(
+            parse_command("eat", false),
+            Some(PlayerAction::Eat { item: None })
+        ));
+        assert!(matches!(
+            parse_command("whatis", false),
+            Some(PlayerAction::WhatIs { position: None })
+        ));
+        assert!(matches!(
+            parse_command("takeoffall", false),
+            Some(PlayerAction::TakeOffAll)
+        ));
+        assert!(matches!(
+            parse_command("save", false),
+            Some(PlayerAction::Save)
+        ));
+        assert!(matches!(
+            parse_command("savequit", false),
+            Some(PlayerAction::SaveAndQuit)
+        ));
+        assert!(matches!(
+            parse_command("known", false),
+            Some(PlayerAction::ViewDiscoveries)
+        ));
+        assert!(matches!(
+            parse_command("vanquished", false),
+            Some(PlayerAction::Vanquished)
+        ));
+        assert!(matches!(
+            parse_command("chronicle", false),
+            Some(PlayerAction::Chronicle)
+        ));
+        assert!(matches!(
+            parse_command("options", false),
+            Some(PlayerAction::Options)
+        ));
+    }
+
+    #[test]
+    fn parse_text_mode_hash_prefixed_commands() {
+        assert!(matches!(
+            parse_command("#pray", false),
+            Some(PlayerAction::Pray)
+        ));
+        assert!(matches!(
+            parse_command("#drink", false),
+            Some(PlayerAction::Quaff { item: None })
+        ));
+        assert!(matches!(
+            parse_command("#wizmap", true),
+            Some(PlayerAction::WizMap)
+        ));
+        assert!(parse_command("#wizmap", false).is_none());
+    }
+
+    #[test]
+    fn repeatable_text_action_filter_excludes_ui_actions() {
+        assert!(is_repeatable_text_action(&PlayerAction::Rest));
+        assert!(is_repeatable_text_action(&PlayerAction::Move {
+            direction: Direction::East,
+        }));
+        assert!(!is_repeatable_text_action(&PlayerAction::ViewInventory));
+        assert!(!is_repeatable_text_action(&PlayerAction::Save));
+        assert!(!is_repeatable_text_action(&PlayerAction::SaveAndQuit));
+    }
+
+    #[test]
+    fn parse_text_mode_wizard_commands_gate_on_debug_mode() {
+        assert!(matches!(
+            parse_command("wizmap", true),
+            Some(PlayerAction::WizMap)
+        ));
+        assert!(matches!(
+            parse_command("wizidentify", true),
+            Some(PlayerAction::WizIdentify)
+        ));
+        assert!(parse_command("wizmap", false).is_none());
+        assert!(parse_command("wizidentify", false).is_none());
+    }
+
+    #[test]
+    fn parse_text_mode_wizard_argument_commands() {
+        assert!(matches!(
+            parse_command("wizwish blessed +2 silver saber", true),
+            Some(PlayerAction::WizWish { wish_text }) if wish_text == "blessed +2 silver saber"
+        ));
+        assert!(matches!(
+            parse_command("wizgenesis arch-lich", true),
+            Some(PlayerAction::WizGenesis { monster_name }) if monster_name == "arch-lich"
+        ));
+        assert!(matches!(
+            parse_command("wizlevelport 9", true),
+            Some(PlayerAction::WizLevelTeleport { depth: 9 })
+        ));
+        assert!(parse_command("wizwish silver dragon", false).is_none());
+    }
+
+    #[test]
+    fn parse_direction_token_aliases() {
+        assert_eq!(parse_direction_token("h"), Some(Direction::West));
+        assert_eq!(
+            parse_direction_token("north-east"),
+            Some(Direction::NorthEast)
+        );
+        assert_eq!(parse_direction_token(">"), Some(Direction::Down));
+        assert_eq!(parse_direction_token("."), Some(Direction::Self_));
+        assert_eq!(parse_direction_token("bogus"), None);
+    }
+
+    #[test]
+    fn parse_autopickup_types_maps_known_symbols() {
+        let classes = parse_autopickup_types("$?!/=");
+        assert_eq!(
+            classes,
+            vec![
+                ObjectClass::Coin,
+                ObjectClass::Scroll,
+                ObjectClass::Potion,
+                ObjectClass::Wand,
+                ObjectClass::Ring,
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_autopickup_types_dedups_and_skips_unknown() {
+        let classes = parse_autopickup_types("$x$$!");
+        assert_eq!(classes, vec![ObjectClass::Coin, ObjectClass::Potion]);
+    }
+
+    #[test]
+    fn apply_runtime_options_wires_autopickup_to_dungeon_state() {
+        let mut world = GameWorld::new(Position::new(1, 1));
+        let mut cfg = config::Config::default();
+        cfg.behavior.autopickup = false;
+        cfg.behavior.autopickup_types = "$?".to_string();
+
+        apply_runtime_options(&mut world, &cfg);
+
+        assert!(!world.dungeon().autopickup_enabled);
+        assert_eq!(
+            world.dungeon().autopickup_classes,
+            vec![ObjectClass::Coin, ObjectClass::Scroll]
+        );
+    }
+
+    #[test]
+    fn parse_text_mode_contextual_item_and_direction_commands() {
+        let mut world = GameWorld::new(Position::new(1, 1));
+        let item_a = spawn_inventory_item(&mut world, 'a');
+        let item_b = spawn_inventory_item(&mut world, 'b');
+
+        assert!(matches!(
+            parse_text_mode_contextual_command("drop a", &world),
+            Some(PlayerAction::Drop { item }) if item == item_a
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("open h", &world),
+            Some(PlayerAction::Open {
+                direction: Direction::West
+            })
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("throw a l", &world),
+            Some(PlayerAction::Throw { item, direction: Direction::East }) if item == item_a
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("zap a k", &world),
+            Some(PlayerAction::ZapWand { item, direction: Some(Direction::North) }) if item == item_a
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("dip a b", &world),
+            Some(PlayerAction::Dip { item, into }) if item == item_a && into == item_b
+        ));
+        assert!(parse_text_mode_contextual_command("drop z", &world).is_none());
+    }
+
+    #[test]
+    fn parse_text_mode_contextual_text_and_position_commands() {
+        let mut world = GameWorld::new(Position::new(1, 1));
+        let item_a = spawn_inventory_item(&mut world, 'a');
+
+        assert!(matches!(
+            parse_text_mode_contextual_command("annotate minetown branch", &world),
+            Some(PlayerAction::Annotate { text }) if text == "minetown branch"
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("engrave Elbereth", &world),
+            Some(PlayerAction::Engrave { text }) if text == "Elbereth"
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("call ! healing", &world),
+            Some(PlayerAction::CallType { class: '!', name }) if name == "healing"
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("name level sokoban", &world),
+            Some(PlayerAction::Name { target: nethack_babel_engine::action::NameTarget::Level, name }) if name == "sokoban"
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("name item a Excalibur", &world),
+            Some(PlayerAction::Name { target: nethack_babel_engine::action::NameTarget::Item { item }, name })
+                if item == item_a && name == "Excalibur"
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("name monster 3 4 foo", &world),
+            Some(PlayerAction::Name { target: nethack_babel_engine::action::NameTarget::MonsterAt { position }, name })
+                if position == Position::new(3, 4) && name == "foo"
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("travel 7 8", &world),
+            Some(PlayerAction::Travel { destination }) if destination == Position::new(7, 8)
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("retravel 7 8", &world),
+            Some(PlayerAction::Travel { destination }) if destination == Position::new(7, 8)
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("jump 2 9", &world),
+            Some(PlayerAction::Jump { position }) if position == Position::new(2, 9)
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("lookat 5 6", &world),
+            Some(PlayerAction::LookAt { position }) if position == Position::new(5, 6)
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("whatis 10 11", &world),
+            Some(PlayerAction::WhatIs { position: Some(position) }) if position == Position::new(10, 11)
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("showtrap 10 11", &world),
+            Some(PlayerAction::WhatIs { position: Some(position) }) if position == Position::new(10, 11)
+        ));
+        assert!(matches!(
+            parse_text_mode_contextual_command("cast b h", &world),
+            Some(PlayerAction::CastSpell { spell, direction: Some(Direction::West) })
+                if spell.0 == 1
+        ));
     }
 }
 
@@ -1206,6 +1946,72 @@ fn resolve_data_dir(specified: &str) -> Result<std::path::PathBuf> {
     )
 }
 
+fn object_class_from_option_symbol(symbol: char) -> Option<ObjectClass> {
+    match symbol {
+        ')' => Some(ObjectClass::Weapon),
+        '[' => Some(ObjectClass::Armor),
+        '=' => Some(ObjectClass::Ring),
+        '"' => Some(ObjectClass::Amulet),
+        '(' => Some(ObjectClass::Tool),
+        '%' => Some(ObjectClass::Food),
+        '!' => Some(ObjectClass::Potion),
+        '?' => Some(ObjectClass::Scroll),
+        '+' => Some(ObjectClass::Spellbook),
+        '/' => Some(ObjectClass::Wand),
+        '$' => Some(ObjectClass::Coin),
+        '*' => Some(ObjectClass::Gem),
+        '`' => Some(ObjectClass::Rock),
+        '0' => Some(ObjectClass::Ball),
+        '_' => Some(ObjectClass::Chain),
+        '.' => Some(ObjectClass::Venom),
+        _ => None,
+    }
+}
+
+fn parse_autopickup_types(spec: &str) -> Vec<ObjectClass> {
+    let mut classes = Vec::new();
+    for symbol in spec.chars() {
+        if let Some(class) = object_class_from_option_symbol(symbol)
+            && !classes.contains(&class)
+        {
+            classes.push(class);
+        }
+    }
+    classes
+}
+
+fn refresh_player_encumbrance(world: &mut GameWorld) {
+    let player = world.player();
+    let Some(attrs) = world.get_component::<Attributes>(player).map(|a| *a) else {
+        return;
+    };
+    let carried = nethack_babel_engine::inventory::total_weight(world, player);
+    let wounded_legs = if nethack_babel_engine::status::has_wounded_legs(world, player) {
+        1
+    } else {
+        0
+    };
+    let carry_cap = nethack_babel_engine::inventory::carry_capacity(
+        attrs.strength,
+        attrs.constitution,
+        nethack_babel_engine::status::is_levitating(world, player),
+        false, // Flying state is not yet exposed by a dedicated status query.
+        wounded_legs,
+    );
+    let level = nethack_babel_engine::inventory::encumbrance_level(carried, carry_cap);
+    if let Some(mut enc) = world.get_component_mut::<EncumbranceLevel>(player) {
+        enc.0 = level;
+    }
+}
+
+fn apply_runtime_options(world: &mut GameWorld, cfg: &config::Config) {
+    let autopickup_classes = parse_autopickup_types(&cfg.behavior.autopickup_types);
+    world
+        .dungeon_mut()
+        .set_autopickup(cfg.behavior.autopickup, autopickup_classes);
+    refresh_player_encumbrance(world);
+}
+
 // ---------------------------------------------------------------------------
 // Save/Load helpers
 // ---------------------------------------------------------------------------
@@ -1223,7 +2029,7 @@ fn ensure_save_dir(save_path: &Path) -> Result<()> {
 /// successfully loaded; `None` if no save file exists.
 fn try_load_save(player_name: &str) -> Option<(GameWorld, u32, i32, [u8; 32])> {
     let save_path = save::save_file_path(player_name);
-    if !save_path.exists() {
+    if !save::save_file_exists(&save_path) {
         return None;
     }
     match save::load_game(&save_path) {
@@ -1247,11 +2053,7 @@ struct WorldSetup {
     player_room_idx: Option<usize>,
 }
 
-fn create_world(
-    data: &GameData,
-    rng: &mut Pcg64,
-    player_name: Option<&str>,
-) -> WorldSetup {
+fn create_world(data: &GameData, rng: &mut Pcg64, player_name: Option<&str>) -> WorldSetup {
     let depth: u8 = 1;
     let level = generate_level(depth, rng);
 
@@ -1283,14 +2085,7 @@ fn create_world(
 
     // Spawn monsters.
     let player_room_idx = find_room_containing(&level.rooms, player_start);
-    spawn_monsters(
-        &mut world,
-        data,
-        &level.rooms,
-        player_room_idx,
-        depth,
-        rng,
-    );
+    spawn_monsters(&mut world, data, &level.rooms, player_room_idx, depth, rng);
 
     WorldSetup {
         world,
@@ -1357,11 +2152,15 @@ fn show_game_options(
             .enumerate()
             .map(|(i, (name, value))| {
                 let accel = option_accelerator(i);
+                // Look up description from the option metadata table.
+                let desc_suffix = config::describe_option(name)
+                    .map(|_d| "") // Description is available but we keep menu compact
+                    .unwrap_or("");
                 let text = if value == "true" || value == "false" {
                     let on = value == "true";
-                    format!("[{}] {}", if on { "X" } else { " " }, name)
+                    format!("[{}] {}{}", if on { "X" } else { " " }, name, desc_suffix)
                 } else {
-                    format!("{}: {}", name, value)
+                    format!("{}: {}{}", name, value, desc_suffix)
                 };
                 MenuItem {
                     accelerator: accel,
@@ -1373,8 +2172,12 @@ fn show_game_options(
             })
             .collect();
 
+        let behavior_count = config::options_in_section(config::OptionSection::Behavior).len();
         let menu = Menu {
-            title: "Game Settings".to_string(),
+            title: format!(
+                "Game Settings ({} behavior options available)",
+                behavior_count
+            ),
             items,
             how: MenuHow::PickOne,
         };
@@ -1419,12 +2222,36 @@ fn show_display_options(
 ) {
     loop {
         let items = vec![
-            bool_item('a', &locale.translate("opt-map-colors", None), cfg.display.map_colors),
-            bool_item('b', &locale.translate("opt-message-colors", None), cfg.display.message_colors),
-            bool_item('c', &locale.translate("opt-buc-highlight", None), cfg.display.buc_highlight),
-            bool_item('d', &locale.translate("opt-minimap", None), cfg.display.minimap),
-            bool_item('e', &locale.translate("opt-mouse-hover", None), cfg.display.mouse_hover_info),
-            bool_item('f', &locale.translate("opt-nerd-fonts", None), cfg.display.nerd_fonts),
+            bool_item(
+                'a',
+                &locale.translate("opt-map-colors", None),
+                cfg.display.map_colors,
+            ),
+            bool_item(
+                'b',
+                &locale.translate("opt-message-colors", None),
+                cfg.display.message_colors,
+            ),
+            bool_item(
+                'c',
+                &locale.translate("opt-buc-highlight", None),
+                cfg.display.buc_highlight,
+            ),
+            bool_item(
+                'd',
+                &locale.translate("opt-minimap", None),
+                cfg.display.minimap,
+            ),
+            bool_item(
+                'e',
+                &locale.translate("opt-mouse-hover", None),
+                cfg.display.mouse_hover_info,
+            ),
+            bool_item(
+                'f',
+                &locale.translate("opt-nerd-fonts", None),
+                cfg.display.nerd_fonts,
+            ),
         ];
         let menu = Menu {
             title: locale.translate("ui-options-display", None),
@@ -1457,11 +2284,21 @@ fn show_sound_options(
 ) {
     loop {
         let items = vec![
-            bool_item('a', &locale.translate("opt-sound-enabled", None), cfg.sound.enabled),
+            bool_item(
+                'a',
+                &locale.translate("opt-sound-enabled", None),
+                cfg.sound.enabled,
+            ),
             MenuItem {
                 accelerator: 'b',
-                text: format!("{}: {}", locale.translate("opt-volume", None), cfg.sound.volume),
-                selected: false, selectable: true, group: None,
+                text: format!(
+                    "{}: {}",
+                    locale.translate("opt-volume", None),
+                    cfg.sound.volume
+                ),
+                selected: false,
+                selectable: true,
+                group: None,
             },
         ];
         let menu = Menu {
@@ -1474,8 +2311,7 @@ fn show_sound_options(
                 match indices[0] {
                     0 => cfg.sound.enabled = !cfg.sound.enabled,
                     1 => {
-                        let prompt = format!("{} (0-100): ",
-                            locale.translate("opt-volume", None));
+                        let prompt = format!("{} (0-100): ", locale.translate("opt-volume", None));
                         if let Some(val) = port.get_line(&prompt)
                             && let Ok(v) = val.trim().parse::<u8>()
                             && v <= 100
@@ -1492,11 +2328,7 @@ fn show_sound_options(
     }
 }
 
-fn show_language_menu(
-    port: &mut TuiPort,
-    locale: &mut LocaleManager,
-    app: &mut App,
-) {
+fn show_language_menu(port: &mut TuiPort, locale: &mut LocaleManager, app: &mut App) {
     let mut langs: Vec<(String, String, String)> = locale
         .available_languages()
         .into_iter()
@@ -1592,22 +2424,112 @@ fn build_inventory_i18n(locale: &LocaleManager) -> InventoryI18n {
     }
 }
 
+fn inventory_display_name(
+    world: &GameWorld,
+    entity: hecs::Entity,
+    core: &ObjectCore,
+    obj_defs: &[ObjectDef],
+) -> String {
+    let base = world
+        .get_component::<Name>(entity)
+        .map(|name| name.0.clone())
+        .filter(|name| !name.trim().is_empty())
+        .or_else(|| {
+            obj_defs
+                .iter()
+                .find(|def| def.id == core.otyp)
+                .map(|def| def.name.clone())
+        })
+        .unwrap_or_else(|| format!("item(otyp={})", core.otyp.0));
+
+    if core.quantity > 1 && !base.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        format!(
+            "{} {}",
+            core.quantity,
+            nethack_babel_engine::identification::makeplural(&base)
+        )
+    } else {
+        base
+    }
+}
+
+fn build_inventory_items(world: &GameWorld, obj_defs: &[ObjectDef]) -> Vec<InventoryItem> {
+    let unknown_buc = BucStatus {
+        cursed: false,
+        blessed: false,
+        bknown: false,
+    };
+
+    nethack_babel_engine::items::get_inventory(world, world.player())
+        .into_iter()
+        .map(|(entity, core)| {
+            let display_name = inventory_display_name(world, entity, &core, obj_defs);
+            let buc = world
+                .get_component::<BucStatus>(entity)
+                .map(|b| (*b).clone())
+                .unwrap_or_else(|| unknown_buc.clone());
+            make_inventory_item(&core, &buc, &display_name)
+        })
+        .collect()
+}
+
+fn build_equipped_lines(world: &GameWorld, obj_defs: &[ObjectDef]) -> Vec<String> {
+    let player = world.player();
+    let Some(equip) = world.get_component::<EquipmentSlots>(player) else {
+        return Vec::new();
+    };
+
+    let slots = [
+        ("Weapon", equip.weapon),
+        ("Off-hand", equip.off_hand),
+        ("Helmet", equip.helmet),
+        ("Cloak", equip.cloak),
+        ("Body armor", equip.body_armor),
+        ("Shield", equip.shield),
+        ("Gloves", equip.gloves),
+        ("Boots", equip.boots),
+        ("Shirt", equip.shirt),
+        ("Ring (left)", equip.ring_left),
+        ("Ring (right)", equip.ring_right),
+        ("Amulet", equip.amulet),
+    ];
+
+    slots
+        .iter()
+        .filter_map(|(label, maybe_entity)| {
+            let entity = (*maybe_entity)?;
+            let name = if let Some(core) = world.get_component::<ObjectCore>(entity) {
+                inventory_display_name(world, entity, &core, obj_defs)
+            } else {
+                world.entity_name(entity)
+            };
+            Some(format!("{label}: {name}"))
+        })
+        .collect()
+}
+
 fn run_tui_mode(
     world: &mut GameWorld,
-    _data: &GameData,
+    data: &GameData,
     rng: &mut Pcg64,
     locale: &mut LocaleManager,
     cfg: &mut config::Config,
     config_path: &str,
     legacy_info: Option<(&str, &str)>,
+    wizard_mode: bool,
 ) -> Result<()> {
     install_panic_hook();
 
-    let mut port = TuiPort::create()
-        .map_err(|e| anyhow::anyhow!("Failed to initialize TUI: {e}"))?;
+    // Auto-checkpoint config — saves every 100 turns in case of crash.
+    let mut checkpoint_config =
+        save::CheckpointConfig::with_interval(save::DEFAULT_CHECKPOINT_INTERVAL);
+
+    let mut port =
+        TuiPort::create().map_err(|e| anyhow::anyhow!("Failed to initialize TUI: {e}"))?;
     port.init();
 
     let mut app = App::new();
+    app.set_wizard_mode(wizard_mode);
     app.messages_i18n = TuiMessages {
         empty_handed: locale.translate("ui-empty-handed", None),
         never_mind: locale.translate("ui-never-mind", None),
@@ -1634,13 +2556,19 @@ fn run_tui_mode(
                 env!("CARGO_PKG_VERSION")
             )
         } else {
-            format!("NetHack Babel v{} -- {}", env!("CARGO_PKG_VERSION"), welcome)
+            format!(
+                "NetHack Babel v{} -- {}",
+                env!("CARGO_PKG_VERSION"),
+                welcome
+            )
         };
         app.push_message(text, MessageUrgency::System);
     }
 
     // Show legacy intro narrative if enabled.
-    if cfg.game.legacy && let Some((deity, role)) = legacy_info {
+    if cfg.game.legacy
+        && let Some((deity, role)) = legacy_info
+    {
         use fluent::FluentArgs;
         let mut args = FluentArgs::new();
         args.set("deity", deity.to_string());
@@ -1669,6 +2597,12 @@ fn run_tui_mode(
     let mut game_over = false;
 
     loop {
+        app.update_inventory_letters(
+            nethack_babel_engine::items::get_inventory(world, world.player())
+                .into_iter()
+                .filter_map(|(entity, core)| core.inv_letter.map(|letter| (entity, letter))),
+        );
+
         // Update FOV.
         update_fov(world, &mut fov);
 
@@ -1708,21 +2642,43 @@ fn run_tui_mode(
             Some(PlayerAction::Help) => {
                 let title = locale.translate("help-title", None);
                 let help_keys = [
-                    "help-move", "", "help-move-diagram", "",
-                    "help-attack", "help-wait", "help-search",
-                    "help-inventory", "help-pickup", "help-drop",
-                    "help-stairs-up", "help-stairs-down",
-                    "help-eat", "help-quaff", "help-read",
-                    "help-wield", "help-wear", "help-remove", "help-zap",
-                    "help-options", "help-look", "help-history",
-                    "", "help-shift-run", "help-arrows",
-                    "", "help-symbols-title",
+                    "help-move",
+                    "",
+                    "help-move-diagram",
+                    "",
+                    "help-attack",
+                    "help-wait",
+                    "help-search",
+                    "help-inventory",
+                    "help-pickup",
+                    "help-drop",
+                    "help-stairs-up",
+                    "help-stairs-down",
+                    "help-eat",
+                    "help-quaff",
+                    "help-read",
+                    "help-wield",
+                    "help-wear",
+                    "help-remove",
+                    "help-zap",
+                    "help-options",
+                    "help-look",
+                    "help-history",
+                    "",
+                    "help-shift-run",
+                    "help-arrows",
+                    "",
+                    "help-symbols-title",
                 ];
                 let symbol_keys = [
-                    "help-symbol-player", "help-symbol-floor",
-                    "help-symbol-corridor", "help-symbol-door-closed",
-                    "help-symbol-door-open", "help-symbol-stairs-up",
-                    "help-symbol-stairs-down", "help-symbol-water",
+                    "help-symbol-player",
+                    "help-symbol-floor",
+                    "help-symbol-corridor",
+                    "help-symbol-door-closed",
+                    "help-symbol-door-open",
+                    "help-symbol-stairs-up",
+                    "help-symbol-stairs-down",
+                    "help-symbol-water",
                     "help-symbol-fountain",
                 ];
                 let mut lines: Vec<String> = help_keys
@@ -1743,15 +2699,52 @@ fn run_tui_mode(
             }
             Some(PlayerAction::ViewInventory) => {
                 let inv_i18n = build_inventory_i18n(locale);
-                nethack_babel_tui::show_inventory(
-                    &mut port, &[], Some(&inv_i18n),
-                );
+                let items = build_inventory_items(world, &data.objects);
+                nethack_babel_tui::show_inventory(&mut port, &items, Some(&inv_i18n));
                 continue;
             }
             Some(PlayerAction::ViewEquipped) => {
                 let title = locale.translate("ui-equipment-title", None);
-                let body = locale.translate("ui-equipment-empty", None);
-                port.show_text(&title, &body);
+                let lines = build_equipped_lines(world, &data.objects);
+                if lines.is_empty() {
+                    let body = locale.translate("ui-equipment-empty", None);
+                    port.show_text(&title, &body);
+                } else {
+                    port.show_text(&title, &lines.join("\n"));
+                }
+                continue;
+            }
+            Some(PlayerAction::LookAt { position }) => {
+                let map = &world.dungeon().current_level;
+                let x = position.x as usize;
+                let y = position.y as usize;
+                if y < map.height && x < map.width {
+                    let terrain = map.cells[y][x].terrain;
+                    let mut args = fluent::FluentArgs::new();
+                    args.set("terrain", format!("{:?}", terrain));
+                    let text = locale.translate("event-you-see-here", Some(&args));
+                    app.push_message(text, MessageUrgency::Normal);
+                }
+                continue;
+            }
+            Some(PlayerAction::WhatIs { position }) => {
+                let target = position.or_else(|| {
+                    world
+                        .get_component::<Positioned>(world.player())
+                        .map(|p| p.0)
+                });
+                if let Some(pos) = target {
+                    let map = &world.dungeon().current_level;
+                    let x = pos.x as usize;
+                    let y = pos.y as usize;
+                    if y < map.height && x < map.width {
+                        let terrain = map.cells[y][x].terrain;
+                        let mut args = fluent::FluentArgs::new();
+                        args.set("terrain", format!("{:?}", terrain));
+                        let text = locale.translate("event-you-see-here", Some(&args));
+                        app.push_message(text, MessageUrgency::Normal);
+                    }
+                }
                 continue;
             }
             Some(PlayerAction::LookHere) => {
@@ -1779,7 +2772,10 @@ fn run_tui_mode(
             }
             Some(PlayerAction::SaveAndQuit) => {
                 // S — save and quit
-                app.push_message(locale.translate("ui-save-prompt", None), MessageUrgency::System);
+                app.push_message(
+                    locale.translate("ui-save-prompt", None),
+                    MessageUrgency::System,
+                );
                 app.display_pending_messages(&mut port);
 
                 let player_name = world.entity_name(world.player());
@@ -1805,10 +2801,7 @@ fn run_tui_mode(
                         break;
                     }
                     Err(e) => {
-                        app.push_message(
-                            format!("Save failed: {e}"),
-                            MessageUrgency::System,
-                        );
+                        app.push_message(format!("Save failed: {e}"), MessageUrgency::System);
                         app.display_pending_messages(&mut port);
                         continue;
                     }
@@ -1827,13 +2820,13 @@ fn run_tui_mode(
                 }
                 match save::save_game(world, &save_path, save::SaveReason::Checkpoint, rng_state) {
                     Ok(()) => {
-                        app.push_message(locale.translate("ui-save-success", None), MessageUrgency::System);
-                    }
-                    Err(e) => {
                         app.push_message(
-                            format!("Save failed: {e}"),
+                            locale.translate("ui-save-success", None),
                             MessageUrgency::System,
                         );
+                    }
+                    Err(e) => {
+                        app.push_message(format!("Save failed: {e}"), MessageUrgency::System);
                     }
                 }
                 continue;
@@ -1841,31 +2834,42 @@ fn run_tui_mode(
             Some(PlayerAction::Options) => {
                 // Top-level options menu loop
                 loop {
-                    let lang_label = locale.manifest_for(locale.current_language())
+                    let lang_label = locale
+                        .manifest_for(locale.current_language())
                         .map(|m| m.name.clone())
                         .unwrap_or_default();
                     let items = vec![
                         MenuItem {
                             accelerator: 'a',
                             text: locale.translate("ui-options-game", None),
-                            selected: false, selectable: true, group: None,
+                            selected: false,
+                            selectable: true,
+                            group: None,
                         },
                         MenuItem {
                             accelerator: 'b',
                             text: locale.translate("ui-options-display", None),
-                            selected: false, selectable: true, group: None,
+                            selected: false,
+                            selectable: true,
+                            group: None,
                         },
                         MenuItem {
                             accelerator: 'c',
                             text: locale.translate("ui-options-sound", None),
-                            selected: false, selectable: true, group: None,
+                            selected: false,
+                            selectable: true,
+                            group: None,
                         },
                         MenuItem {
                             accelerator: 'd',
-                            text: format!("{}: {}",
+                            text: format!(
+                                "{}: {}",
                                 locale.translate("ui-select-language", None),
-                                lang_label),
-                            selected: false, selectable: true, group: None,
+                                lang_label
+                            ),
+                            selected: false,
+                            selectable: true,
+                            group: None,
                         },
                     ];
                     let menu = Menu {
@@ -1874,26 +2878,32 @@ fn run_tui_mode(
                         how: MenuHow::PickOne,
                     };
                     match port.show_menu(&menu) {
-                        MenuResult::Selected(indices) if !indices.is_empty() => {
-                            match indices[0] {
-                                0 => show_game_options(&mut port, cfg, locale, config_path),
-                                1 => show_display_options(&mut port, cfg, locale, config_path),
-                                2 => show_sound_options(&mut port, cfg, locale, config_path),
-                                3 => show_language_menu(&mut port, locale, &mut app),
-                                _ => {}
-                            }
-                        }
+                        MenuResult::Selected(indices) if !indices.is_empty() => match indices[0] {
+                            0 => show_game_options(&mut port, cfg, locale, config_path),
+                            1 => show_display_options(&mut port, cfg, locale, config_path),
+                            2 => show_sound_options(&mut port, cfg, locale, config_path),
+                            3 => show_language_menu(&mut port, locale, &mut app),
+                            _ => {}
+                        },
                         _ => break,
                     }
                 }
+                apply_runtime_options(world, cfg);
                 continue;
             }
             Some(a) => a,
             None => continue, // Unmapped key or Escape.
         };
 
+        app.remember_repeatable_action(&action);
+
         // Resolve the turn.
         let events = resolve_turn(world, action, rng);
+
+        // Auto-checkpoint after each turn (if interval has elapsed).
+        let player_name = world.entity_name(world.player());
+        let rng_state: [u8; 32] = rng.random();
+        save::maybe_checkpoint(world, &mut checkpoint_config, &player_name, rng_state);
 
         // Convert events to messages.
         let messages = events_to_messages(&events, locale, world);
@@ -1904,14 +2914,10 @@ fn run_tui_mode(
         // Check for game over (player death or GameOver event).
         for event in &events {
             let death_info = match event {
-                EngineEvent::EntityDied { entity, cause, .. }
-                    if world.is_player(*entity) =>
-                {
+                EngineEvent::EntityDied { entity, cause, .. } if world.is_player(*entity) => {
                     Some((cause.clone(), 0u64))
                 }
-                EngineEvent::GameOver { cause, score } => {
-                    Some((cause.clone(), *score))
-                }
+                EngineEvent::GameOver { cause, score } => Some((cause.clone(), *score)),
                 _ => None,
             };
             if let Some((cause, score)) = death_info {
@@ -1931,20 +2937,27 @@ fn run_tui_mode(
 
 fn run_text_mode(
     world: &mut GameWorld,
-    _data: &GameData,
+    data: &GameData,
     rng: &mut Pcg64,
     recorder: &mut Option<recording::GameRecorder>,
     locale: &LocaleManager,
+    wizard_mode: bool,
 ) -> Result<()> {
+    // Text mode does not auto-checkpoint (user can save manually).
+    let _checkpoint_config = save::CheckpointConfig::disabled();
+
     println!();
     println!("{}", locale.translate("event-dungeon-welcome", None));
-    println!("Commands: h/j/k/l/y/u/b/n = move, . = wait, < = up, > = down, q = quit, ? = help");
+    println!(
+        "Commands: h/j/k/l/y/u/b/n move, . wait, s search, , pickup, i inv, eq equip, p pray, < up, > down, q quit, ? help"
+    );
     println!();
 
     let stdin = io::stdin();
     let stdout = io::stdout();
 
     let mut game_over = false;
+    let mut last_repeatable_action: Option<PlayerAction> = None;
 
     loop {
         render_map_ascii(world);
@@ -1971,11 +2984,16 @@ fn run_text_mode(
             rec.record_input(trimmed);
         }
 
-        if trimmed == "q" || trimmed == "quit" {
+        let command_input = trimmed
+            .strip_prefix('#')
+            .map(str::trim_start)
+            .unwrap_or(trimmed);
+
+        if command_input == "q" || command_input == "quit" {
             println!("{}", locale.translate("ui-goodbye", None));
             break;
         }
-        if trimmed == "?" || trimmed == "help" {
+        if command_input == "?" || command_input == "help" {
             println!();
             println!("=== NetHack Babel Help ===");
             println!("Movement (vi-keys):");
@@ -1986,10 +3004,22 @@ fn run_text_mode(
             println!("Commands:");
             println!("  .  = rest/wait one turn");
             println!("  s  = search adjacent squares");
+            println!("  ,  = pick up items at your feet");
+            println!("  i  = show inventory");
+            println!("  eq = show equipped items");
+            println!("  p  = pray");
             println!("  <  = go up stairs");
             println!("  >  = go down stairs");
+            println!("  repeat = repeat last action");
+            println!("  save = save game");
+            println!("  savequit = save and quit");
             println!("  q  = quit the game");
             println!("  ?  = show this help");
+            println!("  open <dir>, kick <dir>, chat <dir>, run <dir>");
+            println!("  drop <letter>, wear/wield/apply <letter>, throw <letter> <dir>");
+            println!("  zap <letter> [dir], dip <letter> <letter>, cast <spell> [dir]");
+            println!("  travel <x> <y>, jump <x> <y>, lookat <x> <y>, whatis <x> <y>");
+            println!("  annotate <text>, engrave <text>, call <class> <name>");
             println!();
             println!("Symbols:");
             println!("  @  = you (the player)");
@@ -2003,20 +3033,94 @@ fn run_text_mode(
             continue;
         }
 
-        let action = match parse_command(trimmed) {
-            Some(a) => a,
-            None => {
-                if !trimmed.is_empty() {
-                    let mut args = fluent::FluentArgs::new();
-                    args.set("key", trimmed.to_string());
-                    println!("  {}", locale.translate("ui-unknown-command", Some(&args)));
-                }
+        let action = if let Some(a) = parse_text_mode_contextual_command(command_input, world) {
+            a
+        } else if command_input == "repeat" {
+            if let Some(prev) = &last_repeatable_action {
+                prev.clone()
+            } else {
+                println!("  Nothing to repeat.");
                 continue;
+            }
+        } else {
+            match parse_command(command_input, wizard_mode) {
+                Some(a) => a,
+                None => {
+                    if !trimmed.is_empty() {
+                        let mut args = fluent::FluentArgs::new();
+                        args.set("key", command_input.to_string());
+                        println!("  {}", locale.translate("ui-unknown-command", Some(&args)));
+                    }
+                    continue;
+                }
             }
         };
 
+        if is_repeatable_text_action(&action) {
+            last_repeatable_action = Some(action.clone());
+        }
+
+        if matches!(action, PlayerAction::ViewInventory) {
+            let items = build_inventory_items(world, &data.objects);
+            if items.is_empty() {
+                println!("  You are not carrying anything.");
+            } else {
+                println!("  Inventory:");
+                for item in &items {
+                    println!("    {} - {}", item.letter, item.name);
+                }
+            }
+            continue;
+        }
+
+        if matches!(action, PlayerAction::ViewEquipped) {
+            let lines = build_equipped_lines(world, &data.objects);
+            if lines.is_empty() {
+                println!("  You have nothing equipped.");
+            } else {
+                println!("  Equipped:");
+                for line in &lines {
+                    println!("    {line}");
+                }
+            }
+            continue;
+        }
+
+        if matches!(action, PlayerAction::Save) {
+            let player_name = world.entity_name(world.player());
+            let save_path = save::save_file_path(&player_name);
+            let rng_state: [u8; 32] = rng.random();
+            if let Err(e) = ensure_save_dir(&save_path) {
+                println!("  Failed to create save directory: {e}");
+                continue;
+            }
+            match save::save_game(world, &save_path, save::SaveReason::Checkpoint, rng_state) {
+                Ok(()) => println!("  {}", locale.translate("ui-save-success", None)),
+                Err(e) => println!("  Save failed: {e}"),
+            }
+            continue;
+        }
+
+        if matches!(action, PlayerAction::SaveAndQuit) {
+            let player_name = world.entity_name(world.player());
+            let save_path = save::save_file_path(&player_name);
+            let rng_state: [u8; 32] = rng.random();
+            if let Err(e) = ensure_save_dir(&save_path) {
+                println!("  Failed to create save directory: {e}");
+                continue;
+            }
+            match save::save_game(world, &save_path, save::SaveReason::Quit, rng_state) {
+                Ok(()) => {
+                    println!("  {}", locale.translate("ui-save-goodbye", None));
+                    break;
+                }
+                Err(e) => println!("  Save failed: {e}"),
+            }
+            continue;
+        }
+
         let events = resolve_turn(world, action, rng);
-        display_events_text(&events);
+        display_events_text(&events, locale, world);
 
         for event in &events {
             match event {
@@ -2026,9 +3130,7 @@ fn run_text_mode(
                     println!("Score: {score}");
                     println!("Cause: {cause:?}");
                 }
-                EngineEvent::EntityDied { entity, cause, .. }
-                    if world.is_player(*entity) =>
-                {
+                EngineEvent::EntityDied { entity, cause, .. } if world.is_player(*entity) => {
                     game_over = true;
                     println!("\n*** GAME OVER ***");
                     println!("Cause: {cause:?}");
@@ -2050,31 +3152,20 @@ fn main() -> Result<()> {
     // 1. Parse CLI args.
     let cli = Cli::parse();
 
-    // -- Handle --server (Phase 5 stub) ------------------------------------
+    // -- Handle --server ----------------------------------------------------
     if let Some(ref server_opt) = cli.server {
-        let addr = server_opt
-            .as_deref()
-            .unwrap_or(server::DEFAULT_BIND_ADDR);
+        let addr = server_opt.as_deref().unwrap_or(server::DEFAULT_BIND_ADDR);
         let srv = server::GameServer::new(addr, server::DEFAULT_MAX_CONNECTIONS);
-        match srv.start() {
-            Ok(()) => return Ok(()),
-            Err(server::ServerError::NotImplemented) => {
-                println!("Server mode not yet implemented.");
-                return Ok(());
-            }
-            Err(e) => anyhow::bail!("Server error: {e}"),
-        }
+        srv.start()
+            .map_err(|e| anyhow::anyhow!("Server error: {e}"))?;
+        return Ok(());
     }
 
-    // -- Handle --replay (Phase 5 stub) -----------------------------------
+    // -- Handle --replay ---------------------------------------------------
     if let Some(ref replay_path) = cli.replay {
         let path = std::path::PathBuf::from(replay_path);
         match recording::replay_session(&path) {
             Ok(()) => return Ok(()),
-            Err(recording::RecordingError::ReplayNotImplemented) => {
-                println!("Replay mode not yet implemented.");
-                return Ok(());
-            }
             Err(e) => anyhow::bail!("Replay error: {e}"),
         }
     }
@@ -2095,6 +3186,15 @@ fn main() -> Result<()> {
 
     // 3. Load config.
     let mut cfg = config::load_config(&cli.config)?;
+
+    // Also try loading ~/.nethackrc for traditional NetHack-style options.
+    if let Ok(home) = std::env::var("HOME") {
+        let rc_path = format!("{}/.nethackrc", home);
+        if std::path::Path::new(&rc_path).exists() {
+            let _ = config::load_nethackrc(&rc_path, &mut cfg);
+        }
+    }
+
     if let Some(ref lang) = cli.language {
         cfg.game.language = lang.clone();
     }
@@ -2129,18 +3229,30 @@ fn main() -> Result<()> {
     // 6. Create RNG.
     let mut rng = Pcg64::from_os_rng();
 
+    // 6b. Install panic save hook so the game is saved on crash.
+    save::install_panic_hook();
+
     // 7. Try to restore from a save file, or create a new world.
-    //    If creating a new world, run character selection first.
+    //    First try recovering from a crashed (panic) save, then try normal save.
     let player_name_for_save = cli.name.as_deref().unwrap_or("you");
+    let recovered = match save::try_recover(player_name_for_save) {
+        Ok(Some(result)) => {
+            tracing::info!("Recovered from panic save");
+            Some(result)
+        }
+        Ok(None) => None,
+        Err(e) => {
+            tracing::warn!("Panic recovery failed: {e}");
+            None
+        }
+    };
     let (mut world, legacy_info) = if let Some((restored_world, turn, depth, rng_state)) =
-        try_load_save(player_name_for_save)
+        recovered.or_else(|| try_load_save(player_name_for_save))
     {
         // Re-seed the RNG from the saved state.
         rng = Pcg64::from_seed(rng_state);
         if cli.text {
-            println!(
-                "Restored saved game: turn {turn}, depth {depth}."
-            );
+            println!("Restored saved game: turn {turn}, depth {depth}.");
         }
         (restored_world, None)
     } else {
@@ -2157,8 +3269,8 @@ fn main() -> Result<()> {
             // We init and shut down a TUI port just for character selection
             // (the main game loop will create its own).
             install_panic_hook();
-            let mut port = TuiPort::create()
-                .map_err(|e| anyhow::anyhow!("Failed to initialize TUI: {e}"))?;
+            let mut port =
+                TuiPort::create().map_err(|e| anyhow::anyhow!("Failed to initialize TUI: {e}"))?;
             port.init();
 
             let choice = game_start::select_character(
@@ -2186,14 +3298,17 @@ fn main() -> Result<()> {
             role_args.set("align", character_choice.alignment.name().to_string());
             role_args.set("race", character_choice.race.name().to_string());
             role_args.set("role", character_choice.role_name.clone());
-            println!("{}", locale.translate("event-player-role", Some(&role_args)));
+            println!(
+                "{}",
+                locale.translate("event-player-role", Some(&role_args))
+            );
             println!();
         }
 
         // Compute deity name for legacy intro.
         let deity_name = {
-            use nethack_babel_engine::religion::{god_name, roles};
             use nethack_babel_engine::pets::Role;
+            use nethack_babel_engine::religion::{god_name, roles};
             let role_idx = match character_choice.role {
                 Role::Archeologist => roles::ARCHEOLOGIST,
                 Role::Barbarian => roles::BARBARIAN,
@@ -2218,11 +3333,7 @@ fn main() -> Result<()> {
         };
         let role_name = character_choice.role_name.clone();
 
-        let setup = create_world(
-            &data,
-            &mut rng,
-            Some(&character_choice.name),
-        );
+        let setup = create_world(&data, &mut rng, Some(&character_choice.name));
         let mut new_world = setup.world;
 
         // Apply role/race stats and name to the player.
@@ -2235,15 +3346,42 @@ fn main() -> Result<()> {
         (new_world, Some((deity_name, role_name)))
     };
 
-    // 8. Run in the appropriate mode.
-    let legacy_ref = legacy_info
-        .as_ref()
-        .map(|(d, r)| (d.as_str(), r.as_str()));
-    if cli.text {
-        run_text_mode(&mut world, &data, &mut rng, &mut recorder, &locale)?;
-    } else {
-        run_tui_mode(&mut world, &data, &mut rng, &mut locale, &mut cfg, &cli.config, legacy_ref)?;
+    apply_runtime_options(&mut world, &cfg);
+
+    // 8. Register the world for emergency save on panic.
+    let player_name_for_panic = world.entity_name(world.player());
+    let rng_state_for_panic: [u8; 32] = rng.random();
+    // SAFETY: `world` lives until `unregister_panic_save()` below.
+    unsafe {
+        save::register_panic_save(&world, &player_name_for_panic, rng_state_for_panic);
     }
+
+    // 9. Run in the appropriate mode.
+    let legacy_ref = legacy_info.as_ref().map(|(d, r)| (d.as_str(), r.as_str()));
+    if cli.text {
+        run_text_mode(
+            &mut world,
+            &data,
+            &mut rng,
+            &mut recorder,
+            &locale,
+            cli.debug,
+        )?;
+    } else {
+        run_tui_mode(
+            &mut world,
+            &data,
+            &mut rng,
+            &mut locale,
+            &mut cfg,
+            &cli.config,
+            legacy_ref,
+            cli.debug,
+        )?;
+    }
+
+    // Unregister panic save before dropping the world.
+    save::unregister_panic_save();
 
     // Save the recording if one was active.
     if let Some(ref rec) = recorder {

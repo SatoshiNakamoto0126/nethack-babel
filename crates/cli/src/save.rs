@@ -5,19 +5,21 @@ use std::sync::Mutex;
 use nethack_babel_data::components::{
     BucStatus, Enchantment, Erosion, KnowledgeState, ObjectCore, ObjectLocation,
 };
+use nethack_babel_data::{PlayerIdentity, PlayerSkills};
 use nethack_babel_engine::action::Position;
 use nethack_babel_engine::attributes::{AttributeExercise, NaturalAttributes};
+use nethack_babel_engine::conduct::ConductState;
 use nethack_babel_engine::dungeon::DungeonState;
 use nethack_babel_engine::equipment::EquipmentSlots;
 use nethack_babel_engine::inventory::Inventory;
 use nethack_babel_engine::spells::SpellBook;
 use nethack_babel_engine::status::{Intrinsics, StatusEffects};
-use nethack_babel_engine::world::{
-    ArmorClass, Encumbrance, EncumbranceLevel, ExperienceLevel, GameWorld,
-    HeroSpeed, HeroSpeedBonus, HitPoints, Monster, MovementPoints, Name,
-    Nutrition, PlayerCombat, Positioned, Power, Speed, Tame,
-};
 use nethack_babel_engine::world::Attributes as EngineAttributes;
+use nethack_babel_engine::world::{
+    ArmorClass, Encumbrance, EncumbranceLevel, ExperienceLevel, GameWorld, HeroSpeed,
+    HeroSpeedBonus, HitPoints, Monster, MovementPoints, Name, Nutrition, PlayerCombat, Positioned,
+    Power, Speed, Tame,
+};
 
 // =========================================================================
 // Save format version
@@ -25,13 +27,13 @@ use nethack_babel_engine::world::Attributes as EngineAttributes;
 
 /// Current save format version.  Bump minor for backward-compatible changes,
 /// major for breaking changes.
-const SAVE_VERSION: [u8; 3] = [0, 3, 0];
+const SAVE_VERSION: [u8; 3] = [0, 3, 1];
 
 /// Magic bytes identifying a NetHack Babel save file.
 const SAVE_MAGIC: [u8; 4] = *b"NBSV";
 
 /// Default checkpoint interval in turns.
-const DEFAULT_CHECKPOINT_INTERVAL: u32 = 100;
+pub const DEFAULT_CHECKPOINT_INTERVAL: u32 = 100;
 
 // =========================================================================
 // SaveReason
@@ -132,6 +134,15 @@ pub struct SerializablePlayer {
     pub attribute_exercise: AttributeExercise,
     pub natural_attributes: NaturalAttributes,
     pub spell_book: SpellBook,
+    /// Optional role/race/gender/alignment identity component.
+    #[serde(default)]
+    pub identity: Option<PlayerIdentity>,
+    /// Optional weapon skill/practice component.
+    #[serde(default)]
+    pub skills: Option<PlayerSkills>,
+    /// Voluntary challenge conduct counters.
+    #[serde(default)]
+    pub conduct: ConductState,
     /// Indices into `SaveData::items` for the player's inventory, in order.
     pub inventory_item_indices: Vec<u32>,
     /// Equipment slot assignments, as indices into `SaveData::items`.
@@ -288,7 +299,11 @@ fn extract_player(
     let combat = world
         .get_component::<PlayerCombat>(entity)
         .map(|c| *c)
-        .unwrap_or(PlayerCombat { luck: 0, uhitinc: 0, udaminc: 0 });
+        .unwrap_or(PlayerCombat {
+            luck: 0,
+            uhitinc: 0,
+            udaminc: 0,
+        });
     let attribute_exercise = world
         .get_component::<AttributeExercise>(entity)
         .map(|a| *a)
@@ -301,10 +316,22 @@ fn extract_player(
         .get_component::<SpellBook>(entity)
         .map(|s| (*s).clone())
         .unwrap_or_default();
+    let identity = world
+        .get_component::<PlayerIdentity>(entity)
+        .map(|id| (*id).clone());
+    let skills = world
+        .get_component::<PlayerSkills>(entity)
+        .map(|s| (*s).clone());
+    let conduct = world
+        .get_component::<ConductState>(entity)
+        .map(|c| (*c).clone())
+        .unwrap_or_default();
 
     // Map inventory entity refs to item indices.
     let inventory_item_indices: Vec<u32> = match world.get_component::<Inventory>(entity) {
-        Some(inv) => inv.items.iter()
+        Some(inv) => inv
+            .items
+            .iter()
             .filter_map(|e| item_index_map.get(e).copied())
             .collect(),
         None => Vec::new(),
@@ -358,6 +385,9 @@ fn extract_player(
         attribute_exercise,
         natural_attributes,
         spell_book,
+        identity,
+        skills,
+        conduct,
         inventory_item_indices,
         equipment_indices,
     }
@@ -368,7 +398,10 @@ fn extract_player(
 /// reference items by index.
 fn extract_items(
     world: &GameWorld,
-) -> (Vec<SerializableItem>, std::collections::HashMap<hecs::Entity, u32>) {
+) -> (
+    Vec<SerializableItem>,
+    std::collections::HashMap<hecs::Entity, u32>,
+) {
     let mut items = Vec::new();
     let mut index_map = std::collections::HashMap::new();
 
@@ -379,7 +412,11 @@ fn extract_items(
         let buc = world
             .get_component::<BucStatus>(entity)
             .map(|b| (*b).clone())
-            .unwrap_or(BucStatus { cursed: false, blessed: false, bknown: false });
+            .unwrap_or(BucStatus {
+                cursed: false,
+                blessed: false,
+                bknown: false,
+            });
 
         let knowledge = world
             .get_component::<KnowledgeState>(entity)
@@ -398,9 +435,7 @@ fn extract_items(
             .map(|l| (*l).clone())
             .unwrap_or(ObjectLocation::Free);
 
-        let enchantment = world
-            .get_component::<Enchantment>(entity)
-            .map(|e| e.spe);
+        let enchantment = world.get_component::<Enchantment>(entity).map(|e| e.spe);
 
         let erosion = world
             .get_component::<Erosion>(entity)
@@ -532,6 +567,25 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
     if let Some(mut sb) = world.get_component_mut::<SpellBook>(player) {
         *sb = p.spell_book.clone();
     }
+    if let Some(identity) = &p.identity {
+        if let Some(mut live_identity) = world.get_component_mut::<PlayerIdentity>(player) {
+            *live_identity = identity.clone();
+        } else {
+            let _ = world.ecs_mut().insert_one(player, identity.clone());
+        }
+    }
+    if let Some(skills) = &p.skills {
+        if let Some(mut live_skills) = world.get_component_mut::<PlayerSkills>(player) {
+            *live_skills = skills.clone();
+        } else {
+            let _ = world.ecs_mut().insert_one(player, skills.clone());
+        }
+    }
+    if let Some(mut conduct) = world.get_component_mut::<ConductState>(player) {
+        *conduct = p.conduct.clone();
+    } else {
+        let _ = world.ecs_mut().insert_one(player, p.conduct.clone());
+    }
 
     // Set the turn counter.
     while world.turn() < data.turn {
@@ -662,10 +716,7 @@ pub fn save_game(
     };
 
     // Serialize with bincode v2 using serde compat layer.
-    let encoded = bincode::serde::encode_to_vec(
-        &save_data,
-        bincode::config::standard(),
-    )?;
+    let encoded = bincode::serde::encode_to_vec(&save_data, bincode::config::standard())?;
 
     // Atomic write: write to a temp file first, then rename.
     let tmp_path = path.with_extension("nbsv.tmp");
@@ -692,9 +743,7 @@ pub fn save_game(
 /// On success the save file is deleted to prevent save-scumming.
 ///
 /// Returns `(GameWorld, turn, depth, rng_state)`.
-pub fn load_game(
-    path: &Path,
-) -> anyhow::Result<(GameWorld, u32, i32, [u8; 32])> {
+pub fn load_game(path: &Path) -> anyhow::Result<(GameWorld, u32, i32, [u8; 32])> {
     use std::io::Read;
 
     let mut file = std::fs::File::open(path)?;
@@ -744,10 +793,8 @@ pub fn load_game(
     file.read_exact(&mut payload)?;
 
     // Deserialize.
-    let (save_data, _): (SaveData, _) = bincode::serde::decode_from_slice(
-        &payload,
-        bincode::config::standard(),
-    )?;
+    let (save_data, _): (SaveData, _) =
+        bincode::serde::decode_from_slice(&payload, bincode::config::standard())?;
 
     // Validate embedded header magic (defense in depth).
     if save_data.header.magic != SAVE_MAGIC {
@@ -817,8 +864,7 @@ fn dirs_or_default() -> PathBuf {
 /// Check if a file version is compatible with the current binary.
 /// Same major version is required; minor version of file must be <= current.
 fn is_compatible_version(file_version: [u8; 3]) -> bool {
-    file_version[0] == SAVE_VERSION[0]
-        && file_version[1] <= SAVE_VERSION[1]
+    file_version[0] == SAVE_VERSION[0] && file_version[1] <= SAVE_VERSION[1]
 }
 
 // =========================================================================
@@ -890,11 +936,7 @@ static PANIC_STATE: Mutex<Option<PanicSaveState>> = Mutex::new(None);
 /// # Safety
 ///
 /// The caller must ensure `world` outlives any potential panic.
-pub unsafe fn register_panic_save(
-    world: &GameWorld,
-    player_name: &str,
-    rng_state: [u8; 32],
-) {
+pub unsafe fn register_panic_save(world: &GameWorld, player_name: &str, rng_state: [u8; 32]) {
     let state = PanicSaveState {
         world_ptr: world as *const GameWorld,
         player_name: player_name.to_string(),
@@ -918,16 +960,12 @@ pub fn install_panic_hook() {
                 // SAFETY: We trust the caller of register_panic_save
                 // to keep the world alive.
                 let world = unsafe { &*state.world_ptr };
-                let path = save_file_path(&state.player_name)
-                    .with_extension("panic.nbsv");
+                let path = save_file_path(&state.player_name).with_extension("panic.nbsv");
                 if let Some(parent) = path.parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
                 let _ = save_game(world, &path, SaveReason::Panic, state.rng_state);
-                eprintln!(
-                    "Emergency save written to {}",
-                    path.display()
-                );
+                eprintln!("Emergency save written to {}", path.display());
             }
         }
         // Continue with the default panic handler.
@@ -940,11 +978,8 @@ pub fn install_panic_hook() {
 /// Looks for `<player_name>.panic.nbsv` and loads it if found.
 /// Unlike normal load, the panic file is renamed to `.recovered.nbsv`
 /// instead of deleted, so the player can inspect it.
-pub fn try_recover(
-    player_name: &str,
-) -> anyhow::Result<Option<(GameWorld, u32, i32, [u8; 32])>> {
-    let panic_path = save_file_path(player_name)
-        .with_extension("panic.nbsv");
+pub fn try_recover(player_name: &str) -> anyhow::Result<Option<(GameWorld, u32, i32, [u8; 32])>> {
+    let panic_path = save_file_path(player_name).with_extension("panic.nbsv");
 
     if !panic_path.exists() {
         return Ok(None);
@@ -965,7 +1000,9 @@ pub fn try_recover(
     if !is_compatible_version(version) {
         anyhow::bail!(
             "Panic save version mismatch: {}.{}.{}",
-            version[0], version[1], version[2]
+            version[0],
+            version[1],
+            version[2]
         );
     }
 
@@ -980,10 +1017,8 @@ pub fn try_recover(
     let mut payload = vec![0u8; payload_len];
     file.read_exact(&mut payload)?;
 
-    let (save_data, _): (SaveData, _) = bincode::serde::decode_from_slice(
-        &payload,
-        bincode::config::standard(),
-    )?;
+    let (save_data, _): (SaveData, _) =
+        bincode::serde::decode_from_slice(&payload, bincode::config::standard())?;
 
     if save_data.header.magic != SAVE_MAGIC {
         anyhow::bail!("Corrupt panic save: embedded header has wrong magic");
@@ -1013,12 +1048,16 @@ pub fn try_recover(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(0);
 
     /// Helper: create a unique temp directory for test save files.
     fn test_dir(name: &str) -> PathBuf {
+        let unique = NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir()
             .join("nethack-babel-save-test")
-            .join(name);
+            .join(format!("{name}-{}-{unique}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -1052,15 +1091,11 @@ mod tests {
         assert_eq!(loaded_rng, rng_state);
 
         // Player position preserved.
-        let pos = loaded
-            .get_component::<Positioned>(loaded.player())
-            .unwrap();
+        let pos = loaded.get_component::<Positioned>(loaded.player()).unwrap();
         assert_eq!(pos.0, Position::new(40, 10));
 
         // Player HP preserved.
-        let hp = loaded
-            .get_component::<HitPoints>(loaded.player())
-            .unwrap();
+        let hp = loaded.get_component::<HitPoints>(loaded.player()).unwrap();
         assert_eq!(hp.current, 16);
         assert_eq!(hp.max, 16);
 
@@ -1126,24 +1161,16 @@ mod tests {
         assert_eq!(loaded_rng, rng_state);
 
         // Player HP matches modified values.
-        let hp = loaded
-            .get_component::<HitPoints>(loaded.player())
-            .unwrap();
+        let hp = loaded.get_component::<HitPoints>(loaded.player()).unwrap();
         assert_eq!(hp.current, 10);
         assert_eq!(hp.max, 20);
 
         // Nutrition preserved.
-        let nut = loaded
-            .get_component::<Nutrition>(loaded.player())
-            .unwrap();
+        let nut = loaded.get_component::<Nutrition>(loaded.player()).unwrap();
         assert_eq!(nut.0, 500);
 
         // Two monsters exist.
-        let monster_count = loaded
-            .ecs()
-            .query::<(&Monster,)>()
-            .iter()
-            .count();
+        let monster_count = loaded.ecs().query::<(&Monster,)>().iter().count();
         assert_eq!(monster_count, 2);
 
         // Check monster names are present.
@@ -1170,10 +1197,7 @@ mod tests {
         let _pet = world.spawn((
             Monster,
             Positioned(Position::new(41, 10)),
-            HitPoints {
-                current: 6,
-                max: 6,
-            },
+            HitPoints { current: 6, max: 6 },
             Speed(12),
             MovementPoints(12),
             Name("kitten".to_string()),
@@ -1184,11 +1208,7 @@ mod tests {
         let (loaded, _, _, _) = load_game(&path).unwrap();
 
         // Find the tame monster.
-        let tame_count = loaded
-            .ecs()
-            .query::<(&Monster, &Tame)>()
-            .iter()
-            .count();
+        let tame_count = loaded.ecs().query::<(&Monster, &Tame)>().iter().count();
         assert_eq!(tame_count, 1);
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -1275,9 +1295,7 @@ mod tests {
 
         let mut world = make_world();
         let player = world.player();
-        if let Some(mut attrs) =
-            world.get_component_mut::<EngineAttributes>(player)
-        {
+        if let Some(mut attrs) = world.get_component_mut::<EngineAttributes>(player) {
             attrs.strength = 18;
             attrs.strength_extra = 50;
             attrs.dexterity = 15;
@@ -1396,9 +1414,7 @@ mod tests {
         assert_eq!(depth, 3, "depth must survive round-trip");
         assert_eq!(loaded_rng, rng_state, "rng state must survive round-trip");
 
-        let hp = loaded
-            .get_component::<HitPoints>(loaded.player())
-            .unwrap();
+        let hp = loaded.get_component::<HitPoints>(loaded.player()).unwrap();
         assert_eq!(hp.current, 7, "player HP current must survive round-trip");
         assert_eq!(hp.max, 30, "player HP max must survive round-trip");
 
@@ -1542,9 +1558,7 @@ mod tests {
         save_game(&world, &path, SaveReason::Checkpoint, [0u8; 32]).unwrap();
         let (loaded, _, _, _) = load_game(&path).unwrap();
 
-        let intr = loaded
-            .get_component::<Intrinsics>(loaded.player())
-            .unwrap();
+        let intr = loaded.get_component::<Intrinsics>(loaded.player()).unwrap();
         assert!(intr.fire_resistance);
         assert!(intr.cold_resistance);
         assert!(intr.telepathy);
@@ -1609,9 +1623,7 @@ mod tests {
         save_game(&world, &path, SaveReason::Checkpoint, [0u8; 32]).unwrap();
         let (loaded, _, _, _) = load_game(&path).unwrap();
 
-        let sb = loaded
-            .get_component::<SpellBook>(loaded.player())
-            .unwrap();
+        let sb = loaded.get_component::<SpellBook>(loaded.player()).unwrap();
         assert_eq!(sb.spells.len(), 2);
         assert_eq!(sb.spells[0].spell_type, SpellType::MagicMissile);
         assert_eq!(sb.spells[0].memory, 20000);
@@ -1676,11 +1688,7 @@ mod tests {
         let (loaded, _, _, _) = load_game(&path).unwrap();
 
         // Verify item was restored.
-        let item_count = loaded
-            .ecs()
-            .query::<(&ObjectCore,)>()
-            .iter()
-            .count();
+        let item_count = loaded.ecs().query::<(&ObjectCore,)>().iter().count();
         assert_eq!(item_count, 1);
 
         // Verify item components.

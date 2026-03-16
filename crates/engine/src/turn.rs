@@ -7,17 +7,17 @@
 
 use rand::Rng;
 
-use crate::action::{Direction, PlayerAction, Position};
+use crate::action::{Direction, NameTarget, PlayerAction, Position};
+use crate::conduct::ConductState;
 use crate::dungeon::{CachedMonster, Terrain};
 use crate::event::{EngineEvent, HpSource, HungerLevel};
 use crate::map_gen::generate_level;
 use crate::special_levels::{dispatch_special_level, identify_special_level};
-use crate::traps::{detect_trap, trigger_trap_at, TrapEntityInfo};
+use crate::traps::{TrapEntityInfo, detect_trap, trigger_trap_at};
 use crate::world::{
-    Boulder, CreationOrder, DisplaySymbol, Encumbrance, EncumbranceLevel,
-    ExperienceLevel, GameWorld, HeroSpeed, HeroSpeedBonus, HitPoints,
-    Monster, MonsterSpeedMod, MovementPoints, Name, Nutrition, PlayerCombat,
-    Positioned, Power, Speed, SpeedModifier, NORMAL_SPEED,
+    Boulder, CreationOrder, DisplaySymbol, Encumbrance, EncumbranceLevel, ExperienceLevel,
+    GameWorld, HeroSpeed, HeroSpeedBonus, HitPoints, Monster, MonsterSpeedMod, MovementPoints,
+    NORMAL_SPEED, Name, Nutrition, PlayerCombat, Positioned, Power, Speed, SpeedModifier, Tame,
 };
 
 // ── Movement point calculations ──────────────────────────────────────
@@ -120,8 +120,8 @@ pub fn mcalcmove(
 // ── Hunger helpers ───────────────────────────────────────────────────
 
 use crate::hunger::{
-    nutrition_to_hunger_level, compute_hunger_depletion, AccessoryHungerCtx,
-    check_fainting, should_starve, strength_penalty_change, FaintingOutcome,
+    AccessoryHungerCtx, FaintingOutcome, check_fainting, compute_hunger_depletion,
+    nutrition_to_hunger_level, should_starve, strength_penalty_change,
 };
 
 #[allow(dead_code)]
@@ -394,11 +394,7 @@ fn any_monster_can_move(world: &GameWorld) -> bool {
 
 /// Process the new-turn boundary: grant movement points, increment
 /// turn counter, and run all once-per-turn effects.
-fn process_new_turn(
-    world: &mut GameWorld,
-    rng: &mut impl Rng,
-    events: &mut Vec<EngineEvent>,
-) {
+fn process_new_turn(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<EngineEvent>) {
     // 4a. Grant all monsters new movement points.
     grant_monster_movement(world, rng);
 
@@ -452,12 +448,10 @@ fn process_new_turn(
     }
 
     // 4h2. Gas cloud / region effects.
-    // TODO: gas_clouds should be stored persistently in GameWorld or DungeonState.
-    // For now we keep a local vec so the tick function is wired in and can be
-    // tested once persistent storage is added.
     {
-        let mut gas_clouds: Vec<crate::region::GasCloud> = Vec::new();
+        let mut gas_clouds = std::mem::take(&mut world.dungeon_mut().gas_clouds);
         let mut cloud_events = crate::region::tick_gas_clouds(&mut gas_clouds, world, rng);
+        world.dungeon_mut().gas_clouds = gas_clouds;
         events.append(&mut cloud_events);
     }
 
@@ -468,9 +462,15 @@ fn process_new_turn(
             let player = world.player();
             // Copy components out to avoid simultaneous mutable borrows.
             let snapshot = {
-                let attrs = world.get_component::<crate::world::Attributes>(player).map(|a| *a);
-                let nat = world.get_component::<crate::attributes::NaturalAttributes>(player).map(|n| *n);
-                let ex = world.get_component::<crate::attributes::AttributeExercise>(player).map(|e| *e);
+                let attrs = world
+                    .get_component::<crate::world::Attributes>(player)
+                    .map(|a| *a);
+                let nat = world
+                    .get_component::<crate::attributes::NaturalAttributes>(player)
+                    .map(|n| *n);
+                let ex = world
+                    .get_component::<crate::attributes::AttributeExercise>(player)
+                    .map(|e| *e);
                 match (attrs, nat, ex) {
                     (Some(a), Some(n), Some(e)) => Some((a, n, e)),
                     _ => None,
@@ -488,10 +488,14 @@ fn process_new_turn(
                 if let Some(mut a) = world.get_component_mut::<crate::world::Attributes>(player) {
                     *a = attrs;
                 }
-                if let Some(mut n) = world.get_component_mut::<crate::attributes::NaturalAttributes>(player) {
+                if let Some(mut n) =
+                    world.get_component_mut::<crate::attributes::NaturalAttributes>(player)
+                {
                     *n = nat;
                 }
-                if let Some(mut e) = world.get_component_mut::<crate::attributes::AttributeExercise>(player) {
+                if let Some(mut e) =
+                    world.get_component_mut::<crate::attributes::AttributeExercise>(player)
+                {
                     *e = ex;
                 }
                 events.extend(exercise_events);
@@ -500,9 +504,14 @@ fn process_new_turn(
     }
 
     // 4j. Random monster generation (1/70 chance on normal levels).
-    if rng.random_range(0..70) == 0 {
-        // TODO: actually spawn a monster.  For now, just note that
-        // the roll succeeded.  The map_gen system will handle placement.
+    if rng.random_range(0..70) == 0
+        && let Some(spawn_pos) = random_monster_spawn_position(world, rng)
+    {
+        let entity = spawn_random_monster(world, spawn_pos);
+        events.push(EngineEvent::MonsterGenerated {
+            entity,
+            position: spawn_pos,
+        });
     }
 
     events.push(EngineEvent::TurnEnd {
@@ -517,11 +526,7 @@ fn grant_monster_movement(world: &mut GameWorld, rng: &mut impl Rng) {
     let player = world.player();
     let mut additions: Vec<(hecs::Entity, i32)> = Vec::new();
 
-    for (entity, (speed, _monster)) in world
-        .ecs()
-        .query::<(&Speed, &Monster)>()
-        .iter()
-    {
+    for (entity, (speed, _monster)) in world.ecs().query::<(&Speed, &Monster)>().iter() {
         if entity == player {
             continue;
         }
@@ -635,22 +640,19 @@ fn resolve_player_action(
                 events.push(EngineEvent::msg("levitating-cant-pickup"));
             } else {
                 let mut ls = crate::items::LetterState::default();
-                let pickup_events =
-                    crate::inventory::pickup_all_at_player(world, &mut ls, &[]);
+                let pickup_events = crate::inventory::pickup_all_at_player(world, &mut ls, &[]);
                 events.extend(pickup_events);
             }
         }
         PlayerAction::Drop { item } => {
             let player = world.player();
-            let drop_events =
-                crate::inventory::drop_item(world, player, *item);
+            let drop_events = crate::inventory::drop_item(world, player, *item);
             events.extend(drop_events);
         }
         PlayerAction::DropMultiple { items } => {
             let player = world.player();
             for item in items {
-                let drop_events =
-                    crate::inventory::drop_item(world, player, *item);
+                let drop_events = crate::inventory::drop_item(world, player, *item);
                 events.extend(drop_events);
             }
         }
@@ -692,6 +694,37 @@ fn resolve_player_action(
                 }
             }
         }
+        PlayerAction::TakeOffAll => {
+            let player = world.player();
+            let equip_snapshot = world
+                .get_component::<crate::equipment::EquipmentSlots>(player)
+                .map(|equip| (*equip).clone());
+            if let Some(equip) = equip_snapshot {
+                let mut removed_any = false;
+                for slot in crate::equipment::TAKEOFF_ORDER {
+                    if let Some(item) = equip.get(*slot) {
+                        match crate::equipment::unequip_item(world, player, item) {
+                            Ok(unequip_events) => {
+                                if !unequip_events.is_empty() {
+                                    removed_any = true;
+                                }
+                                events.extend(unequip_events);
+                            }
+                            Err(crate::equipment::EquipError::CursedCannotRemove) => {
+                                events.push(EngineEvent::msg("cursed-cannot-remove"));
+                            }
+                            Err(crate::equipment::EquipError::NotEquipped) => {}
+                            Err(_) => {
+                                events.push(EngineEvent::msg("cannot-do-that"));
+                            }
+                        }
+                    }
+                }
+                if !removed_any {
+                    events.push(EngineEvent::msg("not-wearing-that"));
+                }
+            }
+        }
         PlayerAction::PutOn { item } => {
             let player = world.player();
             events.push(EngineEvent::ItemWorn {
@@ -701,9 +734,7 @@ fn resolve_player_action(
         }
         PlayerAction::Apply { item } => {
             let player = world.player();
-            let tool_events = crate::tools::apply_tool(
-                world, player, *item, rng,
-            );
+            let tool_events = crate::tools::apply_tool(world, player, *item, rng);
             events.extend(tool_events);
         }
         PlayerAction::Engrave { text } => {
@@ -712,40 +743,35 @@ fn resolve_player_action(
                 .get_component::<Positioned>(player)
                 .map(|p| p.0)
                 .unwrap_or(Position::new(0, 0));
-            // Default to dust engraving (finger writing).
-            // TODO: select method based on wielded item (blade, wand, etc.)
-            let method = crate::engrave::EngraveMethod::Dust;
-            let engraving = crate::engrave::Engraving::new(
-                text.clone(),
-                method,
+            let method = infer_engrave_method(world, player);
+            let has_elbereth = text.to_ascii_lowercase().contains("elbereth");
+            let mut conduct = read_conduct_state(world, player);
+            let (mut engrave_events, _turns) = crate::engrave::engrave(
+                &mut world.dungeon_mut().engraving_map,
+                &mut conduct,
                 player_pos,
+                text,
+                method,
             );
-            let has_elbereth = engraving.has_elbereth();
-            world.dungeon_mut().engraving_map.insert(engraving);
-            events.push(EngineEvent::msg_with(
-                "engrave-write",
-                vec![
-                    ("text", text.clone()),
-                    ("method", format!("{:?}", method)),
-                ],
-            ));
+            persist_conduct_state(world, player, conduct);
+            events.append(&mut engrave_events);
             if has_elbereth {
                 events.push(EngineEvent::msg("engrave-elbereth"));
             }
         }
         PlayerAction::Dip { item, into } => {
             let player = world.player();
-            let dip_events = crate::dip::dip_item(
-                world, player, *item, *into, rng,
-            );
+            let dip_events = crate::dip::dip_item(world, player, *item, *into, rng);
             events.extend(dip_events);
         }
         PlayerAction::Kick { direction } => {
             // Kick in the given direction.
-            // TODO: detect Monk role for martial arts bonus.
-            let kick_events = crate::environment::kick(
-                world, *direction, false, rng,
-            );
+            let player = world.player();
+            let is_monk = world
+                .get_component::<nethack_babel_data::PlayerIdentity>(player)
+                .map(|id| id.role.0 == crate::religion::roles::MONK)
+                .unwrap_or(false);
+            let kick_events = crate::environment::kick(world, *direction, is_monk, rng);
             events.extend(kick_events);
         }
         PlayerAction::Loot => {
@@ -756,11 +782,17 @@ fn resolve_player_action(
                 .map(|p| p.0)
                 .unwrap_or(Position::new(0, 0));
             // Find a container at the player's position.
-            for (entity, loc) in world.ecs().query::<&nethack_babel_data::ObjectLocation>().iter() {
+            for (entity, loc) in world
+                .ecs()
+                .query::<&nethack_babel_data::ObjectLocation>()
+                .iter()
+            {
                 if let nethack_babel_data::ObjectLocation::Floor { x, y } = *loc
                     && x == player_pos.x as i16
                     && y == player_pos.y as i16
-                    && world.get_component::<crate::environment::Container>(entity).is_some()
+                    && world
+                        .get_component::<crate::environment::Container>(entity)
+                        .is_some()
                 {
                     let open_events = crate::environment::open_container(world, entity);
                     events.extend(open_events);
@@ -769,17 +801,30 @@ fn resolve_player_action(
             }
         }
         PlayerAction::Eat { item } => {
-            if let Some(_item_entity) = item {
-                // TODO: look up FoodDef from item entity for full eat logic
-                events.push(EngineEvent::msg("eat-generic"));
+            if let Some(item_entity) = item {
+                let player = world.player();
+                if let Some(food_def) = infer_food_def_from_item(world, *item_entity) {
+                    let result =
+                        crate::hunger::eat_food(world, player, *item_entity, &food_def, rng);
+                    apply_eating_conduct(world, player, &result.conduct);
+                    events.extend(result.events);
+                } else {
+                    events.push(EngineEvent::msg("eat-generic"));
+                }
             } else {
                 events.push(EngineEvent::msg("eat-what"));
             }
         }
         PlayerAction::Quaff { item } => {
-            if let Some(_item_entity) = item {
-                // TODO: look up PotionType from item entity
-                events.push(EngineEvent::msg("quaff-generic"));
+            if let Some(item_entity) = item {
+                let player = world.player();
+                if let Some(potion_type) = infer_potion_type_from_item(world, *item_entity) {
+                    let quaff_events =
+                        crate::potions::quaff_potion(world, player, *item_entity, potion_type, rng);
+                    events.extend(quaff_events);
+                } else {
+                    events.push(EngineEvent::msg("quaff-generic"));
+                }
             } else {
                 events.push(EngineEvent::msg("quaff-what"));
             }
@@ -789,26 +834,39 @@ fn resolve_player_action(
             let player = world.player();
             if crate::status::is_blind(world, player) {
                 events.push(EngineEvent::msg("scroll-cant-read-blind"));
-            } else if let Some(_item_entity) = item {
-                // TODO: look up ScrollType from item entity
-                events.push(EngineEvent::msg("read-generic"));
+            } else if let Some(item_entity) = item {
+                if let Some(scroll_type) = infer_scroll_type_from_item(world, *item_entity) {
+                    let confused = crate::status::is_confused(world, player);
+                    let read_events = crate::scrolls::read_scroll(
+                        world,
+                        player,
+                        *item_entity,
+                        scroll_type,
+                        confused,
+                        rng,
+                    );
+                    increment_conduct(world, player, |state| {
+                        state.literate = state.literate.saturating_add(1);
+                    });
+                    events.extend(read_events);
+                } else {
+                    events.push(EngineEvent::msg("read-generic"));
+                }
             } else {
                 events.push(EngineEvent::msg("read-what"));
             }
         }
         PlayerAction::CastSpell { spell, direction } => {
             let player = world.player();
-            let cast_events = crate::spells::cast_spell(
-                world, player, *spell, *direction, rng,
-            );
+            let cast_events = crate::spells::cast_spell(world, player, *spell, *direction, rng);
             events.extend(cast_events);
         }
-        PlayerAction::ZapWand { item: _, direction } => {
+        PlayerAction::ZapWand { item, direction } => {
             // Confused/stunned zapper gets a randomized direction.
             let player = world.player();
             let confused = crate::status::is_confused(world, player);
             let stunned = crate::status::is_stunned(world, player);
-            let _effective_dir = if (confused || stunned) && direction.is_some() {
+            let effective_dir = if (confused || stunned) && direction.is_some() {
                 match crate::status::maybe_confuse_direction(confused, stunned, rng) {
                     Some(random_dir) => Some(random_dir),
                     None => *direction,
@@ -816,22 +874,63 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            // TODO: look up WandType and WandCharges from item entity,
-            // then call zap_wand() with _effective_dir
-            events.push(EngineEvent::msg("zap-generic"));
+
+            let wand_type = world
+                .get_component::<crate::monster_ai::WandTypeTag>(*item)
+                .map(|t| t.0);
+            let mut charges = world
+                .get_component::<crate::wands::WandCharges>(*item)
+                .map(|c| *c);
+            if let (Some(wand_type), Some(mut wand_charges)) = (wand_type, charges.take()) {
+                let zap_dir = match (wand_type.direction(), effective_dir) {
+                    (crate::wands::WandDirection::Nodir, _) => Direction::North,
+                    (_, Some(dir)) => dir,
+                    // Directional wand without direction prompt result:
+                    // keep prior placeholder behavior.
+                    (_, None) => {
+                        events.push(EngineEvent::msg("zap-generic"));
+                        return;
+                    }
+                };
+
+                let wand_events = crate::wands::zap_wand(
+                    world,
+                    player,
+                    wand_type,
+                    &mut wand_charges,
+                    zap_dir,
+                    rng,
+                );
+                events.extend(wand_events);
+
+                if let Some(mut live_charges) =
+                    world.get_component_mut::<crate::wands::WandCharges>(*item)
+                {
+                    *live_charges = wand_charges;
+                }
+            } else {
+                events.push(EngineEvent::msg("zap-generic"));
+            }
         }
         PlayerAction::Throw { item, direction } => {
             let player = world.player();
-            let throw_events = crate::ranged::resolve_throw(
-                world, player, *item, *direction, rng,
-            );
+            let throw_events = crate::ranged::resolve_throw(world, player, *item, *direction, rng);
             events.extend(throw_events);
         }
         PlayerAction::Fire => {
-            // Fire requires a launcher + ammo + direction; for now stub it.
-            // TODO: look up wielded launcher and quivered ammo, prompt for
-            // direction, then call ranged::resolve_fire().
-            events.push(EngineEvent::msg("fire-no-ammo"));
+            let player = world.player();
+            let (launcher, ammo) = world
+                .get_component::<crate::equipment::EquipmentSlots>(player)
+                .map(|slots| (slots.weapon, slots.off_hand))
+                .unwrap_or((None, None));
+            if let (Some(launcher), Some(ammo)) = (launcher, ammo) {
+                let fire_direction = infer_fire_direction(world, player).unwrap_or(Direction::East);
+                let fire_events =
+                    crate::ranged::resolve_fire(world, player, launcher, ammo, fire_direction, rng);
+                events.extend(fire_events);
+            } else {
+                events.push(EngineEvent::msg("fire-no-ammo"));
+            }
         }
         PlayerAction::Open { direction } => {
             // Open a door in the given direction.
@@ -911,15 +1010,9 @@ fn resolve_player_action(
             let mut found = false;
             for dir in Direction::PLANAR.iter() {
                 let target = player_pos.step(*dir);
-                let terrain = world
-                    .dungeon()
-                    .current_level
-                    .get(target)
-                    .map(|c| c.terrain);
+                let terrain = world.dungeon().current_level.get(target).map(|c| c.terrain);
                 if terrain == Some(Terrain::DoorLocked) {
-                    let lock_events = crate::lock::force_lock(
-                        world, player, target, rng,
-                    );
+                    let lock_events = crate::lock::force_lock(world, player, target, rng);
                     events.extend(lock_events);
                     found = true;
                     break;
@@ -930,13 +1023,39 @@ fn resolve_player_action(
             }
         }
         PlayerAction::Pray => {
-            // Simplified prayer — emit a prayer event.
+            let player = world.player();
             events.push(EngineEvent::msg("pray-begin"));
-            // TODO: wire to religion::pray_simple once ReligionState
-            // is stored in the world ECS.
+            let on_altar = world
+                .get_component::<Positioned>(player)
+                .and_then(|pos| {
+                    world
+                        .dungeon()
+                        .current_level
+                        .get(pos.0)
+                        .map(|cell| cell.terrain)
+                })
+                .is_some_and(|terrain| terrain == Terrain::Altar);
+            increment_conduct(world, player, |state| {
+                state.gnostic = state.gnostic.saturating_add(1);
+            });
+
+            let mut religion_state = world
+                .get_component::<crate::religion::ReligionState>(player)
+                .map(|state| (*state).clone())
+                .unwrap_or_else(|| default_religion_state(world, player));
+            refresh_religion_state_from_world(&mut religion_state, world, player);
+
+            let prayer_events =
+                crate::religion::pray_simple(&mut religion_state, player, on_altar, None, rng);
+            persist_religion_state(world, player, religion_state);
+            events.extend(prayer_events);
         }
         PlayerAction::Offer { item } => {
             if item.is_some() {
+                let player = world.player();
+                increment_conduct(world, player, |state| {
+                    state.gnostic = state.gnostic.saturating_add(1);
+                });
                 events.push(EngineEvent::msg("offer-generic"));
             } else {
                 events.push(EngineEvent::msg("offer-what"));
@@ -953,11 +1072,10 @@ fn resolve_player_action(
             // Check if there's a monster at the target position.
             let monster_at_target: bool = {
                 let mut found = false;
-                for (entity, _) in world.ecs().query::<&Monster>().iter()
-                {
-                    if let Some(pos) =
-                        world.get_component::<Positioned>(entity)
-                    && pos.0 == target_pos {
+                for (entity, _) in world.ecs().query::<&Monster>().iter() {
+                    if let Some(pos) = world.get_component::<Positioned>(entity)
+                        && pos.0 == target_pos
+                    {
                         found = true;
                         break;
                     }
@@ -971,24 +1089,34 @@ fn resolve_player_action(
             }
         }
         PlayerAction::Ride => {
-            // Find an adjacent tame monster to mount.
-            events.push(EngineEvent::msg("ride-not-available"));
+            if crate::steed::is_mounted(world, player) {
+                events.extend(crate::steed::dismount(world, player, rng));
+            } else if let Some(steed_entity) = find_adjacent_tame_steed(world, player) {
+                events.extend(crate::steed::mount(world, player, steed_entity, rng));
+            } else {
+                events.push(EngineEvent::msg("ride-not-available"));
+            }
         }
         PlayerAction::Pay => {
             // Pay shopkeeper.
             events.push(EngineEvent::msg("shop-no-debt"));
         }
         PlayerAction::EnhanceSkill => {
-            events.push(EngineEvent::msg("enhance-not-available"));
+            if let Some((skill, level)) = enhance_skill_once(world, player) {
+                events.push(EngineEvent::msg_with(
+                    "enhance-success",
+                    vec![("skill", skill), ("level", level)],
+                ));
+            } else {
+                events.push(EngineEvent::msg("enhance-not-available"));
+            }
         }
         PlayerAction::MoveUntilInterrupt { direction } => {
             // Run: move in direction (simplified — just one step).
             let confused = crate::status::is_confused(world, player);
             let stunned = crate::status::is_stunned(world, player);
             let effective_dir = if confused || stunned {
-                match crate::status::maybe_confuse_direction(
-                    confused, stunned, rng,
-                ) {
+                match crate::status::maybe_confuse_direction(confused, stunned, rng) {
                     Some(random_dir) => random_dir,
                     None => *direction,
                 }
@@ -1002,9 +1130,7 @@ fn resolve_player_action(
             let confused = crate::status::is_confused(world, player);
             let stunned = crate::status::is_stunned(world, player);
             let effective_dir = if confused || stunned {
-                match crate::status::maybe_confuse_direction(
-                    confused, stunned, rng,
-                ) {
+                match crate::status::maybe_confuse_direction(confused, stunned, rng) {
                     Some(random_dir) => random_dir,
                     None => *direction,
                 }
@@ -1018,9 +1144,7 @@ fn resolve_player_action(
             let confused = crate::status::is_confused(world, player);
             let stunned = crate::status::is_stunned(world, player);
             let effective_dir = if confused || stunned {
-                match crate::status::maybe_confuse_direction(
-                    confused, stunned, rng,
-                ) {
+                match crate::status::maybe_confuse_direction(confused, stunned, rng) {
                     Some(random_dir) => random_dir,
                     None => *direction,
                 }
@@ -1034,9 +1158,7 @@ fn resolve_player_action(
             let confused = crate::status::is_confused(world, player);
             let stunned = crate::status::is_stunned(world, player);
             let effective_dir = if confused || stunned {
-                match crate::status::maybe_confuse_direction(
-                    confused, stunned, rng,
-                ) {
+                match crate::status::maybe_confuse_direction(confused, stunned, rng) {
                     Some(random_dir) => random_dir,
                     None => *direction,
                 }
@@ -1050,9 +1172,7 @@ fn resolve_player_action(
             let confused = crate::status::is_confused(world, player);
             let stunned = crate::status::is_stunned(world, player);
             let effective_dir = if confused || stunned {
-                match crate::status::maybe_confuse_direction(
-                    confused, stunned, rng,
-                ) {
+                match crate::status::maybe_confuse_direction(confused, stunned, rng) {
                     Some(random_dir) => random_dir,
                     None => *direction,
                 }
@@ -1065,18 +1185,135 @@ fn resolve_player_action(
             // Do nothing, consume one turn.
             events.push(EngineEvent::msg("wait"));
         }
-        PlayerAction::Travel { destination: _ } => {
-            // Travel to destination (simplified — not yet implemented).
-            events.push(EngineEvent::msg("travel-not-implemented"));
+        PlayerAction::Travel { destination } => {
+            // Travel takes one automated step toward the destination.
+            let player_pos = world
+                .get_component::<Positioned>(player)
+                .map(|p| p.0)
+                .unwrap_or(Position::new(0, 0));
+            if player_pos != *destination
+                && let Some(direction) = travel_direction_toward(world, player_pos, *destination)
+            {
+                // Confusion/stun may randomize the chosen travel direction.
+                let confused = crate::status::is_confused(world, player);
+                let stunned = crate::status::is_stunned(world, player);
+                let effective_dir = if confused || stunned {
+                    match crate::status::maybe_confuse_direction(confused, stunned, rng) {
+                        Some(random_dir) => random_dir,
+                        None => direction,
+                    }
+                } else {
+                    direction
+                };
+                try_move_entity(world, world.player(), effective_dir, events, rng);
+            }
         }
         PlayerAction::ToggleTwoWeapon => {
-            events.push(EngineEvent::msg("two-weapon-not-implemented"));
+            if !has_two_weapon_loadout(world, player) {
+                events.push(EngineEvent::msg("swap-no-secondary"));
+            } else {
+                let two_weapon_on = toggle_two_weapon_mode(world, player);
+                events.push(EngineEvent::msg(if two_weapon_on {
+                    "two-weapon-enabled"
+                } else {
+                    "two-weapon-disabled"
+                }));
+            }
         }
-        PlayerAction::Name { .. } => {
-            events.push(EngineEvent::msg("name-not-implemented"));
+        PlayerAction::Name { target, name } => {
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                events.push(EngineEvent::msg("cannot-do-that"));
+                return;
+            }
+
+            match target {
+                NameTarget::Item { item } => {
+                    if !is_player_inventory_item(world, *item) {
+                        events.push(EngineEvent::msg("cannot-do-that"));
+                        return;
+                    }
+
+                    let item_label = item_label_for_message(world, *item);
+                    if set_item_name(world, *item, trimmed) {
+                        events.push(EngineEvent::msg_with(
+                            "item-name-set",
+                            vec![("item", item_label), ("name", trimmed.to_string())],
+                        ));
+                    } else {
+                        events.push(EngineEvent::msg("cannot-do-that"));
+                    }
+                }
+                NameTarget::ItemClass { class } => {
+                    set_called_item_class(world, *class, trimmed, events);
+                }
+                NameTarget::Level => {
+                    world
+                        .dungeon_mut()
+                        .set_current_level_annotation(trimmed.to_string());
+                }
+                NameTarget::MonsterAt { position } => {
+                    if let Some(monster) = find_monster_entity_at(world, *position) {
+                        let new_name = trimmed.to_string();
+                        if let Some(mut mon_name) = world.get_component_mut::<Name>(monster) {
+                            mon_name.0 = new_name;
+                        } else if world.ecs_mut().insert_one(monster, Name(new_name)).is_err() {
+                            events.push(EngineEvent::msg("cannot-do-that"));
+                        }
+                    } else {
+                        events.push(EngineEvent::msg("cannot-do-that"));
+                    }
+                }
+                NameTarget::Monster { entity } => {
+                    if world.get_component::<Monster>(*entity).is_none() {
+                        events.push(EngineEvent::msg("cannot-do-that"));
+                        return;
+                    }
+                    let new_name = trimmed.to_string();
+                    if let Some(mut mon_name) = world.get_component_mut::<Name>(*entity) {
+                        mon_name.0 = new_name;
+                    } else if world.ecs_mut().insert_one(*entity, Name(new_name)).is_err() {
+                        events.push(EngineEvent::msg("cannot-do-that"));
+                    }
+                }
+            }
         }
-        PlayerAction::Adjust { .. } => {
-            events.push(EngineEvent::msg("adjust-not-implemented"));
+        PlayerAction::Adjust { item, new_letter } => {
+            if !new_letter.is_ascii_alphabetic() || !is_player_inventory_item(world, *item) {
+                events.push(EngineEvent::msg("cannot-do-that"));
+                return;
+            }
+
+            let Some(current_letter) = world
+                .get_component::<nethack_babel_data::ObjectCore>(*item)
+                .and_then(|core| core.inv_letter)
+            else {
+                events.push(EngineEvent::msg("cannot-do-that"));
+                return;
+            };
+
+            if current_letter == *new_letter {
+                return;
+            }
+
+            let player = world.player();
+            let swap_item = crate::inventory::find_by_letter(world, player, *new_letter)
+                .filter(|e| *e != *item);
+
+            if let Some(mut core) = world.get_component_mut::<nethack_babel_data::ObjectCore>(*item)
+            {
+                core.inv_letter = Some(*new_letter);
+            } else {
+                events.push(EngineEvent::msg("cannot-do-that"));
+                return;
+            }
+
+            if let Some(other) = swap_item
+                && let Some(mut other_core) =
+                    world.get_component_mut::<nethack_babel_data::ObjectCore>(other)
+            {
+                other_core.inv_letter = Some(current_letter);
+            }
         }
         PlayerAction::Sit => {
             let player = world.player();
@@ -1091,9 +1328,8 @@ fn resolve_player_action(
                 .map(|c| c.terrain)
                 .unwrap_or(Terrain::Floor);
             let is_levitating = crate::status::is_levitating(world, player);
-            let sit_events = crate::sit::do_sit(
-                rng, terrain, false, is_levitating, false, !is_levitating, 0,
-            );
+            let sit_events =
+                crate::sit::do_sit(rng, terrain, false, is_levitating, false, !is_levitating, 0);
             events.extend(sit_events);
         }
         PlayerAction::Jump { position } => {
@@ -1105,10 +1341,26 @@ fn resolve_player_action(
             let dx = (position.x - player_pos.x).unsigned_abs();
             let dy = (position.y - player_pos.y).unsigned_abs();
             let distance = dx + dy;
-            // TODO: check for boots of jumping to determine has_jumping
-            // and max_range (3 with boots, 2 without).
+            let has_jump_boots = world
+                .get_component::<crate::equipment::EquipmentSlots>(player)
+                .and_then(|equip| equip.boots)
+                .and_then(|boots| world.get_component::<Name>(boots))
+                .map(|name| name.0.to_ascii_lowercase().contains("jumping"))
+                .unwrap_or(false);
+            let has_jumping = has_jump_boots;
+            let max_range = if has_jump_boots { 3 } else { 2 };
+            let burden = world
+                .get_component::<EncumbranceLevel>(player)
+                .map(|enc| {
+                    if enc.0 == Encumbrance::Unencumbered {
+                        0
+                    } else {
+                        1
+                    }
+                })
+                .unwrap_or(0);
             let (result, jump_events) =
-                crate::do_actions::do_jump(true, 0, distance, 3);
+                crate::do_actions::do_jump(has_jumping, burden, distance, max_range);
             events.extend(jump_events);
             if result == crate::do_actions::JumpResult::Jumped {
                 if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
@@ -1129,62 +1381,131 @@ fn resolve_player_action(
                 .map(|p| p.0)
                 .unwrap_or(Position::new(0, 0));
             let target_pos = player_pos.step(*direction);
-            let has_trap = world
-                .dungeon()
-                .trap_map
-                .trap_at(target_pos)
-                .is_some();
-            let dex = 14i32; // TODO: read from player attributes
-            let (_, untrap_events) =
-                crate::do_actions::do_untrap(rng, dex, has_trap, 5);
+            let has_trap = world.dungeon().trap_map.trap_at(target_pos).is_some();
+            let dex = world
+                .get_component::<crate::world::Attributes>(player)
+                .map(|a| i32::from(a.dexterity))
+                .unwrap_or(10);
+            let (_, untrap_events) = crate::do_actions::do_untrap(rng, dex, has_trap, 5);
             events.extend(untrap_events);
         }
         PlayerAction::TurnUndead => {
-            // TODO: count actual undead nearby, check role.
+            let player = world.player();
+            let player_level = world
+                .get_component::<ExperienceLevel>(player)
+                .map(|l| l.0 as u32)
+                .unwrap_or(1);
+            let player_pos = world
+                .get_component::<Positioned>(player)
+                .map(|p| p.0)
+                .unwrap_or(Position::new(0, 0));
+            let is_clerical = player_is_clerical(world, player);
+            let undead_nearby = count_undead_nearby(world, player_pos, 5);
             let (_result, turn_events) =
-                crate::do_actions::do_turn_undead(false, 1, 0);
+                crate::do_actions::do_turn_undead(is_clerical, player_level, undead_nearby);
             events.extend(turn_events);
         }
         PlayerAction::Swap => {
-            // TODO: check actual weapon state from ECS.
+            let player = world.player();
+            let (primary_weapon, secondary_item) = if let Some(equip) =
+                world.get_component::<crate::equipment::EquipmentSlots>(player)
+            {
+                (equip.weapon, equip.off_hand)
+            } else {
+                (None, None)
+            };
+
+            let has_secondary = secondary_item.is_some();
+            let primary_welded = primary_weapon
+                .and_then(|weapon| {
+                    world
+                        .get_component::<nethack_babel_data::BucStatus>(weapon)
+                        .map(|b| b.cursed)
+                })
+                .unwrap_or(false);
+
             let (_result, swap_events) =
-                crate::do_actions::do_swap_weapons(false, false);
+                crate::do_actions::do_swap_weapons(has_secondary, primary_welded);
             events.extend(swap_events);
         }
         PlayerAction::Wipe => {
             let player = world.player();
-            // TODO: read creamed/towel state from ECS components.
-            let creamed = 0u32;
-            let blind_towel = false;
-            let (result, wipe_events) =
-                crate::do_actions::do_wipe(creamed, blind_towel);
+            let creamed = world
+                .get_component::<crate::status::HeroCounters>(player)
+                .map(|hc| hc.creamed)
+                .unwrap_or(0);
+            let blind_towel = world
+                .get_component::<crate::equipment::EquipmentSlots>(player)
+                .and_then(|equip| equip.off_hand)
+                .and_then(|off_hand| {
+                    let is_cursed = world
+                        .get_component::<nethack_babel_data::BucStatus>(off_hand)
+                        .map(|b| b.cursed)
+                        .unwrap_or(false);
+                    if !is_cursed {
+                        return None;
+                    }
+                    let towel_named = world
+                        .get_component::<Name>(off_hand)
+                        .map(|n| n.0.to_ascii_lowercase().contains("towel"))
+                        .unwrap_or(false);
+                    Some(towel_named)
+                })
+                .unwrap_or(false);
+            let (result, wipe_events) = crate::do_actions::do_wipe(creamed, blind_towel);
             if result == crate::do_actions::WipeResult::WipedCream {
-                // TODO: set creamed to 0 on the player entity.
-                let _ = player;
+                if let Some(mut hc) = world.get_component_mut::<crate::status::HeroCounters>(player)
+                {
+                    hc.creamed = 0;
+                }
             }
             events.extend(wipe_events);
         }
         PlayerAction::Tip { item: _ } => {
             // Simplified: assume empty container for now.
-            let (_result, tip_events) =
-                crate::do_actions::do_tip(false, true, 0, true);
+            let (_result, tip_events) = crate::do_actions::do_tip(false, true, 0, true);
             events.extend(tip_events);
         }
-        PlayerAction::Rub { item: _ } => {
-            // TODO: look up item properties from ECS.
+        PlayerAction::Rub { item } => {
+            let item_name = world
+                .get_component::<Name>(*item)
+                .map(|n| n.0.to_ascii_lowercase())
+                .unwrap_or_default();
+            let is_touchstone = item_name.contains("touchstone");
+            let is_magic_lamp = item_name.contains("magic lamp");
+            let is_lamp = is_magic_lamp || item_name.contains("lamp");
             let (_result, rub_events) =
-                crate::do_actions::do_rub(rng, false, false, false);
+                crate::do_actions::do_rub(rng, is_lamp, is_magic_lamp, is_touchstone);
             events.extend(rub_events);
         }
-        PlayerAction::InvokeArtifact { item: _ } => {
-            // TODO: look up artifact properties from ECS.
-            let (_result, invoke_events) =
-                crate::do_actions::do_invoke(false, true, false, 0, "unknown");
+        PlayerAction::InvokeArtifact { item } => {
+            let player = world.player();
+            let is_wielded = world
+                .get_component::<crate::equipment::EquipmentSlots>(player)
+                .map(|equip| equip.weapon == Some(*item))
+                .unwrap_or(false);
+            let has_invoke_power = world
+                .get_component::<nethack_babel_data::ObjectCore>(*item)
+                .and_then(|core| core.artifact)
+                .is_some();
+            // Artifact invoke cooldown tracking is not yet persisted in ECS.
+            let is_on_cooldown = false;
+            let cooldown_remaining = 0;
+            let artifact_name = world
+                .get_component::<Name>(*item)
+                .map(|n| n.0.clone())
+                .unwrap_or_else(|| "artifact".to_string());
+            let (_result, invoke_events) = crate::do_actions::do_invoke(
+                has_invoke_power,
+                is_wielded,
+                is_on_cooldown,
+                cooldown_remaining,
+                &artifact_name,
+            );
             events.extend(invoke_events);
         }
         PlayerAction::Monster => {
-            let (_result, mon_events) =
-                crate::do_actions::do_monster_ability(false, false);
+            let (_result, mon_events) = crate::do_actions::do_monster_ability(false, false);
             events.extend(mon_events);
         }
         PlayerAction::KnownItems => {
@@ -1201,13 +1522,10 @@ fn resolve_player_action(
             events.extend(vanq_events);
         }
         PlayerAction::CallType { class, name } => {
-            let call_events =
-                crate::do_actions::do_call_type(*class, name);
-            events.extend(call_events);
+            set_called_item_class(world, *class, name, events);
         }
         PlayerAction::Glance { direction: _ } => {
-            let glance_events =
-                crate::do_actions::do_glance("You see nothing special.");
+            let glance_events = crate::do_actions::do_glance("You see nothing special.");
             events.extend(glance_events);
         }
         PlayerAction::Chronicle => {
@@ -1251,7 +1569,13 @@ fn resolve_player_action(
                 "wizard-level-teleport",
                 vec![("depth", target_depth.to_string())],
             ));
-            change_level(world, target_depth, target_depth < world.dungeon().depth, rng, events);
+            change_level(
+                world,
+                target_depth,
+                target_depth < world.dungeon().depth,
+                rng,
+                events,
+            );
         }
         PlayerAction::WizDetect => {
             // Detect all monsters, objects, and traps.
@@ -1270,6 +1594,11 @@ fn resolve_player_action(
         PlayerAction::WizKill => {
             events.push(EngineEvent::msg("wizard-kill"));
         }
+        PlayerAction::Annotate { text } => {
+            world
+                .dungeon_mut()
+                .set_current_level_annotation(text.clone());
+        }
         // UI/meta actions: handled by the CLI layer, not by the engine.
         PlayerAction::Help
         | PlayerAction::ShowHistory
@@ -1280,7 +1609,6 @@ fn resolve_player_action(
         | PlayerAction::DungeonOverview
         | PlayerAction::ViewTerrain
         | PlayerAction::ShowVersion
-        | PlayerAction::Annotate { .. }
         | PlayerAction::Attributes
         | PlayerAction::LookAt { .. }
         | PlayerAction::LookHere
@@ -1289,14 +1617,187 @@ fn resolve_player_action(
         | PlayerAction::Quit
         | PlayerAction::SaveAndQuit => {}
     }
+
+    apply_action_conduct_updates(world, player, action, events);
+}
+
+fn apply_action_conduct_updates(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    action: &PlayerAction,
+    events: &[EngineEvent],
+) {
+    let mut weapon_hits = 0i64;
+    let mut kills = 0i64;
+
+    for event in events {
+        match event {
+            EngineEvent::MeleeHit {
+                attacker,
+                weapon: Some(_),
+                ..
+            } if *attacker == player => {
+                weapon_hits += 1;
+            }
+            EngineEvent::EntityDied {
+                killer: Some(killer),
+                ..
+            } if *killer == player => {
+                kills += 1;
+            }
+            _ => {}
+        }
+    }
+
+    let wished = matches!(action, PlayerAction::WizWish { .. });
+    if weapon_hits == 0 && kills == 0 && !wished {
+        return;
+    }
+
+    increment_conduct(world, player, |state| {
+        if weapon_hits > 0 {
+            state.weaphit = state.weaphit.saturating_add(weapon_hits);
+        }
+        if kills > 0 {
+            state.killer = state.killer.saturating_add(kills);
+        }
+        if wished {
+            state.wishes = state.wishes.saturating_add(1);
+        }
+    });
+}
+
+fn find_adjacent_tame_steed(world: &GameWorld, player: hecs::Entity) -> Option<hecs::Entity> {
+    let player_pos = world.get_component::<Positioned>(player).map(|p| p.0)?;
+    for (entity, (_monster, _tame, pos)) in
+        world.ecs().query::<(&Monster, &Tame, &Positioned)>().iter()
+    {
+        let dx = (pos.0.x - player_pos.x).abs();
+        let dy = (pos.0.y - player_pos.y).abs();
+        if dx <= 1 && dy <= 1 && (dx != 0 || dy != 0) {
+            return Some(entity);
+        }
+    }
+    None
+}
+
+fn has_two_weapon_loadout(world: &GameWorld, player: hecs::Entity) -> bool {
+    world
+        .get_component::<crate::equipment::EquipmentSlots>(player)
+        .is_some_and(|equip| equip.weapon.is_some() && equip.off_hand.is_some())
+}
+
+fn toggle_two_weapon_mode(world: &mut GameWorld, player: hecs::Entity) -> bool {
+    if world
+        .get_component::<nethack_babel_data::PlayerSkills>(player)
+        .is_none()
+    {
+        let _ = world.ecs_mut().insert_one(
+            player,
+            nethack_babel_data::PlayerSkills {
+                weapon_slots: 0,
+                skills_advanced: 0,
+                skills: Vec::new(),
+                two_weapon: false,
+            },
+        );
+    }
+
+    let mut two_weapon_on = false;
+    if let Some(mut skills) = world.get_component_mut::<nethack_babel_data::PlayerSkills>(player) {
+        skills.two_weapon = !skills.two_weapon;
+        two_weapon_on = skills.two_weapon;
+    }
+    two_weapon_on
+}
+
+const P_SKILL_LIMIT: i32 = 60;
+
+fn enhance_skill_once(world: &mut GameWorld, player: hecs::Entity) -> Option<(String, String)> {
+    let mut skills = world.get_component_mut::<nethack_babel_data::PlayerSkills>(player)?;
+    let idx = select_advanceable_skill(&skills)?;
+
+    let (skill_kind, current_level) = {
+        let state = &skills.skills[idx];
+        (state.skill, state.level)
+    };
+    let slot_cost = slots_required_for_skill(skill_kind, current_level);
+    if skills.weapon_slots < slot_cost {
+        return None;
+    }
+
+    skills.weapon_slots -= slot_cost;
+    skills.skills_advanced += 1;
+
+    let state = &mut skills.skills[idx];
+    state.level = state.level.saturating_add(1).min(state.max_level);
+
+    Some((
+        format!("{:?}", state.skill),
+        skill_level_label(state.level).to_string(),
+    ))
+}
+
+fn select_advanceable_skill(skills: &nethack_babel_data::PlayerSkills) -> Option<usize> {
+    if skills.skills_advanced >= P_SKILL_LIMIT {
+        return None;
+    }
+    skills.skills.iter().position(|state| {
+        can_advance_skill_state(state, skills.weapon_slots, skills.skills_advanced)
+    })
+}
+
+fn can_advance_skill_state(
+    state: &nethack_babel_data::SkillState,
+    weapon_slots: i32,
+    skills_advanced: i32,
+) -> bool {
+    if state.level == 0 {
+        return false;
+    }
+    if state.level >= state.max_level {
+        return false;
+    }
+    if skills_advanced >= P_SKILL_LIMIT {
+        return false;
+    }
+
+    let required_practice = practice_needed_to_advance(state.level);
+    if state.advance < required_practice {
+        return false;
+    }
+
+    weapon_slots >= slots_required_for_skill(state.skill, state.level)
+}
+
+fn practice_needed_to_advance(level: u8) -> u16 {
+    let lv = u32::from(level);
+    (lv.saturating_mul(lv).saturating_mul(20)).min(u32::from(u16::MAX)) as u16
+}
+
+fn slots_required_for_skill(skill: nethack_babel_data::WeaponSkill, level: u8) -> i32 {
+    let current = i32::from(level).max(1);
+    match skill {
+        nethack_babel_data::WeaponSkill::BareHanded => (current + 1) / 2,
+        _ => current,
+    }
+}
+
+fn skill_level_label(level: u8) -> &'static str {
+    match level {
+        0 => "Restricted",
+        1 => "Unskilled",
+        2 => "Basic",
+        3 => "Skilled",
+        4 => "Expert",
+        5 => "Master",
+        6 => "GrandMaster",
+        _ => "Unknown",
+    }
 }
 
 /// Handle the player going up stairs.
-fn handle_go_up(
-    world: &mut GameWorld,
-    rng: &mut impl Rng,
-    events: &mut Vec<EngineEvent>,
-) {
+fn handle_go_up(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<EngineEvent>) {
     let player = world.player();
     let player_pos = match world.get_component::<Positioned>(player) {
         Some(p) => p.0,
@@ -1324,11 +1825,7 @@ fn handle_go_up(
 }
 
 /// Handle the player going down stairs.
-fn handle_go_down(
-    world: &mut GameWorld,
-    rng: &mut impl Rng,
-    events: &mut Vec<EngineEvent>,
-) {
+fn handle_go_down(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<EngineEvent>) {
     let player = world.player();
 
     // Levitation blocks going down stairs.
@@ -1358,7 +1855,12 @@ fn handle_go_down(
     let branch_transition = world.dungeon().check_branch_transition();
     if let Some((target_branch, target_branch_depth)) = branch_transition {
         change_level_to_branch(
-            world, target_branch, target_branch_depth, false, rng, events,
+            world,
+            target_branch,
+            target_branch_depth,
+            false,
+            rng,
+            events,
         );
     } else {
         let target_depth = current_depth + 1;
@@ -1375,13 +1877,19 @@ fn generate_or_special(
     branch: crate::dungeon::DungeonBranch,
     depth: i32,
     rng: &mut impl Rng,
-) -> (crate::map_gen::GeneratedLevel, crate::special_levels::SpecialLevelFlags) {
+) -> (
+    crate::map_gen::GeneratedLevel,
+    crate::special_levels::SpecialLevelFlags,
+) {
     if let Some(id) = identify_special_level(branch, depth)
         && let Some(special) = dispatch_special_level(id, None, rng)
     {
         return (special.generated, special.flags);
     }
-    (generate_level(depth as u8, rng), crate::special_levels::SpecialLevelFlags::default())
+    (
+        generate_level(depth as u8, rng),
+        crate::special_levels::SpecialLevelFlags::default(),
+    )
 }
 
 /// Topology-aware special level dispatch; fall back to random generation.
@@ -1392,13 +1900,19 @@ fn generate_or_special_topology(
     branch: crate::dungeon::DungeonBranch,
     depth: i32,
     rng: &mut impl Rng,
-) -> (crate::map_gen::GeneratedLevel, crate::special_levels::SpecialLevelFlags) {
+) -> (
+    crate::map_gen::GeneratedLevel,
+    crate::special_levels::SpecialLevelFlags,
+) {
     if let Some(id) = world.dungeon().check_topology_special(&branch, depth)
         && let Some(special) = dispatch_special_level(id, None, rng)
     {
         return (special.generated, special.flags);
     }
-    (generate_level(depth as u8, rng), crate::special_levels::SpecialLevelFlags::default())
+    (
+        generate_level(depth as u8, rng),
+        crate::special_levels::SpecialLevelFlags::default(),
+    )
 }
 
 /// Perform a level transition into a different branch.
@@ -1451,9 +1965,7 @@ fn change_level_to_branch(
         let _ = world.despawn(entity);
     }
 
-    world
-        .dungeon_mut()
-        .cache_current_level(cached_monsters);
+    world.dungeon_mut().cache_current_level(cached_monsters);
 
     // 2. Switch branch and depth.
     world.dungeon_mut().branch = target_branch;
@@ -1488,10 +2000,21 @@ fn change_level_to_branch(
                 ));
             }
 
-            (map, up_pos, down_pos, crate::special_levels::SpecialLevelFlags::default())
+            (
+                map,
+                up_pos,
+                down_pos,
+                crate::special_levels::SpecialLevelFlags::default(),
+            )
         } else {
-            let (generated, flags) = generate_or_special_topology(world, target_branch, target_depth, rng);
-            (generated.map, generated.up_stairs, generated.down_stairs, flags)
+            let (generated, flags) =
+                generate_or_special_topology(world, target_branch, target_depth, rng);
+            (
+                generated.map,
+                generated.up_stairs,
+                generated.down_stairs,
+                flags,
+            )
         };
 
     // 4. Install the new level map and store flags.
@@ -1583,9 +2106,7 @@ fn change_level(
     }
 
     // 3. Cache the current level.
-    world
-        .dungeon_mut()
-        .cache_current_level(cached_monsters);
+    world.dungeon_mut().cache_current_level(cached_monsters);
 
     // 4. Switch depth.
     world.dungeon_mut().depth = target_depth;
@@ -1623,11 +2144,22 @@ fn change_level(
                 ));
             }
 
-            (map, up_pos, down_pos, crate::special_levels::SpecialLevelFlags::default())
+            (
+                map,
+                up_pos,
+                down_pos,
+                crate::special_levels::SpecialLevelFlags::default(),
+            )
         } else {
             // Generate a new level.
-            let (generated, flags) = generate_or_special_topology(world, target_branch, target_depth, rng);
-            (generated.map, generated.up_stairs, generated.down_stairs, flags)
+            let (generated, flags) =
+                generate_or_special_topology(world, target_branch, target_depth, rng);
+            (
+                generated.map,
+                generated.up_stairs,
+                generated.down_stairs,
+                flags,
+            )
         };
 
     // 6. Install the new level map and store flags.
@@ -1656,10 +2188,7 @@ fn change_level(
 }
 
 /// Find the first cell with the given terrain type on a map.
-fn find_terrain(
-    map: &crate::dungeon::LevelMap,
-    terrain: Terrain,
-) -> Option<Position> {
+fn find_terrain(map: &crate::dungeon::LevelMap, terrain: Terrain) -> Option<Position> {
     for y in 0..map.height {
         for x in 0..map.width {
             if map.cells[y][x].terrain == terrain {
@@ -1668,6 +2197,120 @@ fn find_terrain(
         }
     }
     None
+}
+
+fn find_monster_entity_at(world: &GameWorld, pos: Position) -> Option<hecs::Entity> {
+    for (entity, _) in world.ecs().query::<&Monster>().iter() {
+        if let Some(mon_pos) = world.get_component::<Positioned>(entity)
+            && mon_pos.0 == pos
+        {
+            return Some(entity);
+        }
+    }
+    None
+}
+
+#[inline]
+fn is_player_inventory_item(world: &GameWorld, item: hecs::Entity) -> bool {
+    world
+        .get_component::<nethack_babel_data::ObjectLocation>(item)
+        .is_some_and(|loc| matches!(*loc, nethack_babel_data::ObjectLocation::Inventory))
+}
+
+fn item_label_for_message(world: &GameWorld, item: hecs::Entity) -> String {
+    if let Some(name) = world.get_component::<Name>(item) {
+        return name.0.clone();
+    }
+    if let Some(core) = world.get_component::<nethack_babel_data::ObjectCore>(item) {
+        return format!("item(otyp={})", core.otyp.0);
+    }
+    "something".to_string()
+}
+
+fn set_item_name(world: &mut GameWorld, item: hecs::Entity, name: &str) -> bool {
+    let desired = name.to_string();
+
+    if let Some(mut extra) = world.get_component_mut::<nethack_babel_data::ObjectExtra>(item) {
+        extra.name = Some(desired.clone());
+    } else if world
+        .ecs_mut()
+        .insert_one(
+            item,
+            nethack_babel_data::ObjectExtra {
+                name: Some(desired.clone()),
+                contained_monster: None,
+            },
+        )
+        .is_err()
+    {
+        return false;
+    }
+
+    if let Some(mut display_name) = world.get_component_mut::<Name>(item) {
+        display_name.0 = desired;
+    } else if world.ecs_mut().insert_one(item, Name(desired)).is_err() {
+        return false;
+    }
+
+    true
+}
+
+fn set_called_item_class(
+    world: &mut GameWorld,
+    class: char,
+    name: &str,
+    events: &mut Vec<EngineEvent>,
+) {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        events.push(EngineEvent::msg("call-empty-name"));
+        return;
+    }
+
+    world
+        .dungeon_mut()
+        .set_called_item_class(class, trimmed.to_string());
+    events.push(EngineEvent::msg_with(
+        "item-called-set",
+        vec![
+            ("item_class", class.to_string()),
+            ("name", trimmed.to_string()),
+        ],
+    ));
+}
+
+/// Return one travel direction that best advances from `from` toward
+/// `destination`, considering only in-bounds walkable tiles.
+fn travel_direction_toward(
+    world: &GameWorld,
+    from: Position,
+    destination: Position,
+) -> Option<Direction> {
+    let mut dirs: [(Direction, i32); 8] = std::array::from_fn(|i| {
+        let direction = Direction::PLANAR[i];
+        let next = from.step(direction);
+        let walkable = world.dungeon().current_level.in_bounds(next)
+            && world
+                .dungeon()
+                .current_level
+                .get(next)
+                .is_some_and(|cell| cell.terrain.is_walkable());
+        let dist = if walkable {
+            manhattan_distance(next, destination)
+        } else {
+            i32::MAX
+        };
+        (direction, dist)
+    });
+    dirs.sort_by_key(|&(_, d)| d);
+    dirs.into_iter()
+        .find(|&(_, d)| d != i32::MAX)
+        .map(|(dir, _)| dir)
+}
+
+#[inline]
+fn manhattan_distance(a: Position, b: Position) -> i32 {
+    (a.x - b.x).abs() + (a.y - b.y).abs()
 }
 
 /// Attempt to move an entity one step in the given direction.
@@ -1795,9 +2438,25 @@ fn try_move_entity(
         }
     }
 
-    // Check for items on the destination tile (autopickup notification).
-    // TODO: implement full autopickup logic (filter by item class, config).
+    // Run autopickup and then report any remaining floor items.
     if entity == world.player() {
+        if !crate::status::is_levitating(world, entity) {
+            let mut letter_state = crate::items::LetterState::default();
+            let (autopickup_enabled, autopickup_classes) = {
+                let d = world.dungeon();
+                (d.autopickup_enabled, d.autopickup_classes.clone())
+            };
+            if autopickup_enabled {
+                let pickup_events = crate::inventory::autopickup(
+                    world,
+                    &mut letter_state,
+                    &[],
+                    &autopickup_classes,
+                );
+                events.extend(pickup_events);
+            }
+        }
+
         let items_here = count_items_at(world, target_pos);
         if items_here == 1 {
             events.push(EngineEvent::msg("see-item-here"));
@@ -1815,11 +2474,7 @@ fn try_move_entity(
 /// Returns the first boulder entity found, or `None` if no boulder
 /// occupies the cell.
 fn find_boulder_at(world: &GameWorld, pos: Position) -> Option<hecs::Entity> {
-    for (entity, (positioned, _boulder)) in world
-        .ecs()
-        .query::<(&Positioned, &Boulder)>()
-        .iter()
-    {
+    for (entity, (positioned, _boulder)) in world.ecs().query::<(&Positioned, &Boulder)>().iter() {
         if positioned.0 == pos {
             return Some(entity);
         }
@@ -1829,21 +2484,7 @@ fn find_boulder_at(world: &GameWorld, pos: Position) -> Option<hecs::Entity> {
 
 /// Count the number of item entities at the given position.
 fn count_items_at(world: &GameWorld, pos: crate::action::Position) -> usize {
-    let player = world.player();
-    let mut count = 0;
-    for (entity, positioned) in world.ecs().query::<&Positioned>().iter() {
-        // Skip the player and monsters — only count items.
-        if entity == player {
-            continue;
-        }
-        if world.get_component::<Monster>(entity).is_some() {
-            continue;
-        }
-        if positioned.0 == pos {
-            count += 1;
-        }
-    }
-    count
+    crate::inventory::items_at_position(world, pos).len()
 }
 
 /// Give each monster entity a turn, ordered by speed descending, then
@@ -1851,11 +2492,7 @@ fn count_items_at(world: &GameWorld, pos: crate::action::Position) -> usize {
 ///
 /// Only monsters with `movement >= NORMAL_SPEED` get to act.  Each
 /// action costs `NORMAL_SPEED` points.
-fn resolve_monster_turns(
-    world: &mut GameWorld,
-    rng: &mut impl Rng,
-    events: &mut Vec<EngineEvent>,
-) {
+fn resolve_monster_turns(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<EngineEvent>) {
     let player = world.player();
 
     // Collect eligible monsters: (entity, speed, creation_order).
@@ -1890,8 +2527,7 @@ fn resolve_monster_turns(
         }
 
         // Run the monster AI decision tree.
-        let monster_events =
-            crate::monster_ai::resolve_monster_turn(world, *entity, rng);
+        let monster_events = crate::monster_ai::resolve_monster_turn(world, *entity, rng);
         events.extend(monster_events);
     }
 }
@@ -2004,11 +2640,7 @@ fn regen_pw(world: &mut GameWorld, events: &mut Vec<EngineEvent>) {
 /// Uses the full `gethungry()` logic: base depletion (1 per turn) plus
 /// accessory hunger from rings, amulets, regeneration, encumbrance, etc.
 /// Also checks for starvation death, fainting, and strength penalty.
-fn process_hunger(
-    world: &mut GameWorld,
-    events: &mut Vec<EngineEvent>,
-    rng: &mut impl Rng,
-) {
+fn process_hunger(world: &mut GameWorld, events: &mut Vec<EngineEvent>, rng: &mut impl Rng) {
     let player = world.player();
 
     let old_nutrition = match world.get_component::<Nutrition>(player) {
@@ -2111,7 +2743,10 @@ fn build_player_trap_info(
     let hp_comp = world
         .get_component::<HitPoints>(entity)
         .map(|h| *h)
-        .unwrap_or(HitPoints { current: 16, max: 16 });
+        .unwrap_or(HitPoints {
+            current: 16,
+            max: 16,
+        });
     let pw_comp = world
         .get_component::<Power>(entity)
         .map(|p| *p)
@@ -2152,6 +2787,497 @@ fn build_player_trap_info(
     }
 }
 
+fn player_is_clerical(world: &GameWorld, player: hecs::Entity) -> bool {
+    world
+        .get_component::<nethack_babel_data::PlayerIdentity>(player)
+        .map(|id| {
+            let role = id.role.0;
+            role == crate::religion::roles::PRIEST || role == crate::religion::roles::KNIGHT
+        })
+        .unwrap_or(false)
+}
+
+fn count_undead_nearby(world: &GameWorld, center: Position, range: i32) -> u32 {
+    let mut count = 0u32;
+    for (entity, _) in world.ecs().query::<&Monster>().iter() {
+        if world.is_player(entity) {
+            continue;
+        }
+        let Some(pos) = world.get_component::<Positioned>(entity).map(|p| p.0) else {
+            continue;
+        };
+        let dx = (pos.x - center.x).abs();
+        let dy = (pos.y - center.y).abs();
+        if dx.max(dy) > range {
+            continue;
+        }
+        let is_undead = world
+            .get_component::<crate::monster_ai::MonsterSpeciesFlags>(entity)
+            .map(|flags| flags.0.contains(nethack_babel_data::MonsterFlags::UNDEAD))
+            .unwrap_or(false);
+        if is_undead {
+            count += 1;
+        }
+    }
+    count
+}
+
+fn infer_engrave_method(world: &GameWorld, player: hecs::Entity) -> crate::engrave::EngraveMethod {
+    let wielded = world
+        .get_component::<crate::equipment::EquipmentSlots>(player)
+        .and_then(|slots| slots.weapon);
+    let Some(item) = wielded else {
+        return crate::engrave::EngraveMethod::Dust;
+    };
+
+    if let Some(tag) = world.get_component::<crate::monster_ai::WandTypeTag>(item) {
+        return match tag.0 {
+            crate::wands::WandType::Fire => crate::engrave::EngraveMethod::Fire,
+            crate::wands::WandType::Lightning => crate::engrave::EngraveMethod::Lightning,
+            crate::wands::WandType::Digging => crate::engrave::EngraveMethod::Dig,
+            _ => crate::engrave::EngraveMethod::Dust,
+        };
+    }
+
+    let name = item_name_lower(world, item).unwrap_or_default();
+    if name.contains("wand of fire") || name.contains("fire wand") {
+        return crate::engrave::EngraveMethod::Fire;
+    }
+    if name.contains("wand of lightning") || name.contains("lightning wand") {
+        return crate::engrave::EngraveMethod::Lightning;
+    }
+    if name.contains("wand of digging") || name.contains("digging wand") {
+        return crate::engrave::EngraveMethod::Dig;
+    }
+    if name.contains("athame")
+        || name.contains("pick-axe")
+        || name.contains("pickaxe")
+        || name.contains("mattock")
+    {
+        return crate::engrave::EngraveMethod::Dig;
+    }
+
+    if world
+        .get_component::<nethack_babel_data::ObjectCore>(item)
+        .map(|core| core.object_class == nethack_babel_data::ObjectClass::Weapon)
+        .unwrap_or(false)
+        || name.contains("sword")
+        || name.contains("dagger")
+        || name.contains("knife")
+        || name.contains("blade")
+    {
+        return crate::engrave::EngraveMethod::Blade;
+    }
+
+    crate::engrave::EngraveMethod::Dust
+}
+
+fn infer_food_def_from_item(
+    world: &GameWorld,
+    item: hecs::Entity,
+) -> Option<crate::hunger::FoodDef> {
+    let core = world.get_component::<nethack_babel_data::ObjectCore>(item)?;
+    if core.object_class != nethack_babel_data::ObjectClass::Food {
+        return None;
+    }
+
+    let name = item_name_lower(world, item).unwrap_or_else(|| "food".to_string());
+    let is_corpse = name.contains("corpse");
+    let is_tin = name.contains("tin");
+    if is_corpse || is_tin {
+        return None;
+    }
+
+    let is_glob = name.contains("glob");
+    let (nutrition, oc_delay) = if name.contains("food ration") {
+        (800, 5)
+    } else if name.contains("lembas") {
+        (800, 2)
+    } else if name.contains("cram ration") {
+        (600, 3)
+    } else if name.contains("fruit") || name.contains("apple") || name.contains("orange") {
+        (100, 1)
+    } else {
+        (200, 2)
+    };
+    let material = if name.contains("meat")
+        || name.contains("tripe")
+        || name.contains("egg")
+        || name.contains("sausage")
+    {
+        nethack_babel_data::Material::Flesh
+    } else {
+        nethack_babel_data::Material::Veggy
+    };
+
+    Some(crate::hunger::FoodDef {
+        name,
+        nutrition,
+        oc_delay,
+        material,
+        is_corpse: false,
+        is_tin: false,
+        is_glob,
+        weight: core.weight,
+    })
+}
+
+fn infer_potion_type_from_item(
+    world: &GameWorld,
+    item: hecs::Entity,
+) -> Option<crate::potions::PotionType> {
+    if let Some(tag) = world.get_component::<crate::monster_ai::PotionTypeTag>(item) {
+        return Some(tag.0);
+    }
+
+    let name = item_name_lower(world, item)?;
+    let normalized = name
+        .strip_prefix("potion of ")
+        .or_else(|| name.strip_prefix("potion "))
+        .unwrap_or(name.as_str());
+
+    use crate::potions::PotionType;
+    Some(match normalized {
+        "gain ability" => PotionType::GainAbility,
+        "restore ability" => PotionType::RestoreAbility,
+        "confusion" => PotionType::Confusion,
+        "blindness" => PotionType::Blindness,
+        "paralysis" => PotionType::Paralysis,
+        "speed" | "speed monster" => PotionType::Speed,
+        "levitation" => PotionType::Levitation,
+        "hallucination" => PotionType::Hallucination,
+        "invisibility" => PotionType::Invisibility,
+        "see invisible" => PotionType::SeeInvisible,
+        "healing" => PotionType::Healing,
+        "extra healing" => PotionType::ExtraHealing,
+        "gain level" => PotionType::GainLevel,
+        "enlightenment" => PotionType::Enlightenment,
+        "monster detection" => PotionType::MonsterDetection,
+        "object detection" => PotionType::ObjectDetection,
+        "gain energy" => PotionType::GainEnergy,
+        "sleeping" => PotionType::Sleeping,
+        "full healing" => PotionType::FullHealing,
+        "polymorph" => PotionType::Polymorph,
+        "booze" => PotionType::Booze,
+        "sickness" => PotionType::Sickness,
+        "fruit juice" => PotionType::FruitJuice,
+        "acid" => PotionType::Acid,
+        "oil" => PotionType::Oil,
+        "water" | "holy water" | "unholy water" => PotionType::Water,
+        _ => return None,
+    })
+}
+
+fn infer_scroll_type_from_item(
+    world: &GameWorld,
+    item: hecs::Entity,
+) -> Option<crate::scrolls::ScrollType> {
+    let name = item_name_lower(world, item)?;
+    let normalized = name
+        .strip_prefix("scroll of ")
+        .or_else(|| name.strip_prefix("scroll "))
+        .unwrap_or(name.as_str());
+
+    use crate::scrolls::ScrollType;
+    Some(match normalized {
+        "identify" => ScrollType::Identify,
+        "enchant weapon" => ScrollType::EnchantWeapon,
+        "enchant armor" => ScrollType::EnchantArmor,
+        "remove curse" => ScrollType::RemoveCurse,
+        "teleportation" => ScrollType::Teleportation,
+        "gold detection" => ScrollType::GoldDetection,
+        "food detection" => ScrollType::FoodDetection,
+        "confuse monster" => ScrollType::ConfuseMonster,
+        "scare monster" => ScrollType::ScareMonster,
+        "blank paper" | "blank scroll" => ScrollType::BlankPaper,
+        "fire" => ScrollType::Fire,
+        "earth" => ScrollType::Earth,
+        "punishment" => ScrollType::Punishment,
+        "stinking cloud" => ScrollType::StinkingCloud,
+        "amnesia" => ScrollType::Amnesia,
+        "destroy armor" => ScrollType::DestroyArmor,
+        "create monster" => ScrollType::CreateMonster,
+        "taming" => ScrollType::Taming,
+        "genocide" => ScrollType::Genocide,
+        "light" => ScrollType::Light,
+        "charging" => ScrollType::Charging,
+        "magic mapping" => ScrollType::MagicMapping,
+        "mail" => ScrollType::Mail,
+        _ => return None,
+    })
+}
+
+fn item_name_lower(world: &GameWorld, item: hecs::Entity) -> Option<String> {
+    world
+        .get_component::<Name>(item)
+        .map(|name| name.0.to_lowercase())
+}
+
+fn infer_fire_direction(world: &GameWorld, player: hecs::Entity) -> Option<Direction> {
+    let player_pos = world.get_component::<Positioned>(player).map(|p| p.0)?;
+    let mut nearest: Option<(i32, Direction)> = None;
+
+    for (entity, _) in world.ecs().query::<&Monster>().iter() {
+        if entity == player {
+            continue;
+        }
+        let Some(target_pos) = world.get_component::<Positioned>(entity).map(|p| p.0) else {
+            continue;
+        };
+        let dx = target_pos.x - player_pos.x;
+        let dy = target_pos.y - player_pos.y;
+        if dx == 0 && dy == 0 {
+            continue;
+        }
+        let Some(dir) = direction_from_delta(dx.signum(), dy.signum()) else {
+            continue;
+        };
+        let dist = dx.abs().max(dy.abs());
+        match nearest {
+            Some((best, _)) if dist >= best => {}
+            _ => nearest = Some((dist, dir)),
+        }
+    }
+
+    nearest.map(|(_, dir)| dir)
+}
+
+fn direction_from_delta(dx: i32, dy: i32) -> Option<Direction> {
+    Some(match (dx, dy) {
+        (0, -1) => Direction::North,
+        (0, 1) => Direction::South,
+        (1, 0) => Direction::East,
+        (-1, 0) => Direction::West,
+        (1, -1) => Direction::NorthEast,
+        (-1, -1) => Direction::NorthWest,
+        (1, 1) => Direction::SouthEast,
+        (-1, 1) => Direction::SouthWest,
+        _ => return None,
+    })
+}
+
+fn random_monster_spawn_position(world: &GameWorld, rng: &mut impl Rng) -> Option<Position> {
+    let player_pos = world
+        .get_component::<Positioned>(world.player())
+        .map(|p| p.0)
+        .unwrap_or(Position::new(0, 0));
+    let map = &world.dungeon().current_level;
+
+    let is_occupied = |pos: Position| {
+        world
+            .ecs()
+            .query::<(&Monster, &Positioned)>()
+            .iter()
+            .any(|(_, (_, mpos))| mpos.0 == pos)
+            || world
+                .get_component::<Positioned>(world.player())
+                .map(|p| p.0 == pos)
+                .unwrap_or(false)
+    };
+
+    for _ in 0..32 {
+        let dx = rng.random_range(-10..=10);
+        let dy = rng.random_range(-10..=10);
+        if dx == 0 && dy == 0 {
+            continue;
+        }
+        let pos = Position::new(player_pos.x + dx, player_pos.y + dy);
+        let Some(cell) = map.get(pos) else {
+            continue;
+        };
+        if !cell.terrain.is_walkable() || is_occupied(pos) {
+            continue;
+        }
+        return Some(pos);
+    }
+
+    for dir in Direction::PLANAR {
+        let pos = player_pos.step(dir);
+        let Some(cell) = map.get(pos) else {
+            continue;
+        };
+        if cell.terrain.is_walkable() && !is_occupied(pos) {
+            return Some(pos);
+        }
+    }
+
+    None
+}
+
+fn spawn_random_monster(world: &mut GameWorld, pos: Position) -> hecs::Entity {
+    let order = world.next_creation_order();
+    world.spawn((
+        Monster,
+        Positioned(pos),
+        HitPoints { current: 8, max: 8 },
+        Speed(NORMAL_SPEED),
+        MovementPoints(0),
+        Name("wandering monster".to_string()),
+        order,
+    ))
+}
+
+fn default_religion_state(
+    world: &GameWorld,
+    player: hecs::Entity,
+) -> crate::religion::ReligionState {
+    let alignment = world
+        .get_component::<nethack_babel_data::PlayerIdentity>(player)
+        .map(|id| id.alignment)
+        .unwrap_or(nethack_babel_data::Alignment::Neutral);
+    let hp = world
+        .get_component::<HitPoints>(player)
+        .map(|hp| *hp)
+        .unwrap_or(HitPoints {
+            current: 16,
+            max: 16,
+        });
+    let pw = world
+        .get_component::<Power>(player)
+        .map(|pw| *pw)
+        .unwrap_or(Power { current: 4, max: 4 });
+
+    crate::religion::ReligionState {
+        alignment,
+        alignment_record: 10,
+        god_anger: 0,
+        god_gifts: 0,
+        blessed_amount: 0,
+        bless_cooldown: 0,
+        crowned: false,
+        demigod: false,
+        turn: world.turn(),
+        experience_level: world
+            .get_component::<ExperienceLevel>(player)
+            .map(|lvl| lvl.0)
+            .unwrap_or(1),
+        current_hp: hp.current,
+        max_hp: hp.max,
+        current_pw: pw.current,
+        max_pw: pw.max,
+        nutrition: world
+            .get_component::<Nutrition>(player)
+            .map(|n| n.0)
+            .unwrap_or(900),
+        luck: world
+            .get_component::<PlayerCombat>(player)
+            .map(|pc| pc.luck.clamp(i8::MIN as i32, i8::MAX as i32) as i8)
+            .unwrap_or(0),
+        luck_bonus: 0,
+        has_luckstone: false,
+        luckstone_blessed: false,
+        luckstone_cursed: false,
+        in_gehennom: false,
+        is_undead: false,
+        is_demon: false,
+        original_alignment: alignment,
+        has_converted: false,
+        alignment_abuse: 0,
+    }
+}
+
+fn refresh_religion_state_from_world(
+    state: &mut crate::religion::ReligionState,
+    world: &GameWorld,
+    player: hecs::Entity,
+) {
+    if let Some(id) = world.get_component::<nethack_babel_data::PlayerIdentity>(player) {
+        state.alignment = id.alignment;
+    }
+    if let Some(hp) = world.get_component::<HitPoints>(player) {
+        state.current_hp = hp.current;
+        state.max_hp = hp.max;
+    }
+    if let Some(pw) = world.get_component::<Power>(player) {
+        state.current_pw = pw.current;
+        state.max_pw = pw.max;
+    }
+    if let Some(nutrition) = world.get_component::<Nutrition>(player) {
+        state.nutrition = nutrition.0;
+    }
+    if let Some(level) = world.get_component::<ExperienceLevel>(player) {
+        state.experience_level = level.0;
+    }
+    if let Some(combat) = world.get_component::<PlayerCombat>(player) {
+        state.luck = combat.luck.clamp(i8::MIN as i32, i8::MAX as i32) as i8;
+    }
+    state.turn = world.turn();
+    state.in_gehennom = world.dungeon().branch == crate::dungeon::DungeonBranch::Gehennom
+        || world.dungeon().current_level_flags.no_prayer;
+}
+
+fn persist_religion_state(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    state: crate::religion::ReligionState,
+) {
+    if let Some(mut live_state) = world.get_component_mut::<crate::religion::ReligionState>(player)
+    {
+        *live_state = state.clone();
+    } else {
+        let _ = world.ecs_mut().insert_one(player, state.clone());
+    }
+
+    if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+        hp.current = state.current_hp;
+        hp.max = state.max_hp;
+    }
+    if let Some(mut pw) = world.get_component_mut::<Power>(player) {
+        pw.current = state.current_pw;
+        pw.max = state.max_pw;
+    }
+    if let Some(mut nutrition) = world.get_component_mut::<Nutrition>(player) {
+        nutrition.0 = state.nutrition;
+    }
+}
+
+fn read_conduct_state(world: &GameWorld, player: hecs::Entity) -> ConductState {
+    world
+        .get_component::<ConductState>(player)
+        .map(|state| (*state).clone())
+        .unwrap_or_default()
+}
+
+fn persist_conduct_state(world: &mut GameWorld, player: hecs::Entity, state: ConductState) {
+    if let Some(mut live_state) = world.get_component_mut::<ConductState>(player) {
+        *live_state = state;
+    } else {
+        let _ = world.ecs_mut().insert_one(player, state);
+    }
+}
+
+fn increment_conduct(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    update: impl FnOnce(&mut ConductState),
+) {
+    let mut state = read_conduct_state(world, player);
+    update(&mut state);
+    persist_conduct_state(world, player, state);
+}
+
+fn apply_eating_conduct(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    conduct: &crate::hunger::ConductViolations,
+) {
+    if !conduct.broke_foodless && !conduct.broke_vegan && !conduct.broke_vegetarian {
+        return;
+    }
+
+    increment_conduct(world, player, |state| {
+        if conduct.broke_foodless {
+            state.food = state.food.saturating_add(1);
+        }
+        if conduct.broke_vegan {
+            state.unvegan = state.unvegan.saturating_add(1);
+        }
+        if conduct.broke_vegetarian {
+            state.unvegetarian = state.unvegetarian.saturating_add(1);
+        }
+    });
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Tests
 // ═══════════════════════════════════════════════════════════════════════
@@ -2160,8 +3286,14 @@ fn build_player_trap_info(
 mod tests {
     use super::*;
     use crate::action::Position;
+    use crate::conduct::ConductState;
     use crate::dungeon::Terrain;
     use crate::world::Name;
+    use nethack_babel_data::{
+        Alignment, ArtifactId, BucStatus, Gender, Handedness, MonsterFlags, ObjectClass,
+        ObjectCore, ObjectLocation, ObjectTypeId, PlayerIdentity, PlayerSkills, RaceId, RoleId,
+        SkillState, WeaponSkill,
+    };
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
 
@@ -2184,13 +3316,80 @@ mod tests {
         world
     }
 
+    fn spawn_inventory_item(world: &mut GameWorld, letter: char) -> hecs::Entity {
+        world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Weapon,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some(letter),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+        ))
+    }
+
+    fn spawn_floor_coin(world: &mut GameWorld, pos: Position) -> hecs::Entity {
+        world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Coin,
+                quantity: 42,
+                weight: 1,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: pos.x as i16,
+                y: pos.y as i16,
+            },
+        ))
+    }
+
+    fn spawn_tame_steed(world: &mut GameWorld, pos: Position, name: &str) -> hecs::Entity {
+        world.spawn((
+            crate::world::Monster,
+            crate::world::Tame,
+            crate::world::Positioned(pos),
+            Name(name.to_string()),
+            crate::world::Speed(18),
+            crate::world::HitPoints {
+                current: 30,
+                max: 30,
+            },
+        ))
+    }
+
+    fn priest_identity() -> PlayerIdentity {
+        PlayerIdentity {
+            name: "tester".to_string(),
+            role: RoleId(crate::religion::roles::PRIEST),
+            race: RaceId(0),
+            gender: Gender::Male,
+            alignment: Alignment::Lawful,
+            alignment_base: [Alignment::Lawful, Alignment::Lawful],
+            handedness: Handedness::RightHanded,
+        }
+    }
+
+    fn monk_identity() -> PlayerIdentity {
+        PlayerIdentity {
+            name: "tester".to_string(),
+            role: RoleId(crate::religion::roles::MONK),
+            race: RaceId(0),
+            gender: Gender::Male,
+            alignment: Alignment::Lawful,
+            alignment_base: [Alignment::Lawful, Alignment::Lawful],
+            handedness: Handedness::RightHanded,
+        }
+    }
+
     /// Spawn a monster at the given position with a given base speed.
     #[allow(dead_code)]
-    fn spawn_monster(
-        world: &mut GameWorld,
-        pos: Position,
-        speed: u32,
-    ) -> hecs::Entity {
+    fn spawn_monster(world: &mut GameWorld, pos: Position, speed: u32) -> hecs::Entity {
         let order = world.next_creation_order();
         world.spawn((
             Monster,
@@ -2245,9 +3444,7 @@ mod tests {
         assert!(moved, "expected EntityMoved event");
         assert!(turn_end, "expected TurnEnd event");
 
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(6, 5));
     }
 
@@ -2264,10 +3461,70 @@ mod tests {
                 &mut rng,
             );
         }
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0.y, 3);
+    }
+
+    #[test]
+    fn move_triggers_gold_autopickup_on_destination_tile() {
+        let mut world = make_test_world();
+        let coin = spawn_floor_coin(&mut world, Position::new(6, 5));
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::ItemPickedUp {
+                    actor,
+                    item,
+                    ..
+                } if *actor == world.player() && *item == coin
+            )
+        }));
+        let loc = world.get_component::<ObjectLocation>(coin).unwrap();
+        assert!(matches!(*loc, ObjectLocation::Inventory));
+    }
+
+    #[test]
+    fn move_does_not_autopickup_when_disabled() {
+        let mut world = make_test_world();
+        world
+            .dungeon_mut()
+            .set_autopickup(false, vec![ObjectClass::Coin]);
+        let coin = spawn_floor_coin(&mut world, Position::new(6, 5));
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(
+            !events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::ItemPickedUp {
+                        actor,
+                        item,
+                        ..
+                    } if *actor == world.player() && *item == coin
+                )
+            }),
+            "autopickup disabled should not pick coin"
+        );
+        let loc = world.get_component::<ObjectLocation>(coin).unwrap();
+        assert!(matches!(*loc, ObjectLocation::Floor { x: 6, y: 5 }));
     }
 
     #[test]
@@ -2281,10 +3538,285 @@ mod tests {
             .any(|e| matches!(e, EngineEvent::EntityMoved { .. }));
         assert!(!moved, "rest should not generate a move event");
 
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(pos.0, Position::new(5, 5));
+    }
+
+    #[test]
+    fn travel_moves_one_step_toward_destination() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let destination = Position::new(7, 5);
+
+        let events = resolve_turn(&mut world, PlayerAction::Travel { destination }, &mut rng);
+        let moved = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityMoved { .. }));
+        assert!(moved, "travel should move when destination differs");
+
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
+        assert_eq!(pos.0, Position::new(6, 5));
+    }
+
+    #[test]
+    fn travel_uses_alternate_walkable_direction_when_direct_blocked() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        // Block direct east step.
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Wall);
+
+        let destination = Position::new(7, 5);
+        resolve_turn(&mut world, PlayerAction::Travel { destination }, &mut rng);
+
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
+        assert_eq!(pos.0, Position::new(6, 4));
+    }
+
+    #[test]
+    fn travel_at_destination_does_not_move() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let destination = Position::new(5, 5);
+
+        let events = resolve_turn(&mut world, PlayerAction::Travel { destination }, &mut rng);
+        let moved = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityMoved { .. }));
+        assert!(!moved, "travel should not move when already at destination");
+
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
+        assert_eq!(pos.0, Position::new(5, 5));
+    }
+
+    #[test]
+    fn takeoffall_removes_equipped_items() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let helmet = world.spawn((Name("helmet".to_string()),));
+        let cloak = world.spawn((Name("cloak".to_string()),));
+        {
+            let mut equip = world
+                .get_component_mut::<crate::equipment::EquipmentSlots>(player)
+                .unwrap();
+            equip.set(crate::equipment::EquipSlot::Helmet, Some(helmet));
+            equip.set(crate::equipment::EquipSlot::Cloak, Some(cloak));
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(&mut world, PlayerAction::TakeOffAll, &mut rng);
+
+        assert!(events.iter().any(
+            |e| matches!(e, EngineEvent::ItemRemoved { actor, item } if *actor == player && *item == helmet)
+        ));
+        assert!(events.iter().any(
+            |e| matches!(e, EngineEvent::ItemRemoved { actor, item } if *actor == player && *item == cloak)
+        ));
+
+        let equip = world
+            .get_component::<crate::equipment::EquipmentSlots>(player)
+            .unwrap();
+        assert!(equip.helmet.is_none());
+        assert!(equip.cloak.is_none());
+    }
+
+    #[test]
+    fn takeoffall_with_nothing_worn_emits_feedback() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let events = resolve_turn(&mut world, PlayerAction::TakeOffAll, &mut rng);
+
+        assert!(
+            events.iter().any(
+                |e| matches!(e, EngineEvent::Message { key, .. } if key == "not-wearing-that")
+            )
+        );
+    }
+
+    #[test]
+    fn adjust_swaps_inventory_letters_when_target_letter_occupied() {
+        let mut world = make_test_world();
+        let item_a = spawn_inventory_item(&mut world, 'a');
+        let item_b = spawn_inventory_item(&mut world, 'b');
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Adjust {
+                item: item_a,
+                new_letter: 'b',
+            },
+            &mut rng,
+        );
+
+        let core_a = world.get_component::<ObjectCore>(item_a).unwrap();
+        let core_b = world.get_component::<ObjectCore>(item_b).unwrap();
+        assert_eq!(core_a.inv_letter, Some('b'));
+        assert_eq!(core_b.inv_letter, Some('a'));
+        assert!(!events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "adjust-not-implemented")
+        ));
+    }
+
+    #[test]
+    fn name_item_sets_object_extra_and_emits_message() {
+        let mut world = make_test_world();
+        let item = spawn_inventory_item(&mut world, 'a');
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Name {
+                target: NameTarget::Item { item },
+                name: "Excalibur".to_string(),
+            },
+            &mut rng,
+        );
+
+        let extra = world
+            .get_component::<nethack_babel_data::ObjectExtra>(item)
+            .unwrap();
+        assert_eq!(extra.name.as_deref(), Some("Excalibur"));
+        let display_name = world.get_component::<Name>(item).unwrap();
+        assert_eq!(display_name.0, "Excalibur");
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "item-name-set"))
+        );
+        assert!(!events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "name-not-implemented")
+        ));
+    }
+
+    #[test]
+    fn name_monster_updates_monster_name() {
+        let mut world = make_test_world();
+        let monster = spawn_monster(&mut world, Position::new(6, 5), 12);
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Name {
+                target: NameTarget::Monster { entity: monster },
+                name: "Fluffy".to_string(),
+            },
+            &mut rng,
+        );
+
+        let mon_name = world.get_component::<Name>(monster).unwrap();
+        assert_eq!(mon_name.0, "Fluffy");
+        assert!(!events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "name-not-implemented")
+        ));
+    }
+
+    #[test]
+    fn name_monster_at_position_updates_monster_name() {
+        let mut world = make_test_world();
+        let _ = spawn_monster(&mut world, Position::new(7, 5), 12);
+        let target = spawn_monster(&mut world, Position::new(8, 5), 12);
+        let mut rng = test_rng();
+
+        resolve_turn(
+            &mut world,
+            PlayerAction::Name {
+                target: NameTarget::MonsterAt {
+                    position: Position::new(8, 5),
+                },
+                name: "Gremlin".to_string(),
+            },
+            &mut rng,
+        );
+
+        let mon_name = world.get_component::<Name>(target).unwrap();
+        assert_eq!(mon_name.0, "Gremlin");
+    }
+
+    #[test]
+    fn name_monster_at_position_without_monster_emits_error() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Name {
+                target: NameTarget::MonsterAt {
+                    position: Position::new(30, 10),
+                },
+                name: "Nobody".to_string(),
+            },
+            &mut rng,
+        );
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "cannot-do-that"))
+        );
+    }
+
+    #[test]
+    fn name_level_sets_current_level_annotation() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        resolve_turn(
+            &mut world,
+            PlayerAction::Name {
+                target: NameTarget::Level,
+                name: "mine level".to_string(),
+            },
+            &mut rng,
+        );
+
+        assert_eq!(
+            world.dungeon().current_level_annotation(),
+            Some("mine level")
+        );
+    }
+
+    #[test]
+    fn annotate_sets_current_level_annotation() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        resolve_turn(
+            &mut world,
+            PlayerAction::Annotate {
+                text: "vault pending".to_string(),
+            },
+            &mut rng,
+        );
+
+        assert_eq!(
+            world.dungeon().current_level_annotation(),
+            Some("vault pending")
+        );
+    }
+
+    #[test]
+    fn call_type_sets_called_class_name_and_emits_feedback() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::CallType {
+                class: '!',
+                name: "healing?".to_string(),
+            },
+            &mut rng,
+        );
+
+        assert_eq!(world.dungeon().called_item_class('!'), Some("healing?"));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "item-called-set"))
+        );
     }
 
     // ── Movement point calculation tests (test vectors from spec) ─
@@ -2305,12 +3837,7 @@ mod tests {
         let mut bonus_count = 0;
         let trials = 3000;
         for _ in 0..trials {
-            let amt = u_calc_moveamt(
-                12,
-                HeroSpeed::VeryFast,
-                Encumbrance::Unencumbered,
-                &mut rng,
-            );
+            let amt = u_calc_moveamt(12, HeroSpeed::VeryFast, Encumbrance::Unencumbered, &mut rng);
             assert!(amt == 12 || amt == 24, "unexpected moveamt: {}", amt);
             if amt == 24 {
                 bonus_count += 1;
@@ -2332,12 +3859,7 @@ mod tests {
         let mut bonus_count = 0;
         let trials = 3000;
         for _ in 0..trials {
-            let amt = u_calc_moveamt(
-                12,
-                HeroSpeed::Fast,
-                Encumbrance::Unencumbered,
-                &mut rng,
-            );
+            let amt = u_calc_moveamt(12, HeroSpeed::Fast, Encumbrance::Unencumbered, &mut rng);
             assert!(amt == 12 || amt == 24, "unexpected moveamt: {}", amt);
             if amt == 24 {
                 bonus_count += 1;
@@ -2393,12 +3915,7 @@ mod tests {
         let trials = 3000;
         let mut results = Vec::new();
         for _ in 0..trials {
-            let amt = u_calc_moveamt(
-                12,
-                HeroSpeed::VeryFast,
-                Encumbrance::Stressed,
-                &mut rng,
-            );
+            let amt = u_calc_moveamt(12, HeroSpeed::VeryFast, Encumbrance::Stressed, &mut rng);
             assert!(
                 amt == 12 || amt == 6,
                 "unexpected moveamt with VeryFast+Stressed: {}",
@@ -2518,11 +4035,7 @@ mod tests {
         // No monsters, so both sides exhausted => new turn.
         let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
 
-        assert_eq!(
-            world.turn(),
-            initial_turn + 1,
-            "turn should have advanced"
-        );
+        assert_eq!(world.turn(), initial_turn + 1, "turn should have advanced");
         assert!(
             events
                 .iter()
@@ -2550,18 +4063,12 @@ mod tests {
         let mut world = make_test_world();
         let mut rng = test_rng();
 
-        let initial = world
-            .get_component::<Nutrition>(world.player())
-            .unwrap()
-            .0;
+        let initial = world.get_component::<Nutrition>(world.player()).unwrap().0;
         assert_eq!(initial, 900);
 
         resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
 
-        let after = world
-            .get_component::<Nutrition>(world.player())
-            .unwrap()
-            .0;
+        let after = world.get_component::<Nutrition>(world.player()).unwrap().0;
         assert_eq!(after, 899, "nutrition should deplete by 1 per turn");
     }
 
@@ -2624,12 +4131,18 @@ mod tests {
         let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
 
         let died = events.iter().any(|e| {
-            matches!(e, EngineEvent::EntityDied {
-                cause: crate::event::DeathCause::Starvation,
-                ..
-            })
+            matches!(
+                e,
+                EngineEvent::EntityDied {
+                    cause: crate::event::DeathCause::Starvation,
+                    ..
+                }
+            )
         });
-        assert!(died, "hero should die of starvation at nutrition <= -(100 + 10*con)");
+        assert!(
+            died,
+            "hero should die of starvation at nutrition <= -(100 + 10*con)"
+        );
     }
 
     #[test]
@@ -2646,12 +4159,18 @@ mod tests {
         let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
 
         let died = events.iter().any(|e| {
-            matches!(e, EngineEvent::EntityDied {
-                cause: crate::event::DeathCause::Starvation,
-                ..
-            })
+            matches!(
+                e,
+                EngineEvent::EntityDied {
+                    cause: crate::event::DeathCause::Starvation,
+                    ..
+                }
+            )
         });
-        assert!(!died, "hero should survive at exactly the starvation threshold");
+        assert!(
+            !died,
+            "hero should survive at exactly the starvation threshold"
+        );
     }
 
     #[test]
@@ -2666,10 +4185,13 @@ mod tests {
 
         let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
 
-        let strength_msg = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "hunger-weak-strength-loss")
-        });
-        assert!(strength_msg, "entering Weak should emit strength loss message");
+        let strength_msg = events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "hunger-weak-strength-loss"),
+        );
+        assert!(
+            strength_msg,
+            "entering Weak should emit strength loss message"
+        );
     }
 
     // ── HP regeneration tests ────────────────────────────────────
@@ -2709,9 +4231,7 @@ mod tests {
 
         // Player at full HP.
         {
-            let hp = world
-                .get_component::<HitPoints>(world.player())
-                .unwrap();
+            let hp = world.get_component::<HitPoints>(world.player()).unwrap();
             assert_eq!(hp.current, hp.max);
         }
 
@@ -2733,9 +4253,7 @@ mod tests {
         let mut rng = test_rng();
 
         // Set encumbrance to Stressed.
-        if let Some(mut enc) = world
-            .get_component_mut::<EncumbranceLevel>(world.player())
-        {
+        if let Some(mut enc) = world.get_component_mut::<EncumbranceLevel>(world.player()) {
             enc.0 = Encumbrance::Stressed;
         }
 
@@ -2789,9 +4307,7 @@ mod tests {
         let mut rng = test_rng();
 
         // Set encumbrance to Burdened.
-        if let Some(mut enc) = world
-            .get_component_mut::<EncumbranceLevel>(world.player())
-        {
+        if let Some(mut enc) = world.get_component_mut::<EncumbranceLevel>(world.player()) {
             enc.0 = Encumbrance::Burdened;
         }
 
@@ -2861,18 +4377,10 @@ mod tests {
         );
 
         // Check world state is identical.
-        let pos1 = world1
-            .get_component::<Positioned>(world1.player())
-            .unwrap();
-        let pos2 = world2
-            .get_component::<Positioned>(world2.player())
-            .unwrap();
+        let pos1 = world1.get_component::<Positioned>(world1.player()).unwrap();
+        let pos2 = world2.get_component::<Positioned>(world2.player()).unwrap();
         assert_eq!(pos1.0, pos2.0, "player position should match");
-        assert_eq!(
-            world1.turn(),
-            world2.turn(),
-            "turn counter should match"
-        );
+        assert_eq!(world1.turn(), world2.turn(), "turn counter should match");
     }
 
     #[test]
@@ -2917,31 +4425,19 @@ mod tests {
         // Run with resolve_turn (Vec-based).
         let mut world_a = make_test_world();
         let mut rng_a = test_rng();
-        let events_vec = resolve_turn(
-            &mut world_a,
-            PlayerAction::Rest,
-            &mut rng_a,
-        );
+        let events_vec = resolve_turn(&mut world_a, PlayerAction::Rest, &mut rng_a);
 
         // Run with turn_events (from_fn-based).
         let mut world_b = make_test_world();
         let mut rng_b = test_rng();
-        let events_from_fn: Vec<EngineEvent> = turn_events(
-            &mut world_b,
-            PlayerAction::Rest,
-            &mut rng_b,
-        )
-        .collect();
+        let events_from_fn: Vec<EngineEvent> =
+            turn_events(&mut world_b, PlayerAction::Rest, &mut rng_b).collect();
 
         // Run with turn_events_gen (gen-block-based).
         let mut world_c = make_test_world();
         let mut rng_c = test_rng();
-        let events_gen: Vec<EngineEvent> = turn_events_gen(
-            &mut world_c,
-            PlayerAction::Rest,
-            &mut rng_c,
-        )
-        .collect();
+        let events_gen: Vec<EngineEvent> =
+            turn_events_gen(&mut world_c, PlayerAction::Rest, &mut rng_c).collect();
 
         // All three should have the same length.
         assert_eq!(
@@ -2957,9 +4453,7 @@ mod tests {
 
         // Compare event-by-event using Debug representation (EngineEvent
         // may not impl PartialEq, but it impls Debug).
-        for (i, (ev_vec, ev_gen)) in
-            events_vec.iter().zip(events_gen.iter()).enumerate()
-        {
+        for (i, (ev_vec, ev_gen)) in events_vec.iter().zip(events_gen.iter()).enumerate() {
             assert_eq!(
                 format!("{:?}", ev_vec),
                 format!("{:?}", ev_gen),
@@ -2998,9 +4492,7 @@ mod tests {
             "resolve_turn vs turn_events_gen length mismatch (Move)"
         );
 
-        for (i, (ev_vec, ev_gen)) in
-            events_vec.iter().zip(events_gen.iter()).enumerate()
-        {
+        for (i, (ev_vec, ev_gen)) in events_vec.iter().zip(events_gen.iter()).enumerate() {
             assert_eq!(
                 format!("{:?}", ev_vec),
                 format!("{:?}", ev_gen),
@@ -3022,21 +4514,13 @@ mod tests {
         let mut all_gen: Vec<String> = Vec::new();
 
         for _ in 0..20 {
-            let events = resolve_turn(
-                &mut world_a,
-                PlayerAction::Rest,
-                &mut rng_a,
-            );
+            let events = resolve_turn(&mut world_a, PlayerAction::Rest, &mut rng_a);
             for e in &events {
                 all_vec.push(format!("{:?}", e));
             }
 
-            let events: Vec<EngineEvent> = turn_events_gen(
-                &mut world_b,
-                PlayerAction::Rest,
-                &mut rng_b,
-            )
-            .collect();
+            let events: Vec<EngineEvent> =
+                turn_events_gen(&mut world_b, PlayerAction::Rest, &mut rng_b).collect();
             for e in &events {
                 all_gen.push(format!("{:?}", e));
             }
@@ -3060,11 +4544,7 @@ mod tests {
         let mut rng = test_rng();
 
         // No traps placed, so searching should find nothing.
-        let events = resolve_turn(
-            &mut world,
-            PlayerAction::Search,
-            &mut rng,
-        );
+        let events = resolve_turn(&mut world, PlayerAction::Search, &mut rng);
 
         let trap_revealed = events
             .iter()
@@ -3098,11 +4578,7 @@ mod tests {
             // Reset trap detection for each attempt.
             world.dungeon_mut().trap_map.traps[0].detected = false;
 
-            let events = resolve_turn(
-                &mut world,
-                PlayerAction::Search,
-                &mut rng,
-            );
+            let events = resolve_turn(&mut world, PlayerAction::Search, &mut rng);
 
             if events
                 .iter()
@@ -3157,10 +4633,7 @@ mod tests {
             Speed(speed),
             MovementPoints(NORMAL_SPEED as i32),
             Name(name.to_string()),
-            HitPoints {
-                current: 8,
-                max: 8,
-            },
+            HitPoints { current: 8, max: 8 },
             DisplaySymbol {
                 symbol: 'g',
                 color: nethack_babel_data::Color::Brown,
@@ -3283,14 +4756,9 @@ mod tests {
         assert_eq!(world.dungeon().depth, 2);
 
         // Now go back up: place player on StairsUp of the new level.
-        let up_pos = find_terrain(
-            &world.dungeon().current_level,
-            Terrain::StairsUp,
-        );
+        let up_pos = find_terrain(&world.dungeon().current_level, Terrain::StairsUp);
         if let Some(up) = up_pos {
-            if let Some(mut pos) = world
-                .get_component_mut::<Positioned>(world.player())
-            {
+            if let Some(mut pos) = world.get_component_mut::<Positioned>(world.player()) {
                 pos.0 = up;
             }
         }
@@ -3358,8 +4826,12 @@ mod tests {
             .get_component::<CreationOrder>(monster_b)
             .expect("monster B should have CreationOrder")
             .0;
-        assert!(order_a < order_b,
-                "A created first should have lower order: A={}, B={}", order_a, order_b);
+        assert!(
+            order_a < order_b,
+            "A created first should have lower order: A={}, B={}",
+            order_a,
+            order_b
+        );
 
         // Verify sorting: collect monsters in the same way as resolve_monster_turns
         let player = world.player();
@@ -3380,10 +4852,14 @@ mod tests {
         monsters.sort_by(|a, b| b.1.cmp(&a.1).then(a.2.cmp(&b.2)));
 
         assert_eq!(monsters.len(), 2);
-        assert_eq!(monsters[0].0, monster_a,
-                   "same-speed monsters: A (created first) should act first");
-        assert_eq!(monsters[1].0, monster_b,
-                   "same-speed monsters: B (created second) should act second");
+        assert_eq!(
+            monsters[0].0, monster_a,
+            "same-speed monsters: A (created first) should act first"
+        );
+        assert_eq!(
+            monsters[1].0, monster_b,
+            "same-speed monsters: B (created second) should act second"
+        );
     }
 
     #[test]
@@ -3413,10 +4889,11 @@ mod tests {
         }
         monsters.sort_by(|a, b| b.1.cmp(&a.1).then(a.2.cmp(&b.2)));
 
-        assert_eq!(monsters[0].0, fast,
-                   "faster monster acts first regardless of creation order");
-        assert_eq!(monsters[1].0, slow,
-                   "slower monster acts second");
+        assert_eq!(
+            monsters[0].0, fast,
+            "faster monster acts first regardless of creation order"
+        );
+        assert_eq!(monsters[1].0, slow, "slower monster acts second");
     }
 
     #[test]
@@ -3456,14 +4933,14 @@ mod tests {
         // Try to move east.
         let events = resolve_turn(
             &mut world,
-            PlayerAction::Move { direction: Direction::East },
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
             &mut rng,
         );
 
         // Player should NOT have moved.
-        let pos = world
-            .get_component::<Positioned>(world.player())
-            .unwrap();
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
         assert_eq!(
             pos.0,
             Position::new(5, 5),
@@ -3471,16 +4948,19 @@ mod tests {
         );
 
         // Should have a paralysis message.
-        let has_para_msg = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("paralyzed"))
-        });
+        let has_para_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("paralyzed")));
         assert!(has_para_msg, "expected paralysis message");
 
         // No EntityMoved event should have been emitted for the player.
-        let player_moved = events.iter().any(|e| {
-            matches!(e, EngineEvent::EntityMoved { entity, .. } if *entity == player)
-        });
-        assert!(!player_moved, "paralyzed player should not emit EntityMoved");
+        let player_moved = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::EntityMoved { entity, .. } if *entity == player));
+        assert!(
+            !player_moved,
+            "paralyzed player should not emit EntityMoved"
+        );
     }
 
     #[test]
@@ -3502,7 +4982,9 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
             resolve_turn(
                 &mut world,
-                PlayerAction::Move { direction: Direction::East },
+                PlayerAction::Move {
+                    direction: Direction::East,
+                },
                 &mut rng,
             );
 
@@ -3537,7 +5019,9 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
             resolve_turn(
                 &mut world,
-                PlayerAction::Move { direction: Direction::East },
+                PlayerAction::Move {
+                    direction: Direction::East,
+                },
                 &mut rng,
             );
 
@@ -3549,10 +5033,7 @@ mod tests {
                 break;
             }
         }
-        assert!(
-            went_wrong,
-            "stunned player should have movement randomized"
-        );
+        assert!(went_wrong, "stunned player should have movement randomized");
     }
 
     #[test]
@@ -3571,21 +5052,18 @@ mod tests {
         crate::status::make_levitating(&mut world, player, 50);
 
         // Try to go down.
-        let events = resolve_turn(
-            &mut world,
-            PlayerAction::GoDown,
-            &mut rng,
-        );
+        let events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
 
         // Should have a levitation-blocks message.
-        let has_lev_msg = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key.contains("levitating"))
-        });
+        let has_lev_msg = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("levitating")));
         assert!(has_lev_msg, "expected levitation blocking message");
 
         // Depth should remain unchanged.
         assert_eq!(
-            world.dungeon().depth, 1,
+            world.dungeon().depth,
+            1,
             "levitating player should not descend stairs"
         );
     }
@@ -3598,7 +5076,7 @@ mod tests {
         // avoid_trap). We verify the integration by checking the
         // levitation status query works correctly in the traps
         // context.
-        use crate::traps::{avoid_trap, is_floor_trigger, TrapInstance};
+        use crate::traps::{TrapInstance, avoid_trap, is_floor_trigger};
         use nethack_babel_data::TrapType;
 
         let pit = TrapInstance::new(Position::new(10, 5), TrapType::Pit);
@@ -3646,11 +5124,7 @@ mod tests {
         crate::status::make_levitating(&mut world, player, 50);
 
         // Try to pick up.
-        let events = resolve_turn(
-            &mut world,
-            PlayerAction::PickUp,
-            &mut rng,
-        );
+        let events = resolve_turn(&mut world, PlayerAction::PickUp, &mut rng);
 
         // Should have a levitation-blocks-pickup message.
         let has_msg = events.iter().any(|e| {
@@ -3683,7 +5157,10 @@ mod tests {
             .flat_map(|y| (0..world.dungeon().current_level.width).map(move |x| (x, y)))
             .filter(|&(x, y)| !world.dungeon().current_level.cells[y][x].explored)
             .count();
-        assert!(unexplored_before > 0, "should have unexplored cells before WizMap");
+        assert!(
+            unexplored_before > 0,
+            "should have unexplored cells before WizMap"
+        );
 
         let events = resolve_turn(&mut world, PlayerAction::WizMap, &mut rng);
 
@@ -3692,7 +5169,10 @@ mod tests {
             .flat_map(|y| (0..world.dungeon().current_level.width).map(move |x| (x, y)))
             .filter(|&(x, y)| !world.dungeon().current_level.cells[y][x].explored)
             .count();
-        assert_eq!(unexplored_after, 0, "all cells should be explored after WizMap");
+        assert_eq!(
+            unexplored_after, 0,
+            "all cells should be explored after WizMap"
+        );
 
         assert!(events.iter().any(|e| matches!(
             e,
@@ -3834,8 +5314,13 @@ mod tests {
         resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
 
         // Fuel should have decremented.
-        let lf = world.get_component::<crate::light::LightFuel>(lamp).unwrap();
-        assert_eq!(lf.fuel, 2, "light source fuel should decrement by 1 per turn");
+        let lf = world
+            .get_component::<crate::light::LightFuel>(lamp)
+            .unwrap();
+        assert_eq!(
+            lf.fuel, 2,
+            "light source fuel should decrement by 1 per turn"
+        );
     }
 
     #[test]
@@ -3855,7 +5340,9 @@ mod tests {
         let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
 
         // Lamp should be extinguished.
-        let lf = world.get_component::<crate::light::LightFuel>(lamp).unwrap();
+        let lf = world
+            .get_component::<crate::light::LightFuel>(lamp)
+            .unwrap();
         assert!(!lf.lit, "lamp should be extinguished at 0 fuel");
         assert_eq!(lf.fuel, 0);
 
@@ -3881,17 +5368,22 @@ mod tests {
         );
 
         // Depth should now be 5.
-        assert_eq!(world.dungeon().depth, 5, "WizLevelTeleport should change depth");
+        assert_eq!(
+            world.dungeon().depth,
+            5,
+            "WizLevelTeleport should change depth"
+        );
 
         // Should have a level-teleport message and a LevelChanged event.
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "wizard-level-teleport"
         )));
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::LevelChanged { .. }
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+        );
     }
 
     // ── Blind cannot read scrolls ─────────────────────────────────────
@@ -3905,16 +5397,15 @@ mod tests {
         crate::status::make_blinded(&mut world, player, 10);
         assert!(crate::status::is_blind(&world, player));
 
-        let events = resolve_turn(
-            &mut world,
-            PlayerAction::Read { item: None },
-            &mut rng,
-        );
+        let events = resolve_turn(&mut world, PlayerAction::Read { item: None }, &mut rng);
 
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "scroll-cant-read-blind"
-        )), "Blind player should get cant-read message");
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "scroll-cant-read-blind"
+            )),
+            "Blind player should get cant-read message"
+        );
         // Should NOT get the normal "read-what" prompt.
         assert!(!events.iter().any(|e| matches!(
             e,
@@ -3929,11 +5420,7 @@ mod tests {
         let player = world.player();
         assert!(!crate::status::is_blind(&world, player));
 
-        let events = resolve_turn(
-            &mut world,
-            PlayerAction::Read { item: None },
-            &mut rng,
-        );
+        let events = resolve_turn(&mut world, PlayerAction::Read { item: None }, &mut rng);
 
         // Should get the normal prompt, not the blind message.
         assert!(events.iter().any(|e| matches!(
@@ -3956,7 +5443,8 @@ mod tests {
         crate::status::make_stunned(&mut world, player, 10);
         assert!(crate::status::is_stunned(&world, player));
 
-        // Use player entity as a stand-in for the wand item (wand lookup is TODO).
+        // Use player entity as a stand-in item without wand components;
+        // this should fall back to the generic zap path.
         let events = resolve_turn(
             &mut world,
             PlayerAction::ZapWand {
@@ -4016,6 +5504,634 @@ mod tests {
         )));
     }
 
+    #[test]
+    fn test_zap_wand_uses_item_type_and_charges_when_present() {
+        use crate::monster_ai::WandTypeTag;
+        use crate::wands::{WandCharges, WandType};
+
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        let wand = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Wand,
+                quantity: 1,
+                weight: 7,
+                age: 0,
+                inv_letter: Some('z'),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            WandTypeTag(WandType::Light),
+            WandCharges {
+                spe: 1,
+                recharged: 0,
+            },
+        ));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::ZapWand {
+                item: wand,
+                direction: None, // NODIR wand should work without direction.
+            },
+            &mut rng,
+        );
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wand-light")),
+            "Light wand should dispatch to real wand logic"
+        );
+
+        let charges = world
+            .get_component::<WandCharges>(wand)
+            .expect("wand should keep charges component");
+        assert_eq!(charges.spe, 0, "zapping should consume one charge");
+    }
+
+    #[test]
+    fn test_swap_uses_equipment_state_for_secondary_weapon() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let primary = spawn_inventory_item(&mut world, 'a');
+        let secondary = spawn_inventory_item(&mut world, 'b');
+        world
+            .ecs_mut()
+            .insert_one(
+                primary,
+                BucStatus {
+                    cursed: false,
+                    blessed: false,
+                    bknown: true,
+                },
+            )
+            .expect("insert primary buc");
+
+        let mut equip = world
+            .get_component_mut::<crate::equipment::EquipmentSlots>(player)
+            .expect("player should have equipment slots");
+        equip.weapon = Some(primary);
+        equip.off_hand = Some(secondary);
+        drop(equip);
+
+        let events = resolve_turn(&mut world, PlayerAction::Swap, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "swap-success"
+        )));
+    }
+
+    #[test]
+    fn test_ride_mounts_adjacent_tame_steed() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+        let steed = spawn_tame_steed(&mut world, Position::new(6, 5), "pony");
+
+        let events = resolve_turn(&mut world, PlayerAction::Ride, &mut rng);
+
+        assert!(crate::steed::is_mounted(&world, player));
+        let mounted_on = world
+            .get_component::<crate::steed::MountedOn>(player)
+            .expect("player should have MountedOn after ride");
+        assert_eq!(mounted_on.0, steed);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "mount-steed"
+        )));
+    }
+
+    #[test]
+    fn test_ride_dismounts_when_already_mounted() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+        let _steed = spawn_tame_steed(&mut world, Position::new(6, 5), "pony");
+
+        let _ = resolve_turn(&mut world, PlayerAction::Ride, &mut rng);
+        assert!(crate::steed::is_mounted(&world, player));
+
+        let events = resolve_turn(&mut world, PlayerAction::Ride, &mut rng);
+        assert!(!crate::steed::is_mounted(&world, player));
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "dismount-steed"
+        )));
+    }
+
+    #[test]
+    fn test_toggle_two_weapon_requires_offhand() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let primary = spawn_inventory_item(&mut world, 'a');
+        let mut equip = world
+            .get_component_mut::<crate::equipment::EquipmentSlots>(player)
+            .expect("player should have equipment slots");
+        equip.weapon = Some(primary);
+        equip.off_hand = None;
+        drop(equip);
+
+        let events = resolve_turn(&mut world, PlayerAction::ToggleTwoWeapon, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "swap-no-secondary"
+        )));
+    }
+
+    #[test]
+    fn test_toggle_two_weapon_flips_player_skill_state() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let primary = spawn_inventory_item(&mut world, 'a');
+        let secondary = spawn_inventory_item(&mut world, 'b');
+        let mut equip = world
+            .get_component_mut::<crate::equipment::EquipmentSlots>(player)
+            .expect("player should have equipment slots");
+        equip.weapon = Some(primary);
+        equip.off_hand = Some(secondary);
+        drop(equip);
+
+        let events_on = resolve_turn(&mut world, PlayerAction::ToggleTwoWeapon, &mut rng);
+        assert!(events_on.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "two-weapon-enabled"
+        )));
+        let skills = world
+            .get_component::<nethack_babel_data::PlayerSkills>(player)
+            .expect("player should gain PlayerSkills when toggling two-weapon");
+        assert!(
+            skills.two_weapon,
+            "two-weapon should be enabled after first toggle"
+        );
+        drop(skills);
+
+        let events_off = resolve_turn(&mut world, PlayerAction::ToggleTwoWeapon, &mut rng);
+        assert!(events_off.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "two-weapon-disabled"
+        )));
+        let skills = world
+            .get_component::<nethack_babel_data::PlayerSkills>(player)
+            .expect("player should keep PlayerSkills after toggling two-weapon");
+        assert!(
+            !skills.two_weapon,
+            "two-weapon should be disabled after second toggle"
+        );
+    }
+
+    #[test]
+    fn test_enhance_skill_advances_when_threshold_met() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                PlayerSkills {
+                    weapon_slots: 2,
+                    skills_advanced: 0,
+                    skills: vec![SkillState {
+                        skill: WeaponSkill::Dagger,
+                        level: 1,     // Unskilled
+                        max_level: 4, // Expert
+                        advance: 20,  // threshold for level 1->2
+                    }],
+                    two_weapon: false,
+                },
+            )
+            .expect("insert player skills");
+
+        let events = resolve_turn(&mut world, PlayerAction::EnhanceSkill, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "enhance-success"
+        )));
+
+        let skills = world
+            .get_component::<PlayerSkills>(player)
+            .expect("player should keep PlayerSkills");
+        assert_eq!(skills.weapon_slots, 1, "enhance should consume one slot");
+        assert_eq!(skills.skills_advanced, 1, "enhance should increment count");
+        assert_eq!(skills.skills[0].level, 2, "dagger should upgrade to Basic");
+    }
+
+    #[test]
+    fn test_enhance_skill_requires_practice_and_slots() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                PlayerSkills {
+                    weapon_slots: 1, // not enough for Basic->Skilled (cost 2)
+                    skills_advanced: 0,
+                    skills: vec![SkillState {
+                        skill: WeaponSkill::LongSword,
+                        level: 2,     // Basic
+                        max_level: 4, // Expert
+                        advance: 80,  // enough practice
+                    }],
+                    two_weapon: false,
+                },
+            )
+            .expect("insert player skills");
+
+        let events = resolve_turn(&mut world, PlayerAction::EnhanceSkill, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "enhance-not-available"
+        )));
+
+        let skills = world
+            .get_component::<PlayerSkills>(player)
+            .expect("player should keep PlayerSkills");
+        assert_eq!(
+            skills.weapon_slots, 1,
+            "failed enhance should not consume slots"
+        );
+        assert_eq!(
+            skills.skills_advanced, 0,
+            "failed enhance should not increment count"
+        );
+        assert_eq!(
+            skills.skills[0].level, 2,
+            "failed enhance should not change skill level"
+        );
+    }
+
+    #[test]
+    fn test_swap_detects_cursed_primary_weapon() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let primary = spawn_inventory_item(&mut world, 'a');
+        let secondary = spawn_inventory_item(&mut world, 'b');
+        world
+            .ecs_mut()
+            .insert_one(
+                primary,
+                BucStatus {
+                    cursed: true,
+                    blessed: false,
+                    bknown: true,
+                },
+            )
+            .expect("insert primary buc");
+
+        let mut equip = world
+            .get_component_mut::<crate::equipment::EquipmentSlots>(player)
+            .expect("player should have equipment slots");
+        equip.weapon = Some(primary);
+        equip.off_hand = Some(secondary);
+        drop(equip);
+
+        let events = resolve_turn(&mut world, PlayerAction::Swap, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "swap-welded"
+        )));
+    }
+
+    #[test]
+    fn test_wipe_clears_creamed_counter_from_hero_counters() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                crate::status::HeroCounters {
+                    creamed: 3,
+                    gallop: 0,
+                },
+            )
+            .expect("insert hero counters");
+
+        let events = resolve_turn(&mut world, PlayerAction::Wipe, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "wipe-cream-off"
+        )));
+        let counters = world
+            .get_component::<crate::status::HeroCounters>(player)
+            .expect("player should have hero counters");
+        assert_eq!(counters.creamed, 0, "wipe should clear creamed counter");
+    }
+
+    #[test]
+    fn test_wipe_respects_cursed_towel_in_offhand() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                crate::status::HeroCounters {
+                    creamed: 3,
+                    gallop: 0,
+                },
+            )
+            .expect("insert hero counters");
+
+        let towel = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 2,
+                age: 0,
+                inv_letter: Some('t'),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            Name("towel".to_string()),
+            BucStatus {
+                cursed: true,
+                blessed: false,
+                bknown: true,
+            },
+        ));
+
+        let mut equip = world
+            .get_component_mut::<crate::equipment::EquipmentSlots>(player)
+            .expect("player should have equipment slots");
+        equip.off_hand = Some(towel);
+        drop(equip);
+
+        let events = resolve_turn(&mut world, PlayerAction::Wipe, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "wipe-cursed-towel"
+        )));
+
+        let counters = world
+            .get_component::<crate::status::HeroCounters>(player)
+            .expect("player should have hero counters");
+        assert_eq!(
+            counters.creamed, 2,
+            "cursed towel should block wiping; only per-turn decrement applies"
+        );
+    }
+
+    #[test]
+    fn test_turn_undead_uses_role_and_nearby_undead_count() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, priest_identity())
+            .expect("insert player identity");
+
+        world.spawn((
+            Monster,
+            Positioned(Position::new(6, 5)),
+            crate::monster_ai::MonsterSpeciesFlags(MonsterFlags::UNDEAD),
+            MovementPoints(NORMAL_SPEED as i32),
+        ));
+        world.spawn((
+            Monster,
+            Positioned(Position::new(30, 30)),
+            crate::monster_ai::MonsterSpeciesFlags(MonsterFlags::UNDEAD),
+            MovementPoints(NORMAL_SPEED as i32),
+        ));
+
+        let events = resolve_turn(&mut world, PlayerAction::TurnUndead, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "turn-undead-success"
+        )));
+    }
+
+    #[test]
+    fn test_turn_undead_requires_clerical_role() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        world.spawn((
+            Monster,
+            Positioned(Position::new(6, 5)),
+            crate::monster_ai::MonsterSpeciesFlags(MonsterFlags::UNDEAD),
+            MovementPoints(NORMAL_SPEED as i32),
+        ));
+
+        let events = resolve_turn(&mut world, PlayerAction::TurnUndead, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "turn-not-clerical"
+        )));
+    }
+
+    #[test]
+    fn test_jump_without_jumping_boots_has_no_ability() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Jump {
+                position: Position::new(6, 5),
+            },
+            &mut rng,
+        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "jump-no-ability"
+        )));
+    }
+
+    #[test]
+    fn test_jump_with_jumping_boots_moves_player() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let boots = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Armor,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('b'),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            Name("jumping boots".to_string()),
+        ));
+
+        let mut equip = world
+            .get_component_mut::<crate::equipment::EquipmentSlots>(player)
+            .expect("player should have equipment slots");
+        equip.boots = Some(boots);
+        drop(equip);
+
+        let dest = Position::new(8, 5);
+        let events = resolve_turn(&mut world, PlayerAction::Jump { position: dest }, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "jump-success"
+        )));
+        let pos = world
+            .get_component::<Positioned>(player)
+            .expect("player should have position");
+        assert_eq!(pos.0, dest, "successful jump should move player");
+    }
+
+    fn kick_damage(events: &[EngineEvent]) -> Option<u32> {
+        for event in events {
+            if let EngineEvent::Message { key, args } = event
+                && key == "kick-monster"
+                && let Some((_, dmg)) = args.iter().find(|(k, _)| k == "damage")
+                && let Ok(val) = dmg.parse::<u32>()
+            {
+                return Some(val);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn test_kick_uses_monk_role_bonus() {
+        let mut world_non = make_test_world();
+        let mut world_monk = make_test_world();
+        let player = world_monk.player();
+        world_monk
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("insert monk identity");
+
+        spawn_monster(&mut world_non, Position::new(6, 5), 12);
+        spawn_monster(&mut world_monk, Position::new(6, 5), 12);
+
+        let mut rng_non = test_rng();
+        let mut rng_monk = test_rng();
+        let events_non = resolve_turn(
+            &mut world_non,
+            PlayerAction::Kick {
+                direction: Direction::East,
+            },
+            &mut rng_non,
+        );
+        let events_monk = resolve_turn(
+            &mut world_monk,
+            PlayerAction::Kick {
+                direction: Direction::East,
+            },
+            &mut rng_monk,
+        );
+
+        let non_damage = kick_damage(&events_non).expect("non-monk kick damage event");
+        let monk_damage = kick_damage(&events_monk).expect("monk kick damage event");
+        assert!(
+            monk_damage > non_damage,
+            "monk kick should add martial arts bonus ({} <= {})",
+            monk_damage,
+            non_damage
+        );
+    }
+
+    #[test]
+    fn test_rub_uses_item_name_touchstone_path() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Gem,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('g'),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            Name("touchstone".to_string()),
+        ));
+
+        let events = resolve_turn(&mut world, PlayerAction::Rub { item }, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "rub-touchstone"
+        )));
+    }
+
+    #[test]
+    fn test_invoke_artifact_requires_wielded_item() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Weapon,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('a'),
+                artifact: Some(ArtifactId(1)),
+            },
+            ObjectLocation::Inventory,
+            Name("artifact blade".to_string()),
+        ));
+
+        let events = resolve_turn(&mut world, PlayerAction::InvokeArtifact { item }, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "invoke-not-wielded"
+        )));
+    }
+
+    #[test]
+    fn test_invoke_artifact_succeeds_when_wielded() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+        let item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Weapon,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('a'),
+                artifact: Some(ArtifactId(1)),
+            },
+            ObjectLocation::Inventory,
+            Name("artifact blade".to_string()),
+        ));
+
+        let mut equip = world
+            .get_component_mut::<crate::equipment::EquipmentSlots>(player)
+            .expect("player should have equipment slots");
+        equip.weapon = Some(item);
+        drop(equip);
+
+        let events = resolve_turn(&mut world, PlayerAction::InvokeArtifact { item }, &mut rng);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "invoke-artifact"
+        )));
+    }
+
     // ── Gas cloud ticking ─────────────────────────────────────────────
 
     #[test]
@@ -4027,10 +6143,11 @@ mod tests {
         // Run a rest turn which triggers process_new_turn.
         let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
         // No gas clouds => no cloud damage events, but no crash either.
-        assert!(!events.iter().any(|e| matches!(
-            e,
-            EngineEvent::HpChange { .. }
-        )));
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::HpChange { .. }))
+        );
     }
 
     #[test]
@@ -4083,16 +6200,21 @@ mod tests {
             let mut rng = Pcg64::seed_from_u64(seed);
             let events = resolve_turn(
                 &mut world,
-                PlayerAction::Move { direction: Direction::East },
+                PlayerAction::Move {
+                    direction: Direction::East,
+                },
                 &mut rng,
             );
 
-            let has_poly = events.iter().any(|e| matches!(
-                e,
-                EngineEvent::StatusApplied {
-                    status: crate::event::StatusEffect::Polymorphed, ..
-                }
-            ));
+            let has_poly = events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::StatusApplied {
+                        status: crate::event::StatusEffect::Polymorphed,
+                        ..
+                    }
+                )
+            });
             if has_poly {
                 found_poly = true;
                 break;
@@ -4116,10 +6238,13 @@ mod tests {
         let mut rng = test_rng();
 
         // Set up a vault room covering (6,5)..(7,6).
-        world.dungeon_mut().vault_rooms.push(crate::vault::VaultRoom {
-            top_left: Position::new(6, 5),
-            bottom_right: Position::new(7, 6),
-        });
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(crate::vault::VaultRoom {
+                top_left: Position::new(6, 5),
+                bottom_right: Position::new(7, 6),
+            });
         // Make that area walkable.
         for y in 5..=6 {
             for x in 6..=7 {
@@ -4133,13 +6258,15 @@ mod tests {
         // Move east into the vault.
         let events = resolve_turn(
             &mut world,
-            PlayerAction::Move { direction: Direction::East },
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
             &mut rng,
         );
 
-        let has_guard = events.iter().any(|e| {
-            matches!(e, EngineEvent::Message { key, .. } if key == "guard-appears")
-        });
+        let has_guard = events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "guard-appears"));
         assert!(has_guard, "entering a vault should spawn a guard");
         assert!(
             world.dungeon().vault_guard_present,
@@ -4148,9 +6275,128 @@ mod tests {
     }
 
     #[test]
+    fn test_engrave_tracks_elbereth_conduct_on_player() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Engrave {
+                text: "Elbereth".to_string(),
+            },
+            &mut rng,
+        );
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "engrave-write"))
+        );
+        let conduct = world
+            .get_component::<ConductState>(player)
+            .expect("engraving should create conduct state");
+        assert_eq!(
+            conduct.elbereths, 1,
+            "Elbereth should break elberethless once"
+        );
+    }
+
+    #[test]
+    fn test_pray_increments_gnostic_conduct_on_player() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let _ = resolve_turn(&mut world, PlayerAction::Pray, &mut rng);
+
+        let conduct = world
+            .get_component::<ConductState>(player)
+            .expect("prayer should create conduct state");
+        assert_eq!(
+            conduct.gnostic, 1,
+            "prayer should increment atheist counter"
+        );
+    }
+
+    #[test]
+    fn test_offer_increments_gnostic_conduct_on_player() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+        let corpse = spawn_inventory_item(&mut world, 'a');
+
+        let _ = resolve_turn(
+            &mut world,
+            PlayerAction::Offer { item: Some(corpse) },
+            &mut rng,
+        );
+
+        let conduct = world
+            .get_component::<ConductState>(player)
+            .expect("offering should create conduct state");
+        assert_eq!(
+            conduct.gnostic, 1,
+            "offering should increment atheist counter"
+        );
+    }
+
+    #[test]
+    fn test_conduct_updates_weaphit_and_killer_from_events() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let victim = world.spawn((Name("victim".to_string()),));
+
+        let events = vec![
+            EngineEvent::MeleeHit {
+                attacker: player,
+                defender: victim,
+                weapon: Some(player),
+                damage: 1,
+            },
+            EngineEvent::EntityDied {
+                entity: victim,
+                killer: Some(player),
+                cause: crate::event::DeathCause::KilledBy {
+                    killer_name: "you".to_string(),
+                },
+            },
+        ];
+
+        apply_action_conduct_updates(&mut world, player, &PlayerAction::Rest, &events);
+
+        let conduct = world
+            .get_component::<ConductState>(player)
+            .expect("conduct should be created");
+        assert_eq!(conduct.weaphit, 1);
+        assert_eq!(conduct.killer, 1);
+    }
+
+    #[test]
+    fn test_conduct_updates_wishes_on_wizwish_action() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let events = Vec::new();
+
+        apply_action_conduct_updates(
+            &mut world,
+            player,
+            &PlayerAction::WizWish {
+                wish_text: "blessed +2 silver saber".to_string(),
+            },
+            &events,
+        );
+
+        let conduct = world
+            .get_component::<ConductState>(player)
+            .expect("conduct should be created");
+        assert_eq!(conduct.wishes, 1);
+    }
+
+    #[test]
     fn test_prayer_creates_minion_entity() {
         // Test that angry prayer at anger_roll 7 emits MonsterGenerated.
-        use crate::religion::{pray, ReligionState, Trouble};
+        use crate::religion::{ReligionState, Trouble, pray};
 
         let base_state = ReligionState {
             alignment: nethack_babel_data::Alignment::Lawful,
@@ -4198,9 +6444,9 @@ mod tests {
                 false,
                 &mut rng,
             );
-            let has_monster = events.iter().any(|e| {
-                matches!(e, EngineEvent::MonsterGenerated { .. })
-            });
+            let has_monster = events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::MonsterGenerated { .. }));
             if has_monster {
                 found_minion = true;
                 break;
