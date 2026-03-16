@@ -16,10 +16,11 @@ use crate::action::{Direction, Position};
 use crate::combat::resolve_melee_attack;
 use crate::dungeon::Terrain;
 use crate::event::{EngineEvent, HpSource};
+use crate::religion::rnl;
 use crate::steed;
 use crate::status;
 use crate::world::{
-    Attributes, CarryWeight, GameWorld, Monster, Positioned, Tame,
+    Attributes, CarryWeight, GameWorld, Monster, PlayerCombat, Positioned, Tame,
 };
 
 // ---------------------------------------------------------------------------
@@ -142,7 +143,7 @@ pub fn resolve_move(
 /// Success formula (from spec section 4.1):
 ///   `rnl(20) < (STR + DEX + CON) / 3`
 ///
-/// We simplify `rnl` to a uniform roll here (luck adjustment TBD).
+/// Uses luck-adjusted `rnl()` so positive luck improves success rate.
 pub fn try_open_door(
     world: &mut GameWorld,
     position: Position,
@@ -166,12 +167,17 @@ pub fn try_open_door(
         .map(|a| *a)
         .unwrap_or_default();
 
+    let luck = world
+        .get_component::<PlayerCombat>(player)
+        .map(|pc| pc.luck)
+        .unwrap_or(0);
+
     let avg_attrib = (attrs.strength as i32
         + attrs.dexterity as i32
         + attrs.constitution as i32)
         / 3;
 
-    let roll: i32 = rng.random_range(0..20);
+    let roll = rnl(rng, 20, luck);
 
     if roll < avg_attrib {
         // Success: open the door.
@@ -191,6 +197,8 @@ pub fn try_open_door(
 ///
 /// Success formula (from spec section 4.2):
 ///   `rn2(25) < (STR + DEX + CON) / 3`
+///
+/// Uses luck-adjusted `rnl()` for the roll.
 pub fn try_close_door(
     world: &mut GameWorld,
     position: Position,
@@ -214,12 +222,17 @@ pub fn try_close_door(
         .map(|a| *a)
         .unwrap_or_default();
 
+    let luck = world
+        .get_component::<PlayerCombat>(player)
+        .map(|pc| pc.luck)
+        .unwrap_or(0);
+
     let avg_attrib = (attrs.strength as i32
         + attrs.dexterity as i32
         + attrs.constitution as i32)
         / 3;
 
-    let roll: i32 = rng.random_range(0..25);
+    let roll = rnl(rng, 25, luck);
 
     if roll < avg_attrib {
         world
@@ -241,8 +254,9 @@ pub fn try_close_door(
 ///
 /// where `avg_attrib = (STR + DEX + CON) / 3`.
 ///
-/// On success: door becomes `DoorOpen` (simplified; spec distinguishes
-/// broken vs. shattered, which we can refine later).
+/// Uses luck-adjusted `rnl()` for the roll. On success: door becomes
+/// `DoorOpen` (simplified; spec distinguishes broken vs. shattered,
+/// which we can refine later).
 pub fn try_kick_door(
     world: &mut GameWorld,
     position: Position,
@@ -269,12 +283,17 @@ pub fn try_kick_door(
         .map(|a| *a)
         .unwrap_or_default();
 
+    let luck = world
+        .get_component::<PlayerCombat>(player)
+        .map(|pc| pc.luck)
+        .unwrap_or(0);
+
     let avg_attrib = (attrs.strength as i32
         + attrs.dexterity as i32
         + attrs.constitution as i32)
         / 3;
 
-    let roll: i32 = rng.random_range(0..35);
+    let roll = rnl(rng, 35, luck);
 
     if roll < avg_attrib {
         // Door is broken open.
@@ -1835,5 +1854,126 @@ mod tests {
         assert!(events.iter().any(|e| matches!(e,
             EngineEvent::Message { key, .. } if key == "steed-swims")),
             "should emit steed-swims message");
+    }
+
+    // ── Luck-adjusted door tests ───────────────────────────────
+
+    #[test]
+    fn luck_improves_door_open_rate() {
+        // Compare open success rate with luck=0 vs luck=13 over many trials.
+        // Both use moderate attributes where success is not guaranteed.
+        let trials = 200u64;
+        let mut successes_no_luck = 0;
+        let mut successes_high_luck = 0;
+
+        for seed in 0..trials {
+            // No luck
+            {
+                let mut world = make_test_world();
+                let player = world.player();
+                if let Some(mut attrs) = world.get_component_mut::<Attributes>(player) {
+                    attrs.strength = 12;
+                    attrs.dexterity = 12;
+                    attrs.constitution = 12;
+                }
+                let door_pos = Position::new(6, 5);
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(door_pos, Terrain::DoorClosed);
+                let mut rng = Pcg64::seed_from_u64(seed);
+                let events = try_open_door(&mut world, door_pos, &mut rng);
+                if events.iter().any(|e| matches!(e, EngineEvent::DoorOpened { .. })) {
+                    successes_no_luck += 1;
+                }
+            }
+            // High luck
+            {
+                let mut world = make_test_world();
+                let player = world.player();
+                if let Some(mut attrs) = world.get_component_mut::<Attributes>(player) {
+                    attrs.strength = 12;
+                    attrs.dexterity = 12;
+                    attrs.constitution = 12;
+                }
+                // Set high luck via PlayerCombat component.
+                if let Some(mut pc) = world.get_component_mut::<PlayerCombat>(player) {
+                    pc.luck = 13;
+                }
+                let door_pos = Position::new(6, 5);
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(door_pos, Terrain::DoorClosed);
+                let mut rng = Pcg64::seed_from_u64(seed);
+                let events = try_open_door(&mut world, door_pos, &mut rng);
+                if events.iter().any(|e| matches!(e, EngineEvent::DoorOpened { .. })) {
+                    successes_high_luck += 1;
+                }
+            }
+        }
+
+        assert!(
+            successes_high_luck > successes_no_luck,
+            "high luck ({successes_high_luck}) should produce more opens than no luck ({successes_no_luck})"
+        );
+    }
+
+    #[test]
+    fn luck_improves_kick_door_rate() {
+        let trials = 200u64;
+        let mut successes_no_luck = 0;
+        let mut successes_high_luck = 0;
+
+        for seed in 0..trials {
+            // No luck
+            {
+                let mut world = make_test_world();
+                let player = world.player();
+                if let Some(mut attrs) = world.get_component_mut::<Attributes>(player) {
+                    attrs.strength = 14;
+                    attrs.dexterity = 14;
+                    attrs.constitution = 14;
+                }
+                let door_pos = Position::new(6, 5);
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(door_pos, Terrain::DoorLocked);
+                let mut rng = Pcg64::seed_from_u64(seed);
+                let events = try_kick_door(&mut world, door_pos, &mut rng);
+                if events.iter().any(|e| matches!(e, EngineEvent::DoorBroken { .. })) {
+                    successes_no_luck += 1;
+                }
+            }
+            // High luck
+            {
+                let mut world = make_test_world();
+                let player = world.player();
+                if let Some(mut attrs) = world.get_component_mut::<Attributes>(player) {
+                    attrs.strength = 14;
+                    attrs.dexterity = 14;
+                    attrs.constitution = 14;
+                }
+                if let Some(mut pc) = world.get_component_mut::<PlayerCombat>(player) {
+                    pc.luck = 13;
+                }
+                let door_pos = Position::new(6, 5);
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(door_pos, Terrain::DoorLocked);
+                let mut rng = Pcg64::seed_from_u64(seed);
+                let events = try_kick_door(&mut world, door_pos, &mut rng);
+                if events.iter().any(|e| matches!(e, EngineEvent::DoorBroken { .. })) {
+                    successes_high_luck += 1;
+                }
+            }
+        }
+
+        assert!(
+            successes_high_luck > successes_no_luck,
+            "high luck ({successes_high_luck}) should produce more kicks than no luck ({successes_no_luck})"
+        );
     }
 }

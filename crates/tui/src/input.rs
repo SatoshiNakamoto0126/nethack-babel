@@ -665,16 +665,26 @@ pub fn autocomplete_commands() -> Vec<&'static ExtendedCommand> {
 /// Map an extended command name to a PlayerAction.
 ///
 /// Extended commands are typed after the '#' prefix (e.g., "#pray", "#loot").
-/// Returns `None` for unknown commands or commands that require further
-/// prompting (e.g., naming, adjusting inventory letters).
+/// Map an extended command name to a [`PlayerAction`].
+///
+/// Returns `None` for commands that require further prompting (direction,
+/// item selection, text input, or position selection). These commands
+/// already work via their regular key bindings (e.g., `o` for open, `t`
+/// for throw, `w` for wield), where the `key_needs_prompt()` system
+/// handles the follow-up prompts. The `#extended` path does not yet have
+/// its own prompt dispatch, so these return `None` and the command is
+/// silently dropped. Wiring them requires extending `get_extended_command`
+/// in `app.rs` to check for prompt-needing commands (similar to how
+/// `key_needs_prompt` works for regular keys).
+///
+/// Also returns `None` for unknown/unrecognized command names.
 pub fn map_extended_command(name: &str) -> Option<PlayerAction> {
     match name.trim().to_lowercase().as_str() {
+        // ── Commands that produce an action directly ─────────────
         "pray" => Some(PlayerAction::Pray),
         "loot" => Some(PlayerAction::Loot),
         "ride" => Some(PlayerAction::Ride),
         "enhance" => Some(PlayerAction::EnhanceSkill),
-        "name" | "naming" | "call" => None, // needs further prompting
-        "adjust" => None,          // needs further prompting
         "quit" => Some(PlayerAction::Quit),
         "save" => Some(PlayerAction::Save),
         "help" | "?" => Some(PlayerAction::Help),
@@ -685,35 +695,13 @@ pub fn map_extended_command(name: &str) -> Option<PlayerAction> {
         "options" | "optionsfull" => Some(PlayerAction::Options),
         "history" => Some(PlayerAction::ShowHistory),
         "fire" => Some(PlayerAction::Fire),
-        "travel" => None, // needs position prompt
-        "chat" => None,   // needs direction prompt
-        "offer" => None,  // needs item prompt
-        "dip" => None,    // needs item prompts
         "eat" => Some(PlayerAction::Eat { item: None }),
         "quaff" | "drink" => Some(PlayerAction::Quaff { item: None }),
         "read" => Some(PlayerAction::Read { item: None }),
-        "throw" => None,       // needs item + direction
-        "wear" => None,        // needs item prompt
-        "wield" => None,       // needs item prompt
-        "takeoff" => None,     // needs item prompt
-        "takeoffall" => None,  // needs multi-item prompt
-        "puton" => None,       // needs item prompt
-        "remove" => None,      // needs item prompt
-        "drop" | "droptype" => None, // needs item prompt
-        "open" => None,        // needs direction
-        "close" => None,       // needs direction
-        "force" => None,       // needs item prompt
         "known" | "discoveries" => Some(PlayerAction::ViewDiscoveries),
         "knownclass" => Some(PlayerAction::ViewDiscoveries),
-        "whatis" | "glance" => None, // needs position prompt
         "conduct" => Some(PlayerAction::ViewDiscoveries),
-        "engrave" => None,     // needs text prompt
-        "apply" => None,       // needs item prompt
-        "zap" => None,         // needs item + direction
         "sit" => Some(PlayerAction::Rest), // simplified
-        "kick" => None,        // needs direction
-        "rub" => None,         // needs item prompt
-        "untrap" => None,      // needs implementation
         "attributes" | "overview" => Some(PlayerAction::ViewEquipped),
         "two-weapon" | "twoweapon" | "swap" => Some(PlayerAction::ToggleTwoWeapon),
         "version" | "versionshort" => Some(PlayerAction::Help),
@@ -722,14 +710,7 @@ pub fn map_extended_command(name: &str) -> Option<PlayerAction> {
         "wait" => Some(PlayerAction::Rest),
         "down" => Some(PlayerAction::GoDown),
         "up" => Some(PlayerAction::GoUp),
-        "cast" => None,        // needs spell + direction
-        "quiver" => None,      // needs item prompt
-        "invoke" => None,      // needs item prompt
-        "jump" => None,        // needs position prompt
-        "monster" => None,     // needs implementation
         "turn" => Some(PlayerAction::Pray), // turn undead, simplified
-        "tip" => None,         // needs item prompt
-        "annotate" => None,    // needs text prompt
         "chronicle" => Some(PlayerAction::ShowHistory),
         "vanquished" => Some(PlayerAction::ViewDiscoveries),
         "genocided" => Some(PlayerAction::ViewDiscoveries),
@@ -738,22 +719,73 @@ pub fn map_extended_command(name: &str) -> Option<PlayerAction> {
         | "seetools" | "seeweapon" => Some(PlayerAction::ViewEquipped),
         "showgold" => Some(PlayerAction::ViewInventory),
         "showspells" => Some(PlayerAction::ViewEquipped),
-        "showtrap" => None,    // needs position prompt
-        "terrain" => None,     // needs implementation
-        "herecmdmenu" | "therecmdmenu" => None, // needs implementation
         "whatdoes" => Some(PlayerAction::Help),
         "autopickup" => Some(PlayerAction::Options),
         "prevmsg" => Some(PlayerAction::ShowHistory),
-        "redraw" => None,      // handled by TUI layer
-        "repeat" => None,      // handled by TUI layer
-        "reqmenu" => None,     // prefix command
-        "retravel" => None,    // needs position
+
+        // ── Commands needing direction prompt ────────────────────
+        // These work via regular keys (o, c, Ctrl-D, etc.) through
+        // `key_needs_prompt()` → `PromptKind::Direction`. The #extended
+        // path does not yet wire direction prompts.
+        "open" => None,
+        "close" => None,
+        "kick" => None,
+        "chat" => None,
+
+        // ── Commands needing item prompt ─────────────────────────
+        // These work via regular keys (w, W, T, P, R, d, a, Q, etc.)
+        // through `key_needs_prompt()` → `PromptKind::Item`.
+        "wear" => None,
+        "wield" => None,
+        "takeoff" => None,
+        "takeoffall" => None,
+        "puton" => None,
+        "remove" => None,
+        "drop" | "droptype" => None,
+        "apply" => None,
+        "quiver" => None,
+        "invoke" => None,
+        "rub" => None,
+        "tip" => None,
+        "offer" => None,
+        "force" => None,
+
+        // ── Commands needing item + direction prompt ─────────────
+        // These work via regular keys (t, z) through
+        // `key_needs_prompt()` → `PromptKind::ItemThenDirection`.
+        "throw" => None,
+        "zap" => None,
+        "cast" => None,
+        "dip" => None,
+
+        // ── Commands needing text/position prompt ────────────────
+        "name" | "naming" | "call" => None,
+        "adjust" => None,
+        "engrave" => None,
+        "annotate" => None,
+        "travel" => None,
+        "whatis" | "glance" => None,
+        "jump" => None,
+        "showtrap" => None,
+        "retravel" => None,
+
+        // ── TUI-layer / system commands ──────────────────────────
+        "redraw" => None,      // handled by TUI layer directly
+        "repeat" => None,      // handled by TUI layer directly
+        "reqmenu" => None,     // prefix command, no standalone action
         "run" | "rush" => None, // prefix commands
-        "shell" | "suspend" => None, // system-level
-        "perminv" => None,     // handled by TUI layer
-        "exploremode" => None, // mode switch
-        // wizard mode
-        "wizwish" => None,     // needs text prompt
+        "shell" | "suspend" => None, // system-level, not applicable
+        "perminv" => None,     // handled by TUI layer directly
+
+        // ── Unimplemented ────────────────────────────────────────
+        "untrap" => None,
+        "monster" => None,
+        "terrain" => None,
+        "herecmdmenu" | "therecmdmenu" => None,
+        "exploremode" => None,
+
+        // ── Wizard mode commands ─────────────────────────────────
+        "wizwish" => None,
         "wizmap" => None,
         "wizgenesis" => None,
         "wizidentify" => None,
@@ -761,6 +793,7 @@ pub fn map_extended_command(name: &str) -> Option<PlayerAction> {
         "wizlevelport" => None,
         "wizloadlua" | "wizloaddes" => None,
         "wizmakemap" | "wizfliplevel" => None,
+
         _ => None,
     }
 }

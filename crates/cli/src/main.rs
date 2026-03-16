@@ -17,10 +17,13 @@ use rand_pcg::Pcg64;
 
 use nethack_babel_data::{load_game_data, Color as NhColor, GameData, MonsterDef, ObjectClass};
 use nethack_babel_engine::action::{Direction, PlayerAction, Position};
+use nethack_babel_engine::conduct::ConductState;
 use nethack_babel_engine::dungeon::{LevelMap, Terrain};
-use nethack_babel_engine::event::EngineEvent;
+use nethack_babel_engine::end::format_conduct_summary;
+use nethack_babel_engine::event::{DeathCause, EngineEvent};
 use nethack_babel_engine::fov::FovMap;
 use nethack_babel_engine::map_gen::{generate_level, Room};
+use nethack_babel_engine::topten::{default_leaderboard_path, Leaderboard, LeaderboardEntry};
 use nethack_babel_engine::turn::resolve_turn;
 use nethack_babel_engine::world::{
     Attributes, ArmorClass, DisplaySymbol, ExperienceLevel,
@@ -812,6 +815,103 @@ fn entity_display_name(
         let en_name = world.entity_name(entity);
         locale.translate_monster_name(&en_name).to_string()
     }
+}
+
+// ---------------------------------------------------------------------------
+// End-game: tombstone, disclosure, leaderboard
+// ---------------------------------------------------------------------------
+
+/// Handle full game-over sequence: tombstone, disclosure, leaderboard.
+fn handle_game_over(
+    world: &GameWorld,
+    port: &mut TuiPort,
+    cause: &DeathCause,
+    score: u64,
+) {
+    let player = world.player();
+    let player_name = world.entity_name(player);
+
+    let level = world
+        .get_component::<ExperienceLevel>(player)
+        .map(|l| l.0)
+        .unwrap_or(1);
+
+    let (hp, maxhp) = world
+        .get_component::<HitPoints>(player)
+        .map(|h| (h.current, h.max))
+        .unwrap_or((0, 0));
+
+    let turns = world.turn();
+
+    let death_reason = match cause {
+        DeathCause::KilledBy { killer_name } => format!("killed by {}", killer_name),
+        DeathCause::Starvation => "starved to death".to_string(),
+        DeathCause::Poisoning => "died of poisoning".to_string(),
+        DeathCause::Petrification => "turned to stone".to_string(),
+        DeathCause::Drowning => "drowned".to_string(),
+        DeathCause::Burning => "burned to death".to_string(),
+        DeathCause::Disintegration => "disintegrated".to_string(),
+        DeathCause::Sickness => "died of sickness".to_string(),
+        DeathCause::Strangulation => "strangled".to_string(),
+        DeathCause::Falling => "fell to death".to_string(),
+        DeathCause::CrushedByBoulder => "crushed by a boulder".to_string(),
+        DeathCause::Quit => "quit".to_string(),
+        DeathCause::Escaped => "escaped".to_string(),
+        DeathCause::Ascended => "ascended".to_string(),
+        DeathCause::Trickery => "died by trickery".to_string(),
+    };
+
+    // -- Tombstone --
+    let epitaph = format!("{}, level {} adventurer", player_name, level);
+    let info = format!(
+        "{} -- Score: {} -- Turns: {} -- HP: {}/{}",
+        death_reason, score, turns, hp, maxhp
+    );
+    port.render_tombstone(&epitaph, &info);
+
+    // -- Disclosure: conducts --
+    // ConductState is not yet tracked in the game world, so use default.
+    let conducts = ConductState::new();
+    let conduct_lines = format_conduct_summary(&conducts);
+    let conduct_text = conduct_lines.join("\n");
+    port.show_text("Voluntary challenges", &conduct_text);
+
+    // -- Leaderboard --
+    let lb_path = default_leaderboard_path();
+    let mut lb = Leaderboard::load(&lb_path);
+    let entry = LeaderboardEntry {
+        rank: 0,
+        score: score as i64,
+        player_name: player_name.clone(),
+        role: "Adventurer".to_string(),
+        race: "Human".to_string(),
+        gender: "male".to_string(),
+        alignment: "neutral".to_string(),
+        death_cause: death_reason,
+        dungeon_level: format!("Dlvl:{}", level),
+        experience_level: level as u32,
+        turns: turns as u64,
+        timestamp: chrono_timestamp(),
+    };
+    lb.add_entry(entry);
+    let _ = lb.save(&lb_path);
+
+    // Display top 10.
+    let top_lines = lb.format_top(10);
+    let top_text = top_lines.join("\n");
+    port.show_text("Top Scores", &top_text);
+}
+
+/// Simple timestamp without requiring chrono crate.
+fn chrono_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Convert to YYYYMMDD-style string.
+    // Simple approach: just use the unix timestamp as a string.
+    format!("{}", secs)
 }
 
 // ---------------------------------------------------------------------------
@@ -1769,14 +1869,22 @@ fn run_tui_mode(
             app.push_message(text.clone(), *urgency);
         }
 
-        // Check for game over.
+        // Check for game over (player death or GameOver event).
         for event in &events {
-            if let EngineEvent::GameOver { cause, score } = event {
+            let death_info = match event {
+                EngineEvent::EntityDied { entity, cause, .. }
+                    if world.is_player(*entity) =>
+                {
+                    Some((cause.clone(), 0u64))
+                }
+                EngineEvent::GameOver { cause, score } => {
+                    Some((cause.clone(), *score))
+                }
+                _ => None,
+            };
+            if let Some((cause, score)) = death_info {
                 game_over = true;
-                // Show tombstone.
-                let epitaph = world.entity_name(world.player());
-                let info = format!("Cause: {cause:?} -- Score: {score}");
-                port.render_tombstone(&epitaph, &info);
+                handle_game_over(world, &mut port, &cause, score);
             }
         }
     }
@@ -1879,8 +1987,22 @@ fn run_text_mode(
         display_events_text(&events);
 
         for event in &events {
-            if matches!(event, EngineEvent::GameOver { .. }) {
-                game_over = true;
+            match event {
+                EngineEvent::GameOver { cause, score } => {
+                    game_over = true;
+                    println!("\n*** GAME OVER ***");
+                    println!("Score: {score}");
+                    println!("Cause: {cause:?}");
+                }
+                EngineEvent::EntityDied { entity, cause, .. }
+                    if world.is_player(*entity) =>
+                {
+                    game_over = true;
+                    println!("\n*** GAME OVER ***");
+                    println!("Cause: {cause:?}");
+                    println!("Turns: {}", world.turn());
+                }
+                _ => {}
             }
         }
     }

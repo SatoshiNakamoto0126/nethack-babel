@@ -689,6 +689,9 @@ impl WindowPort for TuiPort {
     // ── Special ──────────────────────────────────────────────────
 
     fn render_tombstone(&mut self, epitaph: &str, death_info: &str) {
+        // Split death_info on " -- " to display each field on its own line.
+        let info_lines: Vec<&str> = death_info.split(" -- ").collect();
+
         let _ = self.terminal.draw(|frame| {
             let area = frame.area();
             let buf = frame.buffer_mut();
@@ -703,14 +706,21 @@ impl WindowPort for TuiPort {
                 }
             }
 
-            // Simple tombstone ASCII art
+            // Traditional NetHack tombstone ASCII art
             let tombstone = [
-                "          ----------",
-                "         /          \\",
-                "        /    REST    \\",
-                "       /      IN      \\",
-                "      /     PEACE      \\",
-                "     /                  \\",
+                "            ----------",
+                "           /          \\",
+                "          /    REST    \\",
+                "         /      IN      \\",
+                "        /     PEACE      \\",
+                "       /                  \\",
+                "       |                  |",
+                "       |                  |",
+                "       |                  |",
+                "       |                  |",
+                "       |                  |",
+                "      *|     *  *  *      |*",
+                "  _____| ___________      |_____",
             ];
 
             let stone_style = Style::default()
@@ -718,7 +728,7 @@ impl WindowPort for TuiPort {
             let text_style = Style::default()
                 .fg(ratatui::style::Color::Yellow);
 
-            let start_y = area.y + 2;
+            let start_y = area.y + 1;
             let center_x = area.x + area.width / 2;
 
             // Draw tombstone frame
@@ -732,22 +742,25 @@ impl WindowPort for TuiPort {
                 put_str(buf, line, line_start, y, area.right(), stone_style);
             }
 
-            // Epitaph text centered
-            let epi_y = start_y + tombstone.len() as u16 + 1;
-            if epi_y < area.bottom() {
+            // Epitaph text centered inside the tombstone (on the blank rows)
+            let text_start_y = start_y + 6; // first "|" row
+            if text_start_y < area.bottom() {
                 let w = display_width(epitaph);
                 let epi_start = center_x.saturating_sub(w / 2);
-                put_str(buf, epitaph, epi_start, epi_y, area.right(), text_style);
+                put_str(buf, epitaph, epi_start, text_start_y, area.right(), text_style);
             }
 
-            // Death info below
-            let info_y = epi_y + 2;
-            if info_y < area.bottom() {
-                let info_style = Style::default()
-                    .fg(ratatui::style::Color::Red);
-                let w = display_width(death_info);
-                let info_start = center_x.saturating_sub(w / 2);
-                put_str(buf, death_info, info_start, info_y, area.right(), info_style);
+            // Death info lines on subsequent rows inside the stone
+            let info_style = Style::default()
+                .fg(ratatui::style::Color::Red);
+            for (i, line) in info_lines.iter().enumerate() {
+                let y = text_start_y + 1 + i as u16;
+                if y >= area.bottom() || y >= text_start_y + 4 {
+                    break;
+                }
+                let w = display_width(line);
+                let line_start = center_x.saturating_sub(w / 2);
+                put_str(buf, line, line_start, y, area.right(), info_style);
             }
 
             // "Press any key" at bottom
