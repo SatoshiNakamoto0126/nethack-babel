@@ -1333,46 +1333,78 @@ fn bool_item(accel: char, label: &str, value: bool) -> MenuItem {
     }
 }
 
+fn option_accelerator(index: usize) -> char {
+    if index < 26 {
+        (b'a' + index as u8) as char
+    } else if index < 52 {
+        (b'A' + (index - 26) as u8) as char
+    } else {
+        ' '
+    }
+}
+
 fn show_game_options(
     port: &mut TuiPort,
     cfg: &mut config::Config,
-    locale: &LocaleManager,
+    _locale: &LocaleManager,
     config_path: &str,
 ) {
     loop {
-        let items = vec![
-            bool_item('a', &locale.translate("opt-autopickup", None), cfg.behavior.autopickup),
-            MenuItem {
-                accelerator: 'b',
-                text: format!("{}: {}",
-                    locale.translate("opt-autopickup-types", None),
-                    cfg.behavior.autopickup_types),
-                selected: false, selectable: true, group: None,
-            },
-            bool_item('c', &locale.translate("opt-legacy", None), cfg.game.legacy),
-        ];
+        let option_pairs = config::options_menu_items(cfg);
+
+        let items: Vec<MenuItem> = option_pairs
+            .iter()
+            .enumerate()
+            .map(|(i, (name, value))| {
+                let accel = option_accelerator(i);
+                let text = if value == "true" || value == "false" {
+                    let on = value == "true";
+                    format!("[{}] {}", if on { "X" } else { " " }, name)
+                } else {
+                    format!("{}: {}", name, value)
+                };
+                MenuItem {
+                    accelerator: accel,
+                    text,
+                    selected: false,
+                    selectable: true,
+                    group: None,
+                }
+            })
+            .collect();
+
         let menu = Menu {
-            title: locale.translate("ui-options-game", None),
+            title: "Game Settings".to_string(),
             items,
             how: MenuHow::PickOne,
         };
+
         match port.show_menu(&menu) {
             MenuResult::Selected(indices) if !indices.is_empty() => {
-                match indices[0] {
-                    0 => cfg.behavior.autopickup = !cfg.behavior.autopickup,
-                    1 => {
-                        let prompt = format!("{}: ",
-                            locale.translate("opt-autopickup-types", None));
+                let idx = indices[0];
+                if idx < option_pairs.len() {
+                    let (name, current_value) = &option_pairs[idx];
+
+                    if current_value == "true" || current_value == "false" {
+                        // Boolean option: toggle via apply_option using
+                        // the "!name" (negate) convention
+                        let toggle_name = if current_value == "true" {
+                            format!("!{}", name)
+                        } else {
+                            name.clone()
+                        };
+                        let _ = config::apply_option(cfg, &toggle_name, None);
+                    } else {
+                        // Compound/string option: prompt for new value
+                        let prompt = format!("{} [{}]: ", name, current_value);
                         if let Some(val) = port.get_line(&prompt)
                             && !val.is_empty()
                         {
-                            cfg.behavior.autopickup_types = val;
+                            let _ = config::apply_option(cfg, name, Some(&val));
                         }
                     }
-                    2 => cfg.game.legacy = !cfg.game.legacy,
-                    _ => {}
+                    let _ = config::save_config(cfg, config_path);
                 }
-                let _ = config::save_config(cfg, config_path);
             }
             _ => break,
         }
