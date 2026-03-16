@@ -984,6 +984,40 @@ pub fn monster_wear_armor(
 }
 
 // ---------------------------------------------------------------------------
+// Wand of Digging exclusion conditions (C: muse.c)
+// ---------------------------------------------------------------------------
+
+/// Check if a monster should NOT use a wand of digging.
+///
+/// There are 7 exclusion conditions from C NetHack's `muse.c` that prevent
+/// monsters from zapping a wand of digging to escape downward:
+///
+/// 1. No-teleport level (the wand creates a trap door, similar to teleport)
+/// 2. Sokoban (digging is blocked)
+/// 3. Monster is trapped (can't use the hole)
+/// 4. Underwater (digging underwater doesn't work for escape)
+/// 5. Monster is holding the player (engulfing — won't abandon prey)
+/// 6. Level has no downstairs (bottom of the dungeon)
+/// 7. Rogue level (special level, digging blocked)
+pub fn should_not_dig(
+    is_noteleport_level: bool,
+    is_sokoban: bool,
+    monster_is_trapped: bool,
+    is_underwater: bool,
+    is_holding_player: bool,
+    level_has_no_down_stairs: bool,
+    is_on_rogue_level: bool,
+) -> bool {
+    is_noteleport_level
+        || is_sokoban
+        || monster_is_trapped
+        || is_underwater
+        || is_holding_player
+        || level_has_no_down_stairs
+        || is_on_rogue_level
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1616,5 +1650,29 @@ mod tests {
         // High threat: willing at higher HP.
         assert!(should_use_item_now(0.5, 5));
         assert!(!should_use_item_now(0.8, 5));
+    }
+
+    // ── Wand of Digging exclusions ──────────────────────────────
+
+    #[test]
+    fn should_not_dig_all_false_allows_digging() {
+        assert!(!should_not_dig(false, false, false, false, false, false, false));
+    }
+
+    #[test]
+    fn should_not_dig_each_condition_blocks() {
+        // Each individual condition should block digging.
+        assert!(should_not_dig(true, false, false, false, false, false, false)); // noteleport
+        assert!(should_not_dig(false, true, false, false, false, false, false)); // sokoban
+        assert!(should_not_dig(false, false, true, false, false, false, false)); // trapped
+        assert!(should_not_dig(false, false, false, true, false, false, false)); // underwater
+        assert!(should_not_dig(false, false, false, false, true, false, false)); // holding
+        assert!(should_not_dig(false, false, false, false, false, true, false)); // no stairs
+        assert!(should_not_dig(false, false, false, false, false, false, true)); // rogue level
+    }
+
+    #[test]
+    fn should_not_dig_multiple_conditions() {
+        assert!(should_not_dig(true, true, false, false, false, false, true));
     }
 }

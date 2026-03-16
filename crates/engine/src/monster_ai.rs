@@ -2277,6 +2277,41 @@ pub fn demon_lord_special(
 }
 
 // ---------------------------------------------------------------------------
+// Leprechaun avoidance AI (C: mon.c / monmove.c)
+// ---------------------------------------------------------------------------
+
+/// What a leprechaun should do after stealing gold.
+///
+/// C NetHack: leprechauns teleport away immediately after stealing gold.
+/// If they can't teleport, they flee from the player. When they have no
+/// gold, they behave normally (approach to steal).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeprechaunAction {
+    /// Has gold + can teleport + close to player: teleport away.
+    TeleportAway,
+    /// Has gold but can't teleport: run away from player.
+    FleeFromPlayer,
+    /// No stolen gold: approach normally to steal.
+    Normal,
+}
+
+/// Determine leprechaun-specific behavior based on gold possession
+/// and proximity to the player.
+pub fn leprechaun_avoidance(
+    has_gold: bool,
+    can_teleport: bool,
+    distance_to_player: i32,
+) -> LeprechaunAction {
+    if has_gold && can_teleport && distance_to_player <= 2 {
+        LeprechaunAction::TeleportAway
+    } else if has_gold {
+        LeprechaunAction::FleeFromPlayer
+    } else {
+        LeprechaunAction::Normal
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -4617,6 +4652,40 @@ mod tests {
         assert!(
             events.is_empty(),
             "Baalzebub at range should not do special action"
+        );
+    }
+
+    // ── Leprechaun avoidance ─────────────────────────────────────
+
+    #[test]
+    fn leprechaun_teleports_when_has_gold_and_close() {
+        assert_eq!(
+            leprechaun_avoidance(true, true, 1),
+            LeprechaunAction::TeleportAway,
+        );
+        assert_eq!(
+            leprechaun_avoidance(true, true, 2),
+            LeprechaunAction::TeleportAway,
+        );
+    }
+
+    #[test]
+    fn leprechaun_flees_when_has_gold_but_cannot_teleport() {
+        assert_eq!(
+            leprechaun_avoidance(true, false, 1),
+            LeprechaunAction::FleeFromPlayer,
+        );
+    }
+
+    #[test]
+    fn leprechaun_normal_when_no_gold() {
+        assert_eq!(
+            leprechaun_avoidance(false, true, 1),
+            LeprechaunAction::Normal,
+        );
+        assert_eq!(
+            leprechaun_avoidance(false, false, 5),
+            LeprechaunAction::Normal,
         );
     }
 }

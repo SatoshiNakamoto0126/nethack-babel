@@ -1645,6 +1645,55 @@ pub struct AcidResistance;
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct PoisonResistance;
 
+// ---------------------------------------------------------------------------
+// Potion dilution system (C: obj->odiluted)
+// ---------------------------------------------------------------------------
+
+/// Whether a potion is diluted. Diluted potions have reduced effects.
+///
+/// In C NetHack: `obj->odiluted` flag.
+/// - Dipping a potion in water/fountain sets `odiluted = 1`.
+/// - Dipping an already-diluted potion in water turns it into plain water.
+/// - Diluted healing potions heal half as much.
+/// - Diluted gain level has a 50% chance of no effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum DilutionState {
+    Normal,
+    Diluted,
+}
+
+/// Halve a damage/healing value when the potion is diluted.
+///
+/// Mirrors C pattern `(odiluted ? (damage+1)/2 : damage)`.
+pub fn diluted_effect(damage: i32, diluted: bool) -> i32 {
+    if diluted {
+        (damage + 1) / 2
+    } else {
+        damage
+    }
+}
+
+/// Result of dipping a potion in water (or a fountain).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DipWaterResult {
+    /// Fresh potion becomes diluted.
+    BecomesDiluted,
+    /// Already-diluted potion becomes plain water.
+    BecomesWater,
+}
+
+/// What happens when you dip a potion in water.
+///
+/// C NetHack: `potion.c` — dipping a non-diluted potion sets `odiluted`;
+/// dipping an already-diluted potion converts it to uncursed water.
+pub fn dip_potion_in_water(is_diluted: bool) -> DipWaterResult {
+    if is_diluted {
+        DipWaterResult::BecomesWater
+    } else {
+        DipWaterResult::BecomesDiluted
+    }
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -4398,5 +4447,37 @@ mod tests {
             potion_splash_category(PotionType::Hallucination, false),
             PotionSplashEffect::Hallucinate,
         );
+    }
+
+    // ── Dilution system ──────────────────────────────────────────
+
+    #[test]
+    fn diluted_effect_halves_damage() {
+        assert_eq!(diluted_effect(10, true), 5);
+        assert_eq!(diluted_effect(10, false), 10);
+    }
+
+    #[test]
+    fn diluted_effect_rounds_up() {
+        // (7 + 1) / 2 = 4
+        assert_eq!(diluted_effect(7, true), 4);
+        // (1 + 1) / 2 = 1
+        assert_eq!(diluted_effect(1, true), 1);
+    }
+
+    #[test]
+    fn diluted_effect_zero() {
+        assert_eq!(diluted_effect(0, true), 0);
+        assert_eq!(diluted_effect(0, false), 0);
+    }
+
+    #[test]
+    fn dip_fresh_potion_becomes_diluted() {
+        assert_eq!(dip_potion_in_water(false), DipWaterResult::BecomesDiluted);
+    }
+
+    #[test]
+    fn dip_diluted_potion_becomes_water() {
+        assert_eq!(dip_potion_in_water(true), DipWaterResult::BecomesWater);
     }
 }

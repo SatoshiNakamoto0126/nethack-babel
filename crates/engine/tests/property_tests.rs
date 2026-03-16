@@ -204,13 +204,12 @@ proptest! {
 
 proptest! {
     /// Pluralization should never produce an empty string from non-empty input.
+    /// Note: Latin plurals can be shorter (e.g., "us"→"i", "matzoh"→"matzot").
     #[test]
     fn plural_never_empty(name in "[a-z]{1,20}") {
         let plural = makeplural(&name);
         prop_assert!(!plural.is_empty(),
             "Plural of '{}' should not be empty", name);
-        prop_assert!(plural.len() >= name.len(),
-            "Plural '{}' should not be shorter than singular '{}'", plural, name);
     }
 
     /// Article prefix is always "a " or "an ".
