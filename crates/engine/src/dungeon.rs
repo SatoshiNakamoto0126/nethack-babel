@@ -2,6 +2,7 @@
 //! dungeon-wide topology, and branch transition logic.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,8 @@ use crate::action::Position;
 use crate::engrave::EngravingMap;
 use crate::region::GasCloud;
 use crate::traps::TrapMap;
+use nethack_babel_data::level_loader::{get_embedded_topology, load_topology_from_str};
+use nethack_babel_data::level_schema::{BranchConnection, DungeonTopology as TopologyDefinition};
 
 // Re-export TerrainType from the canonical data crate definition.
 pub use nethack_babel_data::TerrainType;
@@ -485,6 +488,59 @@ impl std::fmt::Display for DungeonLevel {
     }
 }
 
+fn topology_branch_name(branch: DungeonBranch) -> &'static str {
+    match branch {
+        DungeonBranch::Main => "Main",
+        DungeonBranch::Mines => "Mines",
+        DungeonBranch::Sokoban => "Sokoban",
+        DungeonBranch::Quest => "Quest",
+        DungeonBranch::FortLudios => "FortLudios",
+        DungeonBranch::Gehennom => "Gehennom",
+        DungeonBranch::VladsTower => "VladsTower",
+        DungeonBranch::Endgame => "Endgame",
+    }
+}
+
+fn branch_from_topology_name(name: &str) -> Option<DungeonBranch> {
+    Some(match name {
+        "Main" => DungeonBranch::Main,
+        "Mines" => DungeonBranch::Mines,
+        "Sokoban" => DungeonBranch::Sokoban,
+        "Quest" => DungeonBranch::Quest,
+        "FortLudios" => DungeonBranch::FortLudios,
+        "Gehennom" => DungeonBranch::Gehennom,
+        "VladsTower" => DungeonBranch::VladsTower,
+        "Endgame" => DungeonBranch::Endgame,
+        _ => return None,
+    })
+}
+
+fn embedded_topology_definition() -> &'static TopologyDefinition {
+    static TOPOLOGY: OnceLock<TopologyDefinition> = OnceLock::new();
+    TOPOLOGY.get_or_init(|| {
+        load_topology_from_str(get_embedded_topology())
+            .expect("embedded dungeon topology should parse")
+    })
+}
+
+fn topology_connection_entrance_depth(
+    conn: &BranchConnection,
+    dungeon: &DungeonState,
+) -> Option<i32> {
+    if let Some(depth) = conn.entrance_depth {
+        return Some(depth);
+    }
+
+    match (conn.from_branch.as_str(), conn.to_branch.as_str()) {
+        ("Main", "Mines") => Some(dungeon.mines_entrance_depth),
+        ("Mines", "Sokoban") => Some(dungeon.sokoban_entrance_depth),
+        _ => conn
+            .entrance_range
+            .filter(|range| range[0] == range[1])
+            .map(|range| range[0]),
+    }
+}
+
 // ── Portal mechanics ────────────────────────────────────────────────────
 
 /// A portal link between two branch/depth pairs.
@@ -849,6 +905,53 @@ impl DungeonState {
             }
         }
         None
+    }
+
+    /// Resolve a topology-defined portal or magic portal connection for the
+    /// given branch/depth pair.
+    ///
+    /// Explicit runtime `PortalLink`s are handled by `find_portal`; this helper
+    /// covers data-driven branch portals from `data/dungeons/dungeon_topology.toml`.
+    pub fn topology_portal_destination(
+        &self,
+        branch: DungeonBranch,
+        depth: i32,
+    ) -> Option<(DungeonBranch, i32)> {
+        let branch_name = topology_branch_name(branch);
+        for conn in &embedded_topology_definition().connections {
+            if !matches!(conn.connection_type.as_str(), "portal" | "magic_portal") {
+                continue;
+            }
+
+            if conn.from_branch != branch_name && conn.to_branch != branch_name {
+                continue;
+            }
+
+            let Some(from_branch) = branch_from_topology_name(&conn.from_branch) else {
+                continue;
+            };
+            let Some(to_branch) = branch_from_topology_name(&conn.to_branch) else {
+                continue;
+            };
+            let Some(entry_depth) = topology_connection_entrance_depth(conn, self) else {
+                continue;
+            };
+
+            if from_branch == branch && entry_depth == depth {
+                return Some((to_branch, 1));
+            }
+
+            if conn.connection_type == "portal" && to_branch == branch && depth == 1 {
+                return Some((from_branch, entry_depth));
+            }
+        }
+
+        None
+    }
+
+    /// Whether this branch/depth should expose a topology-driven portal tile.
+    pub fn level_has_topology_portal(&self, branch: DungeonBranch, depth: i32) -> bool {
+        self.topology_portal_destination(branch, depth).is_some()
     }
 
     /// Return the current dungeon depth.
@@ -1591,6 +1694,42 @@ mod tests {
         // Wrong position.
         let dest = ds.find_portal(DungeonBranch::Main, 10, Position::new(6, 5));
         assert_eq!(dest, None);
+    }
+
+    #[test]
+    fn test_topology_portal_destination_is_bidirectional_for_portals() {
+        let ds = DungeonState::with_entrance_depths(4, 3);
+
+        assert_eq!(
+            ds.topology_portal_destination(DungeonBranch::Main, 14),
+            Some((DungeonBranch::Quest, 1))
+        );
+        assert_eq!(
+            ds.topology_portal_destination(DungeonBranch::Quest, 1),
+            Some((DungeonBranch::Main, 14))
+        );
+        assert!(ds.level_has_topology_portal(DungeonBranch::Main, 14));
+        assert!(ds.level_has_topology_portal(DungeonBranch::Quest, 1));
+    }
+
+    #[test]
+    fn test_topology_magic_portal_destination_is_one_way() {
+        let ds = DungeonState::with_entrance_depths(4, 3);
+
+        assert_eq!(
+            ds.topology_portal_destination(DungeonBranch::Gehennom, 21),
+            Some((DungeonBranch::Endgame, 1))
+        );
+        assert_eq!(
+            ds.topology_portal_destination(DungeonBranch::Endgame, 1),
+            None,
+            "the Gehennom -> Endgame magic portal should remain one-way"
+        );
+        assert!(ds.level_has_topology_portal(DungeonBranch::Gehennom, 21));
+        assert!(
+            !ds.level_has_topology_portal(DungeonBranch::Endgame, 1),
+            "Endgame entry should not receive a reverse topology portal tile"
+        );
     }
 
     // ── Cache multiple levels test ───────────────────────────────

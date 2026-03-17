@@ -214,7 +214,7 @@ const GEM_DESCRIPTIONS: &[&str] = &[
 
 /// Shuffled appearance tables for unidentified items.
 /// Generated once per game using the game's RNG seed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AppearanceTable {
     /// Potion color assignments: type_index -> color_name.
     pub potion_colors: Vec<String>,
@@ -313,6 +313,14 @@ impl AppearanceTable {
             '*' => GEM_DESCRIPTIONS,
             _ => &[],
         }
+    }
+}
+
+impl Default for AppearanceTable {
+    fn default() -> Self {
+        use rand::SeedableRng;
+        let mut rng = rand_pcg::Pcg64::seed_from_u64(0);
+        Self::new(&mut rng)
     }
 }
 

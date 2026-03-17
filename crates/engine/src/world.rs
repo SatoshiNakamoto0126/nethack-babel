@@ -268,7 +268,7 @@ impl GameWorld {
             world,
             turn: 1,
             player,
-            dungeon: DungeonState::new(),
+            dungeon: DungeonState::with_rng(rng),
             next_creation_order: 1,
             appearance_table,
             monster_catalog: Vec::new(),

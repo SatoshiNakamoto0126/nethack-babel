@@ -1741,6 +1741,7 @@ pub fn generate_wizard_tower(_rng: &mut impl Rng) -> SpecialLevel {
 /// - Central temple with Altar of Moloch
 /// - Moat surrounding the temple
 /// - Stairs up from Gehennom
+/// - Stairs down to the invocation/endgame approach
 pub fn generate_sanctum(_rng: &mut impl Rng) -> SpecialLevel {
     let map_w = LevelMap::DEFAULT_WIDTH;
     let map_h = LevelMap::DEFAULT_HEIGHT;
@@ -1829,6 +1830,8 @@ pub fn generate_sanctum(_rng: &mut impl Rng) -> SpecialLevel {
     // Stairs up at the bottom edge.
     let stair_pos = Position::new(bridge_x as i32, (map_h - 2) as i32);
     map.set_terrain(stair_pos, Terrain::StairsUp);
+    let down_stair_pos = Position::new(altar_x as i32, (altar_y as i32 - 2).max(ty as i32));
+    map.set_terrain(down_stair_pos, Terrain::StairsDown);
 
     let rooms = vec![Room {
         x: tx,
@@ -1843,7 +1846,7 @@ pub fn generate_sanctum(_rng: &mut impl Rng) -> SpecialLevel {
             map,
             rooms,
             up_stairs: Some(stair_pos),
-            down_stairs: None,
+            down_stairs: Some(down_stair_pos),
         },
         flags: SpecialLevelFlags {
             no_dig: true,
@@ -6673,6 +6676,14 @@ mod tests {
         // Flags.
         assert!(sanctum.flags.no_prayer, "Sanctum should have no_prayer");
         assert!(sanctum.flags.no_dig, "Sanctum should have no_dig");
+        assert!(
+            sanctum.generated.up_stairs.is_some(),
+            "Sanctum should have stairs up from Gehennom"
+        );
+        assert!(
+            sanctum.generated.down_stairs.is_some(),
+            "Sanctum should have stairs down toward the endgame approach"
+        );
     }
 
     // ── Elemental Plane tests ───────────────────────────────────────

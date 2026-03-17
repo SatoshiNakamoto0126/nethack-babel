@@ -12,6 +12,7 @@ use nethack_babel_engine::conduct::ConductState;
 use nethack_babel_engine::dungeon::DungeonState;
 use nethack_babel_engine::equipment::EquipmentSlots;
 use nethack_babel_engine::inventory::Inventory;
+use nethack_babel_engine::o_init::AppearanceTable;
 use nethack_babel_engine::spells::SpellBook;
 use nethack_babel_engine::status::{Intrinsics, StatusEffects};
 use nethack_babel_engine::world::Attributes as EngineAttributes;
@@ -27,7 +28,7 @@ use nethack_babel_engine::world::{
 
 /// Current save format version.  Bump minor for backward-compatible changes,
 /// major for breaking changes.
-const SAVE_VERSION: [u8; 3] = [0, 3, 1];
+const SAVE_VERSION: [u8; 3] = [0, 3, 2];
 
 /// Magic bytes identifying a NetHack Babel save file.
 const SAVE_MAGIC: [u8; 4] = *b"NBSV";
@@ -95,6 +96,8 @@ pub struct SaveData {
     pub header: SaveHeader,
     pub turn: u32,
     pub dungeon: DungeonState,
+    #[serde(default)]
+    pub appearance_table: AppearanceTable,
     pub player: SerializablePlayer,
     pub monsters: Vec<SerializableMonster>,
     pub items: Vec<SerializableItem>,
@@ -504,6 +507,7 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
 fn rebuild_world(data: &SaveData) -> GameWorld {
     let p = &data.player;
     let mut world = GameWorld::new(p.position);
+    world.appearance_table = data.appearance_table.clone();
 
     // Overwrite the player's components.
     let player = world.player();
@@ -833,6 +837,7 @@ pub fn save_game(
         header: header.clone(),
         turn: world.turn(),
         dungeon: world.dungeon().clone(),
+        appearance_table: world.appearance_table.clone(),
         player: player_data,
         monsters,
         items,
@@ -1299,6 +1304,26 @@ mod tests {
             loaded.next_creation_order_value(),
             expected_next,
             "loading a save should restore the next creation order counter"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn round_trip_restores_appearance_table() {
+        let dir = test_dir("appearance_table_v3");
+        let path = dir.join("appearance_table.nbsv");
+
+        let mut rng = Pcg64::seed_from_u64(0xA11CE);
+        let world = GameWorld::new_with_rng(Position::new(40, 10), &mut rng);
+        let expected = world.appearance_table.clone();
+
+        save_game(&world, &path, SaveReason::Checkpoint, [12u8; 32]).unwrap();
+
+        let (loaded, _, _, _) = load_game(&path).unwrap();
+        assert_eq!(
+            loaded.appearance_table, expected,
+            "loading a save should preserve the per-game appearance table"
         );
 
         let _ = std::fs::remove_dir_all(&dir);

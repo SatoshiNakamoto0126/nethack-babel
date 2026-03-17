@@ -326,6 +326,29 @@ pub fn teleport_monster(
 /// Looks up the portal at the entity's current position.  If found,
 /// transitions to the target branch/depth/position.  If no portal
 /// exists, emits a "no portal" message.
+pub(crate) fn resolve_magic_portal_destination_at(
+    world: &GameWorld,
+    pos: Position,
+) -> Option<(DungeonBranch, i32, Option<Position>)> {
+    let branch = world.dungeon().branch;
+    let depth = world.dungeon().current_depth();
+
+    if let Some((target_branch, target_depth, target_pos)) =
+        world.dungeon().find_portal(branch, depth, pos)
+    {
+        return Some((target_branch, target_depth, Some(target_pos)));
+    }
+
+    if branch == DungeonBranch::Endgame && (1..=4).contains(&depth) {
+        return Some((DungeonBranch::Endgame, depth + 1, None));
+    }
+
+    world
+        .dungeon()
+        .topology_portal_destination(branch, depth)
+        .map(|(target_branch, target_depth)| (target_branch, target_depth, None))
+}
+
 pub fn branch_teleport(
     world: &mut GameWorld,
     entity: Entity,
@@ -338,11 +361,8 @@ pub fn branch_teleport(
         None => return events,
     };
 
-    let branch = world.dungeon().branch;
-    let depth = world.dungeon().current_depth();
-
     let (target_branch, target_depth, target_pos) =
-        match world.dungeon().find_portal(branch, depth, current_pos) {
+        match resolve_magic_portal_destination_at(world, current_pos) {
             Some(dest) => dest,
             None => {
                 events.push(EngineEvent::msg("teleport-no-portal"));
@@ -350,37 +370,15 @@ pub fn branch_teleport(
             }
         };
 
-    let from_str = format!("{:?}:{}", branch, depth);
-    let to_str = format!("{:?}:{}", target_branch, target_depth);
-
-    // Generate the target level.
-    let generated = crate::map_gen::generate_level(target_depth as u8, rng);
-    world.dungeon_mut().branch = target_branch;
-    world
-        .dungeon_mut()
-        .set_current_level(generated.map, target_depth);
-
-    // Place entity at the portal destination, or fall back to random walkable.
-    let final_pos = if world
-        .dungeon()
-        .current_level
-        .get(target_pos)
-        .is_some_and(|c| is_passable(c.terrain))
-    {
-        target_pos
-    } else {
-        find_random_walkable(world, rng).unwrap_or(target_pos)
-    };
-
-    if let Some(mut p) = world.get_component_mut::<Positioned>(entity) {
-        p.0 = final_pos;
-    }
-
-    events.push(EngineEvent::LevelChanged {
-        entity,
-        from_depth: from_str,
-        to_depth: to_str,
-    });
+    crate::turn::change_level_to_branch(
+        world,
+        target_branch,
+        target_depth,
+        false,
+        target_pos,
+        rng,
+        &mut events,
+    );
     events.push(EngineEvent::msg("teleport-branch"));
 
     events
@@ -533,10 +531,14 @@ pub fn is_liquid_terrain(terrain: Terrain) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+
     use crate::action::Position;
     use crate::dungeon::{DungeonBranch, LevelMap, MapCell, Terrain};
     use crate::status::Intrinsics;
     use crate::world::GameWorld;
+    use nethack_babel_data::{GameData, loader::load_game_data};
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
 
@@ -544,9 +546,23 @@ mod tests {
         SmallRng::seed_from_u64(42)
     }
 
+    fn data_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
+    }
+
+    fn test_game_data() -> &'static GameData {
+        static DATA: OnceLock<GameData> = OnceLock::new();
+        DATA.get_or_init(|| {
+            load_game_data(&data_dir())
+                .unwrap_or_else(|e| panic!("failed to load test game data: {}", e))
+        })
+    }
+
     /// Create a test world with a small floor-filled map.
     fn make_test_world_with_floor() -> GameWorld {
         let mut world = GameWorld::new(Position::new(5, 5));
+        let data = test_game_data();
+        world.set_spawn_catalogs(data.monsters.clone(), data.objects.clone());
         // Replace the default map with a small 20x10 floor map.
         let mut level = LevelMap::new(20, 10);
         for y in 0..10 {
@@ -1022,6 +1038,77 @@ mod tests {
                 .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
         );
         assert_eq!(world.dungeon().branch, DungeonBranch::FortLudios);
+    }
+
+    #[test]
+    fn test_branch_teleport_uses_topology_portal_destination() {
+        let mut world = make_test_world_with_floor();
+        let mut rng = test_rng();
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Main;
+        world.dungeon_mut().depth = 20;
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(5, 5), Terrain::MagicPortal);
+
+        let events = branch_teleport(&mut world, player, &mut rng);
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+        );
+        assert_eq!(world.dungeon().branch, DungeonBranch::FortLudios);
+        assert_eq!(world.dungeon().depth, 1);
+    }
+
+    #[test]
+    fn test_branch_teleport_advances_endgame_planes() {
+        let mut world = make_test_world_with_floor();
+        let mut rng = test_rng();
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Endgame;
+        world.dungeon_mut().depth = 1;
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(5, 5), Terrain::MagicPortal);
+
+        let events = branch_teleport(&mut world, player, &mut rng);
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+        );
+        assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+        assert_eq!(world.dungeon().depth, 2);
+        assert!(world.dungeon().current_level_flags.is_endgame);
+    }
+
+    #[test]
+    fn test_branch_teleport_magic_portal_enters_endgame() {
+        let mut world = make_test_world_with_floor();
+        let mut rng = test_rng();
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 21;
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(5, 5), Terrain::MagicPortal);
+
+        let events = branch_teleport(&mut world, player, &mut rng);
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+        );
+        assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+        assert_eq!(world.dungeon().depth, 1);
+        assert!(world.dungeon().current_level_flags.is_endgame);
     }
 
     #[test]

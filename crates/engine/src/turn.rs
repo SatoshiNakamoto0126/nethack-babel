@@ -14,7 +14,7 @@ use nethack_babel_data::{
 
 use crate::action::{Direction, NameTarget, PlayerAction, Position};
 use crate::conduct::ConductState;
-use crate::dungeon::{CachedMonster, Terrain};
+use crate::dungeon::{CachedMonster, DungeonBranch, Terrain};
 use crate::event::{EngineEvent, HpSource, HungerLevel};
 use crate::makemon::{GoodPosFlags, MakeMonFlags, enexto, goodpos, makemon};
 use crate::map_gen::generate_level;
@@ -1866,6 +1866,7 @@ fn handle_go_down(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<En
             target_branch,
             target_branch_depth,
             false,
+            None,
             rng,
             events,
         );
@@ -1899,6 +1900,68 @@ fn generate_or_special(
     )
 }
 
+fn find_portal_anchor(
+    map: &crate::dungeon::LevelMap,
+    preferred: Option<Position>,
+) -> Option<Position> {
+    let mut candidates = Vec::new();
+    if let Some(anchor) = preferred {
+        candidates.push(anchor);
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                candidates.push(Position::new(anchor.x + dx, anchor.y + dy));
+            }
+        }
+    }
+
+    let center = Position::new((map.width / 2) as i32, (map.height / 2) as i32);
+    candidates.push(center);
+
+    for pos in candidates {
+        if let Some(cell) = map.get(pos)
+            && matches!(cell.terrain, Terrain::Floor | Terrain::Corridor)
+        {
+            return Some(pos);
+        }
+    }
+
+    for y in 0..map.height {
+        for x in 0..map.width {
+            let pos = Position::new(x as i32, y as i32);
+            if map
+                .get(pos)
+                .is_some_and(|cell| matches!(cell.terrain, Terrain::Floor | Terrain::Corridor))
+            {
+                return Some(pos);
+            }
+        }
+    }
+
+    None
+}
+
+fn inject_topology_portal_if_needed(
+    world: &crate::world::GameWorld,
+    branch: DungeonBranch,
+    depth: i32,
+    generated: &mut crate::map_gen::GeneratedLevel,
+) {
+    if !world.dungeon().level_has_topology_portal(branch, depth) {
+        return;
+    }
+    if find_terrain(&generated.map, Terrain::MagicPortal).is_some() {
+        return;
+    }
+
+    let preferred = generated.up_stairs.or(generated.down_stairs);
+    if let Some(portal_pos) = find_portal_anchor(&generated.map, preferred) {
+        generated.map.set_terrain(portal_pos, Terrain::MagicPortal);
+    }
+}
+
 fn current_player_role_name(world: &GameWorld) -> Option<String> {
     world
         .get_component::<PlayerIdentity>(world.player())
@@ -1926,7 +1989,7 @@ fn special_level_role_name(
 /// Uses the per-game randomized topology depths for the Main branch.
 fn generate_or_special_topology(
     world: &crate::world::GameWorld,
-    branch: crate::dungeon::DungeonBranch,
+    branch: DungeonBranch,
     depth: i32,
     rng: &mut impl Rng,
 ) -> (
@@ -1936,7 +1999,8 @@ fn generate_or_special_topology(
 ) {
     if let Some(id) = world.dungeon().check_topology_special(&branch, depth) {
         let role_name = special_level_role_name(world, id);
-        if let Some(special) = dispatch_special_level(id, role_name.as_deref(), rng) {
+        if let Some(mut special) = dispatch_special_level(id, role_name.as_deref(), rng) {
+            inject_topology_portal_if_needed(world, branch, depth, &mut special.generated);
             let population = crate::special_levels::population_for_special_level_with_role(
                 id,
                 &special.generated,
@@ -1949,8 +2013,10 @@ fn generate_or_special_topology(
             );
         }
     }
+    let mut generated = generate_level(depth as u8, rng);
+    inject_topology_portal_if_needed(world, branch, depth, &mut generated);
     (
-        generate_level(depth as u8, rng),
+        generated,
         crate::special_levels::SpecialLevelFlags::default(),
         None,
     )
@@ -1959,11 +2025,12 @@ fn generate_or_special_topology(
 /// Perform a level transition into a different branch.
 ///
 /// Similar to `change_level` but switches the dungeon branch.
-fn change_level_to_branch(
+pub(crate) fn change_level_to_branch(
     world: &mut GameWorld,
-    target_branch: crate::dungeon::DungeonBranch,
+    target_branch: DungeonBranch,
     target_depth: i32,
     going_up: bool,
+    landing_override: Option<Position>,
     rng: &mut impl Rng,
     events: &mut Vec<EngineEvent>,
 ) {
@@ -2065,11 +2132,22 @@ fn change_level_to_branch(
     world.dungeon_mut().current_level_flags = flags.into();
 
     // 5. Place the player.
-    let target_pos = if going_up {
+    let default_target_pos = if going_up {
         new_down_stairs.unwrap_or(Position::new(40, 10))
     } else {
-        new_up_stairs.unwrap_or(Position::new(40, 10))
+        new_up_stairs
+            .or_else(|| find_terrain(&world.dungeon().current_level, Terrain::MagicPortal))
+            .unwrap_or(Position::new(40, 10))
     };
+    let target_pos = landing_override
+        .filter(|pos| {
+            world
+                .dungeon()
+                .current_level
+                .get(*pos)
+                .is_some_and(|cell| cell.terrain.is_walkable())
+        })
+        .unwrap_or(default_target_pos);
 
     if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
         pos.0 = target_pos;
@@ -2861,6 +2939,19 @@ fn try_move_entity(
         let (trap_events, _triggered) =
             trigger_trap_at(rng, &trap_info, &mut world.dungeon_mut().trap_map);
         events.extend(trap_events);
+    }
+
+    if entity == world.player()
+        && world
+            .dungeon()
+            .current_level
+            .get(target_pos)
+            .is_some_and(|cell| cell.terrain == Terrain::MagicPortal)
+        && crate::teleport::resolve_magic_portal_destination_at(world, target_pos).is_some()
+    {
+        let portal_events = crate::teleport::handle_magic_portal(world, entity, rng);
+        events.extend(portal_events);
+        return;
     }
 
     // Check if the player entered a vault (spawn guard if needed).
@@ -4007,6 +4098,59 @@ mod tests {
     }
 
     #[test]
+    fn move_onto_topology_portal_enters_fort_ludios() {
+        let mut world = make_portal_world(DungeonBranch::Main, 20, Position::new(6, 5));
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "teleport-branch"
+        )));
+        assert_eq!(world.dungeon().branch, DungeonBranch::FortLudios);
+        assert_eq!(world.dungeon().depth, 1);
+    }
+
+    #[test]
+    fn move_onto_topology_magic_portal_enters_endgame() {
+        let mut world = make_portal_world(DungeonBranch::Gehennom, 21, Position::new(6, 5));
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "teleport-branch"
+        )));
+        assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+        assert_eq!(world.dungeon().depth, 1);
+        assert!(world.dungeon().current_level_flags.is_endgame);
+    }
+
+    #[test]
     fn rest_does_not_move() {
         let mut world = make_test_world();
         let mut rng = test_rng();
@@ -5099,6 +5243,18 @@ mod tests {
         world
     }
 
+    fn make_portal_world(branch: DungeonBranch, depth: i32, portal_pos: Position) -> GameWorld {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = branch;
+        world.dungeon_mut().depth = depth;
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(portal_pos, Terrain::MagicPortal);
+        world
+    }
+
     #[test]
     fn test_generate_or_special_topology_returns_population_for_special_levels() {
         let world = make_test_world();
@@ -5119,6 +5275,42 @@ mod tests {
                 .iter()
                 .any(|spawn| spawn.name.eq_ignore_ascii_case("Orcus")),
             "Orcus level should carry its boss population directly from generation"
+        );
+    }
+
+    #[test]
+    fn test_generate_or_special_topology_injects_portal_for_fort_entrance_depth() {
+        let world = make_test_world();
+        let mut rng = test_rng();
+
+        let (generated, _flags, population) =
+            generate_or_special_topology(&world, DungeonBranch::Main, 20, &mut rng);
+
+        assert!(
+            find_terrain(&generated.map, Terrain::MagicPortal).is_some(),
+            "Main:20 should receive a topology-driven portal tile for Fort Ludios"
+        );
+        assert!(
+            population.is_none(),
+            "random portal source levels should not fabricate special population plans"
+        );
+    }
+
+    #[test]
+    fn test_generate_or_special_topology_injects_magic_portal_for_endgame_entrance_depth() {
+        let world = make_test_world();
+        let mut rng = test_rng();
+
+        let (generated, _flags, population) =
+            generate_or_special_topology(&world, DungeonBranch::Gehennom, 21, &mut rng);
+
+        assert!(
+            find_terrain(&generated.map, Terrain::MagicPortal).is_some(),
+            "Gehennom:21 should receive a topology-driven magic portal tile for Endgame"
+        );
+        assert!(
+            population.is_none(),
+            "Gehennom:21 is a portal source level, not a populated special level"
         );
     }
 
@@ -5584,6 +5776,7 @@ mod tests {
             crate::dungeon::DungeonBranch::Quest,
             1,
             false,
+            None,
             &mut rng,
             &mut events,
         );
@@ -5614,6 +5807,7 @@ mod tests {
                 crate::dungeon::DungeonBranch::Quest,
                 1,
                 false,
+                None,
                 &mut rng,
                 &mut events,
             );
@@ -5650,6 +5844,7 @@ mod tests {
             crate::dungeon::DungeonBranch::Quest,
             7,
             false,
+            None,
             &mut rng,
             &mut events,
         );
@@ -5687,6 +5882,7 @@ mod tests {
                 crate::dungeon::DungeonBranch::Quest,
                 7,
                 false,
+                None,
                 &mut rng,
                 &mut events,
             );
@@ -5743,6 +5939,7 @@ mod tests {
                 crate::dungeon::DungeonBranch::Quest,
                 4,
                 false,
+                None,
                 &mut rng,
                 &mut events,
             );
@@ -5781,6 +5978,7 @@ mod tests {
                 crate::dungeon::DungeonBranch::Quest,
                 3,
                 false,
+                None,
                 &mut rng,
                 &mut events,
             );
@@ -5812,6 +6010,7 @@ mod tests {
             crate::dungeon::DungeonBranch::FortLudios,
             1,
             false,
+            None,
             &mut rng,
             &mut events,
         );
@@ -5850,6 +6049,7 @@ mod tests {
             crate::dungeon::DungeonBranch::Quest,
             7,
             false,
+            None,
             &mut rng,
             &mut events,
         );
@@ -5908,6 +6108,7 @@ mod tests {
             crate::dungeon::DungeonBranch::Quest,
             1,
             false,
+            None,
             &mut rng,
             &mut events,
         );
@@ -5951,6 +6152,7 @@ mod tests {
             crate::dungeon::DungeonBranch::Quest,
             4,
             false,
+            None,
             &mut rng,
             &mut events,
         );
@@ -5995,6 +6197,7 @@ mod tests {
             crate::dungeon::DungeonBranch::Quest,
             3,
             false,
+            None,
             &mut rng,
             &mut events,
         );
@@ -6086,6 +6289,7 @@ mod tests {
             crate::dungeon::DungeonBranch::FortLudios,
             1,
             false,
+            None,
             &mut rng,
             &mut events,
         );
@@ -6099,6 +6303,7 @@ mod tests {
             crate::dungeon::DungeonBranch::Main,
             1,
             true,
+            None,
             &mut rng,
             &mut events,
         );
@@ -6107,6 +6312,7 @@ mod tests {
             crate::dungeon::DungeonBranch::FortLudios,
             1,
             false,
+            None,
             &mut rng,
             &mut events,
         );

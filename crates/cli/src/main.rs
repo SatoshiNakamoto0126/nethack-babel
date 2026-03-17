@@ -2070,7 +2070,7 @@ fn create_world(data: &GameData, rng: &mut Pcg64, player_name: Option<&str>) -> 
         )
     };
 
-    let mut world = GameWorld::new(player_start);
+    let mut world = GameWorld::new_with_rng(player_start, rng);
 
     // Set the player's name if provided.
     if let Some(name) = player_name
