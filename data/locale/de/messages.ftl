@@ -417,6 +417,10 @@ quaff-generic = Du trinkst den Trank.
 quaff-what = Was trinken?
 read-generic = Du liest die Schriftrolle.
 read-what = Was lesen?
+quest-expelled = You are not yet permitted to descend into the quest.
+invocation-complete = The invocation ritual succeeds and a magic portal opens!
+invocation-incomplete = The runes flare, but the invocation does not complete.
+read-dead-book = The Book of the Dead whispers with sepulchral power.
 zap-generic = Du benutzt den Zauberstab.
 
 ## Türen

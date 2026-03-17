@@ -280,40 +280,38 @@ pub const SOKOBAN_ENTRANCE: BranchEntrance = BranchEntrance {
 /// branch.  Returns `Some((target_branch, target_depth))` if a branch
 /// transition occurs.
 ///
-/// For the Mines entrance: the actual entrance depth is randomly chosen
-/// once per game (from depth 3-5) and stored in `DungeonState`.
-///
-/// For Sokoban: entrance from Mines level 3-4.
-///
-/// For Gehennom: entering from depth >= 25 in the Main branch after the
-/// Castle level.
+/// Stair-based branch entrances are resolved from the embedded
+/// `data/dungeons/dungeon_topology.toml` definition. The per-run randomized
+/// Mines and Sokoban depths are substituted using the values stored in
+/// `DungeonState`.
 pub fn check_branch_entrance(
     branch: DungeonBranch,
     depth: i32,
     mines_entrance_depth: i32,
     sokoban_entrance_depth: i32,
 ) -> Option<(DungeonBranch, i32)> {
-    match branch {
-        DungeonBranch::Main => {
-            // Mines entrance
-            if depth == mines_entrance_depth {
-                return Some((DungeonBranch::Mines, 1));
-            }
-            // Castle is at depth ~25.  Below the Castle is Gehennom.
-            if depth >= 26 {
-                return Some((DungeonBranch::Gehennom, depth - 25));
-            }
-            None
+    let branch_name = topology_branch_name(branch);
+    for conn in &embedded_topology_definition().connections {
+        if conn.connection_type != "stairs" || conn.from_branch != branch_name {
+            continue;
         }
-        DungeonBranch::Mines => {
-            // Sokoban entrance from Mines depth 3-4.
-            if depth == sokoban_entrance_depth {
-                return Some((DungeonBranch::Sokoban, 1));
-            }
-            None
+
+        let Some(entry_depth) = topology_connection_entrance_depth_from_values(
+            conn,
+            mines_entrance_depth,
+            sokoban_entrance_depth,
+        ) else {
+            continue;
+        };
+        if entry_depth != depth {
+            continue;
         }
-        _ => None,
+        let Some(target_branch) = branch_from_topology_name(&conn.to_branch) else {
+            continue;
+        };
+        return Some((target_branch, 1));
     }
+    None
 }
 
 /// Result of checking whether stairs can be used.
@@ -527,13 +525,25 @@ fn topology_connection_entrance_depth(
     conn: &BranchConnection,
     dungeon: &DungeonState,
 ) -> Option<i32> {
+    topology_connection_entrance_depth_from_values(
+        conn,
+        dungeon.mines_entrance_depth,
+        dungeon.sokoban_entrance_depth,
+    )
+}
+
+fn topology_connection_entrance_depth_from_values(
+    conn: &BranchConnection,
+    mines_entrance_depth: i32,
+    sokoban_entrance_depth: i32,
+) -> Option<i32> {
     if let Some(depth) = conn.entrance_depth {
         return Some(depth);
     }
 
     match (conn.from_branch.as_str(), conn.to_branch.as_str()) {
-        ("Main", "Mines") => Some(dungeon.mines_entrance_depth),
-        ("Mines", "Sokoban") => Some(dungeon.sokoban_entrance_depth),
+        ("Main", "Mines") => Some(mines_entrance_depth),
+        ("Mines", "Sokoban") => Some(sokoban_entrance_depth),
         _ => conn
             .entrance_range
             .filter(|range| range[0] == range[1])
@@ -1171,12 +1181,12 @@ mod tests {
 
     #[test]
     fn test_branch_entrance_gehennom() {
-        // Gehennom begins below depth 25 (Castle).
+        // Gehennom entrance is topology-defined at Main:26.
         let result = check_branch_entrance(DungeonBranch::Main, 26, 3, 3);
         assert_eq!(result, Some((DungeonBranch::Gehennom, 1)));
 
-        let result = check_branch_entrance(DungeonBranch::Main, 30, 3, 3);
-        assert_eq!(result, Some((DungeonBranch::Gehennom, 5)));
+        let result = check_branch_entrance(DungeonBranch::Main, 27, 3, 3);
+        assert_eq!(result, None);
 
         // Depth 25 is the Castle, not yet Gehennom.
         assert_eq!(check_branch_entrance(DungeonBranch::Main, 25, 3, 3), None,);

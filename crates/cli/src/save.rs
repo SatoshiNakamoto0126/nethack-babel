@@ -5,7 +5,9 @@ use std::sync::Mutex;
 use nethack_babel_data::components::{
     BucStatus, Enchantment, Erosion, KnowledgeState, ObjectCore, ObjectLocation,
 };
-use nethack_babel_data::{GameData, PlayerIdentity, PlayerSkills, loader::load_game_data};
+use nethack_babel_data::{
+    GameData, PlayerEvents, PlayerIdentity, PlayerQuestItems, PlayerSkills, loader::load_game_data,
+};
 use nethack_babel_engine::action::Position;
 use nethack_babel_engine::attributes::{AttributeExercise, NaturalAttributes};
 use nethack_babel_engine::conduct::ConductState;
@@ -13,6 +15,8 @@ use nethack_babel_engine::dungeon::DungeonState;
 use nethack_babel_engine::equipment::EquipmentSlots;
 use nethack_babel_engine::inventory::Inventory;
 use nethack_babel_engine::o_init::AppearanceTable;
+use nethack_babel_engine::quest::QuestState;
+use nethack_babel_engine::religion::ReligionState;
 use nethack_babel_engine::spells::SpellBook;
 use nethack_babel_engine::status::{Intrinsics, StatusEffects};
 use nethack_babel_engine::world::Attributes as EngineAttributes;
@@ -28,7 +32,7 @@ use nethack_babel_engine::world::{
 
 /// Current save format version.  Bump minor for backward-compatible changes,
 /// major for breaking changes.
-const SAVE_VERSION: [u8; 3] = [0, 3, 2];
+const SAVE_VERSION: [u8; 3] = [0, 3, 3];
 
 /// Magic bytes identifying a NetHack Babel save file.
 const SAVE_MAGIC: [u8; 4] = *b"NBSV";
@@ -146,6 +150,18 @@ pub struct SerializablePlayer {
     /// Voluntary challenge conduct counters.
     #[serde(default)]
     pub conduct: ConductState,
+    /// Persistent religion/prayer state.
+    #[serde(default)]
+    pub religion: Option<ReligionState>,
+    /// Persistent quest progression state.
+    #[serde(default)]
+    pub quest: Option<QuestState>,
+    /// Cached possession flags for quest / invocation-critical items.
+    #[serde(default)]
+    pub quest_items: PlayerQuestItems,
+    /// Sticky runtime milestone flags.
+    #[serde(default)]
+    pub player_events: PlayerEvents,
     /// Indices into `SaveData::items` for the player's inventory, in order.
     pub inventory_item_indices: Vec<u32>,
     /// Equipment slot assignments, as indices into `SaveData::items`.
@@ -329,6 +345,20 @@ fn extract_player(
         .get_component::<ConductState>(entity)
         .map(|c| (*c).clone())
         .unwrap_or_default();
+    let religion = world
+        .get_component::<ReligionState>(entity)
+        .map(|state| (*state).clone());
+    let quest = world
+        .get_component::<QuestState>(entity)
+        .map(|state| (*state).clone());
+    let quest_items = world
+        .get_component::<PlayerQuestItems>(entity)
+        .map(|items| (*items).clone())
+        .unwrap_or_default();
+    let player_events = world
+        .get_component::<PlayerEvents>(entity)
+        .map(|events| (*events).clone())
+        .unwrap_or_default();
 
     // Map inventory entity refs to item indices.
     let inventory_item_indices: Vec<u32> = match world.get_component::<Inventory>(entity) {
@@ -391,6 +421,10 @@ fn extract_player(
         identity,
         skills,
         conduct,
+        religion,
+        quest,
+        quest_items,
+        player_events,
         inventory_item_indices,
         equipment_indices,
     }
@@ -589,6 +623,30 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
         *conduct = p.conduct.clone();
     } else {
         let _ = world.ecs_mut().insert_one(player, p.conduct.clone());
+    }
+    if let Some(religion) = &p.religion {
+        if let Some(mut live_religion) = world.get_component_mut::<ReligionState>(player) {
+            *live_religion = religion.clone();
+        } else {
+            let _ = world.ecs_mut().insert_one(player, religion.clone());
+        }
+    }
+    if let Some(quest) = &p.quest {
+        if let Some(mut live_quest) = world.get_component_mut::<QuestState>(player) {
+            *live_quest = quest.clone();
+        } else {
+            let _ = world.ecs_mut().insert_one(player, quest.clone());
+        }
+    }
+    if let Some(mut live_items) = world.get_component_mut::<PlayerQuestItems>(player) {
+        *live_items = p.quest_items.clone();
+    } else {
+        let _ = world.ecs_mut().insert_one(player, p.quest_items.clone());
+    }
+    if let Some(mut live_events) = world.get_component_mut::<PlayerEvents>(player) {
+        *live_events = p.player_events.clone();
+    } else {
+        let _ = world.ecs_mut().insert_one(player, p.player_events.clone());
     }
 
     // Set the turn counter.
@@ -1324,6 +1382,111 @@ mod tests {
         assert_eq!(
             loaded.appearance_table, expected,
             "loading a save should preserve the per-game appearance table"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn round_trip_restores_religion_and_quest_state() {
+        let dir = test_dir("story_state_v3");
+        let path = dir.join("story_state.nbsv");
+
+        let mut world = make_world();
+        let player = world.player();
+
+        let religion = ReligionState {
+            alignment: Alignment::Chaotic,
+            alignment_record: 17,
+            god_anger: 2,
+            god_gifts: 1,
+            blessed_amount: 3,
+            bless_cooldown: 42,
+            crowned: true,
+            demigod: false,
+            turn: 777,
+            experience_level: 14,
+            current_hp: 22,
+            max_hp: 30,
+            current_pw: 18,
+            max_pw: 24,
+            nutrition: 650,
+            luck: 4,
+            luck_bonus: 0,
+            has_luckstone: false,
+            luckstone_blessed: false,
+            luckstone_cursed: false,
+            in_gehennom: false,
+            is_undead: false,
+            is_demon: false,
+            original_alignment: Alignment::Chaotic,
+            has_converted: false,
+            alignment_abuse: 0,
+        };
+        let mut quest = QuestState::new();
+        quest.meet_leader();
+        quest.assign();
+        quest.enter_quest_dungeon();
+        quest.obtain_artifact();
+        let quest_items = PlayerQuestItems {
+            has_amulet: true,
+            has_bell: true,
+            has_book: false,
+            has_menorah: false,
+            has_quest_artifact: true,
+        };
+        let player_events = PlayerEvents {
+            quest_called: true,
+            quest_completed: true,
+            gehennom_entered: true,
+            ..PlayerEvents::default()
+        };
+
+        world
+            .ecs_mut()
+            .insert_one(player, religion.clone())
+            .expect("player should accept religion state");
+        world
+            .ecs_mut()
+            .insert_one(player, quest.clone())
+            .expect("player should accept quest state");
+        if let Some(mut live_items) = world.get_component_mut::<PlayerQuestItems>(player) {
+            *live_items = quest_items.clone();
+        }
+        if let Some(mut live_events) = world.get_component_mut::<PlayerEvents>(player) {
+            *live_events = player_events.clone();
+        }
+
+        save_game(&world, &path, SaveReason::Checkpoint, [17u8; 32]).unwrap();
+
+        let (loaded, _, _, _) = load_game(&path).unwrap();
+        assert_eq!(
+            loaded
+                .get_component::<ReligionState>(loaded.player())
+                .map(|state| (*state).clone()),
+            Some(religion),
+            "loading a save should restore religion state"
+        );
+        assert_eq!(
+            loaded
+                .get_component::<QuestState>(loaded.player())
+                .map(|state| (*state).clone()),
+            Some(quest),
+            "loading a save should restore quest state"
+        );
+        assert_eq!(
+            loaded
+                .get_component::<PlayerQuestItems>(loaded.player())
+                .map(|state| (*state).clone()),
+            Some(quest_items),
+            "loading a save should restore player quest item flags"
+        );
+        assert_eq!(
+            loaded
+                .get_component::<PlayerEvents>(loaded.player())
+                .map(|state| (*state).clone()),
+            Some(player_events),
+            "loading a save should restore player milestone flags"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2374,6 +2537,54 @@ mod tests {
             count_objects_with_artifact_name(&loaded, "The Eye of the Aethiopica"),
             1,
             "quest goal artifact should not duplicate after save/load"
+        );
+    }
+
+    #[test]
+    fn round_trip_loaded_invoked_gehennom_portal_reopens_on_revisit() {
+        let mut world = make_stair_world(DungeonBranch::Gehennom, 20, Terrain::StairsDown);
+        let mut rng = Pcg64::seed_from_u64(7007);
+
+        resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(world.dungeon().depth, 21);
+        assert!(
+            find_terrain(&world.dungeon().current_level, Terrain::MagicPortal).is_none(),
+            "before invocation the Gehennom 21 portal should stay closed"
+        );
+
+        let player = world.player();
+        if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+            player_events.invoked = true;
+            player_events.found_vibrating_square = true;
+        }
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("invoked-gehennom-portal", &world, [18u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let current_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+            .expect("Gehennom 21 should have stairs up");
+        set_player_position(&mut loaded, current_up);
+        resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+
+        let cached_down = find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+            .expect("cached Gehennom 20 should preserve stairs down");
+        set_player_position(&mut loaded, cached_down);
+        resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(loaded.dungeon().depth, 21);
+        assert!(
+            find_terrain(&loaded.dungeon().current_level, Terrain::MagicPortal).is_some(),
+            "after save/load, revisiting Gehennom 21 with invoked=true should reopen the endgame portal"
+        );
+        assert!(
+            !loaded
+                .dungeon()
+                .trap_map
+                .traps
+                .iter()
+                .any(|trap| trap.trap_type == nethack_babel_data::TrapType::VibratingSquare),
+            "the vibrating square marker should be gone once invocation has been recorded"
         );
     }
 }

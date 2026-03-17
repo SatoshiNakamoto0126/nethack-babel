@@ -343,10 +343,20 @@ pub(crate) fn resolve_magic_portal_destination_at(
         return Some((DungeonBranch::Endgame, depth + 1, None));
     }
 
-    world
+    let topology_destination = world
         .dungeon()
         .topology_portal_destination(branch, depth)
-        .map(|(target_branch, target_depth)| (target_branch, target_depth, None))
+        .map(|(target_branch, target_depth)| (target_branch, target_depth, None));
+
+    if matches!(topology_destination, Some((DungeonBranch::Endgame, _, _)))
+        && !world
+            .get_component::<nethack_babel_data::PlayerEvents>(world.player())
+            .is_some_and(|events| events.invoked)
+    {
+        return None;
+    }
+
+    topology_destination
 }
 
 pub fn branch_teleport(
@@ -1094,6 +1104,11 @@ mod tests {
         let player = world.player();
         world.dungeon_mut().branch = DungeonBranch::Gehennom;
         world.dungeon_mut().depth = 21;
+        if let Some(mut player_events) =
+            world.get_component_mut::<nethack_babel_data::PlayerEvents>(player)
+        {
+            player_events.invoked = true;
+        }
         world
             .dungeon_mut()
             .current_level
@@ -1109,6 +1124,28 @@ mod tests {
         assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
         assert_eq!(world.dungeon().depth, 1);
         assert!(world.dungeon().current_level_flags.is_endgame);
+    }
+
+    #[test]
+    fn test_branch_teleport_magic_portal_requires_invocation() {
+        let mut world = make_test_world_with_floor();
+        let mut rng = test_rng();
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 21;
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(5, 5), Terrain::MagicPortal);
+
+        let events = branch_teleport(&mut world, player, &mut rng);
+
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "teleport-no-portal"
+        )));
+        assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
+        assert_eq!(world.dungeon().depth, 21);
     }
 
     #[test]

@@ -8,8 +8,8 @@
 use rand::Rng;
 
 use nethack_babel_data::{
-    ArtifactId, MonsterDef, MonsterId, ObjectClass, ObjectCore, ObjectDef, ObjectTypeId,
-    PlayerIdentity,
+    Alignment, ArtifactId, BucStatus, Enchantment, LightSource, MonsterDef, MonsterId, ObjectClass,
+    ObjectCore, ObjectDef, ObjectTypeId, PlayerEvents, PlayerIdentity, PlayerQuestItems, TrapType,
 };
 
 use crate::action::{Direction, NameTarget, PlayerAction, Position};
@@ -19,6 +19,7 @@ use crate::event::{EngineEvent, HpSource, HungerLevel};
 use crate::makemon::{GoodPosFlags, MakeMonFlags, enexto, goodpos, makemon};
 use crate::map_gen::generate_level;
 use crate::mkobj::mksobj_at;
+use crate::role::Role;
 use crate::special_levels::{dispatch_special_level, identify_special_level};
 use crate::traps::{TrapEntityInfo, detect_trap, trigger_trap_at};
 use crate::world::{
@@ -215,6 +216,9 @@ pub fn resolve_turn(
     if player_mp < NORMAL_SPEED as i32 && !monsters_can_move {
         process_new_turn(world, rng, &mut events);
     }
+
+    sync_quest_state_from_world(world);
+    sync_player_story_components(world, &events);
 
     events
 }
@@ -837,12 +841,17 @@ fn resolve_player_action(
             }
         }
         PlayerAction::Read { item } => {
-            // Blind players cannot read scrolls/spellbooks.
             let player = world.player();
-            if crate::status::is_blind(world, player) {
-                events.push(EngineEvent::msg("scroll-cant-read-blind"));
-            } else if let Some(item_entity) = item {
-                if let Some(scroll_type) = infer_scroll_type_from_item(world, *item_entity) {
+            if let Some(item_entity) = item {
+                if is_book_of_the_dead(world, *item_entity) {
+                    increment_conduct(world, player, |state| {
+                        state.literate = state.literate.saturating_add(1);
+                    });
+                    let read_events = read_book_of_the_dead(world, player, *item_entity, rng);
+                    events.extend(read_events);
+                } else if crate::status::is_blind(world, player) {
+                    events.push(EngineEvent::msg("scroll-cant-read-blind"));
+                } else if let Some(scroll_type) = infer_scroll_type_from_item(world, *item_entity) {
                     let confused = crate::status::is_confused(world, player);
                     let read_events = crate::scrolls::read_scroll(
                         world,
@@ -859,6 +868,8 @@ fn resolve_player_action(
                 } else {
                     events.push(EngineEvent::msg("read-generic"));
                 }
+            } else if crate::status::is_blind(world, player) {
+                events.push(EngineEvent::msg("scroll-cant-read-blind"));
             } else {
                 events.push(EngineEvent::msg("read-what"));
             }
@@ -1058,14 +1069,83 @@ fn resolve_player_action(
             events.extend(prayer_events);
         }
         PlayerAction::Offer { item } => {
-            if item.is_some() {
-                let player = world.player();
-                increment_conduct(world, player, |state| {
-                    state.gnostic = state.gnostic.saturating_add(1);
-                });
-                events.push(EngineEvent::msg("offer-generic"));
-            } else {
+            let Some(item) = item else {
                 events.push(EngineEvent::msg("offer-what"));
+                return;
+            };
+
+            let player = world.player();
+            increment_conduct(world, player, |state| {
+                state.gnostic = state.gnostic.saturating_add(1);
+            });
+
+            let player_pos = world
+                .get_component::<Positioned>(player)
+                .map(|pos| pos.0)
+                .unwrap_or(Position::new(0, 0));
+            let on_altar = world
+                .dungeon()
+                .current_level
+                .get(player_pos)
+                .is_some_and(|cell| cell.terrain == Terrain::Altar);
+            if !on_altar || !player_carries_item(world, player, *item) {
+                events.push(EngineEvent::msg("offer-generic"));
+                return;
+            }
+
+            if is_real_amulet_of_yendor(world, *item) {
+                let mut religion_state = world
+                    .get_component::<crate::religion::ReligionState>(player)
+                    .map(|state| (*state).clone())
+                    .unwrap_or_else(|| default_religion_state(world, player));
+                refresh_religion_state_from_world(&mut religion_state, world, player);
+
+                let role = current_player_role(world).unwrap_or(Role::Valkyrie);
+                let altar_alignment =
+                    altar_alignment_at(world, player_pos).unwrap_or(religion_state.alignment);
+                let on_astral =
+                    world.dungeon().branch == DungeonBranch::Endgame && world.dungeon().depth == 5;
+
+                match crate::religion::offer_amulet(
+                    religion_state.alignment,
+                    altar_alignment,
+                    on_astral,
+                ) {
+                    crate::religion::AmuletOfferingResult::Ascended => {
+                        religion_state.demigod = true;
+                        persist_religion_state(world, player, religion_state.clone());
+                        let _ = remove_item_from_player_possessions(world, player, *item);
+                        events.extend(crate::end::ascension_sequence(
+                            &world.entity_name(player),
+                            &role,
+                            religion_state.alignment == religion_state.original_alignment,
+                        ));
+                        let result = crate::end::done(
+                            world,
+                            player,
+                            crate::end::DoneParams {
+                                how: crate::end::EndHow::Ascended,
+                                killer: String::new(),
+                                deepest_level: world.dungeon().max_depth(),
+                                gold: player_gold(world, player),
+                                starting_gold: 0,
+                                vanquished: Vec::new(),
+                                conducts: read_conduct_state(world, player),
+                                depth_string: current_depth_string(world),
+                                role,
+                                original_alignment: religion_state.alignment
+                                    == religion_state.original_alignment,
+                            },
+                        );
+                        events.extend(result.events);
+                    }
+                    crate::religion::AmuletOfferingResult::Rejected
+                    | crate::religion::AmuletOfferingResult::NotAstralPlane => {
+                        events.push(EngineEvent::msg("offer-generic"));
+                    }
+                }
+            } else {
+                events.push(EngineEvent::msg("offer-generic"));
             }
         }
         PlayerAction::Chat { direction } => {
@@ -1077,19 +1157,57 @@ fn resolve_player_action(
                 .unwrap_or(Position::new(0, 0));
             let target_pos = player_pos.step(*direction);
             // Check if there's a monster at the target position.
-            let monster_at_target: bool = {
-                let mut found = false;
-                for (entity, _) in world.ecs().query::<&Monster>().iter() {
-                    if let Some(pos) = world.get_component::<Positioned>(entity)
-                        && pos.0 == target_pos
-                    {
-                        found = true;
-                        break;
+            let monster_at_target = world
+                .ecs()
+                .query::<(&Monster, &Positioned)>()
+                .iter()
+                .find_map(|(entity, (_, pos))| (pos.0 == target_pos).then_some(entity));
+            if let Some(monster_entity) = monster_at_target {
+                if world.dungeon().branch == DungeonBranch::Quest
+                    && let Some(role) = current_player_role(world)
+                    && let Some(monster_name) = world
+                        .get_component::<Name>(monster_entity)
+                        .map(|name| name.0.clone())
+                {
+                    let is_leader = quest_name_matches(
+                        &monster_name,
+                        crate::quest::quest_leader_for_role(role),
+                    );
+                    let is_nemesis = quest_name_matches(
+                        &monster_name,
+                        crate::quest::quest_nemesis_for_role(role),
+                    );
+                    let is_guardian = quest_name_matches(
+                        &monster_name,
+                        crate::quest::quest_guardian_for_role(role),
+                    );
+
+                    if is_leader || is_nemesis || is_guardian {
+                        let mut quest_state = read_quest_state(world, player);
+                        let alignment_record = world
+                            .get_component::<crate::religion::ReligionState>(player)
+                            .map(|state| state.alignment_record)
+                            .unwrap_or_else(|| {
+                                default_religion_state(world, player).alignment_record
+                            });
+                        let level = world
+                            .get_component::<ExperienceLevel>(player)
+                            .map(|lvl| lvl.0)
+                            .unwrap_or(1);
+                        let encounter =
+                            crate::quest::determine_encounter(&quest_state, is_leader, is_nemesis);
+                        let quest_events = crate::quest::resolve_encounter(
+                            &mut quest_state,
+                            role,
+                            encounter,
+                            level,
+                            alignment_record,
+                        );
+                        persist_quest_state(world, player, quest_state);
+                        events.extend(quest_events);
+                        return;
                     }
                 }
-                found
-            };
-            if monster_at_target {
                 events.push(EngineEvent::msg("npc-chat-no-response"));
             } else {
                 events.push(EngineEvent::msg("chat-nobody-there"));
@@ -1858,6 +1976,16 @@ fn handle_go_down(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<En
 
     let current_depth = world.dungeon().depth;
 
+    if world.dungeon().branch == DungeonBranch::Quest && current_depth == 1 {
+        let mut quest_state = read_quest_state(world, player);
+        if crate::quest::should_expel_from_quest(&quest_state) {
+            quest_state.expel();
+            persist_quest_state(world, player, quest_state);
+            events.push(EngineEvent::msg("quest-expelled"));
+            return;
+        }
+    }
+
     // Check for branch transition before defaulting to depth+1.
     let branch_transition = world.dungeon().check_branch_transition();
     if let Some((target_branch, target_branch_depth)) = branch_transition {
@@ -1962,11 +2090,14 @@ fn inject_topology_portal_if_needed(
     }
 }
 
-fn current_player_role_name(world: &GameWorld) -> Option<String> {
+fn current_player_role(world: &GameWorld) -> Option<Role> {
     world
         .get_component::<PlayerIdentity>(world.player())
         .and_then(|identity| crate::role::Role::from_id(identity.role))
-        .map(|role| role.name().to_ascii_lowercase())
+}
+
+fn current_player_role_name(world: &GameWorld) -> Option<String> {
+    current_player_role(world).map(|role| role.name().to_ascii_lowercase())
 }
 
 fn special_level_role_name(
@@ -2130,6 +2261,7 @@ pub(crate) fn change_level_to_branch(
     // 4. Install the new level map and store flags.
     world.dungeon_mut().current_level = new_map;
     world.dungeon_mut().current_level_flags = flags.into();
+    sync_current_level_invocation_access(world, rng);
 
     // 5. Place the player.
     let default_target_pos = if going_up {
@@ -2292,6 +2424,7 @@ fn change_level(
     // 6. Install the new level map and store flags.
     world.dungeon_mut().current_level = new_map;
     world.dungeon_mut().current_level_flags = flags.into();
+    sync_current_level_invocation_access(world, rng);
 
     // 7. Place the player on the appropriate stairs.
     let target_pos = if going_up {
@@ -3763,6 +3896,442 @@ fn persist_religion_state(
     }
 }
 
+fn read_quest_state(world: &GameWorld, player: hecs::Entity) -> crate::quest::QuestState {
+    world
+        .get_component::<crate::quest::QuestState>(player)
+        .map(|state| (*state).clone())
+        .unwrap_or_default()
+}
+
+fn persist_quest_state(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    state: crate::quest::QuestState,
+) {
+    if let Some(mut live_state) = world.get_component_mut::<crate::quest::QuestState>(player) {
+        *live_state = state;
+    } else {
+        let _ = world.ecs_mut().insert_one(player, state);
+    }
+}
+
+fn current_player_alignment(world: &GameWorld, player: hecs::Entity) -> Alignment {
+    world
+        .get_component::<PlayerIdentity>(player)
+        .map(|identity| identity.alignment)
+        .unwrap_or(Alignment::Neutral)
+}
+
+fn strip_leading_article(name: &str) -> &str {
+    name.strip_prefix("the ")
+        .or_else(|| name.strip_prefix("The "))
+        .unwrap_or(name)
+}
+
+fn quest_name_matches(actual: &str, expected: &str) -> bool {
+    actual.eq_ignore_ascii_case(expected)
+        || strip_leading_article(actual).eq_ignore_ascii_case(strip_leading_article(expected))
+}
+
+fn item_display_name(world: &GameWorld, item: hecs::Entity) -> Option<String> {
+    if let Some(name) = world.get_component::<Name>(item) {
+        return Some(name.0.clone());
+    }
+    let core = world.get_component::<ObjectCore>(item)?;
+    world
+        .object_catalog()
+        .iter()
+        .find(|def| def.id == core.otyp)
+        .map(|def| def.name.clone())
+}
+
+fn find_player_named_item(
+    world: &GameWorld,
+    player: hecs::Entity,
+    expected_name: &str,
+) -> Option<hecs::Entity> {
+    if let Some(inv) = world.get_component::<crate::inventory::Inventory>(player)
+        && let Some(item) = inv.items.iter().find(|item| {
+            item_display_name(world, **item)
+                .is_some_and(|name| quest_name_matches(&name, expected_name))
+        })
+    {
+        return Some(*item);
+    }
+
+    world
+        .get_component::<crate::equipment::EquipmentSlots>(player)
+        .and_then(|slots| {
+            slots.all_worn().iter().find_map(|(_, item)| {
+                item_display_name(world, *item)
+                    .is_some_and(|name| quest_name_matches(&name, expected_name))
+                    .then_some(*item)
+            })
+        })
+}
+
+fn player_carries_item(world: &GameWorld, player: hecs::Entity, item: hecs::Entity) -> bool {
+    world
+        .get_component::<crate::inventory::Inventory>(player)
+        .is_some_and(|inv| inv.contains(item))
+        || world
+            .get_component::<crate::equipment::EquipmentSlots>(player)
+            .and_then(|slots| slots.find_slot(item))
+            .is_some()
+}
+
+fn remove_item_from_player_possessions(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    item: hecs::Entity,
+) -> bool {
+    let mut removed = false;
+    if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+        removed |= inv.remove(item);
+    }
+    if let Some(mut slots) = world.get_component_mut::<crate::equipment::EquipmentSlots>(player)
+        && let Some(slot) = slots.find_slot(item)
+    {
+        slots.set(slot, None);
+        removed = true;
+    }
+    if removed {
+        let _ = world.despawn(item);
+    }
+    removed
+}
+
+fn is_real_amulet_of_yendor(world: &GameWorld, item: hecs::Entity) -> bool {
+    let Some(core) = world.get_component::<ObjectCore>(item) else {
+        return false;
+    };
+    let Some(amulet_id) = resolve_object_type_by_spec(world.object_catalog(), "Amulet of Yendor")
+    else {
+        return false;
+    };
+    core.otyp == amulet_id
+}
+
+fn is_book_of_the_dead(world: &GameWorld, item: hecs::Entity) -> bool {
+    item_display_name(world, item).is_some_and(|name| quest_name_matches(&name, "Book of the Dead"))
+}
+
+fn item_is_cursed(world: &GameWorld, item: hecs::Entity) -> bool {
+    world
+        .get_component::<BucStatus>(item)
+        .is_some_and(|status| status.cursed)
+}
+
+fn item_is_lit(world: &GameWorld, item: hecs::Entity) -> bool {
+    world
+        .get_component::<LightSource>(item)
+        .is_some_and(|source| source.lit)
+}
+
+fn item_charges(world: &GameWorld, item: hecs::Entity) -> i8 {
+    world
+        .get_component::<Enchantment>(item)
+        .map(|charges| charges.spe)
+        .unwrap_or(0)
+}
+
+fn is_invocation_site(world: &GameWorld, pos: Position) -> bool {
+    if world
+        .dungeon()
+        .current_level
+        .get(pos)
+        .is_some_and(|cell| matches!(cell.terrain, Terrain::StairsUp | Terrain::StairsDown))
+    {
+        return false;
+    }
+
+    world
+        .dungeon()
+        .trap_map
+        .trap_at(pos)
+        .is_some_and(|trap| trap.trap_type == TrapType::VibratingSquare)
+}
+
+fn player_gold(world: &GameWorld, player: hecs::Entity) -> i64 {
+    world
+        .get_component::<crate::inventory::Inventory>(player)
+        .map(|inv| {
+            inv.items
+                .iter()
+                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                .filter(|core| core.object_class == ObjectClass::Coin)
+                .map(|core| core.quantity as i64)
+                .sum()
+        })
+        .unwrap_or(0)
+}
+
+fn current_depth_string(world: &GameWorld) -> String {
+    if world.dungeon().branch == DungeonBranch::Endgame && world.dungeon().depth == 5 {
+        "Astral".to_string()
+    } else {
+        format!("{:?}:{}", world.dungeon().branch, world.dungeon().depth)
+    }
+}
+
+fn altar_alignment_at(world: &GameWorld, pos: Position) -> Option<Alignment> {
+    let branch = world.dungeon().branch;
+    let depth = world.dungeon().depth;
+    if branch == DungeonBranch::Endgame && depth == 5 {
+        let mut altar_positions = Vec::new();
+        let map = &world.dungeon().current_level;
+        for y in 0..map.height {
+            for x in 0..map.width {
+                let altar_pos = Position::new(x as i32, y as i32);
+                if map
+                    .get(altar_pos)
+                    .is_some_and(|cell| cell.terrain == Terrain::Altar)
+                {
+                    altar_positions.push(altar_pos);
+                }
+            }
+        }
+        altar_positions.sort_by_key(|altar_pos| altar_pos.x);
+        for (index, altar_pos) in altar_positions.iter().enumerate() {
+            if *altar_pos == pos {
+                return Some(match index {
+                    0 => Alignment::Lawful,
+                    1 => Alignment::Neutral,
+                    _ => Alignment::Chaotic,
+                });
+            }
+        }
+    }
+    Some(current_player_alignment(world, world.player()))
+}
+
+fn level_uses_invocation_magic_portal(
+    world: &GameWorld,
+    branch: DungeonBranch,
+    depth: i32,
+) -> bool {
+    matches!(
+        world.dungeon().topology_portal_destination(branch, depth),
+        Some((DungeonBranch::Endgame, _))
+    )
+}
+
+fn sync_current_level_invocation_access(world: &mut GameWorld, rng: &mut impl Rng) {
+    let branch = world.dungeon().branch;
+    let depth = world.dungeon().depth;
+    if !level_uses_invocation_magic_portal(world, branch, depth) {
+        return;
+    }
+
+    let player_events = read_player_events(world, world.player());
+    let preferred = world
+        .dungeon()
+        .trap_map
+        .traps
+        .iter()
+        .find(|trap| trap.trap_type == TrapType::VibratingSquare)
+        .map(|trap| trap.pos)
+        .or_else(|| find_terrain(&world.dungeon().current_level, Terrain::StairsUp))
+        .or_else(|| find_terrain(&world.dungeon().current_level, Terrain::StairsDown));
+    let Some(anchor) = find_portal_anchor(&world.dungeon().current_level, preferred) else {
+        return;
+    };
+
+    if player_events.invoked {
+        world.dungeon_mut().trap_map.remove_trap_at(anchor);
+        if world
+            .dungeon()
+            .current_level
+            .get(anchor)
+            .is_some_and(|cell| matches!(cell.terrain, Terrain::Floor | Terrain::Corridor))
+        {
+            world
+                .dungeon_mut()
+                .current_level
+                .set_terrain(anchor, Terrain::MagicPortal);
+        }
+    } else {
+        if let Some(portal_pos) = find_terrain(&world.dungeon().current_level, Terrain::MagicPortal)
+        {
+            world
+                .dungeon_mut()
+                .current_level
+                .set_terrain(portal_pos, Terrain::Floor);
+        }
+        if world.dungeon().trap_map.trap_at(anchor).is_none() {
+            let _ = crate::traps::create_trap(
+                rng,
+                &mut world.dungeon_mut().trap_map,
+                anchor,
+                TrapType::VibratingSquare,
+            );
+        }
+    }
+}
+
+fn read_book_of_the_dead(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    book: hecs::Entity,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    let mut events = Vec::new();
+    let player_pos = world
+        .get_component::<Positioned>(player)
+        .map(|pos| pos.0)
+        .unwrap_or(Position::new(0, 0));
+
+    if !is_invocation_site(world, player_pos) {
+        events.push(EngineEvent::msg("read-dead-book"));
+        return events;
+    }
+
+    let bell = find_player_named_item(world, player, "Bell of Opening");
+    let candelabrum = find_player_named_item(world, player, "Candelabrum of Invocation");
+    let Some(bell) = bell else {
+        events.push(EngineEvent::msg("invocation-incomplete"));
+        return events;
+    };
+    let Some(candelabrum) = candelabrum else {
+        events.push(EngineEvent::msg("invocation-incomplete"));
+        return events;
+    };
+
+    let invocation_items_ready = crate::religion::has_invocation_items(true, true, true);
+    let bell_recent = world
+        .get_component::<ObjectCore>(bell)
+        .is_some_and(|core| world.turn().saturating_sub(core.age.max(0) as u32) <= 5);
+    let candelabrum_ready =
+        item_charges(world, candelabrum) >= 7 && item_is_lit(world, candelabrum);
+    let all_uncursed = !item_is_cursed(world, book)
+        && !item_is_cursed(world, bell)
+        && !item_is_cursed(world, candelabrum);
+
+    if invocation_items_ready && bell_recent && candelabrum_ready && all_uncursed {
+        let mut player_events = read_player_events(world, player);
+        player_events.invoked = true;
+        player_events.found_vibrating_square = true;
+        persist_player_events(world, player, player_events);
+        sync_current_level_invocation_access(world, rng);
+        events.push(EngineEvent::msg("invocation-complete"));
+    } else {
+        events.push(EngineEvent::msg("invocation-incomplete"));
+    }
+
+    events
+}
+
+fn sync_quest_state_from_world(world: &mut GameWorld) {
+    let player = world.player();
+    let Some(role) = current_player_role(world) else {
+        return;
+    };
+    let mut state = read_quest_state(world, player);
+    if world.dungeon().branch == DungeonBranch::Quest && world.dungeon().depth > 1 {
+        state.enter_quest_dungeon();
+    }
+
+    let quest_artifact = crate::quest::quest_artifact_for_role(role);
+    let has_artifact = world
+        .get_component::<crate::inventory::Inventory>(player)
+        .is_some_and(|inv| {
+            inv.items.iter().any(|item| {
+                item_display_name(world, *item)
+                    .is_some_and(|name| quest_name_matches(&name, quest_artifact))
+            })
+        });
+    if has_artifact {
+        state.obtain_artifact();
+    }
+
+    if state.artifact_obtained
+        && world.dungeon().branch == DungeonBranch::Quest
+        && world.dungeon().depth == 7
+    {
+        let nemesis_name = crate::quest::quest_nemesis_for_role(role);
+        let nemesis_alive = world
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .any(|(_, (_, name))| quest_name_matches(&name.0, nemesis_name));
+        if !nemesis_alive {
+            state.defeat_nemesis();
+        }
+    }
+
+    persist_quest_state(world, player, state);
+}
+
+fn player_has_named_item(world: &GameWorld, player: hecs::Entity, expected_name: &str) -> bool {
+    find_player_named_item(world, player, expected_name).is_some()
+}
+
+fn persist_player_quest_items(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    items: PlayerQuestItems,
+) {
+    if let Some(mut live_items) = world.get_component_mut::<PlayerQuestItems>(player) {
+        *live_items = items;
+    } else {
+        let _ = world.ecs_mut().insert_one(player, items);
+    }
+}
+
+fn read_player_events(world: &GameWorld, player: hecs::Entity) -> PlayerEvents {
+    world
+        .get_component::<PlayerEvents>(player)
+        .map(|events| (*events).clone())
+        .unwrap_or_default()
+}
+
+fn persist_player_events(world: &mut GameWorld, player: hecs::Entity, events: PlayerEvents) {
+    if let Some(mut live_events) = world.get_component_mut::<PlayerEvents>(player) {
+        *live_events = events;
+    } else {
+        let _ = world.ecs_mut().insert_one(player, events);
+    }
+}
+
+fn sync_player_story_components(world: &mut GameWorld, events: &[EngineEvent]) {
+    let player = world.player();
+
+    let quest_items = PlayerQuestItems {
+        has_amulet: player_has_named_item(world, player, "Amulet of Yendor"),
+        has_bell: player_has_named_item(world, player, "Bell of Opening"),
+        has_book: player_has_named_item(world, player, "Book of the Dead"),
+        has_menorah: player_has_named_item(world, player, "Candelabrum of Invocation"),
+        has_quest_artifact: current_player_role(world).is_some_and(|role| {
+            player_has_named_item(world, player, crate::quest::quest_artifact_for_role(role))
+        }),
+    };
+    persist_player_quest_items(world, player, quest_items);
+
+    let quest_state = read_quest_state(world, player);
+    let mut player_events = read_player_events(world, player);
+    player_events.quest_called = quest_state.leader_met;
+    player_events.quest_expelled = quest_state.times_expelled > 0;
+    player_events.quest_completed = quest_state.status == crate::quest::QuestStatus::Completed;
+    player_events.gehennom_entered |= world.dungeon().branch == DungeonBranch::Gehennom;
+    if let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) {
+        player_events.found_vibrating_square |= world
+            .dungeon()
+            .trap_map
+            .trap_at(player_pos)
+            .is_some_and(|trap| trap.trap_type == TrapType::VibratingSquare);
+    }
+    player_events.ascended |= events.iter().any(|event| {
+        matches!(
+            event,
+            EngineEvent::GameOver {
+                cause: crate::event::DeathCause::Ascended,
+                ..
+            }
+        )
+    });
+    persist_player_events(world, player, player_events);
+}
+
 fn read_conduct_state(world: &GameWorld, player: hecs::Entity) -> ConductState {
     world
         .get_component::<ConductState>(player)
@@ -3823,8 +4392,8 @@ mod tests {
     use crate::world::Name;
     use nethack_babel_data::{
         Alignment, ArtifactId, BucStatus, GameData, Gender, Handedness, MonsterFlags, ObjectClass,
-        ObjectCore, ObjectLocation, ObjectTypeId, PlayerIdentity, PlayerSkills, RaceId, RoleId,
-        SkillState, WeaponSkill, load_game_data,
+        ObjectCore, ObjectLocation, ObjectTypeId, PlayerEvents, PlayerIdentity, PlayerQuestItems,
+        PlayerSkills, RaceId, RoleId, SkillState, WeaponSkill, load_game_data,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
@@ -3955,6 +4524,54 @@ mod tests {
         id.alignment = Alignment::Chaotic;
         id.alignment_base = [Alignment::Chaotic, Alignment::Chaotic];
         id
+    }
+
+    fn spawn_idle_named_monster(world: &mut GameWorld, pos: Position, name: &str) -> hecs::Entity {
+        let order = world.next_creation_order();
+        world.spawn((
+            Monster,
+            Positioned(pos),
+            Speed(12),
+            MovementPoints(0),
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
+            Name(name.to_string()),
+            order,
+        ))
+    }
+
+    fn spawn_inventory_object_by_name(
+        world: &mut GameWorld,
+        name: &str,
+        letter: char,
+    ) -> hecs::Entity {
+        let object_type = resolve_object_type_by_spec(&test_game_data().objects, name)
+            .unwrap_or_else(|| panic!("{name} should resolve against the test catalog"));
+        let object_def = test_game_data()
+            .objects
+            .iter()
+            .find(|def| def.id == object_type)
+            .unwrap_or_else(|| panic!("{name} should exist in the object catalog"));
+        let item = world.spawn((
+            ObjectCore {
+                otyp: object_type,
+                object_class: object_def.class,
+                quantity: 1,
+                weight: object_def.weight as u32,
+                age: 0,
+                inv_letter: Some(letter),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            Name(name.to_string()),
+        ));
+        let player = world.player();
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.push(item);
+        }
+        item
     }
 
     /// Spawn a monster at the given position with a given base speed.
@@ -4127,6 +4744,10 @@ mod tests {
     fn move_onto_topology_magic_portal_enters_endgame() {
         let mut world = make_portal_world(DungeonBranch::Gehennom, 21, Position::new(6, 5));
         let mut rng = test_rng();
+        let player = world.player();
+        if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+            player_events.invoked = true;
+        }
 
         let events = resolve_turn(
             &mut world,
@@ -4148,6 +4769,28 @@ mod tests {
         assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
         assert_eq!(world.dungeon().depth, 1);
         assert!(world.dungeon().current_level_flags.is_endgame);
+    }
+
+    #[test]
+    fn move_onto_topology_magic_portal_before_invocation_does_not_enter_endgame() {
+        let mut world = make_portal_world(DungeonBranch::Gehennom, 21, Position::new(6, 5));
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::LevelChanged { .. }))
+        );
+        assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
+        assert_eq!(world.dungeon().depth, 21);
     }
 
     #[test]
@@ -5588,6 +6231,25 @@ mod tests {
             )
         });
         assert!(level_changed, "expected LevelChanged event from 1 to 2");
+    }
+
+    #[test]
+    fn test_quest_start_blocks_descent_before_assignment() {
+        let mut world = make_stair_world(Terrain::StairsDown, 1);
+        world.dungeon_mut().branch = DungeonBranch::Quest;
+        let mut rng = test_rng();
+
+        let events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(world.dungeon().depth, 1);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-expelled"
+        )));
+        let quest_state = world
+            .get_component::<crate::quest::QuestState>(world.player())
+            .expect("quest descent block should persist quest state");
+        assert_eq!(quest_state.times_expelled, 1);
     }
 
     #[test]
@@ -7868,6 +8530,365 @@ mod tests {
             e,
             EngineEvent::Message { key, .. } if key == "invoke-artifact"
         )));
+    }
+
+    #[test]
+    fn test_chat_quest_leader_assigns_quest_when_eligible() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Quest;
+        world.dungeon_mut().depth = 1;
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        let mut religion = default_religion_state(&world, player);
+        religion.experience_level = 14;
+        religion.alignment_record = 10;
+        world
+            .ecs_mut()
+            .insert_one(player, religion)
+            .expect("player should accept religion state");
+        if let Some(mut level) = world.get_component_mut::<ExperienceLevel>(player) {
+            level.0 = 14;
+        }
+        spawn_idle_named_monster(&mut world, Position::new(6, 5), "Neferet the Green");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-leader-first"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-assigned"
+        )));
+        let quest_state = world
+            .get_component::<crate::quest::QuestState>(player)
+            .expect("quest chat should persist quest state");
+        assert!(quest_state.leader_met, "leader should be marked as met");
+        assert_eq!(quest_state.status, crate::quest::QuestStatus::Assigned);
+    }
+
+    #[test]
+    fn test_chat_quest_guardian_uses_quest_dialogue() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Quest;
+        world.dungeon_mut().depth = 1;
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        spawn_idle_named_monster(&mut world, Position::new(6, 5), "apprentice");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-guardian"
+        )));
+    }
+
+    #[test]
+    fn test_quest_state_sync_marks_entered_and_artifact_obtained() {
+        let mut world = make_stair_world(Terrain::StairsDown, 2);
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Quest;
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+
+        let artifact = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('a'),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            Name("The Eye of the Aethiopica".to_string()),
+        ));
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.push(artifact);
+        }
+
+        let mut rng = test_rng();
+        let _ = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+
+        let quest_state = world
+            .get_component::<crate::quest::QuestState>(player)
+            .expect("quest sync should persist quest state");
+        assert!(quest_state.quest_dungeon_entered);
+        assert!(quest_state.artifact_obtained);
+        let quest_items = world
+            .get_component::<PlayerQuestItems>(player)
+            .expect("quest sync should persist player quest item flags");
+        assert!(quest_items.has_quest_artifact);
+    }
+
+    #[test]
+    fn test_offer_real_amulet_on_aligned_astral_altar_ascends() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        let mut rng = test_rng();
+        let astral = crate::special_levels::dispatch_special_level(
+            crate::special_levels::SpecialLevelId::AstralPlane,
+            None,
+            &mut rng,
+        )
+        .expect("Astral Plane should dispatch");
+        world.dungeon_mut().branch = DungeonBranch::Endgame;
+        world.dungeon_mut().depth = 5;
+        world.dungeon_mut().current_level = astral.generated.map;
+        world.dungeon_mut().current_level_flags = astral.flags.into();
+
+        let mut altar_positions = Vec::new();
+        for y in 0..world.dungeon().current_level.height {
+            for x in 0..world.dungeon().current_level.width {
+                let pos = Position::new(x as i32, y as i32);
+                if world
+                    .dungeon()
+                    .current_level
+                    .get(pos)
+                    .is_some_and(|cell| cell.terrain == Terrain::Altar)
+                {
+                    altar_positions.push(pos);
+                }
+            }
+        }
+        altar_positions.sort_by_key(|pos| pos.x);
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
+            pos.0 = *altar_positions
+                .last()
+                .expect("Astral Plane should have at least one altar");
+        }
+
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Offer { item: Some(amulet) },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::GameOver {
+                cause: crate::event::DeathCause::Ascended,
+                ..
+            }
+        )));
+        assert!(
+            world.get_component::<ObjectCore>(amulet).is_none(),
+            "successful ascension should consume the offered amulet"
+        );
+        let player_events = world
+            .get_component::<PlayerEvents>(player)
+            .expect("ascension flow should persist player milestone flags");
+        assert!(player_events.ascended);
+    }
+
+    #[test]
+    fn test_offer_real_amulet_on_wrong_astral_altar_does_not_ascend() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        let mut rng = test_rng();
+        let astral = crate::special_levels::dispatch_special_level(
+            crate::special_levels::SpecialLevelId::AstralPlane,
+            None,
+            &mut rng,
+        )
+        .expect("Astral Plane should dispatch");
+        world.dungeon_mut().branch = DungeonBranch::Endgame;
+        world.dungeon_mut().depth = 5;
+        world.dungeon_mut().current_level = astral.generated.map;
+        world.dungeon_mut().current_level_flags = astral.flags.into();
+
+        let mut altar_positions = Vec::new();
+        for y in 0..world.dungeon().current_level.height {
+            for x in 0..world.dungeon().current_level.width {
+                let pos = Position::new(x as i32, y as i32);
+                if world
+                    .dungeon()
+                    .current_level
+                    .get(pos)
+                    .is_some_and(|cell| cell.terrain == Terrain::Altar)
+                {
+                    altar_positions.push(pos);
+                }
+            }
+        }
+        altar_positions.sort_by_key(|pos| pos.x);
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
+            pos.0 = altar_positions[0];
+        }
+
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Offer { item: Some(amulet) },
+            &mut rng,
+        );
+
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                EngineEvent::GameOver {
+                    cause: crate::event::DeathCause::Ascended,
+                    ..
+                }
+            )),
+            "offering on the wrong Astral altar must not ascend"
+        );
+        assert!(
+            world.get_component::<ObjectCore>(amulet).is_some(),
+            "rejected offer should not delete the amulet in the current simplified runtime"
+        );
+    }
+
+    #[test]
+    fn test_sync_current_level_invocation_access_gates_endgame_portal() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 21;
+        let mut rng = test_rng();
+
+        sync_current_level_invocation_access(&mut world, &mut rng);
+        assert!(
+            find_terrain(&world.dungeon().current_level, Terrain::MagicPortal).is_none(),
+            "the endgame portal should stay closed until invocation succeeds"
+        );
+        assert!(
+            world
+                .dungeon()
+                .trap_map
+                .traps
+                .iter()
+                .any(|trap| trap.trap_type == TrapType::VibratingSquare)
+        );
+
+        let player = world.player();
+        let mut player_events = read_player_events(&world, player);
+        player_events.invoked = true;
+        persist_player_events(&mut world, player, player_events);
+        sync_current_level_invocation_access(&mut world, &mut rng);
+
+        assert!(
+            find_terrain(&world.dungeon().current_level, Terrain::MagicPortal).is_some(),
+            "successful invocation should expose the endgame magic portal"
+        );
+        assert!(
+            !world
+                .dungeon()
+                .trap_map
+                .traps
+                .iter()
+                .any(|trap| trap.trap_type == TrapType::VibratingSquare),
+            "opening the portal should clear the vibrating square marker"
+        );
+    }
+
+    #[test]
+    fn test_read_book_of_the_dead_invokes_and_opens_portal() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 21;
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .map(|pos| pos.0)
+            .expect("player should have a position");
+        let mut rng = test_rng();
+        let _ = crate::traps::create_trap(
+            &mut rng,
+            &mut world.dungeon_mut().trap_map,
+            player_pos,
+            TrapType::VibratingSquare,
+        );
+
+        let bell = spawn_inventory_object_by_name(&mut world, "Bell of Opening", 'b');
+        let candelabrum =
+            spawn_inventory_object_by_name(&mut world, "Candelabrum of Invocation", 'c');
+        let book = spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'd');
+
+        let current_turn = world.turn() as i64;
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(bell) {
+            core.age = current_turn;
+        }
+        world
+            .ecs_mut()
+            .insert_one(candelabrum, Enchantment { spe: 7 })
+            .expect("candelabrum should accept candle count");
+        world
+            .ecs_mut()
+            .insert_one(
+                candelabrum,
+                LightSource {
+                    lit: true,
+                    recharged: 0,
+                },
+            )
+            .expect("candelabrum should accept light state");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Read { item: Some(book) },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "invocation-complete"
+        )));
+        let player_events = world
+            .get_component::<PlayerEvents>(player)
+            .expect("invocation should persist milestone flags");
+        assert!(player_events.invoked);
+        assert!(player_events.found_vibrating_square);
+        assert_eq!(
+            world
+                .dungeon()
+                .current_level
+                .get(player_pos)
+                .map(|cell| cell.terrain),
+            Some(Terrain::MagicPortal),
+            "successful invocation should open the portal on the vibrating square"
+        );
+        assert!(
+            world.dungeon().trap_map.trap_at(player_pos).is_none(),
+            "the vibrating square trap marker should be cleared after invocation"
+        );
     }
 
     // ── Gas cloud ticking ─────────────────────────────────────────────

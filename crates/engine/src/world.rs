@@ -5,7 +5,7 @@
 //! this struct.
 
 use hecs::{Entity, World};
-use nethack_babel_data::{MonsterDef, ObjectDef};
+use nethack_babel_data::{MonsterDef, ObjectDef, PlayerEvents, PlayerQuestItems};
 use serde::{Deserialize, Serialize};
 
 use crate::action::Position;
@@ -264,6 +264,8 @@ impl GameWorld {
         let _ = world.insert_one(player, AttributeExercise::default());
         let _ = world.insert_one(player, NaturalAttributes::default());
         let _ = world.insert_one(player, crate::spells::SpellBook::default());
+        let _ = world.insert_one(player, PlayerQuestItems::default());
+        let _ = world.insert_one(player, PlayerEvents::default());
         Self {
             world,
             turn: 1,

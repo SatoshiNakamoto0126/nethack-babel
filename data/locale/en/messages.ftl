@@ -2212,6 +2212,10 @@ punishment-removed = You feel the iron ball disappear.
 ## ============================================================================
 
 quest-assigned = Your quest has been assigned.
+quest-expelled = You are not yet permitted to descend into the quest.
+invocation-complete = The invocation ritual succeeds and a magic portal opens!
+invocation-incomplete = The runes flare, but the invocation does not complete.
+read-dead-book = The Book of the Dead whispers with sepulchral power.
 
 ## ============================================================================
 ## Region

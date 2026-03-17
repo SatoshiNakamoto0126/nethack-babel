@@ -2413,6 +2413,10 @@ punishment-removed = You feel the iron ball disappear.
 
 # TODO: translate
 quest-assigned = Your quest has been assigned.
+quest-expelled = 你還沒有獲准深入任務地城。
+invocation-complete = 祈喚儀式成功了，一道魔法傳送門開啟了！
+invocation-incomplete = 符文閃爍著，但祈喚並未完成。
+read-dead-book = 《死者之書》低語著墓穴般的力量。
 
 # TODO: translate
 region-fog-obscures = A cloud of fog obscures your vision!

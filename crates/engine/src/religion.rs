@@ -8,6 +8,7 @@
 
 use hecs::Entity;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 use nethack_babel_data::Alignment;
 
@@ -102,7 +103,7 @@ impl Trouble {
 
 /// Snapshot of the player's religion state, extracted from ECS for pure
 /// function computation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReligionState {
     /// Current alignment type (Lawful / Neutral / Chaotic).
     pub alignment: Alignment,

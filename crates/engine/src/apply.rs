@@ -282,6 +282,25 @@ fn apply_bell(
         ench.spe -= 1;
     }
 
+    // Ringing the Bell of Opening on the vibrating square marks it as
+    // invocation-ready for a short window, matching the Book of the Dead
+    // runtime check.
+    let player_pos = world
+        .get_component::<Positioned>(player)
+        .map(|p| p.0)
+        .unwrap_or(Position::new(0, 0));
+    let on_invocation_site = world
+        .dungeon()
+        .trap_map
+        .trap_at(player_pos)
+        .is_some_and(|trap| trap.trap_type == nethack_babel_data::TrapType::VibratingSquare);
+    let current_turn = world.turn() as i64;
+    if on_invocation_site
+        && let Some(mut core) = world.get_component_mut::<nethack_babel_data::ObjectCore>(item)
+    {
+        core.age = current_turn;
+    }
+
     if buc.cursed {
         // Cursed: create undead.
         events.push(EngineEvent::msg("tool-bell-cursed-undead"));

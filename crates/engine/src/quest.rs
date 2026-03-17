@@ -10,6 +10,7 @@
 
 use nethack_babel_data::Alignment;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 use crate::event::EngineEvent;
 use crate::role::Role;
@@ -19,7 +20,7 @@ use crate::role::Role;
 // ---------------------------------------------------------------------------
 
 /// Overall progress through the quest.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum QuestStatus {
     /// The player has not yet been offered the quest.
     NotStarted,
@@ -32,7 +33,7 @@ pub enum QuestStatus {
 }
 
 /// Tracks the player's progress through the quest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuestState {
     pub status: QuestStatus,
     pub leader_met: bool,
