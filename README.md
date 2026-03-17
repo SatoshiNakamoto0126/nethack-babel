@@ -280,11 +280,11 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 ## Roadmap (2026)
 
 1. **Temple and shop long-tail parity**  
-   Finish the remaining priest/shopkeeper behavior that goes beyond identity and basic anger state: sanctuary rules, calm-down paths, follow-home logic, and economy-side consequences.
+   Push beyond the current `follow / payoff / pray / calm-down` runtime closure and finish the remaining priest/shopkeeper edge cases: sanctuary nuance, damage/repair consequences, and richer economy-side behavior.
 2. **Wizard harassment parity**  
-   Broaden Wizard of Yendor harassment beyond the current core actions, with richer nasty pools, repeated-harassment coverage, and stronger mid-run save/load regression tests.
+   Broaden Wizard of Yendor harassment beyond the current respawn/theft/curse/nasty-summon runtime, with richer nasty pools and more original-NetHack cadence.
 3. **Story drift detection**  
-   Expand traversal and save/load matrices into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
+   Expand the current quest/endgame/shop/temple/wizard traversal matrices into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
 4. **Runtime cache and save hardening**  
    Continue auditing level-local runtime state and keep save-format rules explicit whenever serialized world semantics change.
 5. **Contributor and content tooling**  
@@ -292,11 +292,11 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 
 ## TODO (Short-Term)
 
-- [ ] Finish shopkeeper and priest long-tail runtime semantics: follow-home behavior, sanctuary/calm-down paths, and economy-side regressions.
-- [ ] Extend Wizard of Yendor harassment parity beyond respawn, theft, cursing, and the current nasty summon pool/replay matrix.
-- [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state.
+- [ ] Finish the remaining priest/shop edge cases beyond the current payoff/follow/pray/calm runtime path: sanctuary nuance, damage/repair fallout, and broader economy consequences.
+- [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, theft, cursing, nasty summon, and repeated reload coverage.
+- [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state beyond the current quest/endgame/shop/temple/wizard scenarios.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and save/load omissions.
-- [ ] Keep contributor docs and content-editing docs aligned as runtime/save contracts continue to harden.
+- [ ] Reduce legacy warning noise in CI so new regressions are easier to spot.
 
 ## Documentation
 
