@@ -887,12 +887,22 @@ pub fn drop_in_shop(
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
-    let (item_otyp, quantity) = {
+    let (item_otyp, quantity, item_name) = {
         let core = match world.get_component::<ObjectCore>(item) {
             Some(c) => c,
             None => return events,
         };
-        (core.otyp, core.quantity)
+        let item_name = world
+            .get_component::<crate::world::Name>(item)
+            .map(|name| name.0.clone())
+            .or_else(|| {
+                obj_defs
+                    .iter()
+                    .find(|def| def.id == core.otyp)
+                    .map(|def| def.name.clone())
+            })
+            .unwrap_or_else(|| "item".to_string());
+        (core.otyp, core.quantity, item_name)
     };
 
     // If the item was on the bill, just remove it (returned merchandise).
@@ -949,8 +959,8 @@ pub fn drop_in_shop(
         events.push(EngineEvent::msg_with(
             "shop-sell",
             vec![
-                ("shopkeeper", shop.shopkeeper_name.clone()),
-                ("amount", sell_price.to_string()),
+                ("item", item_name.clone()),
+                ("price", sell_price.to_string()),
             ],
         ));
     } else if shop.shopkeeper_gold > 0 {
@@ -958,11 +968,8 @@ pub fn drop_in_shop(
         let offer = shop.shopkeeper_gold;
         shop.shopkeeper_gold = 0;
         events.push(EngineEvent::msg_with(
-            "shop-sell-short",
-            vec![
-                ("shopkeeper", shop.shopkeeper_name.clone()),
-                ("amount", offer.to_string()),
-            ],
+            "shop-sell",
+            vec![("item", item_name), ("price", offer.to_string())],
         ));
     } else {
         // Shopkeeper has no gold — offer credit at 90%.

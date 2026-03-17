@@ -498,7 +498,7 @@ pub enum Achievement {
 
 /// Event flags tracked for the player.
 /// Corresponds to `struct u_event` in C.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct PlayerEvents {
     /// Whether the minor oracle was consulted.  From `u.uevent.minor_oracle`.
     pub minor_oracle: bool,
@@ -534,31 +534,9 @@ pub struct PlayerEvents {
     pub ascended: bool,
 }
 
-impl Default for PlayerEvents {
-    fn default() -> Self {
-        Self {
-            minor_oracle: false,
-            major_oracle: false,
-            quest_called: false,
-            quest_expelled: false,
-            quest_completed: false,
-            heard_tune: 0,
-            opened_dbridge: false,
-            invoked: false,
-            gehennom_entered: false,
-            hand_of_elbereth: 0,
-            killed_wizard: false,
-            wizard_last_killed_turn: 0,
-            wizard_times_killed: 0,
-            found_vibrating_square: false,
-            ascended: false,
-        }
-    }
-}
-
 /// Whether the player holds specific quest-critical items.
 /// Corresponds to `struct u_have` in C.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct PlayerQuestItems {
     /// Whether the player has the Amulet of Yendor.
     pub has_amulet: bool,
@@ -570,18 +548,6 @@ pub struct PlayerQuestItems {
     pub has_menorah: bool,
     /// Whether the player has their quest artifact.
     pub has_quest_artifact: bool,
-}
-
-impl Default for PlayerQuestItems {
-    fn default() -> Self {
-        Self {
-            has_amulet: false,
-            has_bell: false,
-            has_book: false,
-            has_menorah: false,
-            has_quest_artifact: false,
-        }
-    }
 }
 
 /// Player's weapon skill levels and practice progress.

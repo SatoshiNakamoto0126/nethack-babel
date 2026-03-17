@@ -115,6 +115,8 @@ pub struct SaveData {
     pub next_creation_order: u64,
 }
 
+type RecoverResult = anyhow::Result<Option<(GameWorld, u32, i32, [u8; 32])>>;
+
 /// Flattened player state, extracted from ECS components.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializablePlayer {
@@ -1163,15 +1165,12 @@ pub fn install_panic_hook() {
 /// Unlike normal load, the panic file is renamed to `.recovered.nbsv`
 /// instead of deleted, so the player can inspect it.
 #[allow(dead_code)]
-pub fn try_recover(player_name: &str) -> anyhow::Result<Option<(GameWorld, u32, i32, [u8; 32])>> {
+pub fn try_recover(player_name: &str) -> RecoverResult {
     let data = load_runtime_game_data()?;
     try_recover_with_data(player_name, &data)
 }
 
-pub fn try_recover_with_data(
-    player_name: &str,
-    data: &GameData,
-) -> anyhow::Result<Option<(GameWorld, u32, i32, [u8; 32])>> {
+pub fn try_recover_with_data(player_name: &str, data: &GameData) -> RecoverResult {
     let panic_path = save_file_path(player_name).with_extension("panic.nbsv");
 
     if !panic_path.exists() {
@@ -1536,9 +1535,12 @@ mod tests {
         QuestLeaderAnger,
         ShopkeeperFollow,
         ShopkeeperPayoff,
+        ShopkeeperCredit,
+        ShopkeeperSell,
         ShopRepair,
         TempleWrath,
         TempleCalm,
+        WizardHarassment,
         EndgameAscension,
     }
 
@@ -1549,9 +1551,12 @@ mod tests {
                 SaveStoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
                 SaveStoryTraversalScenario::ShopkeeperFollow => "shopkeeper-follow",
                 SaveStoryTraversalScenario::ShopkeeperPayoff => "shopkeeper-payoff",
+                SaveStoryTraversalScenario::ShopkeeperCredit => "shopkeeper-credit",
+                SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopRepair => "shop-repair",
                 SaveStoryTraversalScenario::TempleWrath => "temple-wrath",
                 SaveStoryTraversalScenario::TempleCalm => "temple-calm",
+                SaveStoryTraversalScenario::WizardHarassment => "wizard-harassment",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
         }
@@ -1819,6 +1824,68 @@ mod tests {
                 let events = resolve_turn(&mut loaded, PlayerAction::Pay, &mut rng);
                 (loaded, events)
             }
+            SaveStoryTraversalScenario::ShopkeeperCredit => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                world.dungeon_mut().shop_rooms[0].debit = 50;
+                world.dungeon_mut().shop_rooms[0].angry = true;
+                world.dungeon_mut().shop_rooms[0].surcharge = true;
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shopkeeper-credit", &world, [39u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let loaded_gold = spawn_inventory_gold(&mut loaded, 150, 'g');
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Drop { item: loaded_gold },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopkeeperSell => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                world.dungeon_mut().shop_rooms[0].shopkeeper_gold = 80;
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shopkeeper-sell", &world, [41u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let loaded_item = spawn_inventory_object_by_name(&mut loaded, "pick-axe", 'p');
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Drop { item: loaded_item },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
             SaveStoryTraversalScenario::ShopRepair => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
                 set_player_position(&mut world, Position::new(6, 6));
@@ -1934,6 +2001,50 @@ mod tests {
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(&mut loaded, PlayerAction::Pray, &mut rng);
                 (loaded, events)
+            }
+            SaveStoryTraversalScenario::WizardHarassment => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+                    hp.current = 20;
+                    hp.max = 40;
+                }
+                let sword = spawn_inventory_object_by_name(&mut world, "long sword", 'b');
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        sword,
+                        BucStatus {
+                            cursed: false,
+                            blessed: false,
+                            bknown: false,
+                        },
+                    )
+                    .expect("inventory item should accept BUC state");
+                if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+                    player_events.invoked = true;
+                }
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-wizard-harassment", &world, [42u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let mut final_events = Vec::new();
+                for _ in 0..256 {
+                    let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
+                    if events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. }
+                                if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                        )
+                    }) {
+                        final_events = events;
+                        break;
+                    }
+                }
+                (loaded, final_events)
             }
             SaveStoryTraversalScenario::EndgameAscension => {
                 let mut world = make_stair_world(DungeonBranch::Gehennom, 20, Terrain::StairsDown);
@@ -3877,9 +3988,12 @@ mod tests {
             SaveStoryTraversalScenario::QuestLeaderAnger,
             SaveStoryTraversalScenario::ShopkeeperFollow,
             SaveStoryTraversalScenario::ShopkeeperPayoff,
+            SaveStoryTraversalScenario::ShopkeeperCredit,
+            SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopRepair,
             SaveStoryTraversalScenario::TempleWrath,
             SaveStoryTraversalScenario::TempleCalm,
+            SaveStoryTraversalScenario::WizardHarassment,
             SaveStoryTraversalScenario::EndgameAscension,
         ] {
             let (world, final_events) = run_round_trip_story_traversal_scenario(scenario);
@@ -3975,6 +4089,52 @@ mod tests {
                         .expect("shopkeeper should keep explicit runtime state");
                     assert!(!shopkeeper_state.following);
                 }
+                SaveStoryTraversalScenario::ShopkeeperCredit => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-pay-success"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-credit"
+                    )));
+                    assert_eq!(shop.debit, 0);
+                    assert_eq!(shop.credit, 100);
+                    assert!(!shop.angry);
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 0);
+                }
+                SaveStoryTraversalScenario::ShopkeeperSell => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-sell"
+                    )));
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 5);
+                    assert_eq!(shop.shopkeeper_gold, 75);
+                }
                 SaveStoryTraversalScenario::ShopRepair => {
                     let shop = &world.dungeon().shop_rooms[0];
                     assert!(final_events.iter().any(|event| matches!(
@@ -4029,6 +4189,33 @@ mod tests {
                         event,
                         EngineEvent::Message { key, .. } if key == "priest-calmed"
                     )));
+                }
+                SaveStoryTraversalScenario::WizardHarassment => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                    )));
+                    let cursed = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items.iter().any(|item| {
+                                world
+                                    .get_component::<BucStatus>(*item)
+                                    .is_some_and(|status| status.cursed)
+                            })
+                        })
+                        .unwrap_or(false);
+                    let summoned = final_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }));
+                    assert!(cursed || summoned);
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.invoked),
+                        "save/load wizard matrix should preserve the invoked harassment trigger"
+                    );
                 }
                 SaveStoryTraversalScenario::EndgameAscension => {
                     assert!(final_events.iter().any(|event| matches!(

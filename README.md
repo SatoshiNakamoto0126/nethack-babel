@@ -280,9 +280,9 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 ## Roadmap (2026)
 
 1. **Temple and shop long-tail parity**  
-   Push beyond the current `follow / payoff / pray / calm-down / repair` runtime closure and finish the remaining priest/shopkeeper edge cases: sanctuary nuance and richer economy-side behavior.
+   Push beyond the current `follow / payoff / pray / calm-down / repair / drop-credit / live-sell` runtime closure and finish the remaining priest/shopkeeper edge cases: temple donation/dialogue depth, robbery aftermath, and richer economy-side behavior.
 2. **Wizard harassment parity**  
-   Broaden Wizard of Yendor harassment beyond the current respawn/theft/curse/nasty-summon runtime, with richer nasty pools and more original-NetHack cadence.
+   Broaden Wizard of Yendor harassment beyond the current respawn/theft/curse/nasty-summon runtime, with richer nasty pools, stronger cadence, and more long-tail original-NetHack behavior.
 3. **Story drift detection**  
    Expand the current quest/endgame/shop/temple/wizard traversal matrices into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
 4. **Runtime cache and save hardening**  
@@ -292,11 +292,11 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 
 ## TODO (Short-Term)
 
-- [ ] Finish the remaining priest/shop edge cases beyond the current payoff/follow/pray/calm/repair runtime path: sanctuary nuance and broader economy consequences.
-- [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, theft, cursing, nasty summon, and repeated reload coverage.
+- [ ] Extend temple/shop parity beyond the current payoff/follow/pray/calm/repair/drop-credit/live-sell path: donation dialogue, robbery aftermath, and more original economy consequences.
+- [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, theft, cursing, scaled nasty summon, and repeated reload coverage.
 - [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state beyond the current quest/endgame/shop/temple/wizard scenarios.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and save/load omissions.
-- [ ] Reduce legacy warning noise in CI so new regressions are easier to spot.
+- [ ] Keep CI strictness healthy as workflow/toolchain requirements evolve.
 
 ## Documentation
 

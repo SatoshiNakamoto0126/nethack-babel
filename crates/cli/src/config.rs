@@ -37,23 +37,18 @@ pub struct Config {
 // ---------------------------------------------------------------------------
 
 /// Menu style for item selection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum MenuStyle {
     Traditional,
     Combination,
+    #[default]
     Full,
     Partial,
 }
 
-impl Default for MenuStyle {
-    fn default() -> Self {
-        Self::Full
-    }
-}
-
 /// How to sort discovered objects.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SortDiscoveries {
     /// By discovery order.
@@ -61,46 +56,31 @@ pub enum SortDiscoveries {
     /// Alphabetically within class.
     Alphabetical,
     /// By object class, then alphabetically.
+    #[default]
     ByClass,
 }
 
-impl Default for SortDiscoveries {
-    fn default() -> Self {
-        Self::ByClass
-    }
-}
-
 /// How to sort loot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SortLoot {
     None,
     Loot,
+    #[default]
     Full,
 }
 
-impl Default for SortLoot {
-    fn default() -> Self {
-        Self::Full
-    }
-}
-
 /// Disclosure preferences for end-of-game information.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DiscloseChoice {
     /// Show with prompt.
+    #[default]
     Yes,
     /// Do not show.
     No,
     /// Show without prompt.
     Auto,
-}
-
-impl Default for DiscloseChoice {
-    fn default() -> Self {
-        Self::Yes
-    }
 }
 
 /// End-of-game disclosure settings.
@@ -191,55 +171,40 @@ impl Default for ParanoidConfig {
 }
 
 /// Run mode — how to display multi-step movement.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum RunMode {
     Teleport,
+    #[default]
     Run,
     Walk,
     Crawl,
 }
 
-impl Default for RunMode {
-    fn default() -> Self {
-        Self::Run
-    }
-}
-
 /// Pickup burden threshold.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum PickupBurden {
     Unencumbered,
     Burdened,
+    #[default]
     Stressed,
     Strained,
     Overtaxed,
     Overloaded,
 }
 
-impl Default for PickupBurden {
-    fn default() -> Self {
-        Self::Stressed
-    }
-}
-
 /// Autounlock behavior when encountering a locked door/chest.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AutoUnlock {
     /// Do nothing.
     None,
     /// Apply a key/lockpick if in inventory.
+    #[default]
     Apply,
     /// Kick doors, force chests.
     Force,
-}
-
-impl Default for AutoUnlock {
-    fn default() -> Self {
-        Self::Apply
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -340,7 +305,7 @@ impl Default for GameConfig {
 // [character] section — role/race/gender/align selection
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CharacterConfig {
     /// Starting role (e.g., "Valkyrie", "Wizard", "random").
     #[serde(default)]
@@ -360,19 +325,6 @@ pub struct CharacterConfig {
     /// Pauper conduct — start without gold.
     #[serde(default)]
     pub pauper: bool,
-}
-
-impl Default for CharacterConfig {
-    fn default() -> Self {
-        Self {
-            role: String::new(),
-            race: String::new(),
-            gender: String::new(),
-            alignment: String::new(),
-            nudist: false,
-            pauper: false,
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -733,16 +685,11 @@ impl Default for MapConfig {
 // ---------------------------------------------------------------------------
 
 /// Number of status lines to display.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum StatusLines {
+    #[default]
     Two,
     Three,
-}
-
-impl Default for StatusLines {
-    fn default() -> Self {
-        Self::Two
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -801,35 +748,25 @@ impl Default for StatusConfig {
 // ---------------------------------------------------------------------------
 
 /// Message window behavior on Ctrl+P.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum MsgWindow {
+    #[default]
     Single,
     Combination,
     Full,
     Reversed,
 }
 
-impl Default for MsgWindow {
-    fn default() -> Self {
-        Self::Single
-    }
-}
-
 /// Menu heading style.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum MenuHeadings {
     Bold,
+    #[default]
     Inverse,
     Underline,
     None,
-}
-
-impl Default for MenuHeadings {
-    fn default() -> Self {
-        Self::Inverse
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
