@@ -7598,6 +7598,209 @@ mod tests {
     }
 
     #[test]
+    fn test_special_level_population_census_key_levels_match_contracts() {
+        struct CensusCase {
+            id: SpecialLevelId,
+            role: Option<&'static str>,
+            expected_monsters: &'static [&'static str],
+            expected_objects: &'static [&'static str],
+            no_dig: bool,
+            no_teleport: bool,
+            no_prayer: bool,
+        }
+
+        let cases = [
+            CensusCase {
+                id: SpecialLevelId::OracleLevel,
+                role: None,
+                expected_monsters: &["Oracle"],
+                expected_objects: &[],
+                no_dig: false,
+                no_teleport: false,
+                no_prayer: false,
+            },
+            CensusCase {
+                id: SpecialLevelId::Medusa(0),
+                role: None,
+                expected_monsters: &["Medusa"],
+                expected_objects: &[],
+                no_dig: false,
+                no_teleport: false,
+                no_prayer: false,
+            },
+            CensusCase {
+                id: SpecialLevelId::Castle,
+                role: None,
+                expected_monsters: &[],
+                expected_objects: &["wand of wishing"],
+                no_dig: false,
+                no_teleport: false,
+                no_prayer: false,
+            },
+            CensusCase {
+                id: SpecialLevelId::FortLudios,
+                role: None,
+                expected_monsters: &["soldier", "lieutenant", "captain"],
+                expected_objects: &[],
+                no_dig: false,
+                no_teleport: false,
+                no_prayer: false,
+            },
+            CensusCase {
+                id: SpecialLevelId::Valley,
+                role: None,
+                expected_monsters: &["ghost"],
+                expected_objects: &[],
+                no_dig: false,
+                no_teleport: true,
+                no_prayer: true,
+            },
+            CensusCase {
+                id: SpecialLevelId::Asmodeus,
+                role: None,
+                expected_monsters: &["Asmodeus"],
+                expected_objects: &[],
+                no_dig: false,
+                no_teleport: true,
+                no_prayer: true,
+            },
+            CensusCase {
+                id: SpecialLevelId::Baalzebub,
+                role: None,
+                expected_monsters: &["Baalzebub"],
+                expected_objects: &[],
+                no_dig: false,
+                no_teleport: true,
+                no_prayer: true,
+            },
+            CensusCase {
+                id: SpecialLevelId::Juiblex,
+                role: None,
+                expected_monsters: &["Juiblex"],
+                expected_objects: &[],
+                no_dig: false,
+                no_teleport: true,
+                no_prayer: true,
+            },
+            CensusCase {
+                id: SpecialLevelId::Orcus,
+                role: None,
+                expected_monsters: &["Orcus"],
+                expected_objects: &["wand of death"],
+                no_dig: false,
+                no_teleport: true,
+                no_prayer: true,
+            },
+            CensusCase {
+                id: SpecialLevelId::FakeWizard(2),
+                role: None,
+                expected_monsters: &["lich", "vampire lord", "kraken"],
+                expected_objects: &["Amulet of Yendor"],
+                no_dig: true,
+                no_teleport: true,
+                no_prayer: true,
+            },
+            CensusCase {
+                id: SpecialLevelId::WizardTower3,
+                role: None,
+                expected_monsters: &["Wizard of Yendor"],
+                expected_objects: &[],
+                no_dig: true,
+                no_teleport: true,
+                no_prayer: true,
+            },
+            CensusCase {
+                id: SpecialLevelId::Sanctum,
+                role: None,
+                expected_monsters: &["high priest"],
+                expected_objects: &[],
+                no_dig: true,
+                no_teleport: true,
+                no_prayer: true,
+            },
+            CensusCase {
+                id: SpecialLevelId::QuestStart,
+                role: Some("wizard"),
+                expected_monsters: &["Neferet the Green", "apprentice"],
+                expected_objects: &[],
+                no_dig: false,
+                no_teleport: false,
+                no_prayer: false,
+            },
+            CensusCase {
+                id: SpecialLevelId::QuestLocator,
+                role: Some("wizard"),
+                expected_monsters: &["vampire bat", "xorn"],
+                expected_objects: &[],
+                no_dig: false,
+                no_teleport: false,
+                no_prayer: false,
+            },
+            CensusCase {
+                id: SpecialLevelId::QuestGoal,
+                role: Some("wizard"),
+                expected_monsters: &["Dark One", "vampire bat", "xorn"],
+                expected_objects: &["The Eye of the Aethiopica"],
+                no_dig: false,
+                no_teleport: true,
+                no_prayer: false,
+            },
+            CensusCase {
+                id: SpecialLevelId::QuestFiller(3),
+                role: Some("wizard"),
+                expected_monsters: &["vampire bat", "xorn"],
+                expected_objects: &[],
+                no_dig: false,
+                no_teleport: false,
+                no_prayer: false,
+            },
+        ];
+
+        for (idx, case) in cases.into_iter().enumerate() {
+            let mut rng = Pcg64::seed_from_u64(90000 + idx as u64);
+            let sl = dispatch_special_level(case.id, case.role, &mut rng)
+                .unwrap_or_else(|| panic!("{:?} should generate", case.id));
+            assert_eq!(
+                sl.flags.no_dig, case.no_dig,
+                "{:?} no_dig mismatch",
+                case.id
+            );
+            assert_eq!(
+                sl.flags.no_teleport, case.no_teleport,
+                "{:?} no_teleport mismatch",
+                case.id
+            );
+            assert_eq!(
+                sl.flags.no_prayer, case.no_prayer,
+                "{:?} no_prayer mismatch",
+                case.id
+            );
+
+            let pop = population_for_special_level_with_role(case.id, &sl.generated, case.role);
+            for expected in case.expected_monsters {
+                assert!(
+                    pop.monsters
+                        .iter()
+                        .any(|m| m.name.eq_ignore_ascii_case(expected)),
+                    "{:?} population should include monster {}",
+                    case.id,
+                    expected
+                );
+            }
+            for expected in case.expected_objects {
+                assert!(
+                    pop.objects
+                        .iter()
+                        .any(|o| o.name.eq_ignore_ascii_case(expected)),
+                    "{:?} population should include object {}",
+                    case.id,
+                    expected
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_embedded_population_positions_land_on_walkable_tiles() {
         let mut rng = test_rng();
         let ids = [

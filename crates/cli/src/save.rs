@@ -1048,7 +1048,23 @@ pub fn try_recover(player_name: &str) -> anyhow::Result<Option<(GameWorld, u32, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{
+        OnceLock,
+        atomic::{AtomicU64, Ordering},
+    };
+
+    use nethack_babel_data::{
+        Alignment, GameData, Gender, Handedness, RaceId, loader::load_game_data,
+    };
+    use nethack_babel_engine::{
+        action::PlayerAction,
+        artifacts::find_artifact_by_name,
+        dungeon::{DungeonBranch, LevelMap, Terrain},
+        role::Role,
+        turn::resolve_turn,
+    };
+    use rand::SeedableRng;
+    use rand_pcg::Pcg64;
 
     static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -1065,6 +1081,107 @@ mod tests {
     /// Helper: create a default game world.
     fn make_world() -> GameWorld {
         GameWorld::new(Position::new(40, 10))
+    }
+
+    fn data_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
+    }
+
+    fn test_game_data() -> &'static GameData {
+        static DATA: OnceLock<GameData> = OnceLock::new();
+        DATA.get_or_init(|| {
+            load_game_data(&data_dir())
+                .unwrap_or_else(|e| panic!("failed to load test game data: {}", e))
+        })
+    }
+
+    fn install_test_catalogs(world: &mut GameWorld) {
+        let data = test_game_data();
+        world.set_spawn_catalogs(data.monsters.clone(), data.objects.clone());
+    }
+
+    fn make_stair_world(branch: DungeonBranch, depth: i32, player_terrain: Terrain) -> GameWorld {
+        let mut world = GameWorld::new(Position::new(5, 5));
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = branch;
+        world.dungeon_mut().depth = depth;
+        for y in 3..=7 {
+            for x in 3..=7 {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(x, y), Terrain::Floor);
+            }
+        }
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(5, 5), player_terrain);
+        world
+    }
+
+    fn wizard_identity() -> PlayerIdentity {
+        PlayerIdentity {
+            name: "tester".to_string(),
+            role: Role::Wizard.to_id(),
+            race: RaceId(0),
+            gender: Gender::Male,
+            alignment: Alignment::Chaotic,
+            alignment_base: [Alignment::Chaotic, Alignment::Chaotic],
+            handedness: Handedness::RightHanded,
+        }
+    }
+
+    fn save_and_reload_world(
+        label: &str,
+        world: &GameWorld,
+        rng_state: [u8; 32],
+    ) -> (GameWorld, [u8; 32]) {
+        let dir = test_dir(label);
+        let path = dir.join(format!("{label}.nbsv"));
+        save_game(world, &path, SaveReason::Checkpoint, rng_state).unwrap();
+        let (mut loaded, _turn, _depth, loaded_rng) = load_game(&path).unwrap();
+        install_test_catalogs(&mut loaded);
+        let _ = std::fs::remove_dir_all(&dir);
+        (loaded, loaded_rng)
+    }
+
+    fn set_player_position(world: &mut GameWorld, pos: Position) {
+        if let Some(mut player_pos) = world.get_component_mut::<Positioned>(world.player()) {
+            player_pos.0 = pos;
+        }
+    }
+
+    fn find_terrain(map: &LevelMap, terrain: Terrain) -> Option<Position> {
+        for y in 0..map.height {
+            for x in 0..map.width {
+                let pos = Position::new(x as i32, y as i32);
+                if map.get(pos).is_some_and(|cell| cell.terrain == terrain) {
+                    return Some(pos);
+                }
+            }
+        }
+        None
+    }
+
+    fn count_monsters_named(world: &GameWorld, name: &str) -> usize {
+        world
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .filter(|(_, (_monster, monster_name))| monster_name.0.eq_ignore_ascii_case(name))
+            .count()
+    }
+
+    fn count_objects_with_artifact_name(world: &GameWorld, artifact_name: &str) -> usize {
+        let artifact = find_artifact_by_name(artifact_name)
+            .unwrap_or_else(|| panic!("missing artifact definition for {}", artifact_name));
+        world
+            .ecs()
+            .query::<&ObjectCore>()
+            .iter()
+            .filter(|(_, core)| core.artifact == Some(artifact.id))
+            .count()
     }
 
     // ----- Basic round-trip --------------------------------------------------
@@ -1922,5 +2039,231 @@ mod tests {
         assert_eq!(ae.con_exercise, 25);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn round_trip_loaded_medusa_revisit_does_not_duplicate_boss() {
+        let mut world = make_stair_world(DungeonBranch::Main, 23, Terrain::StairsDown);
+        let mut rng = Pcg64::seed_from_u64(7001);
+
+        resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(world.dungeon().depth, 24);
+        assert_eq!(count_monsters_named(&world, "medusa"), 1);
+
+        let (mut loaded, loaded_rng) = save_and_reload_world("medusa-revisit", &world, [11u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let medusa_down = find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+            .expect("Medusa level should have stairs down");
+        set_player_position(&mut loaded, medusa_down);
+        resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+
+        let castle_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+            .expect("Castle should have stairs up");
+        set_player_position(&mut loaded, castle_up);
+        resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+
+        assert_eq!(loaded.dungeon().depth, 24);
+        assert_eq!(
+            count_monsters_named(&loaded, "medusa"),
+            1,
+            "Medusa should not duplicate after save/load and revisit"
+        );
+    }
+
+    #[test]
+    fn round_trip_loaded_orcus_revisit_does_not_duplicate_boss() {
+        let mut world = make_stair_world(DungeonBranch::Gehennom, 11, Terrain::StairsDown);
+        let mut rng = Pcg64::seed_from_u64(7002);
+
+        resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(world.dungeon().depth, 12);
+        assert_eq!(count_monsters_named(&world, "orcus"), 1);
+
+        let (mut loaded, loaded_rng) = save_and_reload_world("orcus-revisit", &world, [12u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let orcus_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+            .expect("Orcus level should have stairs up");
+        set_player_position(&mut loaded, orcus_up);
+        resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+
+        let gehennom_down = find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+            .expect("cached Gehennom entry level should preserve stairs down");
+        set_player_position(&mut loaded, gehennom_down);
+        resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(loaded.dungeon().depth, 12);
+        assert_eq!(
+            count_monsters_named(&loaded, "orcus"),
+            1,
+            "Orcus should not duplicate after save/load and revisit"
+        );
+    }
+
+    #[test]
+    fn round_trip_loaded_wizard_quest_start_revisit_preserves_population() {
+        let mut world = make_stair_world(DungeonBranch::Quest, 2, Terrain::StairsUp);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept identity");
+        let mut rng = Pcg64::seed_from_u64(7003);
+
+        resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+        assert_eq!(world.dungeon().depth, 1);
+        let apprentices = count_monsters_named(&world, "apprentice");
+        assert_eq!(count_monsters_named(&world, "Neferet the Green"), 1);
+        assert!(apprentices >= 1);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("quest-start-revisit", &world, [13u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let start_down = find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+            .expect("Quest start should have stairs down");
+        set_player_position(&mut loaded, start_down);
+        resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+
+        let cached_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+            .expect("cached quest depth 2 should preserve stairs up");
+        set_player_position(&mut loaded, cached_up);
+        resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+
+        assert_eq!(loaded.dungeon().depth, 1);
+        assert_eq!(count_monsters_named(&loaded, "Neferet the Green"), 1);
+        assert_eq!(
+            count_monsters_named(&loaded, "apprentice"),
+            apprentices,
+            "quest start guardians should not duplicate after save/load"
+        );
+    }
+
+    #[test]
+    fn round_trip_loaded_wizard_quest_locator_revisit_preserves_population() {
+        let mut world = make_stair_world(DungeonBranch::Quest, 3, Terrain::StairsDown);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept identity");
+        let mut rng = Pcg64::seed_from_u64(7004);
+
+        resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(world.dungeon().depth, 4);
+        let xorns = count_monsters_named(&world, "xorn");
+        let vampire_bats = count_monsters_named(&world, "vampire bat");
+        assert!(xorns >= 1);
+        assert!(vampire_bats >= 1);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("quest-locator-revisit", &world, [14u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let locator_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+            .expect("Quest locator should have stairs up");
+        set_player_position(&mut loaded, locator_up);
+        resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+
+        let cached_down = find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+            .expect("cached quest depth 3 should preserve stairs down");
+        set_player_position(&mut loaded, cached_down);
+        resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(loaded.dungeon().depth, 4);
+        assert_eq!(count_monsters_named(&loaded, "xorn"), xorns);
+        assert_eq!(
+            count_monsters_named(&loaded, "vampire bat"),
+            vampire_bats,
+            "quest locator enemies should not duplicate after save/load"
+        );
+    }
+
+    #[test]
+    fn round_trip_loaded_wizard_quest_filler_revisit_preserves_population() {
+        let mut world = make_stair_world(DungeonBranch::Quest, 2, Terrain::StairsDown);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept identity");
+        let mut rng = Pcg64::seed_from_u64(7005);
+
+        resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(world.dungeon().depth, 3);
+        let xorns = count_monsters_named(&world, "xorn");
+        let vampire_bats = count_monsters_named(&world, "vampire bat");
+        assert!(xorns >= 1);
+        assert!(vampire_bats >= 1);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("quest-filler-revisit", &world, [15u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let filler_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+            .expect("Quest filler should have stairs up");
+        set_player_position(&mut loaded, filler_up);
+        resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+
+        let cached_down = find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+            .expect("cached quest depth 2 should preserve stairs down");
+        set_player_position(&mut loaded, cached_down);
+        resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(loaded.dungeon().depth, 3);
+        assert_eq!(count_monsters_named(&loaded, "xorn"), xorns);
+        assert_eq!(
+            count_monsters_named(&loaded, "vampire bat"),
+            vampire_bats,
+            "quest filler enemies should not duplicate after save/load"
+        );
+    }
+
+    #[test]
+    fn round_trip_loaded_wizard_quest_goal_revisit_preserves_population_and_artifact() {
+        let mut world = make_stair_world(DungeonBranch::Quest, 6, Terrain::StairsDown);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept identity");
+        let mut rng = Pcg64::seed_from_u64(7006);
+
+        resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(world.dungeon().depth, 7);
+        let xorns = count_monsters_named(&world, "xorn");
+        let vampire_bats = count_monsters_named(&world, "vampire bat");
+        assert_eq!(count_monsters_named(&world, "Dark One"), 1);
+        assert!(xorns >= 1);
+        assert!(vampire_bats >= 1);
+        assert_eq!(
+            count_objects_with_artifact_name(&world, "The Eye of the Aethiopica"),
+            1
+        );
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("quest-goal-revisit", &world, [16u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let goal_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+            .expect("Quest goal should have stairs up");
+        set_player_position(&mut loaded, goal_up);
+        resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+
+        let cached_down = find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+            .expect("cached quest depth 6 should preserve stairs down");
+        set_player_position(&mut loaded, cached_down);
+        resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(loaded.dungeon().depth, 7);
+        assert_eq!(count_monsters_named(&loaded, "Dark One"), 1);
+        assert_eq!(count_monsters_named(&loaded, "xorn"), xorns);
+        assert_eq!(count_monsters_named(&loaded, "vampire bat"), vampire_bats);
+        assert_eq!(
+            count_objects_with_artifact_name(&loaded, "The Eye of the Aethiopica"),
+            1,
+            "quest goal artifact should not duplicate after save/load"
+        );
     }
 }

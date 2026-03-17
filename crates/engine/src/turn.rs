@@ -5892,6 +5892,137 @@ mod tests {
     }
 
     #[test]
+    fn test_revisiting_wizard_quest_start_does_not_duplicate_leader_or_guardians() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("test player should accept identity");
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::Quest,
+            1,
+            false,
+            &mut rng,
+            &mut events,
+        );
+
+        let apprentices = count_monsters_named(&world, "apprentice");
+        assert_eq!(count_monsters_named(&world, "Neferet the Green"), 1);
+        assert!(
+            apprentices >= 1,
+            "wizard quest start should spawn apprentice guardians"
+        );
+
+        change_level(&mut world, 2, false, &mut rng, &mut events);
+        change_level(&mut world, 1, true, &mut rng, &mut events);
+
+        assert_eq!(
+            count_monsters_named(&world, "Neferet the Green"),
+            1,
+            "revisiting wizard quest start should not duplicate the leader"
+        );
+        assert_eq!(
+            count_monsters_named(&world, "apprentice"),
+            apprentices,
+            "revisiting wizard quest start should not duplicate apprentice guardians"
+        );
+    }
+
+    #[test]
+    fn test_revisiting_wizard_quest_locator_does_not_duplicate_enemies() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("test player should accept identity");
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::Quest,
+            4,
+            false,
+            &mut rng,
+            &mut events,
+        );
+
+        let xorns = count_monsters_named(&world, "xorn");
+        let vampire_bats = count_monsters_named(&world, "vampire bat");
+        assert!(xorns >= 1, "wizard quest locator should spawn xorn enemies");
+        assert!(
+            vampire_bats >= 1,
+            "wizard quest locator should spawn vampire bat enemies"
+        );
+
+        change_level(&mut world, 5, false, &mut rng, &mut events);
+        change_level(&mut world, 4, true, &mut rng, &mut events);
+
+        assert_eq!(
+            count_monsters_named(&world, "xorn"),
+            xorns,
+            "revisiting wizard quest locator should not duplicate xorn enemies"
+        );
+        assert_eq!(
+            count_monsters_named(&world, "vampire bat"),
+            vampire_bats,
+            "revisiting wizard quest locator should not duplicate vampire bat enemies"
+        );
+    }
+
+    #[test]
+    fn test_revisiting_wizard_quest_filler_does_not_duplicate_enemies() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("test player should accept identity");
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::Quest,
+            3,
+            false,
+            &mut rng,
+            &mut events,
+        );
+
+        let xorns = count_monsters_named(&world, "xorn");
+        let vampire_bats = count_monsters_named(&world, "vampire bat");
+        assert!(xorns >= 1, "wizard quest filler should spawn xorn enemies");
+        assert!(
+            vampire_bats >= 1,
+            "wizard quest filler should spawn vampire bat enemies"
+        );
+
+        change_level(&mut world, 4, false, &mut rng, &mut events);
+        change_level(&mut world, 3, true, &mut rng, &mut events);
+
+        assert_eq!(
+            count_monsters_named(&world, "xorn"),
+            xorns,
+            "revisiting wizard quest filler should not duplicate xorn enemies"
+        );
+        assert_eq!(
+            count_monsters_named(&world, "vampire bat"),
+            vampire_bats,
+            "revisiting wizard quest filler should not duplicate vampire bat enemies"
+        );
+    }
+
+    #[test]
     fn test_revisiting_medusa_does_not_duplicate_medusa() {
         let mut world = make_stair_world(Terrain::StairsDown, 23);
         let mut rng = test_rng();
