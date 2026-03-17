@@ -51,7 +51,7 @@ NetHack is one of the foundational roguelikes, developed continuously for decade
 - **Leaderboard** — JSON-persisted top-100 score board
 - **Deterministic replay** — explicit RNG threading; same seed + same inputs = same game
 - **Replay + server runtime modes (MVP)** — replay `.cast` sessions and run a TCP multi-connection server endpoint
-- **Wizard mode** — debug commands: create monsters, grant wishes, reveal map, teleport
+- **Wizard mode** — debug commands: create monsters, grant wishes, reveal/detect the current level, inspect special-level topology, wipe the current level, and level-teleport
 
 ## Quick Start
 
@@ -295,13 +295,14 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 - [x] Close remaining action wiring TODOs in the turn pipeline (prayer, inventory entity lookup, ranged equipment lookup, summon hooks).
 - [x] Add nightly differential/property/Monte-Carlo regression workflow (with optional C corpus refresh).
 - [x] Add full-run touchstone scenarios covering win/lose disclosures and score pipeline.
-- [ ] Audit wizard/debug commands for parity with documented behavior and add missing tests.
-- [ ] Add contributor-facing docs for adding monsters/items/special levels safely with validation steps.
+- [x] Audit wizard/debug commands for parity with documented behavior and add missing tests.
+- [x] Add contributor-facing docs for adding monsters/items/special levels safely with validation steps.
 
 ## Documentation
 
 - [Player's Guidebook (English)](doc/GUIDEBOOK.md) — Complete gameplay guide
 - [玩家指南（中文）](doc/GUIDEBOOK_zh.md) — 完整游戏攻略
+- [Content Contributor Guide](docs/Content-Contributor-Guide.md) — Data/content editing workflow and validation checklist
 - [DIFFERENCES.md](DIFFERENCES.md) — Architectural divergences from C NetHack
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Build instructions, code style, testing
 

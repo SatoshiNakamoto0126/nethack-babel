@@ -3156,7 +3156,16 @@ wizard-double-trouble = "Double Trouble..."
 wizard-identify-all = You feel self-knowledgeable...
 
 # TODO: translate
-wizard-kill = You die.
+wizard-genesis = A { $monster } appears beside you.
+
+# TODO: translate
+wizard-genesis-failed = Nothing answers your request for { $monster }.
+
+# TODO: translate
+wizard-kill = You wipe out { $count } monster(s) on this level.
+
+# TODO: translate
+wizard-kill-none = There are no monsters here to wipe out.
 
 # TODO: translate
 wizard-map-revealed = An image of your surroundings forms in your mind!
@@ -3168,7 +3177,25 @@ wizard-steal-amulet = The Wizard of Yendor steals the Amulet!
 wizard-summon-nasties = New nasties appear from thin air!
 
 # TODO: translate
-wizard-where = You sense where everything is.
+wizard-where-current = You are on { $location } (absolute depth { $absolute }) at { $x },{ $y }.
+
+# TODO: translate
+wizard-where-special = { $level } lies on { $location }.
+
+# TODO: translate
+wizard-wish = Your wish is granted: { $item }.
+
+# TODO: translate
+wizard-wish-adjusted = Your wish is adjusted to: { $item }.
+
+# TODO: translate
+wizard-wish-adjusted-floor = Your wish is adjusted: { $item } drops at your feet.
+
+# TODO: translate
+wizard-wish-failed = Nothing answers your wish for "{ $wish }".
+
+# TODO: translate
+wizard-wish-floor = Your wish is granted: { $item } drops at your feet.
 
 # TODO: translate
 worm-grows = The long worm grows longer!

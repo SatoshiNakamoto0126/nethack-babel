@@ -89,9 +89,11 @@ pub fn detect_objects(world: &GameWorld, _player: Entity) -> Vec<EngineEvent> {
     let mut detected: Vec<DetectedObject> = Vec::new();
 
     for (entity, (core, loc)) in world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter() {
-        if let Some(pos) =
-            crate::dungeon::floor_position_on_level(loc, world.dungeon().branch, world.dungeon().depth)
-        {
+        if let Some(pos) = crate::dungeon::floor_position_on_level(
+            loc,
+            world.dungeon().branch,
+            world.dungeon().depth,
+        ) {
             detected.push(DetectedObject {
                 entity,
                 position: pos,
@@ -640,6 +642,47 @@ mod tests {
         assert!(events.iter().any(
             |e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-objects-none")
         ));
+    }
+
+    #[test]
+    fn test_detect_objects_ignores_floor_items_on_other_levels() {
+        let mut world = test_world();
+        let player = world.player();
+
+        spawn_floor_item(&mut world, Position::new(5, 5), ObjectClass::Weapon);
+        world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(2),
+                object_class: ObjectClass::Food,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: crate::dungeon::data_dungeon_level(crate::dungeon::DungeonBranch::Quest, 1),
+            },
+        ));
+
+        let events = detect_objects(&world, player);
+
+        let msg = events.iter().find(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "detect-objects-found"),
+        );
+        assert!(
+            msg.is_some(),
+            "should only detect items on the current level"
+        );
+        if let EngineEvent::Message { args, .. } = msg.unwrap() {
+            let count = args
+                .iter()
+                .find(|(k, _)| k == "count")
+                .map(|(_, v)| v.as_str());
+            assert_eq!(count, Some("1"));
+        }
     }
 
     // ── Detect Traps ───────────────────────────────────────────────

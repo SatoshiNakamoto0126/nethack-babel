@@ -2655,5 +2655,14 @@ god-lightning-bolt = Suddenly, a bolt of lightning strikes you!
 ## ============================================================================
 
 wizard-detect-all = You sense everything around you.
-wizard-kill = You die.
-wizard-where = You sense where everything is.
+wizard-genesis = A { $monster } appears beside you.
+wizard-genesis-failed = Nothing answers your request for { $monster }.
+wizard-wish = Your wish is granted: { $item }.
+wizard-wish-adjusted = Your wish is adjusted to: { $item }.
+wizard-wish-floor = Your wish is granted: { $item } drops at your feet.
+wizard-wish-adjusted-floor = Your wish is adjusted: { $item } drops at your feet.
+wizard-wish-failed = Nothing answers your wish for "{ $wish }".
+wizard-kill = You wipe out { $count } monster(s) on this level.
+wizard-kill-none = There are no monsters here to wipe out.
+wizard-where-current = You are on { $location } (absolute depth { $absolute }) at { $x },{ $y }.
+wizard-where-special = { $level } lies on { $location }.

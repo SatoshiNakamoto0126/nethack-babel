@@ -85,6 +85,19 @@ With a compiled binary, run it from a directory containing `data/`, or pass the 
 | `--text` | Plain text-mode fallback instead of TUI |
 | `--record FILE` | Record session to file |
 
+### Wizard Mode Commands
+
+When launched with `-D` / `--debug`, text-mode input also accepts:
+
+- `wizgenesis <monster>`: spawn the named monster adjacent to the hero.
+- `wizwish <wish>`: materialize a wished-for item, applying the same wish parser and restrictions as the engine.
+- `wizidentify`: mark carried items as fully known at the instance level.
+- `wizmap`: reveal the full current map.
+- `wizdetect`: detect all monsters, objects, and traps on the current level.
+- `wizwhere`: print the current location and the resolved special-level topology for this run.
+- `wizkill`: remove every live monster on the current level.
+- `wizlevelport <depth>`: level-teleport to the requested dungeon depth.
+
 ### The Screen
 
     +------------------------------------------------------------+
@@ -536,8 +549,8 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 - [x] Close remaining turn-pipeline wiring TODOs around prayer/action dispatch and inventory/equipment entity lookup.
 - [x] Add nightly differential/property/Monte-Carlo regression workflow (with optional C-side corpus refresh).
 - [x] Add win/lose scoring and disclosure touchstones for endgame closure paths.
-- [ ] Audit wizard/debug command behavior and backfill parity tests.
-- [ ] Improve contributor docs for adding monsters, objects, and levels with validation checklists.
+- [x] Audit wizard/debug command behavior and backfill parity tests.
+- [x] Improve contributor docs for adding monsters, objects, and levels with validation checklists.
 
 ### Save Format Policy
 

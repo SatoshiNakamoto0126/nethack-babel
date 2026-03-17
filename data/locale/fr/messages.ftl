@@ -385,6 +385,22 @@ two-weapon-disabled = Vous cessez de combattre avec deux armes.
 name-not-implemented = Le nommage n'est pas encore disponible.
 adjust-not-implemented = L'ajustement d'inventaire n'est pas encore disponible.
 
+## Mode assistant (debug)
+wizard-identify-all = Vous connaissez soudain tout votre équipement.
+wizard-map-revealed = Une image de votre environnement se forme dans votre esprit !
+wizard-detect-all = Vous sentez tout autour de vous.
+wizard-genesis = Un { $monster } apparaît à côté de vous.
+wizard-genesis-failed = Rien ne répond à votre demande de { $monster }.
+wizard-wish = Votre souhait est exaucé : { $item }.
+wizard-wish-adjusted = Votre souhait est ajusté en : { $item }.
+wizard-wish-floor = Votre souhait est exaucé : { $item } tombe à vos pieds.
+wizard-wish-adjusted-floor = Votre souhait est ajusté : { $item } tombe à vos pieds.
+wizard-wish-failed = Rien ne répond à votre souhait de « { $wish } ».
+wizard-kill = Vous effacez { $count } monstre(s) sur ce niveau.
+wizard-kill-none = Il n'y a aucun monstre ici à effacer.
+wizard-where-current = Vous êtes sur { $location } (profondeur absolue { $absolute }) en { $x },{ $y }.
+wizard-where-special = { $level } se trouve sur { $location }.
+
 ## ============================================================================
 ## Quêtes / Dialogue PNJ
 ## ============================================================================

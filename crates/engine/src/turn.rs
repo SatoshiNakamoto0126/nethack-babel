@@ -9,13 +9,14 @@ use rand::Rng;
 
 use nethack_babel_data::{
     Alignment, ArtifactId, BucStatus, Enchantment, LightSource, MonsterDef, MonsterId, ObjectClass,
-    ObjectCore, ObjectDef, ObjectTypeId, PlayerEvents, PlayerIdentity, PlayerQuestItems, TrapType,
+    ObjectCore, ObjectDef, ObjectExtra, ObjectLocation, ObjectTypeId, PlayerEvents, PlayerIdentity,
+    PlayerQuestItems, TrapType,
 };
 
 use crate::action::{Direction, NameTarget, PlayerAction, Position};
 use crate::conduct::ConductState;
 use crate::dungeon::{CachedLevelRuntimeState, CachedMonster, DungeonBranch, Terrain};
-use crate::event::{EngineEvent, HpSource, HungerLevel};
+use crate::event::{DeathCause, EngineEvent, HpSource, HungerLevel};
 use crate::makemon::{GoodPosFlags, MakeMonFlags, enexto, goodpos, makemon};
 use crate::map_gen::generate_level;
 use crate::mkobj::mksobj_at;
@@ -1665,20 +1666,13 @@ fn resolve_player_action(
         }
         // ── Wizard mode commands ─────────────────────────────────
         PlayerAction::WizGenesis { monster_name } => {
-            events.push(EngineEvent::msg_with(
-                "wizard-genesis",
-                vec![("monster", monster_name.clone())],
-            ));
+            wizard_genesis(world, monster_name, rng, events);
         }
         PlayerAction::WizWish { wish_text } => {
-            events.push(EngineEvent::msg_with(
-                "wizard-wish",
-                vec![("wish", wish_text.clone())],
-            ));
+            wizard_wish(world, wish_text, events);
         }
         PlayerAction::WizIdentify => {
-            // Emit event; the caller that owns IdentificationState
-            // handles the actual type-level discovery.
+            wizard_identify(world);
             events.push(EngineEvent::msg("wizard-identify-all"));
         }
         PlayerAction::WizMap => {
@@ -1717,10 +1711,10 @@ fn resolve_player_action(
             events.push(EngineEvent::msg("wizard-detect-all"));
         }
         PlayerAction::WizWhere => {
-            events.push(EngineEvent::msg("wizard-where"));
+            events.extend(wizard_where(world));
         }
         PlayerAction::WizKill => {
-            events.push(EngineEvent::msg("wizard-kill"));
+            wizard_kill(world, events);
         }
         PlayerAction::Annotate { text } => {
             world
@@ -1793,6 +1787,320 @@ fn apply_action_conduct_updates(
             state.wishes = state.wishes.saturating_add(1);
         }
     });
+}
+
+fn wizard_identify(world: &mut GameWorld) {
+    let player = world.player();
+    let items = world
+        .get_component::<crate::inventory::Inventory>(player)
+        .map(|inv| inv.items.clone())
+        .unwrap_or_default();
+
+    for item in items {
+        if let Some(mut knowledge) =
+            world.get_component_mut::<nethack_babel_data::KnowledgeState>(item)
+        {
+            knowledge.known = true;
+            knowledge.dknown = true;
+            knowledge.rknown = true;
+            knowledge.cknown = true;
+            knowledge.lknown = true;
+            knowledge.tknown = true;
+        }
+        if let Some(mut buc) = world.get_component_mut::<BucStatus>(item) {
+            buc.bknown = true;
+        }
+    }
+}
+
+fn wizard_genesis(
+    world: &mut GameWorld,
+    monster_name: &str,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) {
+    let monster_defs: Vec<MonsterDef> = world.monster_catalog().to_vec();
+    let Some(monster_id) = resolve_monster_id_by_spec(&monster_defs, monster_name) else {
+        events.push(EngineEvent::msg_with(
+            "wizard-genesis-failed",
+            vec![("monster", monster_name.to_string())],
+        ));
+        return;
+    };
+    let Some(monster_def) = monster_defs.iter().find(|def| def.id == monster_id) else {
+        events.push(EngineEvent::msg_with(
+            "wizard-genesis-failed",
+            vec![("monster", monster_name.to_string())],
+        ));
+        return;
+    };
+    let Some(player_pos) = world
+        .get_component::<Positioned>(world.player())
+        .map(|pos| pos.0)
+    else {
+        events.push(EngineEvent::msg_with(
+            "wizard-genesis-failed",
+            vec![("monster", monster_name.to_string())],
+        ));
+        return;
+    };
+    let Some(spawn_pos) = enexto(world, player_pos, monster_def) else {
+        events.push(EngineEvent::msg_with(
+            "wizard-genesis-failed",
+            vec![("monster", monster_name.to_string())],
+        ));
+        return;
+    };
+    let Some(entity) = makemon(
+        world,
+        &monster_defs,
+        Some(monster_id),
+        spawn_pos,
+        MakeMonFlags::NO_GROUP,
+        rng,
+    ) else {
+        events.push(EngineEvent::msg_with(
+            "wizard-genesis-failed",
+            vec![("monster", monster_name.to_string())],
+        ));
+        return;
+    };
+
+    events.push(EngineEvent::MonsterGenerated {
+        entity,
+        position: spawn_pos,
+    });
+    events.push(EngineEvent::msg_with(
+        "wizard-genesis",
+        vec![("monster", monster_def.names.male.clone())],
+    ));
+}
+
+fn wizard_wish(world: &mut GameWorld, wish_text: &str, events: &mut Vec<EngineEvent>) {
+    let object_defs: Vec<ObjectDef> = world.object_catalog().to_vec();
+    let Some(mut wished) = crate::wish::parse_wish(wish_text, &object_defs) else {
+        events.push(EngineEvent::msg_with(
+            "wizard-wish-failed",
+            vec![("wish", wish_text.to_string())],
+        ));
+        return;
+    };
+
+    let restricted = !crate::wish::apply_wish_restrictions(&mut wished).is_empty();
+    let Some(object_def) = object_defs.iter().find(|def| def.id == wished.object_type) else {
+        events.push(EngineEvent::msg_with(
+            "wizard-wish-failed",
+            vec![("wish", wish_text.to_string())],
+        ));
+        return;
+    };
+
+    let entity = crate::items::spawn_item(
+        world,
+        object_def,
+        crate::items::SpawnLocation::Free,
+        wished.enchantment,
+    );
+
+    if let Some(mut core) = world.get_component_mut::<ObjectCore>(entity) {
+        core.quantity = wished.quantity as i32;
+        if object_def.class == ObjectClass::Coin {
+            core.inv_letter = Some('$');
+        }
+    }
+    if let Some(mut buc) = world.get_component_mut::<BucStatus>(entity) {
+        buc.cursed = matches!(wished.buc, Some(crate::wish::BucWish::Cursed));
+        buc.blessed = matches!(wished.buc, Some(crate::wish::BucWish::Blessed));
+        buc.bknown = true;
+    }
+    if let Some(mut knowledge) =
+        world.get_component_mut::<nethack_babel_data::KnowledgeState>(entity)
+    {
+        knowledge.known = true;
+        knowledge.dknown = true;
+        knowledge.rknown = true;
+        knowledge.cknown = true;
+        knowledge.lknown = true;
+        knowledge.tknown = true;
+    }
+    if wished.erodeproof
+        && let Some(mut erosion) = world.get_component_mut::<nethack_babel_data::Erosion>(entity)
+    {
+        erosion.erodeproof = true;
+    }
+    if let Some(name) = wished.name.clone() {
+        let _ = world.ecs_mut().insert_one(
+            entity,
+            ObjectExtra {
+                name: Some(name),
+                contained_monster: None,
+            },
+        );
+    }
+
+    let player = world.player();
+    let mut letter_state = crate::items::LetterState::default();
+    let inventory_letter = if object_def.class == ObjectClass::Coin {
+        Some('$')
+    } else {
+        crate::items::assign_inv_letter(world, player, &mut letter_state)
+    };
+
+    if let Some(letter) = inventory_letter {
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(entity) {
+            core.inv_letter = Some(letter);
+        }
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(entity) {
+            *loc = ObjectLocation::Inventory;
+        }
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.push(entity);
+        }
+        events.push(EngineEvent::msg_with(
+            if restricted {
+                "wizard-wish-adjusted"
+            } else {
+                "wizard-wish"
+            },
+            vec![("item", object_def.name.clone())],
+        ));
+        return;
+    }
+
+    let player_pos = world
+        .get_component::<Positioned>(player)
+        .map(|pos| pos.0)
+        .unwrap_or(Position::new(0, 0));
+    let branch = world.dungeon().branch;
+    let depth = world.dungeon().depth;
+    if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(entity) {
+        *loc = crate::dungeon::floor_object_location(branch, depth, player_pos);
+    }
+    events.push(EngineEvent::msg_with(
+        if restricted {
+            "wizard-wish-adjusted-floor"
+        } else {
+            "wizard-wish-floor"
+        },
+        vec![("item", object_def.name.clone())],
+    ));
+}
+
+fn wizard_where(world: &GameWorld) -> Vec<EngineEvent> {
+    let mut events = Vec::new();
+    let player_pos = world
+        .get_component::<Positioned>(world.player())
+        .map(|pos| pos.0)
+        .unwrap_or(Position::new(0, 0));
+    let current_level = world.dungeon().current_dungeon_level();
+    events.push(EngineEvent::msg_with(
+        "wizard-where-current",
+        vec![
+            ("location", current_level.to_string()),
+            ("absolute", world.dungeon().absolute_depth().to_string()),
+            ("x", player_pos.x.to_string()),
+            ("y", player_pos.y.to_string()),
+        ],
+    ));
+
+    use crate::dungeon::{DungeonBranch, DungeonLevel, branch_max_depth};
+    let branches = [
+        DungeonBranch::Main,
+        DungeonBranch::Mines,
+        DungeonBranch::Sokoban,
+        DungeonBranch::Quest,
+        DungeonBranch::FortLudios,
+        DungeonBranch::Gehennom,
+        DungeonBranch::VladsTower,
+        DungeonBranch::Endgame,
+    ];
+    for branch in branches {
+        for depth in 1..=branch_max_depth(branch) {
+            let Some(id) = world.dungeon().check_topology_special(&branch, depth) else {
+                continue;
+            };
+            if matches!(id, crate::special_levels::SpecialLevelId::QuestFiller(_)) {
+                continue;
+            }
+            events.push(EngineEvent::msg_with(
+                "wizard-where-special",
+                vec![
+                    ("level", wizard_special_level_name(id)),
+                    ("location", DungeonLevel::new(branch, depth).to_string()),
+                ],
+            ));
+        }
+    }
+
+    events
+}
+
+fn wizard_special_level_name(id: crate::special_levels::SpecialLevelId) -> String {
+    use crate::special_levels::SpecialLevelId;
+
+    match id {
+        SpecialLevelId::OracleLevel => "Oracle".to_string(),
+        SpecialLevelId::Minetown => "Minetown".to_string(),
+        SpecialLevelId::MinesEnd => "Mines' End".to_string(),
+        SpecialLevelId::Sokoban(level) => format!("Sokoban {}", level),
+        SpecialLevelId::Castle => "Castle".to_string(),
+        SpecialLevelId::Medusa(_) => "Medusa".to_string(),
+        SpecialLevelId::FortLudios => "Fort Ludios".to_string(),
+        SpecialLevelId::VladsTower(level) => format!("Vlad's Tower {}", level),
+        SpecialLevelId::WizardTower => "Wizard Tower".to_string(),
+        SpecialLevelId::WizardTower2 => "Wizard Tower 2".to_string(),
+        SpecialLevelId::WizardTower3 => "Wizard Tower 3".to_string(),
+        SpecialLevelId::Sanctum => "Sanctum".to_string(),
+        SpecialLevelId::EarthPlane => "Plane of Earth".to_string(),
+        SpecialLevelId::AirPlane => "Plane of Air".to_string(),
+        SpecialLevelId::FirePlane => "Plane of Fire".to_string(),
+        SpecialLevelId::WaterPlane => "Plane of Water".to_string(),
+        SpecialLevelId::AstralPlane => "Astral Plane".to_string(),
+        SpecialLevelId::Valley => "Valley of the Dead".to_string(),
+        SpecialLevelId::BigRoom(_) => "Big Room".to_string(),
+        SpecialLevelId::Rogue => "Rogue Level".to_string(),
+        SpecialLevelId::Asmodeus => "Asmodeus".to_string(),
+        SpecialLevelId::Baalzebub => "Baalzebub".to_string(),
+        SpecialLevelId::Juiblex => "Juiblex".to_string(),
+        SpecialLevelId::Orcus => "Orcus".to_string(),
+        SpecialLevelId::FakeWizard(level) => format!("Fake Wizard Tower {}", level),
+        SpecialLevelId::QuestStart => "Quest Start".to_string(),
+        SpecialLevelId::QuestLocator => "Quest Locate".to_string(),
+        SpecialLevelId::QuestGoal => "Quest Goal".to_string(),
+        SpecialLevelId::QuestFiller(level) => format!("Quest Filler {}", level),
+    }
+}
+
+fn wizard_kill(world: &mut GameWorld, events: &mut Vec<EngineEvent>) {
+    let player = world.player();
+    let killer_name = world.entity_name(player);
+    let monsters: Vec<hecs::Entity> = world
+        .ecs()
+        .query::<&Monster>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .collect();
+
+    if monsters.is_empty() {
+        events.push(EngineEvent::msg("wizard-kill-none"));
+        return;
+    }
+
+    for monster in &monsters {
+        events.push(EngineEvent::EntityDied {
+            entity: *monster,
+            killer: Some(player),
+            cause: DeathCause::KilledBy {
+                killer_name: killer_name.clone(),
+            },
+        });
+        let _ = world.despawn(*monster);
+    }
+
+    events.push(EngineEvent::msg_with(
+        "wizard-kill",
+        vec![("count", monsters.len().to_string())],
+    ));
 }
 
 fn find_adjacent_tame_steed(world: &GameWorld, player: hecs::Entity) -> Option<hecs::Entity> {
@@ -4603,6 +4911,238 @@ mod tests {
         resolve_turn(world, PlayerAction::Move { direction }, rng)
     }
 
+    #[derive(Clone, Copy)]
+    enum StoryTraversalScenario {
+        QuestClosure,
+        EndgameAscension,
+    }
+
+    impl StoryTraversalScenario {
+        fn label(self) -> &'static str {
+            match self {
+                StoryTraversalScenario::QuestClosure => "quest-closure",
+                StoryTraversalScenario::EndgameAscension => "endgame-ascension",
+            }
+        }
+    }
+
+    fn run_story_traversal_scenario(
+        scenario: StoryTraversalScenario,
+    ) -> (GameWorld, Vec<EngineEvent>) {
+        match scenario {
+            StoryTraversalScenario::QuestClosure => {
+                let mut world = make_stair_world(Terrain::StairsDown, 1);
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world.dungeon_mut().branch = DungeonBranch::Quest;
+                world
+                    .ecs_mut()
+                    .insert_one(player, wizard_identity())
+                    .expect("player should accept wizard identity");
+                let mut religion = default_religion_state(&world, player);
+                religion.experience_level = 14;
+                religion.alignment_record = 10;
+                world
+                    .ecs_mut()
+                    .insert_one(player, religion)
+                    .expect("player should accept religion state");
+                if let Some(mut level) = world.get_component_mut::<ExperienceLevel>(player) {
+                    level.0 = 14;
+                }
+                world.spawn((
+                    Monster,
+                    Positioned(Position::new(6, 5)),
+                    Name("Neferet the Green".to_string()),
+                    HitPoints {
+                        current: 30,
+                        max: 30,
+                    },
+                    Speed(12),
+                    DisplaySymbol {
+                        symbol: '@',
+                        color: nethack_babel_data::Color::Green,
+                    },
+                    MovementPoints(NORMAL_SPEED as i32),
+                ));
+
+                let mut rng = test_rng();
+                let _assign_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+
+                for expected_depth in 2..=7 {
+                    if expected_depth > 2 {
+                        let stairs_down =
+                            find_terrain(&world.dungeon().current_level, Terrain::StairsDown)
+                                .expect("quest traversal should preserve stairs down");
+                        set_player_position(&mut world, stairs_down);
+                    }
+                    let events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                    assert!(
+                        events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                        "{} should descend into quest depth {}",
+                        scenario.label(),
+                        expected_depth
+                    );
+                }
+
+                let mut quest_state = world
+                    .get_component::<crate::quest::QuestState>(player)
+                    .map(|state| (*state).clone())
+                    .expect("quest traversal should persist quest state");
+                quest_state.obtain_artifact();
+                quest_state.defeat_nemesis();
+                persist_quest_state(&mut world, player, quest_state);
+
+                for expected_depth in (1..=6).rev() {
+                    let stairs_up = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
+                        .expect("quest traversal should preserve stairs up");
+                    set_player_position(&mut world, stairs_up);
+                    let events = resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+                    assert!(
+                        events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                        "{} should ascend into quest depth {}",
+                        scenario.label(),
+                        expected_depth
+                    );
+                }
+
+                let leader_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, leader_events)
+            }
+            StoryTraversalScenario::EndgameAscension => {
+                let mut world = make_stair_world(Terrain::StairsDown, 20);
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, wizard_identity())
+                    .expect("player should accept wizard identity");
+                world.dungeon_mut().branch = DungeonBranch::Gehennom;
+                let mut rng = test_rng();
+
+                let descend_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    descend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should descend into Gehennom:21",
+                    scenario.label()
+                );
+
+                let invocation_pos = world
+                    .dungeon()
+                    .trap_map
+                    .traps
+                    .iter()
+                    .find(|trap| trap.trap_type == TrapType::VibratingSquare)
+                    .map(|trap| trap.pos)
+                    .expect("Gehennom 21 should expose a vibrating square before invocation");
+                set_player_position(&mut world, invocation_pos);
+
+                let bell = spawn_inventory_object_by_name(&mut world, "Bell of Opening", 'b');
+                let candelabrum =
+                    spawn_inventory_object_by_name(&mut world, "Candelabrum of Invocation", 'c');
+                let book = spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'd');
+                let current_turn = world.turn() as i64;
+                if let Some(mut core) = world.get_component_mut::<ObjectCore>(bell) {
+                    core.age = current_turn;
+                }
+                world
+                    .ecs_mut()
+                    .insert_one(candelabrum, Enchantment { spe: 7 })
+                    .expect("candelabrum should accept candle count");
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        candelabrum,
+                        LightSource {
+                            lit: true,
+                            recharged: 0,
+                        },
+                    )
+                    .expect("candelabrum should accept light state");
+
+                let invocation_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Read { item: Some(book) },
+                    &mut rng,
+                );
+                assert!(
+                    invocation_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "invocation-complete"
+                    )),
+                    "{} should complete invocation before portal traversal",
+                    scenario.label()
+                );
+
+                let enter_events = move_player_onto_magic_portal(&mut world, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should enter Endgame through the magic portal",
+                    scenario.label()
+                );
+
+                for expected_depth in 2..=5 {
+                    let portal_events = move_player_onto_magic_portal(&mut world, &mut rng);
+                    assert!(
+                        portal_events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                        "{} should reach Endgame depth {}",
+                        scenario.label(),
+                        expected_depth
+                    );
+                }
+
+                let mut altar_positions = Vec::new();
+                for y in 0..world.dungeon().current_level.height {
+                    for x in 0..world.dungeon().current_level.width {
+                        let pos = Position::new(x as i32, y as i32);
+                        if world
+                            .dungeon()
+                            .current_level
+                            .get(pos)
+                            .is_some_and(|cell| cell.terrain == Terrain::Altar)
+                        {
+                            altar_positions.push(pos);
+                        }
+                    }
+                }
+                altar_positions.sort_by_key(|pos| pos.x);
+                let chaotic_altar = *altar_positions
+                    .last()
+                    .expect("Astral Plane should have a chaotic altar");
+                set_player_position(&mut world, chaotic_altar);
+
+                let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+                let offer_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Offer { item: Some(amulet) },
+                    &mut rng,
+                );
+                (world, offer_events)
+            }
+        }
+    }
+
     /// Spawn a monster at the given position with a given base speed.
     #[allow(dead_code)]
     fn spawn_monster(world: &mut GameWorld, pos: Position, speed: u32) -> hecs::Entity {
@@ -6425,7 +6965,8 @@ mod tests {
         if let Some(mut level) = world.get_component_mut::<ExperienceLevel>(player) {
             level.0 = 14;
         }
-        if let Some(mut religion) = world.get_component_mut::<crate::religion::ReligionState>(player)
+        if let Some(mut religion) =
+            world.get_component_mut::<crate::religion::ReligionState>(player)
         {
             religion.experience_level = 14;
         }
@@ -6442,10 +6983,11 @@ mod tests {
         )));
 
         let descend_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
-        assert!(descend_events.iter().any(|event| matches!(
-            event,
-            EngineEvent::LevelChanged { .. }
-        )));
+        assert!(
+            descend_events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+        );
         assert_eq!(world.dungeon().depth, 2);
     }
 
@@ -7901,10 +8443,44 @@ mod tests {
     // ── Wizard mode tests ──────────────────────────────────────
 
     #[test]
-    fn wiz_identify_emits_event() {
+    fn wiz_identify_marks_inventory_items_known() {
         let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let long_sword = test_game_data()
+            .objects
+            .iter()
+            .find(|def| def.name.eq_ignore_ascii_case("long sword"))
+            .expect("long sword should exist in test data");
+        let item = crate::items::spawn_item(
+            &mut world,
+            long_sword,
+            crate::items::SpawnLocation::Free,
+            Some(2),
+        );
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+            *loc = ObjectLocation::Inventory;
+        }
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.push(item);
+        }
+
         let mut rng = test_rng();
         let events = resolve_turn(&mut world, PlayerAction::WizIdentify, &mut rng);
+
+        let knowledge = world
+            .get_component::<nethack_babel_data::KnowledgeState>(item)
+            .expect("wished item should keep knowledge state");
+        assert!(knowledge.known);
+        assert!(knowledge.dknown);
+        assert!(knowledge.rknown);
+        assert!(knowledge.cknown);
+        assert!(knowledge.lknown);
+        assert!(knowledge.tknown);
+        let buc = world
+            .get_component::<BucStatus>(item)
+            .expect("wished item should keep BUC state");
+        assert!(buc.bknown, "wizard identify should reveal BUC knowledge");
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "wizard-identify-all"
@@ -7956,16 +8532,41 @@ mod tests {
     }
 
     #[test]
-    fn wiz_genesis_emits_event() {
+    fn wiz_genesis_spawns_named_monster_adjacent_to_player() {
         let mut world = make_test_world();
+        install_test_catalogs(&mut world);
         let mut rng = test_rng();
         let events = resolve_turn(
             &mut world,
             PlayerAction::WizGenesis {
-                monster_name: "dragon".to_string(),
+                monster_name: "goblin".to_string(),
             },
             &mut rng,
         );
+
+        let player_pos = world
+            .get_component::<Positioned>(world.player())
+            .expect("player should have a position")
+            .0;
+        let spawned = world
+            .ecs()
+            .query::<(&Monster, &Name, &Positioned)>()
+            .iter()
+            .find(|(_, (_, name, _))| name.0.eq_ignore_ascii_case("goblin"))
+            .map(|(entity, (_, _, pos))| (entity, pos.0))
+            .expect("wizgenesis should spawn the requested monster");
+        assert_ne!(
+            spawned.1, player_pos,
+            "genesis should not stack onto the player"
+        );
+        assert!(
+            (spawned.1.x - player_pos.x).abs() <= 1 && (spawned.1.y - player_pos.y).abs() <= 1,
+            "genesis should prefer an adjacent spawn position"
+        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::MonsterGenerated { entity, .. } if *entity == spawned.0
+        )));
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "wizard-genesis"
@@ -7973,38 +8574,130 @@ mod tests {
     }
 
     #[test]
-    fn wiz_wish_emits_event() {
+    fn wiz_wish_grants_restricted_item_in_inventory() {
         let mut world = make_test_world();
+        install_test_catalogs(&mut world);
         let mut rng = test_rng();
         let events = resolve_turn(
             &mut world,
             PlayerAction::WizWish {
-                wish_text: "blessed +3 silver dragon scale mail".to_string(),
+                wish_text: "50 blessed rustproof +7 arrow named Debug".to_string(),
             },
             &mut rng,
         );
+
+        let player = world.player();
+        let wished_item = world
+            .get_component::<crate::inventory::Inventory>(player)
+            .expect("player should have inventory")
+            .items
+            .iter()
+            .copied()
+            .find(|item| {
+                world
+                    .get_component::<ObjectCore>(*item)
+                    .is_some_and(|core| {
+                        resolve_object_type_by_spec(&test_game_data().objects, "arrow")
+                            .is_some_and(|arrow_id| core.otyp == arrow_id)
+                    })
+            })
+            .expect("wizwish should grant the wished item");
+        let core = world
+            .get_component::<ObjectCore>(wished_item)
+            .expect("wished item should have ObjectCore");
+        let enchantment = world
+            .get_component::<Enchantment>(wished_item)
+            .expect("wished item should have enchantment");
+        let buc = world
+            .get_component::<BucStatus>(wished_item)
+            .expect("wished item should have BUC state");
+        let erosion = world
+            .get_component::<nethack_babel_data::Erosion>(wished_item)
+            .expect("wished item should have erosion state");
+        let extra = world
+            .get_component::<ObjectExtra>(wished_item)
+            .expect("named wished item should keep ObjectExtra");
+
+        assert_eq!(core.quantity, 20, "wish quantity should clamp to 20");
+        assert_eq!(enchantment.spe, 3, "wish enchantment should clamp to +3");
+        assert!(buc.blessed, "wished item should preserve blessed status");
+        assert!(buc.bknown, "wizard wishes should reveal BUC status");
+        assert!(erosion.erodeproof, "rustproof wish should set erodeproof");
+        assert_eq!(extra.name.as_deref(), Some("debug"));
         assert!(events.iter().any(|e| matches!(
             e,
-            EngineEvent::Message { key, .. } if key == "wizard-wish"
+            EngineEvent::Message { key, .. } if key == "wizard-wish-adjusted"
         )));
     }
 
     #[test]
-    fn wiz_where_emits_event() {
+    fn wiz_where_reports_current_location_and_special_levels() {
         let mut world = make_test_world();
         let mut rng = test_rng();
         let events = resolve_turn(&mut world, PlayerAction::WizWhere, &mut rng);
-        assert!(events.iter().any(|e| matches!(
-            e,
-            EngineEvent::Message { key, .. } if key == "wizard-where"
-        )));
+
+        let current = events
+            .iter()
+            .find_map(|event| match event {
+                EngineEvent::Message { key, args } if key == "wizard-where-current" => {
+                    Some(args.clone())
+                }
+                _ => None,
+            })
+            .expect("wizwhere should emit the current location");
+        assert!(
+            current
+                .iter()
+                .any(|(k, v)| k == "location" && v == "Dungeons of Doom:1")
+        );
+        assert!(current.iter().any(|(k, v)| k == "absolute" && v == "1"));
+        assert!(current.iter().any(|(k, v)| k == "x" && v == "5"));
+        assert!(current.iter().any(|(k, v)| k == "y" && v == "5"));
+
+        let special_lines: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                EngineEvent::Message { key, args } if key == "wizard-where-special" => {
+                    Some(args.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            special_lines
+                .iter()
+                .any(|args| args.iter().any(|(k, v)| k == "level" && v == "Castle")),
+            "wizwhere should enumerate fixed special levels like Castle"
+        );
+        assert!(
+            special_lines
+                .iter()
+                .any(|args| args.iter().any(|(k, v)| k == "level" && v == "Quest Start")),
+            "wizwhere should enumerate cross-branch special levels like the quest home"
+        );
     }
 
     #[test]
-    fn wiz_kill_emits_event() {
+    fn wiz_kill_removes_all_monsters_on_level() {
         let mut world = make_test_world();
+        spawn_full_monster(&mut world, Position::new(6, 5), "goblin", 12);
+        spawn_full_monster(&mut world, Position::new(7, 5), "orc", 12);
         let mut rng = test_rng();
         let events = resolve_turn(&mut world, PlayerAction::WizKill, &mut rng);
+
+        let remaining = world.ecs().query::<&Monster>().iter().count();
+        assert_eq!(
+            remaining, 0,
+            "wizkill should remove all monsters on the live level"
+        );
+        let deaths = events
+            .iter()
+            .filter(|event| matches!(event, EngineEvent::EntityDied { .. }))
+            .count();
+        assert_eq!(
+            deaths, 2,
+            "wizkill should emit one death per removed monster"
+        );
         assert!(events.iter().any(|e| matches!(
             e,
             EngineEvent::Message { key, .. } if key == "wizard-kill"
@@ -9583,10 +10276,11 @@ mod tests {
         let mut rng = test_rng();
 
         let events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
-        assert!(events.iter().any(|event| matches!(
-            event,
-            EngineEvent::LevelChanged { .. }
-        )));
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+        );
         assert_eq!(world.dungeon().depth, 21);
 
         let invocation_pos = world
@@ -9633,19 +10327,21 @@ mod tests {
         )));
 
         let enter_events = move_player_onto_magic_portal(&mut world, &mut rng);
-        assert!(enter_events.iter().any(|event| matches!(
-            event,
-            EngineEvent::LevelChanged { .. }
-        )));
+        assert!(
+            enter_events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+        );
         assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
         assert_eq!(world.dungeon().depth, 1);
 
         for expected_depth in 2..=5 {
             let portal_events = move_player_onto_magic_portal(&mut world, &mut rng);
-            assert!(portal_events.iter().any(|event| matches!(
-                event,
-                EngineEvent::LevelChanged { .. }
-            )));
+            assert!(
+                portal_events
+                    .iter()
+                    .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+            );
             assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
             assert_eq!(world.dungeon().depth, expected_depth);
         }
@@ -9673,9 +10369,7 @@ mod tests {
 
         let offer_events = resolve_turn(
             &mut world,
-            PlayerAction::Offer {
-                item: Some(amulet),
-            },
+            PlayerAction::Offer { item: Some(amulet) },
             &mut rng,
         );
 
@@ -9687,6 +10381,64 @@ mod tests {
             }
         )));
         assert!(read_player_events(&world, player).ascended);
+    }
+
+    #[test]
+    fn test_story_traversal_matrix() {
+        for scenario in [
+            StoryTraversalScenario::QuestClosure,
+            StoryTraversalScenario::EndgameAscension,
+        ] {
+            let (world, final_events) = run_story_traversal_scenario(scenario);
+            let player = world.player();
+
+            match scenario {
+                StoryTraversalScenario::QuestClosure => {
+                    assert!(
+                        final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "quest-completed"
+                        )),
+                        "{} should emit quest completion",
+                        scenario.label()
+                    );
+                    let quest_status = world
+                        .get_component::<crate::quest::QuestState>(player)
+                        .map(|state| state.status)
+                        .expect("quest traversal should preserve quest state");
+                    assert_eq!(
+                        quest_status,
+                        crate::quest::QuestStatus::Completed,
+                        "{} should end with a completed quest",
+                        scenario.label()
+                    );
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Quest);
+                    assert_eq!(world.dungeon().depth, 1);
+                }
+                StoryTraversalScenario::EndgameAscension => {
+                    assert!(
+                        final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::GameOver {
+                                cause: crate::event::DeathCause::Ascended,
+                                ..
+                            }
+                        )),
+                        "{} should end in ascension",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|flags| flags.ascended),
+                        "{} should persist ascension in player milestone flags",
+                        scenario.label()
+                    );
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+                    assert_eq!(world.dungeon().depth, 5);
+                }
+            }
+        }
     }
 
     // ── Gas cloud ticking ─────────────────────────────────────────────

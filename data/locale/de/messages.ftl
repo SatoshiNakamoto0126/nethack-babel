@@ -472,6 +472,22 @@ two-weapon-disabled = Ihr kämpft nicht mehr mit zwei Waffen.
 name-not-implemented = Benennen ist noch nicht verfügbar.
 adjust-not-implemented = Inventaranpassung ist noch nicht verfügbar.
 
+## Wizard-Modus (Debug)
+wizard-identify-all = Du weißt plötzlich alles über deine Ausrüstung.
+wizard-map-revealed = Ein Bild deiner Umgebung formt sich in deinem Geist!
+wizard-detect-all = Du spürst alles um dich herum.
+wizard-genesis = Ein { $monster } erscheint neben dir.
+wizard-genesis-failed = Nichts reagiert auf deine Bitte um { $monster }.
+wizard-wish = Dein Wunsch wird erfüllt: { $item }.
+wizard-wish-adjusted = Dein Wunsch wird angepasst zu: { $item }.
+wizard-wish-floor = Dein Wunsch wird erfüllt: { $item } landet vor deinen Füßen.
+wizard-wish-adjusted-floor = Dein Wunsch wird angepasst: { $item } landet vor deinen Füßen.
+wizard-wish-failed = Nichts reagiert auf deinen Wunsch nach "{ $wish }".
+wizard-kill = Du löschst { $count } Monster auf dieser Ebene aus.
+wizard-kill-none = Hier gibt es keine Monster zum Auslöschen.
+wizard-where-current = Du bist auf { $location } (absolute Tiefe { $absolute }) bei { $x },{ $y }.
+wizard-where-special = { $level } befindet sich auf { $location }.
+
 ## ============================================================================
 ## Quest / NPC-Dialog
 ## ============================================================================
