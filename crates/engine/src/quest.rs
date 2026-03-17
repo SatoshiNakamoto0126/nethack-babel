@@ -1199,8 +1199,20 @@ mod tests {
         qs.assign();
         qs.enter_quest_dungeon();
         qs.defeat_nemesis();
+        qs.obtain_artifact();
         let enc = determine_encounter(&qs, true, false);
         assert_eq!(enc, QuestEncounterType::LeaderNemesisDead);
+    }
+
+    #[test]
+    fn test_encounter_leader_after_nemesis_without_artifact() {
+        let mut qs = QuestState::new();
+        qs.meet_leader();
+        qs.assign();
+        qs.enter_quest_dungeon();
+        qs.defeat_nemesis();
+        let enc = determine_encounter(&qs, true, false);
+        assert_eq!(enc, QuestEncounterType::LeaderAssigned);
     }
 
     #[test]
