@@ -5725,6 +5725,82 @@ mod tests {
     }
 
     #[test]
+    fn test_entering_all_quest_locators_spawn_role_specific_enemies() {
+        for (idx, role) in crate::role::Role::ALL.into_iter().enumerate() {
+            let mut world = make_test_world();
+            install_test_catalogs(&mut world);
+            let player = world.player();
+            world
+                .ecs_mut()
+                .insert_one(player, identity_for_role(role))
+                .expect("test player should accept identity");
+            let mut rng = Pcg64::seed_from_u64(10100 + idx as u64);
+            let mut events = Vec::new();
+            let enemies = crate::quest::quest_enemies_for_role(role);
+
+            change_level_to_branch(
+                &mut world,
+                crate::dungeon::DungeonBranch::Quest,
+                4,
+                false,
+                &mut rng,
+                &mut events,
+            );
+
+            assert!(
+                has_monster_named(&world, enemies.enemy1),
+                "{} quest locator should spawn primary quest enemy {}",
+                role.name(),
+                enemies.enemy1
+            );
+            assert!(
+                has_monster_named(&world, enemies.enemy2),
+                "{} quest locator should spawn secondary quest enemy {}",
+                role.name(),
+                enemies.enemy2
+            );
+        }
+    }
+
+    #[test]
+    fn test_entering_all_quest_fillers_spawn_role_specific_enemies() {
+        for (idx, role) in crate::role::Role::ALL.into_iter().enumerate() {
+            let mut world = make_test_world();
+            install_test_catalogs(&mut world);
+            let player = world.player();
+            world
+                .ecs_mut()
+                .insert_one(player, identity_for_role(role))
+                .expect("test player should accept identity");
+            let mut rng = Pcg64::seed_from_u64(10200 + idx as u64);
+            let mut events = Vec::new();
+            let enemies = crate::quest::quest_enemies_for_role(role);
+
+            change_level_to_branch(
+                &mut world,
+                crate::dungeon::DungeonBranch::Quest,
+                3,
+                false,
+                &mut rng,
+                &mut events,
+            );
+
+            assert!(
+                has_monster_named(&world, enemies.enemy1),
+                "{} quest filler should spawn primary quest enemy {}",
+                role.name(),
+                enemies.enemy1
+            );
+            assert!(
+                has_monster_named(&world, enemies.enemy2),
+                "{} quest filler should spawn secondary quest enemy {}",
+                role.name(),
+                enemies.enemy2
+            );
+        }
+    }
+
+    #[test]
     fn test_entering_fort_ludios_spawns_garrison() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);

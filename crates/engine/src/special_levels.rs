@@ -2488,6 +2488,33 @@ fn find_room_containing_pos(rooms: &[Room], pos: Position) -> Option<&Room> {
     })
 }
 
+fn quest_enemy_spawns(
+    rooms: &[Room],
+    primary: &str,
+    secondary: &str,
+    total: usize,
+) -> Vec<SpecialMonsterSpawn> {
+    let mut anchors = Vec::new();
+    for room in rooms {
+        anchors.extend(room_anchor_positions(room, &[]));
+        if anchors.len() >= total {
+            break;
+        }
+    }
+    anchors.truncate(total);
+    anchors
+        .into_iter()
+        .enumerate()
+        .map(|(idx, pos)| SpecialMonsterSpawn {
+            name: if idx % 4 == 3 { secondary } else { primary }.to_string(),
+            pos: Some(pos),
+            chance: 100,
+            peaceful: Some(false),
+            asleep: Some(false),
+        })
+        .collect()
+}
+
 fn find_first_terrain(map: &LevelMap, terrain: Terrain) -> Option<Position> {
     for y in 0..map.height {
         for x in 0..map.width {
@@ -2809,6 +2836,16 @@ pub fn population_for_special_level_with_role(
                 objects: Vec::new(),
             }
         }
+        SpecialLevelId::QuestLocator => {
+            let Some(role) = quest_role_from_name(role_name) else {
+                return SpecialLevelPopulation::default();
+            };
+            let enemies = quest_enemies_for_role(role);
+            SpecialLevelPopulation {
+                monsters: quest_enemy_spawns(&generated.rooms, enemies.enemy1, enemies.enemy2, 6),
+                objects: Vec::new(),
+            }
+        }
         SpecialLevelId::QuestGoal => {
             let Some(role) = quest_role_from_name(role_name) else {
                 return SpecialLevelPopulation::default();
@@ -2851,6 +2888,16 @@ pub fn population_for_special_level_with_role(
                     chance: 100,
                     quantity: Some(1),
                 }],
+            }
+        }
+        SpecialLevelId::QuestFiller(_) => {
+            let Some(role) = quest_role_from_name(role_name) else {
+                return SpecialLevelPopulation::default();
+            };
+            let enemies = quest_enemies_for_role(role);
+            SpecialLevelPopulation {
+                monsters: quest_enemy_spawns(&generated.rooms, enemies.enemy1, enemies.enemy2, 4),
+                objects: Vec::new(),
             }
         }
         _ => {
@@ -7357,6 +7404,54 @@ mod tests {
     }
 
     #[test]
+    fn test_population_quest_locator_role_specific_enemies() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::QuestLocator, Some("wizard"), &mut rng)
+            .expect("wizard quest locator should generate");
+        let pop = population_for_special_level_with_role(
+            SpecialLevelId::QuestLocator,
+            &sl.generated,
+            Some("wizard"),
+        );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("vampire bat")),
+            "wizard quest locator should include primary wizard quest enemies"
+        );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("xorn")),
+            "wizard quest locator should include secondary wizard quest enemies"
+        );
+    }
+
+    #[test]
+    fn test_population_quest_filler_role_specific_enemies() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::QuestFiller(3), Some("wizard"), &mut rng)
+            .expect("wizard quest filler should generate");
+        let pop = population_for_special_level_with_role(
+            SpecialLevelId::QuestFiller(3),
+            &sl.generated,
+            Some("wizard"),
+        );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("vampire bat")),
+            "wizard quest filler should include primary wizard quest enemies"
+        );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("xorn")),
+            "wizard quest filler should include secondary wizard quest enemies"
+        );
+    }
+
+    #[test]
     fn test_population_quest_roles_cover_all_leaders_guardians_nemeses_enemies_and_artifacts() {
         for (idx, role) in Role::ALL.into_iter().enumerate() {
             let role_name = role.name().to_ascii_lowercase();
@@ -7434,6 +7529,70 @@ mod tests {
                 "{} quest goal should include artifact {}",
                 role.name(),
                 quest_artifact_for_role(role)
+            );
+        }
+    }
+
+    #[test]
+    fn test_population_quest_roles_cover_locator_and_filler_enemies() {
+        for (idx, role) in Role::ALL.into_iter().enumerate() {
+            let role_name = role.name().to_ascii_lowercase();
+            let mut locator_rng = Pcg64::seed_from_u64(8100 + idx as u64);
+            let mut filler_rng = Pcg64::seed_from_u64(8200 + idx as u64);
+            let enemies = quest_enemies_for_role(role);
+
+            let locator = dispatch_special_level(
+                SpecialLevelId::QuestLocator,
+                Some(role_name.as_str()),
+                &mut locator_rng,
+            )
+            .unwrap_or_else(|| panic!("{} quest locator should generate", role.name()));
+            let locator_pop = population_for_special_level_with_role(
+                SpecialLevelId::QuestLocator,
+                &locator.generated,
+                Some(role_name.as_str()),
+            );
+            assert!(
+                locator_pop
+                    .monsters
+                    .iter()
+                    .any(|m| m.name == enemies.enemy1),
+                "{} quest locator should include primary enemy {}",
+                role.name(),
+                enemies.enemy1
+            );
+            assert!(
+                locator_pop
+                    .monsters
+                    .iter()
+                    .any(|m| m.name == enemies.enemy2),
+                "{} quest locator should include secondary enemy {}",
+                role.name(),
+                enemies.enemy2
+            );
+
+            let filler = dispatch_special_level(
+                SpecialLevelId::QuestFiller(3),
+                Some(role_name.as_str()),
+                &mut filler_rng,
+            )
+            .unwrap_or_else(|| panic!("{} quest filler should generate", role.name()));
+            let filler_pop = population_for_special_level_with_role(
+                SpecialLevelId::QuestFiller(3),
+                &filler.generated,
+                Some(role_name.as_str()),
+            );
+            assert!(
+                filler_pop.monsters.iter().any(|m| m.name == enemies.enemy1),
+                "{} quest filler should include primary enemy {}",
+                role.name(),
+                enemies.enemy1
+            );
+            assert!(
+                filler_pop.monsters.iter().any(|m| m.name == enemies.enemy2),
+                "{} quest filler should include secondary enemy {}",
+                role.name(),
+                enemies.enemy2
             );
         }
     }
