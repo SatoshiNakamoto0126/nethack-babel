@@ -4196,15 +4196,14 @@ fn read_book_of_the_dead(
     let bell = find_player_named_item(world, player, "Bell of Opening");
     let candelabrum = find_player_named_item(world, player, "Candelabrum of Invocation");
     let Some(bell) = bell else {
-        events.push(EngineEvent::msg("invocation-incomplete"));
+        events.push(EngineEvent::msg("invocation-missing-bell"));
         return events;
     };
     let Some(candelabrum) = candelabrum else {
-        events.push(EngineEvent::msg("invocation-incomplete"));
+        events.push(EngineEvent::msg("invocation-missing-candelabrum"));
         return events;
     };
 
-    let invocation_items_ready = crate::religion::has_invocation_items(true, true, true);
     let bell_recent = world
         .get_component::<ObjectCore>(bell)
         .is_some_and(|core| world.turn().saturating_sub(core.age.max(0) as u32) <= 5);
@@ -4214,16 +4213,25 @@ fn read_book_of_the_dead(
         && !item_is_cursed(world, bell)
         && !item_is_cursed(world, candelabrum);
 
-    if invocation_items_ready && bell_recent && candelabrum_ready && all_uncursed {
-        let mut player_events = read_player_events(world, player);
-        player_events.invoked = true;
-        player_events.found_vibrating_square = true;
-        persist_player_events(world, player, player_events);
-        sync_current_level_invocation_access(world, rng);
-        events.push(EngineEvent::msg("invocation-complete"));
-    } else {
-        events.push(EngineEvent::msg("invocation-incomplete"));
+    if !bell_recent {
+        events.push(EngineEvent::msg("invocation-needs-bell-rung"));
+        return events;
     }
+    if !candelabrum_ready {
+        events.push(EngineEvent::msg("invocation-needs-candelabrum-ready"));
+        return events;
+    }
+    if !all_uncursed {
+        events.push(EngineEvent::msg("invocation-items-cursed"));
+        return events;
+    }
+
+    let mut player_events = read_player_events(world, player);
+    player_events.invoked = true;
+    player_events.found_vibrating_square = true;
+    persist_player_events(world, player, player_events);
+    sync_current_level_invocation_access(world, rng);
+    events.push(EngineEvent::msg("invocation-complete"));
 
     events
 }
@@ -4580,6 +4588,19 @@ mod tests {
             inv.items.push(item);
         }
         item
+    }
+
+    fn move_player_onto_magic_portal(
+        world: &mut GameWorld,
+        rng: &mut impl Rng,
+    ) -> Vec<EngineEvent> {
+        let portal_pos = find_terrain(&world.dungeon().current_level, Terrain::MagicPortal)
+            .expect("current level should expose a magic portal");
+        let (entry_pos, direction) =
+            adjacent_walkable_step(&world.dungeon().current_level, portal_pos)
+                .expect("magic portal should have an adjacent walkable entry tile");
+        set_player_position(world, entry_pos);
+        resolve_turn(world, PlayerAction::Move { direction }, rng)
     }
 
     /// Spawn a monster at the given position with a given base speed.
@@ -6358,6 +6379,74 @@ mod tests {
             .get_component::<crate::quest::QuestState>(world.player())
             .expect("quest descent block should persist quest state");
         assert_eq!(quest_state.times_expelled, 1);
+    }
+
+    #[test]
+    fn test_quest_start_blocks_descent_after_rejection_until_assignment() {
+        let mut world = make_stair_world(Terrain::StairsDown, 1);
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Quest;
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        let mut religion = default_religion_state(&world, player);
+        religion.experience_level = 10;
+        religion.alignment_record = 10;
+        world
+            .ecs_mut()
+            .insert_one(player, religion)
+            .expect("player should accept religion state");
+        if let Some(mut level) = world.get_component_mut::<ExperienceLevel>(player) {
+            level.0 = 10;
+        }
+        spawn_idle_named_monster(&mut world, Position::new(6, 5), "Neferet the Green");
+
+        let mut rng = test_rng();
+        let reject_events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(reject_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-leader-reject"
+        )));
+
+        let blocked_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(world.dungeon().depth, 1);
+        assert!(blocked_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-expelled"
+        )));
+
+        if let Some(mut level) = world.get_component_mut::<ExperienceLevel>(player) {
+            level.0 = 14;
+        }
+        if let Some(mut religion) = world.get_component_mut::<crate::religion::ReligionState>(player)
+        {
+            religion.experience_level = 14;
+        }
+        let assign_events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(assign_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-assigned"
+        )));
+
+        let descend_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert!(descend_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::LevelChanged { .. }
+        )));
+        assert_eq!(world.dungeon().depth, 2);
     }
 
     #[test]
@@ -9014,11 +9103,12 @@ mod tests {
             .expect("nemesis should despawn cleanly");
 
         let _ = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
-        let quest_status = world
+        let quest_state = world
             .get_component::<crate::quest::QuestState>(player)
-            .map(|state| state.status)
+            .map(|state| (*state).clone())
             .expect("quest traversal should persist quest state");
-        assert_eq!(quest_status, crate::quest::QuestStatus::Completed);
+        assert_eq!(quest_state.status, crate::quest::QuestStatus::InProgress);
+        assert!(quest_state.ready_for_completion());
 
         for expected_depth in (1..=6).rev() {
             let stairs_up = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
@@ -9045,6 +9135,15 @@ mod tests {
             event,
             EngineEvent::Message { key, .. } if key == "quest-leader-nemesis-dead"
         )));
+        assert!(leader_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-completed"
+        )));
+        let quest_status = world
+            .get_component::<crate::quest::QuestState>(player)
+            .map(|state| state.status)
+            .expect("leader return should persist quest completion");
+        assert_eq!(quest_status, crate::quest::QuestStatus::Completed);
     }
 
     #[test]
@@ -9290,6 +9389,304 @@ mod tests {
             world.dungeon().trap_map.trap_at(player_pos).is_none(),
             "the vibrating square trap marker should be cleared after invocation"
         );
+    }
+
+    #[test]
+    fn test_read_book_of_the_dead_requires_recent_bell_ring() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 21;
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .map(|pos| pos.0)
+            .expect("player should have a position");
+        let mut rng = test_rng();
+        let _ = crate::traps::create_trap(
+            &mut rng,
+            &mut world.dungeon_mut().trap_map,
+            player_pos,
+            TrapType::VibratingSquare,
+        );
+
+        let bell = spawn_inventory_object_by_name(&mut world, "Bell of Opening", 'b');
+        let candelabrum =
+            spawn_inventory_object_by_name(&mut world, "Candelabrum of Invocation", 'c');
+        let book = spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'd');
+
+        for _ in 0..6 {
+            world.advance_turn();
+        }
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(bell) {
+            core.age = 0;
+        }
+        world
+            .ecs_mut()
+            .insert_one(candelabrum, Enchantment { spe: 7 })
+            .expect("candelabrum should accept candle count");
+        world
+            .ecs_mut()
+            .insert_one(
+                candelabrum,
+                LightSource {
+                    lit: true,
+                    recharged: 0,
+                },
+            )
+            .expect("candelabrum should accept light state");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Read { item: Some(book) },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "invocation-needs-bell-rung"
+        )));
+        assert!(
+            !read_player_events(&world, player).invoked,
+            "stale bell ringing should not complete invocation"
+        );
+    }
+
+    #[test]
+    fn test_read_book_of_the_dead_requires_ready_candelabrum() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 21;
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .map(|pos| pos.0)
+            .expect("player should have a position");
+        let mut rng = test_rng();
+        let _ = crate::traps::create_trap(
+            &mut rng,
+            &mut world.dungeon_mut().trap_map,
+            player_pos,
+            TrapType::VibratingSquare,
+        );
+
+        let bell = spawn_inventory_object_by_name(&mut world, "Bell of Opening", 'b');
+        let candelabrum =
+            spawn_inventory_object_by_name(&mut world, "Candelabrum of Invocation", 'c');
+        let book = spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'd');
+        let current_turn = world.turn() as i64;
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(bell) {
+            core.age = current_turn;
+        }
+        world
+            .ecs_mut()
+            .insert_one(candelabrum, Enchantment { spe: 6 })
+            .expect("candelabrum should accept candle count");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Read { item: Some(book) },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "invocation-needs-candelabrum-ready"
+        )));
+        assert!(
+            !read_player_events(&world, player).invoked,
+            "an unready candelabrum should not complete invocation"
+        );
+    }
+
+    #[test]
+    fn test_read_book_of_the_dead_rejects_cursed_invocation_items() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 21;
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .map(|pos| pos.0)
+            .expect("player should have a position");
+        let mut rng = test_rng();
+        let _ = crate::traps::create_trap(
+            &mut rng,
+            &mut world.dungeon_mut().trap_map,
+            player_pos,
+            TrapType::VibratingSquare,
+        );
+
+        let bell = spawn_inventory_object_by_name(&mut world, "Bell of Opening", 'b');
+        let candelabrum =
+            spawn_inventory_object_by_name(&mut world, "Candelabrum of Invocation", 'c');
+        let book = spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'd');
+
+        let current_turn = world.turn() as i64;
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(bell) {
+            core.age = current_turn;
+        }
+        world
+            .ecs_mut()
+            .insert_one(candelabrum, Enchantment { spe: 7 })
+            .expect("candelabrum should accept candle count");
+        world
+            .ecs_mut()
+            .insert_one(
+                candelabrum,
+                LightSource {
+                    lit: true,
+                    recharged: 0,
+                },
+            )
+            .expect("candelabrum should accept light state");
+        world
+            .ecs_mut()
+            .insert_one(
+                book,
+                BucStatus {
+                    cursed: true,
+                    blessed: false,
+                    bknown: false,
+                },
+            )
+            .expect("Book of the Dead should accept a cursed state");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Read { item: Some(book) },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "invocation-items-cursed"
+        )));
+        assert!(
+            !read_player_events(&world, player).invoked,
+            "cursed invocation items should not complete invocation"
+        );
+    }
+
+    #[test]
+    fn test_endgame_portal_traversal_reaches_astral_and_ascends() {
+        let mut world = make_stair_world(Terrain::StairsDown, 20);
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        let mut rng = test_rng();
+
+        let events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::LevelChanged { .. }
+        )));
+        assert_eq!(world.dungeon().depth, 21);
+
+        let invocation_pos = world
+            .dungeon()
+            .trap_map
+            .traps
+            .iter()
+            .find(|trap| trap.trap_type == TrapType::VibratingSquare)
+            .map(|trap| trap.pos)
+            .expect("Gehennom 21 should expose a vibrating square before invocation");
+        set_player_position(&mut world, invocation_pos);
+
+        let bell = spawn_inventory_object_by_name(&mut world, "Bell of Opening", 'b');
+        let candelabrum =
+            spawn_inventory_object_by_name(&mut world, "Candelabrum of Invocation", 'c');
+        let book = spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'd');
+        let current_turn = world.turn() as i64;
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(bell) {
+            core.age = current_turn;
+        }
+        world
+            .ecs_mut()
+            .insert_one(candelabrum, Enchantment { spe: 7 })
+            .expect("candelabrum should accept candle count");
+        world
+            .ecs_mut()
+            .insert_one(
+                candelabrum,
+                LightSource {
+                    lit: true,
+                    recharged: 0,
+                },
+            )
+            .expect("candelabrum should accept light state");
+
+        let invocation_events = resolve_turn(
+            &mut world,
+            PlayerAction::Read { item: Some(book) },
+            &mut rng,
+        );
+        assert!(invocation_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "invocation-complete"
+        )));
+
+        let enter_events = move_player_onto_magic_portal(&mut world, &mut rng);
+        assert!(enter_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::LevelChanged { .. }
+        )));
+        assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+        assert_eq!(world.dungeon().depth, 1);
+
+        for expected_depth in 2..=5 {
+            let portal_events = move_player_onto_magic_portal(&mut world, &mut rng);
+            assert!(portal_events.iter().any(|event| matches!(
+                event,
+                EngineEvent::LevelChanged { .. }
+            )));
+            assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+            assert_eq!(world.dungeon().depth, expected_depth);
+        }
+
+        let mut altar_positions = Vec::new();
+        for y in 0..world.dungeon().current_level.height {
+            for x in 0..world.dungeon().current_level.width {
+                let pos = Position::new(x as i32, y as i32);
+                if world
+                    .dungeon()
+                    .current_level
+                    .get(pos)
+                    .is_some_and(|cell| cell.terrain == Terrain::Altar)
+                {
+                    altar_positions.push(pos);
+                }
+            }
+        }
+        altar_positions.sort_by_key(|pos| pos.x);
+        let chaotic_altar = *altar_positions
+            .last()
+            .expect("Astral Plane should have a chaotic altar");
+        set_player_position(&mut world, chaotic_altar);
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+
+        let offer_events = resolve_turn(
+            &mut world,
+            PlayerAction::Offer {
+                item: Some(amulet),
+            },
+            &mut rng,
+        );
+
+        assert!(offer_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::GameOver {
+                cause: crate::event::DeathCause::Ascended,
+                ..
+            }
+        )));
+        assert!(read_player_events(&world, player).ascended);
     }
 
     // ── Gas cloud ticking ─────────────────────────────────────────────

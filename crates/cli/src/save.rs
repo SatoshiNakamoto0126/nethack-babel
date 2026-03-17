@@ -1427,7 +1427,9 @@ mod tests {
         quest.meet_leader();
         quest.assign();
         quest.enter_quest_dungeon();
+        quest.defeat_nemesis();
         quest.obtain_artifact();
+        quest.complete();
         let quest_items = PlayerQuestItems {
             has_amulet: true,
             has_bell: true,

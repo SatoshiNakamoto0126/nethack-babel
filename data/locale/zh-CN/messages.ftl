@@ -2413,9 +2413,25 @@ punishment-removed = You feel the iron ball disappear.
 
 # TODO: translate
 quest-assigned = Your quest has been assigned.
+quest-completed = 你的任务已经完成。
+quest-leader-first = { $leader } 向你致意，并衡量你的资格。
+quest-leader-next = { $leader } 再次审视你，判断你是否已经准备好。
+quest-leader-assigned = { $leader } 提醒你去击败 { $nemesis }。
+quest-leader-nemesis-dead = { $leader } 认可你带着 { $artifact } 归来。
+quest-leader-reject = { $leader } 以“{ $reason }”为由拒绝了你。
+quest-guardian = { $guardian } 警告你要忠于自己的任务。
+quest-nemesis-first = { $nemesis } 挡住了你的去路。
+quest-nemesis-next = { $nemesis } 仍在等待你的到来。
+quest-nemesis-artifact = { $nemesis } 看到任务神器时发出怒吼。
+quest-nemesis-dead = 空气中弥漫着 { $nemesis } 败亡后的腐臭。
 quest-expelled = 你还没有获准深入任务地城。
 invocation-complete = 祈唤仪式成功了，一道魔法传送门开启了！
 invocation-incomplete = 符文闪烁着，但祈唤并未完成。
+invocation-missing-bell = 没有开门铃，仪式立刻失去了关键一环。
+invocation-missing-candelabrum = 没有祈唤烛台，仪式无法成形。
+invocation-needs-bell-rung = 必须先在这里敲响开门铃，仪式才能开始。
+invocation-needs-candelabrum-ready = 祈唤烛台必须点燃七支蜡烛才行。
+invocation-items-cursed = 被诅咒的祈唤道具扭曲了整个仪式。
 read-dead-book = 《死者之书》低语着墓穴般的力量。
 
 # TODO: translate

@@ -539,6 +539,10 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 - [ ] Audit wizard/debug command behavior and backfill parity tests.
 - [ ] Improve contributor docs for adding monsters, objects, and levels with validation checklists.
 
+### Save Format Policy
+
+The current save format version is `1.0.0`. Older `0.3.x` saves are intentionally incompatible and will be rejected on load. The break was required to serialize level-scoped floor object locations and newer quest/runtime state without silently misloading cross-level data.
+
 ---
 
 *NetHack Babel is free software under the NetHack General Public License (NGPL). Based on NetHack by the NetHack DevTeam.*

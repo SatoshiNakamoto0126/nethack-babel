@@ -102,13 +102,23 @@ impl QuestState {
     /// Mark the nemesis as defeated.
     pub fn defeat_nemesis(&mut self) {
         self.nemesis_defeated = true;
-        self.check_completion();
     }
 
     /// Mark the quest artifact as obtained.
     pub fn obtain_artifact(&mut self) {
         self.artifact_obtained = true;
-        self.check_completion();
+    }
+
+    /// Whether the player has done enough work to report back to the leader.
+    pub fn ready_for_completion(&self) -> bool {
+        self.nemesis_defeated && self.artifact_obtained
+    }
+
+    /// Mark the quest as completed after reporting back to the leader.
+    pub fn complete(&mut self) {
+        if self.ready_for_completion() {
+            self.status = QuestStatus::Completed;
+        }
     }
 
     /// Record that the leader rejected the player this visit.
@@ -126,13 +136,6 @@ impl QuestState {
         self.leader_angry = true;
     }
 
-    /// Check if the quest is complete (both nemesis defeated and artifact
-    /// obtained).
-    fn check_completion(&mut self) {
-        if self.nemesis_defeated && self.artifact_obtained {
-            self.status = QuestStatus::Completed;
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +512,7 @@ pub fn determine_encounter(
     is_nemesis: bool,
 ) -> QuestEncounterType {
     if is_leader {
-        if quest_state.nemesis_defeated {
+        if quest_state.status == QuestStatus::Completed || quest_state.ready_for_completion() {
             QuestEncounterType::LeaderNemesisDead
         } else if quest_state.status == QuestStatus::Assigned
             || quest_state.status == QuestStatus::InProgress
@@ -637,6 +640,10 @@ pub fn resolve_encounter(
             ));
         }
         QuestEncounterType::LeaderNemesisDead => {
+            if quest_state.status != QuestStatus::Completed && quest_state.ready_for_completion() {
+                quest_state.complete();
+                events.push(EngineEvent::msg("quest-completed"));
+            }
             events.push(EngineEvent::msg_with(
                 key,
                 vec![
@@ -682,7 +689,7 @@ pub const MIN_QUEST_LEVEL: u8 = 14;
 ///
 /// Expulsion occurs if quest is not assigned and the player tries to descend.
 pub fn should_expel_from_quest(quest_state: &QuestState) -> bool {
-    quest_state.status == QuestStatus::NotStarted && !quest_state.leader_met
+    quest_state.status == QuestStatus::NotStarted
 }
 
 /// Check if the player's alignment is sufficient for the quest.
@@ -863,6 +870,10 @@ mod tests {
 
         qs.obtain_artifact();
         assert!(qs.artifact_obtained);
+        assert!(qs.ready_for_completion());
+        assert_eq!(qs.status, QuestStatus::InProgress);
+
+        qs.complete();
         assert_eq!(qs.status, QuestStatus::Completed);
     }
 
@@ -878,6 +889,10 @@ mod tests {
         assert_eq!(qs.status, QuestStatus::InProgress);
 
         qs.defeat_nemesis();
+        assert!(qs.ready_for_completion());
+        assert_eq!(qs.status, QuestStatus::InProgress);
+
+        qs.complete();
         assert_eq!(qs.status, QuestStatus::Completed);
     }
 
@@ -1239,6 +1254,29 @@ mod tests {
         assert!(!events.is_empty());
     }
 
+    #[test]
+    fn test_resolve_leader_completion_marks_completed() {
+        let mut qs = QuestState::new();
+        qs.assign();
+        qs.enter_quest_dungeon();
+        qs.defeat_nemesis();
+        qs.obtain_artifact();
+
+        let events = resolve_encounter(
+            &mut qs,
+            Role::Wizard,
+            QuestEncounterType::LeaderNemesisDead,
+            20,
+            15,
+        );
+
+        assert_eq!(qs.status, QuestStatus::Completed);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-completed"
+        )));
+    }
+
     // ── Quest message key tests ───────────────────────────────────
 
     #[test]
@@ -1270,9 +1308,16 @@ mod tests {
     }
 
     #[test]
-    fn test_should_not_expel_after_meeting_leader() {
+    fn test_should_still_expel_after_meeting_leader_without_assignment() {
         let mut qs = QuestState::new();
         qs.meet_leader();
+        assert!(should_expel_from_quest(&qs));
+    }
+
+    #[test]
+    fn test_should_not_expel_after_assignment() {
+        let mut qs = QuestState::new();
+        qs.assign();
         assert!(!should_expel_from_quest(&qs));
     }
 

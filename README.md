@@ -273,6 +273,8 @@ cargo build --release                    # Release build
 
 The game engine is feature-complete with 99.8% coverage of NetHack 3.7 gameplay systems. All core systems — combat, magic, items, monsters, dungeon generation, special levels, quests, pets, religion, traps, shops, hunger, status effects, identification, polymorph, riding, conducts, bones, save/load, leaderboard, and the terminal UI — are implemented and verified against the original NetHack source with 4,217+ passing tests.
 
+Save format note: the current on-disk save version is `1.0.0`. Older `0.3.x` saves are intentionally rejected because level-scoped floor object data and story/runtime state are now serialized differently.
+
 See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENCES.md](DIFFERENCES.md) for known deviations from NetHack 3.7 behavior.
 
 ## Roadmap (2026)
