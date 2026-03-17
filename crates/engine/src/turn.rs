@@ -1143,8 +1143,10 @@ fn resolve_player_action(
                         );
                         events.extend(result.events);
                     }
-                    crate::religion::AmuletOfferingResult::Rejected
-                    | crate::religion::AmuletOfferingResult::NotAstralPlane => {
+                    crate::religion::AmuletOfferingResult::Rejected => {
+                        reject_amulet_offering(world, player, *item, player_pos, events);
+                    }
+                    crate::religion::AmuletOfferingResult::NotAstralPlane => {
                         events.push(EngineEvent::msg("offer-generic"));
                     }
                 }
@@ -2515,6 +2517,7 @@ pub(crate) fn change_level_to_branch(
     let player = world.player();
     let from_depth = world.dungeon().depth;
     let from_branch = world.dungeon().branch;
+    let first_visit = !world.dungeon().has_visited(target_branch, target_depth);
 
     // 1. Collect and cache current level (same as change_level).
     let mut monster_entities: Vec<hecs::Entity> = Vec::new();
@@ -2619,6 +2622,7 @@ pub(crate) fn change_level_to_branch(
     if let Some(pop) = special_population {
         apply_special_level_population(world, pop, rng);
     }
+    maybe_spawn_astral_guardian_angel(world, first_visit, rng, events);
 
     // 6. Mark visited and check level feeling.
     let was_visited = world.dungeon().was_visited(target_branch, target_depth);
@@ -2656,6 +2660,7 @@ fn change_level(
     let player = world.player();
     let from_depth = world.dungeon().depth;
     let branch = world.dungeon().branch;
+    let first_visit = !world.dungeon().has_visited(branch, target_depth);
 
     // 1. Collect all monster entities on the current level.
     let mut monster_entities: Vec<hecs::Entity> = Vec::new();
@@ -2757,6 +2762,7 @@ fn change_level(
     if let Some(pop) = special_population {
         apply_special_level_population(world, pop, rng);
     }
+    maybe_spawn_astral_guardian_angel(world, first_visit, rng, events);
 
     // 8. Emit LevelChanged event.
     events.push(EngineEvent::LevelChanged {
@@ -2788,6 +2794,79 @@ fn apply_special_level_population(
         }
         spawn_special_object(world, obj, &object_defs, rng);
     }
+}
+
+fn player_has_conflict_equipment(world: &GameWorld, player: hecs::Entity) -> bool {
+    world
+        .get_component::<crate::equipment::EquipmentSlots>(player)
+        .map(|slots| slots.all_worn())
+        .into_iter()
+        .flatten()
+        .any(|(_slot, item)| {
+            item_display_name(world, item)
+                .is_some_and(|name| name.to_ascii_lowercase().contains("conflict"))
+        })
+}
+
+fn maybe_spawn_astral_guardian_angel(
+    world: &mut GameWorld,
+    first_visit: bool,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) {
+    if !first_visit
+        || world.dungeon().branch != DungeonBranch::Endgame
+        || world.dungeon().depth != 5
+    {
+        return;
+    }
+
+    let player = world.player();
+    let religion = world
+        .get_component::<crate::religion::ReligionState>(player)
+        .map(|state| (*state).clone())
+        .unwrap_or_else(|| default_religion_state(world, player));
+    if !crate::minion::worthy_of_guardian(
+        religion.alignment_record,
+        player_has_conflict_equipment(world, player),
+    ) {
+        return;
+    }
+
+    let monster_defs: Vec<MonsterDef> = world.monster_catalog().to_vec();
+    let Some(angel_id) = resolve_monster_id_by_spec(&monster_defs, "Angel") else {
+        return;
+    };
+    let Some(angel_def) = monster_defs.iter().find(|def| def.id == angel_id) else {
+        return;
+    };
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return;
+    };
+    let Some(spawn_pos) = enexto(world, player_pos, angel_def) else {
+        return;
+    };
+    let Some(angel) = makemon(
+        world,
+        &monster_defs,
+        Some(angel_id),
+        spawn_pos,
+        MakeMonFlags::NO_GROUP,
+        rng,
+    ) else {
+        return;
+    };
+
+    // The runtime does not yet distinguish peaceful from tame monsters.
+    // Use the pet marker so the Astral guardian remains non-hostile.
+    let cha = world
+        .get_component::<crate::world::Attributes>(player)
+        .map(|attrs| attrs.charisma)
+        .unwrap_or(10);
+    let pet_state = crate::pets::PetState::new(cha, world.turn());
+    let _ = world.ecs_mut().insert_one(angel, Tame);
+    let _ = world.ecs_mut().insert_one(angel, pet_state);
+    events.push(EngineEvent::msg("guardian-angel-appears"));
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -4300,6 +4379,18 @@ fn remove_item_from_player_possessions(
     player: hecs::Entity,
     item: hecs::Entity,
 ) -> bool {
+    let removed = detach_item_from_player_possessions(world, player, item);
+    if removed {
+        let _ = world.despawn(item);
+    }
+    removed
+}
+
+fn detach_item_from_player_possessions(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    item: hecs::Entity,
+) -> bool {
     let mut removed = false;
     if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
         removed |= inv.remove(item);
@@ -4310,10 +4401,51 @@ fn remove_item_from_player_possessions(
         slots.set(slot, None);
         removed = true;
     }
-    if removed {
-        let _ = world.despawn(item);
-    }
     removed
+}
+
+fn nearest_walkable_drop_pos(world: &GameWorld, origin: Position) -> Position {
+    for dy in -1..=1 {
+        for dx in -1..=1 {
+            if dx == 0 && dy == 0 {
+                continue;
+            }
+            let pos = Position::new(origin.x + dx, origin.y + dy);
+            if world
+                .dungeon()
+                .current_level
+                .get(pos)
+                .is_some_and(|cell| cell.terrain.is_walkable())
+            {
+                return pos;
+            }
+        }
+    }
+    origin
+}
+
+fn reject_amulet_offering(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    item: hecs::Entity,
+    player_pos: Position,
+    events: &mut Vec<EngineEvent>,
+) {
+    if !detach_item_from_player_possessions(world, player, item) {
+        events.push(EngineEvent::msg("offer-generic"));
+        return;
+    }
+
+    let drop_pos = nearest_walkable_drop_pos(world, player_pos);
+    if let Some(mut core) = world.get_component_mut::<ObjectCore>(item) {
+        core.inv_letter = None;
+    }
+    let branch = world.dungeon().branch;
+    let depth = world.dungeon().depth;
+    if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+        *loc = crate::dungeon::floor_object_location(branch, depth, drop_pos);
+    }
+    events.push(EngineEvent::msg("offer-amulet-rejected"));
 }
 
 fn is_real_amulet_of_yendor(world: &GameWorld, item: hecs::Entity) -> bool {
@@ -9964,7 +10096,25 @@ mod tests {
         );
         assert!(
             world.get_component::<ObjectCore>(amulet).is_some(),
-            "rejected offer should not delete the amulet in the current simplified runtime"
+            "rejected offer should keep the real amulet in play"
+        );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "offer-amulet-rejected"
+        )));
+        assert!(
+            !player_carries_item(&world, player, amulet),
+            "rejected amulet should leave the player's possessions"
+        );
+        assert!(
+            world
+                .get_component::<ObjectLocation>(amulet)
+                .is_some_and(|loc| matches!(
+                    &*loc,
+                    ObjectLocation::Floor { level, .. }
+                        if *level
+                            == crate::dungeon::data_dungeon_level(DungeonBranch::Endgame, 5)
+                ))
         );
     }
 
@@ -10381,6 +10531,75 @@ mod tests {
             }
         )));
         assert!(read_player_events(&world, player).ascended);
+    }
+
+    #[test]
+    fn test_entering_astral_plane_spawns_guardian_angel_when_worthy() {
+        let mut world = make_stair_world(Terrain::StairsDown, 4);
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = DungeonBranch::Endgame;
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        let mut religion = default_religion_state(&world, player);
+        religion.alignment_record = 10;
+        world
+            .ecs_mut()
+            .insert_one(player, religion)
+            .expect("player should accept religion state");
+
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+        change_level(&mut world, 5, false, &mut rng, &mut events);
+
+        assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+        assert_eq!(world.dungeon().depth, 5);
+        assert_eq!(count_monsters_named(&world, "Angel"), 1);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "guardian-angel-appears"
+        )));
+    }
+
+    #[test]
+    fn test_revisiting_astral_plane_does_not_duplicate_guardian_angel() {
+        let mut world = make_stair_world(Terrain::StairsDown, 4);
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = DungeonBranch::Endgame;
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        let mut religion = default_religion_state(&world, player);
+        religion.alignment_record = 10;
+        world
+            .ecs_mut()
+            .insert_one(player, religion)
+            .expect("player should accept religion state");
+
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+        change_level(&mut world, 5, false, &mut rng, &mut events);
+        assert_eq!(count_monsters_named(&world, "Angel"), 1);
+
+        events.clear();
+        change_level(&mut world, 4, true, &mut rng, &mut events);
+        events.clear();
+        change_level(&mut world, 5, false, &mut rng, &mut events);
+
+        assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+        assert_eq!(world.dungeon().depth, 5);
+        assert_eq!(count_monsters_named(&world, "Angel"), 1);
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "guardian-angel-appears"
+            )),
+            "Astral revisit should not respawn the guardian angel"
+        );
     }
 
     #[test]

@@ -368,6 +368,7 @@ pray-begin = Vous commencez à prier votre dieu...
 
 ## Offrandes
 offer-generic = Vous faites une offrande sur l'autel.
+offer-amulet-rejected = L'Amulette est rejetée et retombe près de vous !
 offer-what = Offrir quoi ?
 
 ## Discussion
@@ -442,3 +443,4 @@ whatis-nothing = Vous ne voyez rien de spécial là.
 ## Découvertes
 discoveries-title = Découvertes
 discoveries-empty = Vous n'avez encore rien découvert.
+guardian-angel-appears = Un ange gardien apparaît à vos côtés !

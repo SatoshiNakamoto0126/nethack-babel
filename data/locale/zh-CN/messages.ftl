@@ -1664,6 +1664,7 @@ pray-begin = 你开始向神灵祈祷……
 
 ## 祭品
 offer-generic = 你在祭坛上献上了祭品。
+offer-amulet-rejected = 护符被拒绝了，并落在你附近！
 offer-what = 献上什么？
 
 ## 对话
@@ -2050,6 +2051,7 @@ guard-halt = "Halt, thief! You're under arrest!"
 guard-no-gold = The guard finds no gold on you.
 
 # TODO: translate
+guardian-angel-appears = 一位守护天使出现在你身旁！
 guardian-angel-rebukes = Your guardian angel rebukes you!
 
 # TODO: translate

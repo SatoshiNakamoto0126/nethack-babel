@@ -1712,6 +1712,7 @@ pray-begin = You begin praying to your deity...
 
 ## Offerings
 offer-generic = You offer a sacrifice at the altar.
+offer-amulet-rejected = The Amulet is rejected and lands nearby!
 offer-what = Sacrifice what?
 
 ## Chat
@@ -1971,6 +1972,7 @@ vault-guard-state-change = The guard changes stance.
 ## Guardian angel
 ## ============================================================================
 
+guardian-angel-appears = A guardian angel appears beside you!
 guardian-angel-rebukes = Your guardian angel rebukes you!
 
 ## ============================================================================

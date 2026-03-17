@@ -1168,9 +1168,10 @@ mod tests {
         Alignment, GameData, Gender, Handedness, RaceId, loader::load_game_data,
     };
     use nethack_babel_engine::{
-        action::PlayerAction,
+        action::{Direction, PlayerAction},
         artifacts::find_artifact_by_name,
         dungeon::{DungeonBranch, LevelMap, Terrain},
+        event::{DeathCause, EngineEvent},
         role::Role,
         turn::resolve_turn,
     };
@@ -1300,6 +1301,382 @@ mod tests {
             .iter()
             .filter(|(_, core)| core.artifact == Some(artifact.id))
             .count()
+    }
+
+    fn spawn_inventory_object_by_name(
+        world: &mut GameWorld,
+        name: &str,
+        letter: char,
+    ) -> hecs::Entity {
+        let data = test_game_data();
+        let object_def = data
+            .objects
+            .iter()
+            .find(|def| def.name.eq_ignore_ascii_case(name))
+            .unwrap_or_else(|| panic!("{name} should exist in the object catalog"));
+        let item = world.spawn((
+            ObjectCore {
+                otyp: object_def.id,
+                object_class: object_def.class,
+                quantity: 1,
+                weight: object_def.weight as u32,
+                age: 0,
+                inv_letter: Some(letter),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            Name(name.to_string()),
+        ));
+        let player = world.player();
+        if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+            inv.items.push(item);
+        }
+        item
+    }
+
+    fn adjacent_walkable_step(map: &LevelMap, target: Position) -> Option<(Position, Direction)> {
+        for direction in [
+            Direction::North,
+            Direction::South,
+            Direction::West,
+            Direction::East,
+            Direction::NorthWest,
+            Direction::NorthEast,
+            Direction::SouthWest,
+            Direction::SouthEast,
+        ] {
+            let origin = match direction {
+                Direction::North => Position::new(target.x, target.y + 1),
+                Direction::South => Position::new(target.x, target.y - 1),
+                Direction::West => Position::new(target.x + 1, target.y),
+                Direction::East => Position::new(target.x - 1, target.y),
+                Direction::NorthWest => Position::new(target.x + 1, target.y + 1),
+                Direction::NorthEast => Position::new(target.x - 1, target.y + 1),
+                Direction::SouthWest => Position::new(target.x + 1, target.y - 1),
+                Direction::SouthEast => Position::new(target.x - 1, target.y - 1),
+                Direction::Up | Direction::Down | Direction::Self_ => continue,
+            };
+            if map
+                .get(origin)
+                .is_some_and(|cell| cell.terrain.is_walkable())
+            {
+                return Some((origin, direction));
+            }
+        }
+        None
+    }
+
+    fn move_player_onto_magic_portal(
+        world: &mut GameWorld,
+        rng: &mut impl rand::Rng,
+    ) -> Vec<EngineEvent> {
+        let portal_pos = find_terrain(&world.dungeon().current_level, Terrain::MagicPortal)
+            .expect("current level should expose a magic portal");
+        let (entry_pos, direction) =
+            adjacent_walkable_step(&world.dungeon().current_level, portal_pos)
+                .expect("magic portal should have an adjacent walkable entry tile");
+        set_player_position(world, entry_pos);
+        resolve_turn(world, PlayerAction::Move { direction }, rng)
+    }
+
+    fn wizard_story_religion(world: &GameWorld, player: hecs::Entity) -> ReligionState {
+        let hp = world
+            .get_component::<HitPoints>(player)
+            .map(|hp| *hp)
+            .unwrap_or(HitPoints {
+                current: 16,
+                max: 16,
+            });
+        let pw = world
+            .get_component::<Power>(player)
+            .map(|pw| *pw)
+            .unwrap_or(Power { current: 4, max: 4 });
+        ReligionState {
+            alignment: Alignment::Chaotic,
+            alignment_record: 10,
+            god_anger: 0,
+            god_gifts: 0,
+            blessed_amount: 0,
+            bless_cooldown: 0,
+            crowned: false,
+            demigod: false,
+            turn: world.turn(),
+            experience_level: 14,
+            current_hp: hp.current,
+            max_hp: hp.max,
+            current_pw: pw.current,
+            max_pw: pw.max,
+            nutrition: 900,
+            luck: 0,
+            luck_bonus: 0,
+            has_luckstone: false,
+            luckstone_blessed: false,
+            luckstone_cursed: false,
+            in_gehennom: false,
+            is_undead: false,
+            is_demon: false,
+            original_alignment: Alignment::Chaotic,
+            has_converted: false,
+            alignment_abuse: 0,
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    enum SaveStoryTraversalScenario {
+        QuestClosure,
+        EndgameAscension,
+    }
+
+    impl SaveStoryTraversalScenario {
+        fn label(self) -> &'static str {
+            match self {
+                SaveStoryTraversalScenario::QuestClosure => "quest-closure",
+                SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
+            }
+        }
+    }
+
+    fn run_round_trip_story_traversal_scenario(
+        scenario: SaveStoryTraversalScenario,
+    ) -> (GameWorld, Vec<EngineEvent>) {
+        match scenario {
+            SaveStoryTraversalScenario::QuestClosure => {
+                let mut world = make_stair_world(DungeonBranch::Quest, 1, Terrain::StairsDown);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, wizard_identity())
+                    .expect("player should accept wizard identity");
+                let religion = wizard_story_religion(&world, player);
+                world
+                    .ecs_mut()
+                    .insert_one(player, religion)
+                    .expect("player should accept religion state");
+                if let Some(mut level) = world.get_component_mut::<ExperienceLevel>(player) {
+                    level.0 = 14;
+                }
+                world.spawn((
+                    Monster,
+                    Positioned(Position::new(6, 5)),
+                    Name("Neferet the Green".to_string()),
+                    HitPoints {
+                        current: 30,
+                        max: 30,
+                    },
+                    Speed(12),
+                    nethack_babel_engine::world::DisplaySymbol {
+                        symbol: '@',
+                        color: nethack_babel_data::Color::Green,
+                    },
+                    MovementPoints(12),
+                ));
+
+                let mut rng = Pcg64::seed_from_u64(7101);
+                let assign_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                assert!(assign_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "quest-assigned"
+                )));
+
+                for expected_depth in 2..=7 {
+                    if expected_depth > 2 {
+                        let stairs_down =
+                            find_terrain(&world.dungeon().current_level, Terrain::StairsDown)
+                                .expect("quest traversal should preserve stairs down");
+                        set_player_position(&mut world, stairs_down);
+                    }
+                    let events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                    assert!(
+                        events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                        "{} should descend into quest depth {} before save/load",
+                        scenario.label(),
+                        expected_depth
+                    );
+                }
+
+                let eye = find_artifact_by_name("The Eye of the Aethiopica")
+                    .expect("wizard quest artifact should exist");
+                let artifact_entity = world
+                    .ecs()
+                    .query::<&ObjectCore>()
+                    .iter()
+                    .find_map(|(entity, core)| (core.artifact == Some(eye.id)).then_some(entity))
+                    .expect("quest goal should place the Eye artifact");
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(artifact_entity) {
+                    *loc = ObjectLocation::Inventory;
+                }
+                if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+                    inv.items.push(artifact_entity);
+                }
+
+                let dark_one = world
+                    .ecs()
+                    .query::<(&Monster, &Name)>()
+                    .iter()
+                    .find_map(|(entity, (_monster, name))| {
+                        name.0.eq_ignore_ascii_case("Dark One").then_some(entity)
+                    })
+                    .expect("quest goal should spawn the Dark One");
+                world
+                    .despawn(dark_one)
+                    .expect("nemesis should despawn cleanly");
+                let _ = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-quest", &world, [21u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+
+                for expected_depth in (1..=6).rev() {
+                    let stairs_up =
+                        find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+                            .expect("quest traversal should preserve stairs up after save/load");
+                    set_player_position(&mut loaded, stairs_up);
+                    let events = resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+                    assert!(
+                        events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                        "{} should ascend into quest depth {} after save/load",
+                        scenario.label(),
+                        expected_depth
+                    );
+                }
+
+                let leader_events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, leader_events)
+            }
+            SaveStoryTraversalScenario::EndgameAscension => {
+                let mut world = make_stair_world(DungeonBranch::Gehennom, 20, Terrain::StairsDown);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, wizard_identity())
+                    .expect("player should accept wizard identity");
+                let religion = wizard_story_religion(&world, player);
+                world
+                    .ecs_mut()
+                    .insert_one(player, religion)
+                    .expect("player should accept religion state");
+
+                let mut rng = Pcg64::seed_from_u64(7102);
+                let descend_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    descend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+                assert_eq!(world.dungeon().depth, 21);
+
+                let invocation_pos = world
+                    .dungeon()
+                    .trap_map
+                    .traps
+                    .iter()
+                    .find(|trap| trap.trap_type == nethack_babel_data::TrapType::VibratingSquare)
+                    .map(|trap| trap.pos)
+                    .expect("Gehennom 21 should expose a vibrating square before invocation");
+                set_player_position(&mut world, invocation_pos);
+
+                let bell = spawn_inventory_object_by_name(&mut world, "Bell of Opening", 'b');
+                let candelabrum =
+                    spawn_inventory_object_by_name(&mut world, "Candelabrum of Invocation", 'c');
+                let book = spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'd');
+                let current_turn = world.turn() as i64;
+                if let Some(mut core) = world.get_component_mut::<ObjectCore>(bell) {
+                    core.age = current_turn;
+                }
+                world
+                    .ecs_mut()
+                    .insert_one(candelabrum, Enchantment { spe: 7 })
+                    .expect("candelabrum should accept candle count");
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        candelabrum,
+                        nethack_babel_data::LightSource {
+                            lit: true,
+                            recharged: 0,
+                        },
+                    )
+                    .expect("candelabrum should accept light state");
+
+                let invocation_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Read { item: Some(book) },
+                    &mut rng,
+                );
+                assert!(invocation_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "invocation-complete"
+                )));
+
+                for expected_depth in 1..=5 {
+                    let portal_events = move_player_onto_magic_portal(&mut world, &mut rng);
+                    assert!(
+                        portal_events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                        "{} should traverse into Endgame depth {} before save/load",
+                        scenario.label(),
+                        expected_depth
+                    );
+                }
+                assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+                assert_eq!(world.dungeon().depth, 5);
+                let angel_count = count_monsters_named(&world, "Angel");
+                assert_eq!(
+                    angel_count, 1,
+                    "Astral entry should spawn one guardian angel"
+                );
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-endgame", &world, [22u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                assert_eq!(count_monsters_named(&loaded, "Angel"), angel_count);
+
+                let mut altar_positions = Vec::new();
+                for y in 0..loaded.dungeon().current_level.height {
+                    for x in 0..loaded.dungeon().current_level.width {
+                        let pos = Position::new(x as i32, y as i32);
+                        if loaded
+                            .dungeon()
+                            .current_level
+                            .get(pos)
+                            .is_some_and(|cell| cell.terrain == Terrain::Altar)
+                        {
+                            altar_positions.push(pos);
+                        }
+                    }
+                }
+                altar_positions.sort_by_key(|pos| pos.x);
+                let chaotic_altar = *altar_positions
+                    .last()
+                    .expect("Astral Plane should have a chaotic altar");
+                set_player_position(&mut loaded, chaotic_altar);
+                let amulet = spawn_inventory_object_by_name(&mut loaded, "Amulet of Yendor", 'a');
+
+                let offer_events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Offer { item: Some(amulet) },
+                    &mut rng,
+                );
+                (loaded, offer_events)
+            }
+        }
     }
 
     // ----- Basic round-trip --------------------------------------------------
@@ -2795,5 +3172,54 @@ mod tests {
             1,
             "revisiting depth 1 after save/load should reveal the original floor item again"
         );
+    }
+
+    #[test]
+    fn round_trip_story_traversal_matrix() {
+        for scenario in [
+            SaveStoryTraversalScenario::QuestClosure,
+            SaveStoryTraversalScenario::EndgameAscension,
+        ] {
+            let (world, final_events) = run_round_trip_story_traversal_scenario(scenario);
+            let player = world.player();
+
+            match scenario {
+                SaveStoryTraversalScenario::QuestClosure => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "quest-completed"
+                    )));
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Quest);
+                    assert_eq!(world.dungeon().depth, 1);
+                    assert!(
+                        world
+                            .get_component::<QuestState>(player)
+                            .is_some_and(|state| state.status
+                                == nethack_babel_engine::quest::QuestStatus::Completed)
+                    );
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.quest_completed)
+                    );
+                }
+                SaveStoryTraversalScenario::EndgameAscension => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::GameOver {
+                            cause: DeathCause::Ascended,
+                            ..
+                        }
+                    )));
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+                    assert_eq!(world.dungeon().depth, 5);
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.ascended)
+                    );
+                }
+            }
+        }
     }
 }

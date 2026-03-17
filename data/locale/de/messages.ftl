@@ -455,6 +455,7 @@ pray-begin = Du beginnst zu deiner Gottheit zu beten...
 
 ## Opfergaben
 offer-generic = Du bringst ein Opfer am Altar dar.
+offer-amulet-rejected = Das Amulett wird zurückgewiesen und landet in deiner Nähe!
 offer-what = Was opfern?
 
 ## Gespräch
@@ -529,3 +530,4 @@ whatis-nothing = Du siehst dort nichts Besonderes.
 ## Entdeckungen
 discoveries-title = Entdeckungen
 discoveries-empty = Du hast noch nichts entdeckt.
+guardian-angel-appears = Ein Schutzengel erscheint neben dir!
