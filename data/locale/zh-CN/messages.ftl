@@ -3235,3 +3235,30 @@ write-spellbook-fail = The spellbook warps strangely, then turns blank.
 
 # TODO: translate
 write-spellbook-success = You successfully write the spellbook!
+
+# TODO: translate
+priest-not-enough-gold = The priest asks for { $cost } gold.
+
+# TODO: translate
+priest-protection-granted = The priest grants you protection for { $cost } gold.
+
+# TODO: translate
+shk-welcome = { $shopkeeper } says: "Welcome to my shop, { $honorific }."
+
+# TODO: translate
+shk-angry-greeting = { $shopkeeper } glares at you angrily.
+
+# TODO: translate
+shk-robbed-greeting = { $shopkeeper } says: "I still remember that robbery, { $honorific }."
+
+# TODO: translate
+shk-surcharge-greeting = { $shopkeeper } says: "Prices are higher for you now, { $honorific }."
+
+# TODO: translate
+god-roars-suffer = A booming voice roars: "Suffer for thy blasphemy!"
+
+# TODO: translate
+god-how-dare-harm-servant = A booming voice roars: "How darest thou harm my servant?"
+
+# TODO: translate
+god-profane-shrine = A booming voice roars: "Thou hast profaned my shrine!"

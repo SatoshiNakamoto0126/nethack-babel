@@ -8,9 +8,9 @@
 use rand::Rng;
 
 use nethack_babel_data::{
-    Alignment, ArtifactId, BucStatus, Enchantment, LightSource, MonsterDef, MonsterId, ObjectClass,
-    ObjectCore, ObjectDef, ObjectExtra, ObjectLocation, ObjectTypeId, PlayerEvents, PlayerIdentity,
-    PlayerQuestItems, TrapType,
+    Alignment, ArtifactId, BucStatus, Enchantment, GenoFlags, LightSource, MonsterDef,
+    MonsterFlags, MonsterId, ObjectClass, ObjectCore, ObjectDef, ObjectExtra, ObjectLocation,
+    ObjectTypeId, PlayerEvents, PlayerIdentity, PlayerQuestItems, TrapType,
 };
 
 use crate::action::{Direction, NameTarget, PlayerAction, Position};
@@ -202,6 +202,7 @@ pub fn resolve_turn(
 
     // ── Step 2: execute the player's action ──────────────────────
     resolve_player_action(world, &action, rng, &mut events);
+    apply_domain_hostility_side_effects_from_player_events(world, &mut events, rng);
     anger_peaceful_monsters_from_player_events(world, &events);
 
     // ── Step 3: monster loop ─────────────────────────────────────
@@ -280,6 +281,7 @@ pub fn turn_events<'a, R: Rng>(
     }
     let mut player_events = Vec::with_capacity(4);
     resolve_player_action(world, &action, rng, &mut player_events);
+    apply_domain_hostility_side_effects_from_player_events(world, &mut player_events, rng);
     anger_peaceful_monsters_from_player_events(world, &player_events);
 
     // Phase 2: monster turns.
@@ -383,6 +385,7 @@ pub fn turn_events_gen<'a, R: Rng>(
         // Phase 2: resolve player action.
         let mut player_events = Vec::with_capacity(4);
         resolve_player_action(world, &action, rng, &mut player_events);
+        apply_domain_hostility_side_effects_from_player_events(world, &mut player_events, rng);
         anger_peaceful_monsters_from_player_events(world, &player_events);
         for event in player_events {
             story_events.push(event.clone());
@@ -418,43 +421,60 @@ pub fn turn_events_gen<'a, R: Rng>(
     }
 }
 
-fn anger_peaceful_monsters_from_player_events(world: &mut GameWorld, events: &[EngineEvent]) {
-    let player = world.player();
-    let mut angered = std::collections::HashSet::new();
+fn collect_player_hostility_targets(
+    player: hecs::Entity,
+    events: &[EngineEvent],
+) -> std::collections::HashSet<hecs::Entity> {
+    let mut targets = std::collections::HashSet::new();
 
     for event in events {
         match event {
             EngineEvent::MeleeHit {
                 attacker, defender, ..
             } if *attacker == player => {
-                angered.insert(*defender);
+                targets.insert(*defender);
+            }
+            EngineEvent::MeleeMiss { attacker, defender } if *attacker == player => {
+                targets.insert(*defender);
             }
             EngineEvent::RangedHit {
                 attacker, defender, ..
             } if *attacker == player => {
-                angered.insert(*defender);
+                targets.insert(*defender);
+            }
+            EngineEvent::RangedMiss {
+                attacker, defender, ..
+            } if *attacker == player => {
+                targets.insert(*defender);
             }
             EngineEvent::ExtraDamage { target, .. } => {
-                angered.insert(*target);
+                targets.insert(*target);
             }
             EngineEvent::HpChange { entity, amount, .. } if *amount < 0 => {
-                angered.insert(*entity);
+                targets.insert(*entity);
             }
             EngineEvent::EntityDied {
                 entity,
                 killer: Some(killer),
                 ..
             } if *killer == player => {
-                angered.insert(*entity);
+                targets.insert(*entity);
             }
             EngineEvent::StatusApplied { entity, status, .. }
                 if status_is_hostile_toward_monster(*status) =>
             {
-                angered.insert(*entity);
+                targets.insert(*entity);
             }
             _ => {}
         }
     }
+
+    targets
+}
+
+fn anger_peaceful_monsters_from_player_events(world: &mut GameWorld, events: &[EngineEvent]) {
+    let player = world.player();
+    let angered = collect_player_hostility_targets(player, events);
 
     for entity in angered {
         if entity == player || world.get_component::<Monster>(entity).is_none() {
@@ -462,6 +482,34 @@ fn anger_peaceful_monsters_from_player_events(world: &mut GameWorld, events: &[E
         }
         let _ = world.ecs_mut().remove_one::<Peaceful>(entity);
     }
+}
+
+fn apply_domain_hostility_side_effects_from_player_events(
+    world: &mut GameWorld,
+    events: &mut Vec<EngineEvent>,
+    rng: &mut impl Rng,
+) {
+    let player = world.player();
+    let targets = collect_player_hostility_targets(player, events);
+    if targets.is_empty() {
+        return;
+    }
+
+    mark_angry_quest_leader_from_targets(world, &targets);
+    rile_attacked_shopkeepers(world, &targets);
+
+    let mut extra_events = Vec::new();
+    for entity in targets {
+        if let Some(priest) = infer_priest_runtime(world, entity) {
+            let mut temple = crate::priest::TempleInfo::new(priest.alignment);
+            temple.has_priest = true;
+            temple.has_shrine = priest.has_shrine;
+            temple.is_sanctum = priest.is_high_priest;
+            extra_events.extend(crate::priest::anger_priest(&mut temple));
+            extra_events.extend(crate::priest::ghod_hitsu(&temple, rng));
+        }
+    }
+    events.extend(extra_events);
 }
 
 fn status_is_hostile_toward_monster(status: crate::event::StatusEffect) -> bool {
@@ -1308,6 +1356,78 @@ fn resolve_player_action(
                         return;
                     }
                 }
+
+                if let Some(shop_idx) = find_shop_room_index_by_shopkeeper(world, monster_entity) {
+                    let shop = &world.dungeon().shop_rooms[shop_idx];
+                    let honorific = crate::npc::shopkeeper_honorific(
+                        current_player_is_female(world, player),
+                        current_player_level(world, player),
+                        crate::status::is_hallucinating(world, player),
+                    );
+                    events.push(crate::npc::shopkeeper_greeting(
+                        shop.angry,
+                        shop.robbed > 0,
+                        shop.surcharge,
+                        &shop.shopkeeper_name,
+                        honorific,
+                    ));
+                    return;
+                }
+
+                if let Some(priest_data) = infer_priest_runtime(world, monster_entity) {
+                    if world
+                        .get_component::<crate::npc::Priest>(monster_entity)
+                        .is_none()
+                    {
+                        let _ = world.ecs_mut().insert_one(monster_entity, priest_data);
+                    }
+                    if world.get_component::<Peaceful>(monster_entity).is_none() {
+                        events.push(EngineEvent::msg("npc-chat-no-response"));
+                        return;
+                    }
+
+                    let current_protection = world
+                        .get_component::<crate::status::SpellProtection>(player)
+                        .map(|protection| i32::from(protection.layers))
+                        .unwrap_or(0);
+                    let priest_events = crate::npc::priest_interaction(
+                        world,
+                        player,
+                        monster_entity,
+                        player_gold(world, player) as i32,
+                        current_player_alignment(world, player),
+                        current_protection,
+                    );
+                    let granted_protection = priest_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "priest-protection-granted"
+                        )
+                    });
+                    if granted_protection {
+                        if let Some(mut protection) =
+                            world.get_component_mut::<crate::status::SpellProtection>(player)
+                        {
+                            protection.layers = protection.layers.saturating_add(1);
+                            protection.countdown = protection.interval.max(10);
+                            if protection.interval == 0 {
+                                protection.interval = 10;
+                            }
+                        } else {
+                            let _ = world.ecs_mut().insert_one(
+                                player,
+                                crate::status::SpellProtection {
+                                    layers: 1,
+                                    countdown: 10,
+                                    interval: 10,
+                                },
+                            );
+                        }
+                    }
+                    events.extend(priest_events);
+                    return;
+                }
+
                 events.push(EngineEvent::msg("npc-chat-no-response"));
             } else {
                 events.push(EngineEvent::msg("chat-nobody-there"));
@@ -4477,6 +4597,91 @@ fn current_player_alignment(world: &GameWorld, player: hecs::Entity) -> Alignmen
         .unwrap_or(Alignment::Neutral)
 }
 
+fn current_player_level(world: &GameWorld, player: hecs::Entity) -> u8 {
+    world
+        .get_component::<ExperienceLevel>(player)
+        .map(|level| level.0)
+        .unwrap_or(1)
+}
+
+fn current_player_is_female(world: &GameWorld, player: hecs::Entity) -> bool {
+    world
+        .get_component::<PlayerIdentity>(player)
+        .is_some_and(|identity| identity.gender == nethack_babel_data::Gender::Female)
+}
+
+fn mark_angry_quest_leader_from_targets(
+    world: &mut GameWorld,
+    targets: &std::collections::HashSet<hecs::Entity>,
+) {
+    let player = world.player();
+    let Some(role) = current_player_role(world) else {
+        return;
+    };
+
+    let leader_name = crate::quest::quest_leader_for_role(role);
+    let attacked_leader = targets.iter().any(|entity| {
+        world
+            .get_component::<Name>(*entity)
+            .is_some_and(|name| quest_name_matches(&name.0, leader_name))
+    });
+    if !attacked_leader {
+        return;
+    }
+
+    let mut state = read_quest_state(world, player);
+    state.anger_leader();
+    persist_quest_state(world, player, state);
+}
+
+fn find_shop_room_index_by_shopkeeper(world: &GameWorld, entity: hecs::Entity) -> Option<usize> {
+    world
+        .dungeon()
+        .shop_rooms
+        .iter()
+        .position(|shop| shop.shopkeeper == entity)
+}
+
+fn rile_attacked_shopkeepers(
+    world: &mut GameWorld,
+    targets: &std::collections::HashSet<hecs::Entity>,
+) {
+    let mut indices: Vec<usize> = targets
+        .iter()
+        .filter_map(|entity| find_shop_room_index_by_shopkeeper(world, *entity))
+        .collect();
+    indices.sort_unstable();
+    indices.dedup();
+    for idx in indices {
+        crate::shop::rile_shop(&mut world.dungeon_mut().shop_rooms[idx]);
+    }
+}
+
+fn infer_priest_runtime(world: &GameWorld, entity: hecs::Entity) -> Option<crate::npc::Priest> {
+    if let Some(priest) = world.get_component::<crate::npc::Priest>(entity) {
+        return Some(*priest);
+    }
+
+    let name = world.get_component::<Name>(entity)?.0.to_ascii_lowercase();
+    if !name.contains("priest") {
+        return None;
+    }
+
+    let pos = world
+        .get_component::<Positioned>(entity)
+        .map(|position| position.0)?;
+    let on_altar = world
+        .dungeon()
+        .current_level
+        .get(pos)
+        .is_some_and(|cell| cell.terrain == Terrain::Altar);
+    Some(crate::npc::Priest {
+        alignment: current_player_alignment(world, world.player()),
+        has_shrine: on_altar,
+        is_high_priest: name.contains("high priest"),
+    })
+}
+
 fn strip_leading_article(name: &str) -> &str {
     name.strip_prefix("the ")
         .or_else(|| name.strip_prefix("The "))
@@ -4689,9 +4894,9 @@ fn apply_wizard_harassment_action(
             }
         }
         crate::npc::WizardAction::SummonNasties => {
-            for spec in ["vampire lord", "xorn"] {
+            for spec in choose_wizard_nasty_summon_specs(world, rng) {
                 if let Some((monster, pos)) =
-                    spawn_named_monster_near_entity(world, player, spec, rng)
+                    spawn_named_monster_near_entity(world, player, spec.as_str(), rng)
                 {
                     events.push(EngineEvent::MonsterGenerated {
                         entity: monster,
@@ -4703,6 +4908,74 @@ fn apply_wizard_harassment_action(
         crate::npc::WizardAction::CurseItems => {
             curse_random_player_items(world, player, rng);
         }
+    }
+}
+
+fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Vec<String> {
+    let branch = world.dungeon().branch;
+    let depth = world.dungeon().depth.max(1) as u8;
+    let desired_count = if branch == DungeonBranch::Gehennom {
+        3usize
+    } else {
+        2usize
+    };
+    let desired_difficulty = if branch == DungeonBranch::Gehennom {
+        depth.saturating_add(8)
+    } else {
+        depth.saturating_add(4)
+    };
+
+    let mut candidates: Vec<&MonsterDef> = world
+        .monster_catalog()
+        .iter()
+        .filter(|monster| {
+            !monster
+                .geno_flags
+                .intersects(GenoFlags::G_UNIQ | GenoFlags::G_NOGEN)
+                && monster.flags.contains(MonsterFlags::HOSTILE)
+                && (monster.flags.contains(MonsterFlags::NASTY)
+                    || monster.difficulty >= desired_difficulty)
+                && monster.names.male != "Wizard of Yendor"
+                && (branch == DungeonBranch::Gehennom
+                    || !monster.geno_flags.contains(GenoFlags::G_HELL))
+        })
+        .collect();
+    candidates.sort_by(|lhs, rhs| {
+        rhs.difficulty
+            .cmp(&lhs.difficulty)
+            .then(rhs.base_level.cmp(&lhs.base_level))
+            .then(lhs.names.male.cmp(&rhs.names.male))
+    });
+
+    if candidates.is_empty() {
+        return vec!["vampire lord".to_string(), "xorn".to_string()];
+    }
+
+    let mut picks = Vec::new();
+    let mut fallback_pool = candidates
+        .iter()
+        .filter(|monster| monster.difficulty >= desired_difficulty.saturating_sub(4))
+        .copied()
+        .collect::<Vec<_>>();
+    if fallback_pool.is_empty() {
+        fallback_pool = candidates.clone();
+    }
+
+    while picks.len() < desired_count && !fallback_pool.is_empty() {
+        let idx = rng.random_range(0..fallback_pool.len());
+        let monster = fallback_pool.swap_remove(idx);
+        if !picks
+            .iter()
+            .any(|name: &String| quest_name_matches(name, &monster.names.male))
+        {
+            picks.push(monster.names.male.clone());
+        }
+    }
+
+    if picks.is_empty() {
+        vec!["vampire lord".to_string(), "xorn".to_string()]
+    } else {
+        picks
     }
 }
 
@@ -5317,6 +5590,26 @@ mod tests {
         ))
     }
 
+    fn spawn_inventory_gold(world: &mut GameWorld, amount: u32, letter: char) -> hecs::Entity {
+        let item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Coin,
+                quantity: amount as i32,
+                weight: 1,
+                age: 0,
+                inv_letter: Some(letter),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+        ));
+        let player = world.player();
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.push(item);
+        }
+        item
+    }
+
     fn spawn_floor_coin(world: &mut GameWorld, pos: Position) -> hecs::Entity {
         world.spawn((
             ObjectCore {
@@ -5457,6 +5750,7 @@ mod tests {
     #[derive(Clone, Copy)]
     enum StoryTraversalScenario {
         QuestClosure,
+        QuestLeaderAnger,
         EndgameAscension,
     }
 
@@ -5464,6 +5758,7 @@ mod tests {
         fn label(self) -> &'static str {
             match self {
                 StoryTraversalScenario::QuestClosure => "quest-closure",
+                StoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
         }
@@ -5566,6 +5861,45 @@ mod tests {
                     &mut rng,
                 );
                 (world, leader_events)
+            }
+            StoryTraversalScenario::QuestLeaderAnger => {
+                let mut world = make_stair_world(Terrain::StairsDown, 1);
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world.dungeon_mut().branch = DungeonBranch::Quest;
+                world
+                    .ecs_mut()
+                    .insert_one(player, wizard_identity())
+                    .expect("player should accept wizard identity");
+                let leader =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Neferet the Green", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(leader, Peaceful)
+                    .expect("leader should accept peaceful marker");
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(leader) {
+                    hp.current = 40;
+                    hp.max = 40;
+                }
+                if let Some(mut mp) = world.get_component_mut::<MovementPoints>(leader) {
+                    mp.0 = 0;
+                }
+
+                let mut rng = test_rng();
+                let attack_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::FightDirection {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                assert!(attack_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::MeleeHit { defender, .. } if *defender == leader
+                )));
+
+                let blocked_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                (world, blocked_events)
             }
             StoryTraversalScenario::EndgameAscension => {
                 let mut world = make_stair_world(Terrain::StairsDown, 20);
@@ -9411,6 +9745,78 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_wizard_summon_nasties_uses_catalog_driven_pool() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 20;
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+            hp.current = 20;
+            hp.max = 40;
+        }
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            wizard,
+            player,
+            crate::npc::WizardAction::SummonNasties,
+            &mut rng,
+            &mut events,
+        );
+
+        let generated: Vec<hecs::Entity> = events
+            .iter()
+            .filter_map(|event| match event {
+                EngineEvent::MonsterGenerated { entity, .. } => Some(*entity),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            generated.len(),
+            3,
+            "Gehennom wizard harassment should summon three nasty monsters"
+        );
+
+        let mut names = Vec::new();
+        for entity in generated {
+            let name = world
+                .get_component::<Name>(entity)
+                .expect("generated nasty should have a name")
+                .0
+                .clone();
+            names.push(name.clone());
+            let monster_id = resolve_monster_id_by_spec(&test_game_data().monsters, &name)
+                .unwrap_or_else(|| panic!("{name} should resolve against the monster catalog"));
+            let monster_def = test_game_data()
+                .monsters
+                .iter()
+                .find(|monster| monster.id == monster_id)
+                .expect("generated nasty should exist in the monster catalog");
+            assert!(
+                monster_def.flags.contains(MonsterFlags::HOSTILE),
+                "{name} should come from the hostile nasty summon pool"
+            );
+            assert!(
+                monster_def.flags.contains(MonsterFlags::NASTY) || monster_def.difficulty >= 16,
+                "{name} should come from the nasty/high-difficulty summon pool"
+            );
+            assert!(
+                !monster_def
+                    .geno_flags
+                    .intersects(GenoFlags::G_UNIQ | GenoFlags::G_NOGEN),
+                "{name} should not be a unique or no-gen monster"
+            );
+        }
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), 3, "summoned nasties should be unique");
+    }
+
     // ── Cross-system wiring tests ──────────────────────────────
 
     #[test]
@@ -10568,6 +10974,228 @@ mod tests {
     }
 
     #[test]
+    fn test_attacking_quest_leader_marks_angry_and_blocks_progress() {
+        let mut world = make_stair_world(Terrain::StairsDown, 1);
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Quest;
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        let leader = spawn_full_monster(&mut world, Position::new(6, 5), "Neferet the Green", 12);
+        world
+            .ecs_mut()
+            .insert_one(leader, Peaceful)
+            .expect("leader should accept peaceful marker");
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(leader) {
+            hp.current = 40;
+            hp.max = 40;
+        }
+        if let Some(mut mp) = world.get_component_mut::<MovementPoints>(leader) {
+            mp.0 = 0;
+        }
+
+        let mut rng = test_rng();
+        let attack_events = resolve_turn(
+            &mut world,
+            PlayerAction::FightDirection {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(attack_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::MeleeHit { defender, .. } if *defender == leader
+        )));
+        assert!(
+            world
+                .get_component::<crate::quest::QuestState>(player)
+                .is_some_and(|state| state.leader_angry),
+            "attacking the quest leader should persist leader anger"
+        );
+
+        let chat_events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(chat_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-leader-reject"
+        )));
+
+        let down_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert!(down_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-expelled"
+        )));
+        assert_eq!(world.dungeon().depth, 1);
+    }
+
+    #[test]
+    fn test_chatting_with_shopkeeper_tracks_angry_state_after_attack() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(shopkeeper) {
+            hp.current = 40;
+            hp.max = 40;
+        }
+        if let Some(mut mp) = world.get_component_mut::<MovementPoints>(shopkeeper) {
+            mp.0 = 0;
+        }
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let mut rng = test_rng();
+        let greet_events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(greet_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shk-welcome"
+        )));
+
+        let _ = resolve_turn(
+            &mut world,
+            PlayerAction::FightDirection {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(
+            world.dungeon().shop_rooms[0].angry,
+            "attacking a shopkeeper should rile the live shop room"
+        );
+
+        let angry_events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(angry_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shk-angry-greeting"
+        )));
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_priest_grants_protection() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        let _gold = spawn_inventory_gold(&mut world, 1_000, 'g');
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("priest should accept peaceful marker");
+        if let Some(mut mp) = world.get_component_mut::<MovementPoints>(priest) {
+            mp.0 = 0;
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-protection-granted"
+        )));
+        assert!(
+            world
+                .get_component::<crate::status::SpellProtection>(player)
+                .is_some_and(|protection| protection.layers == 1),
+            "successful priest chat should grant one layer of protection"
+        );
+    }
+
+    #[test]
+    fn test_attacking_priest_emits_wrath_and_ends_peaceful_chat() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        let _gold = spawn_inventory_gold(&mut world, 1_000, 'g');
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("priest should accept peaceful marker");
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(priest) {
+            hp.current = 40;
+            hp.max = 40;
+        }
+        if let Some(mut mp) = world.get_component_mut::<MovementPoints>(priest) {
+            mp.0 = 0;
+        }
+
+        let mut rng = test_rng();
+        let attack_events = resolve_turn(
+            &mut world,
+            PlayerAction::FightDirection {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(attack_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-angry"
+        )));
+        assert!(attack_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "god-lightning-bolt"
+        )));
+
+        let chat_events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(
+            !chat_events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "priest-protection-granted"
+            )),
+            "hostile priests should no longer grant protection"
+        );
+    }
+
+    #[test]
     fn test_quest_state_sync_marks_entered_and_artifact_obtained() {
         let mut world = make_stair_world(Terrain::StairsDown, 2);
         let player = world.player();
@@ -11465,6 +12093,7 @@ mod tests {
     fn test_story_traversal_matrix() {
         for scenario in [
             StoryTraversalScenario::QuestClosure,
+            StoryTraversalScenario::QuestLeaderAnger,
             StoryTraversalScenario::EndgameAscension,
         ] {
             let (world, final_events) = run_story_traversal_scenario(scenario);
@@ -11488,6 +12117,21 @@ mod tests {
                         quest_status,
                         crate::quest::QuestStatus::Completed,
                         "{} should end with a completed quest",
+                        scenario.label()
+                    );
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Quest);
+                    assert_eq!(world.dungeon().depth, 1);
+                }
+                StoryTraversalScenario::QuestLeaderAnger => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "quest-expelled"
+                    )));
+                    assert!(
+                        world
+                            .get_component::<crate::quest::QuestState>(player)
+                            .is_some_and(|state| state.leader_angry),
+                        "{} should preserve leader anger in quest state",
                         scenario.label()
                     );
                     assert_eq!(world.dungeon().branch, DungeonBranch::Quest);

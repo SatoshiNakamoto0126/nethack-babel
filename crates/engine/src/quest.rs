@@ -567,6 +567,24 @@ pub fn resolve_encounter(
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
+    if matches!(
+        encounter,
+        QuestEncounterType::LeaderFirst
+            | QuestEncounterType::LeaderNext
+            | QuestEncounterType::LeaderAssigned
+            | QuestEncounterType::LeaderNemesisDead
+    ) && quest_state.leader_angry
+    {
+        events.push(EngineEvent::msg_with(
+            "quest-leader-reject",
+            vec![
+                ("leader", quest_leader_for_role(role).to_string()),
+                ("reason", "angry with you".to_string()),
+            ],
+        ));
+        return events;
+    }
+
     let key = quest_message_key(encounter);
 
     match encounter {
@@ -688,7 +706,7 @@ pub const MIN_QUEST_LEVEL: u8 = 14;
 ///
 /// Expulsion occurs if quest is not assigned and the player tries to descend.
 pub fn should_expel_from_quest(quest_state: &QuestState) -> bool {
-    quest_state.status == QuestStatus::NotStarted
+    quest_state.status == QuestStatus::NotStarted || quest_state.leader_angry
 }
 
 /// Check if the player's alignment is sufficient for the quest.
@@ -1276,6 +1294,26 @@ mod tests {
         )));
     }
 
+    #[test]
+    fn test_angry_leader_rejects_even_eligible_player() {
+        let mut qs = QuestState::new();
+        qs.anger_leader();
+
+        let events = resolve_encounter(
+            &mut qs,
+            Role::Wizard,
+            QuestEncounterType::LeaderFirst,
+            20,
+            15,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-leader-reject"
+        )));
+        assert_eq!(qs.status, QuestStatus::NotStarted);
+    }
+
     // ── Quest message key tests ───────────────────────────────────
 
     #[test]
@@ -1318,6 +1356,14 @@ mod tests {
         let mut qs = QuestState::new();
         qs.assign();
         assert!(!should_expel_from_quest(&qs));
+    }
+
+    #[test]
+    fn test_should_expel_after_angering_leader() {
+        let mut qs = QuestState::new();
+        qs.assign();
+        qs.anger_leader();
+        assert!(should_expel_from_quest(&qs));
     }
 
     #[test]

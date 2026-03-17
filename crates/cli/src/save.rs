@@ -1347,6 +1347,29 @@ mod tests {
         item
     }
 
+    fn spawn_full_monster(
+        world: &mut GameWorld,
+        pos: Position,
+        name: &str,
+        hp: i32,
+    ) -> hecs::Entity {
+        world.spawn((
+            Monster,
+            Positioned(pos),
+            Name(name.to_string()),
+            HitPoints {
+                current: hp,
+                max: hp,
+            },
+            Speed(12),
+            MovementPoints(0),
+            nethack_babel_engine::world::DisplaySymbol {
+                symbol: '@',
+                color: nethack_babel_data::Color::Green,
+            },
+        ))
+    }
+
     fn adjacent_walkable_step(map: &LevelMap, target: Position) -> Option<(Position, Direction)> {
         for direction in [
             Direction::North,
@@ -1437,6 +1460,7 @@ mod tests {
     #[derive(Clone, Copy)]
     enum SaveStoryTraversalScenario {
         QuestClosure,
+        QuestLeaderAnger,
         EndgameAscension,
     }
 
@@ -1444,6 +1468,7 @@ mod tests {
         fn label(self) -> &'static str {
             match self {
                 SaveStoryTraversalScenario::QuestClosure => "quest-closure",
+                SaveStoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
         }
@@ -1571,6 +1596,41 @@ mod tests {
                     &mut rng,
                 );
                 (loaded, leader_events)
+            }
+            SaveStoryTraversalScenario::QuestLeaderAnger => {
+                let mut world = make_stair_world(DungeonBranch::Quest, 1, Terrain::StairsDown);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, wizard_identity())
+                    .expect("player should accept wizard identity");
+                let leader =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Neferet the Green", 40);
+                world
+                    .ecs_mut()
+                    .insert_one(leader, nethack_babel_engine::world::Peaceful)
+                    .expect("leader should accept peaceful marker");
+
+                let mut rng = Pcg64::seed_from_u64(7103);
+                let attack_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::FightDirection {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                assert!(attack_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::MeleeHit { defender, .. }
+                        | EngineEvent::MeleeMiss { defender, .. }
+                        if *defender == leader
+                )));
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-quest-anger", &world, [23u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let blocked_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+                (loaded, blocked_events)
             }
             SaveStoryTraversalScenario::EndgameAscension => {
                 let mut world = make_stair_world(DungeonBranch::Gehennom, 20, Terrain::StairsDown);
@@ -3159,6 +3219,49 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_angry_shopkeeper_keeps_angry_greeting() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 40);
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(nethack_babel_engine::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                nethack_babel_engine::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let mut rng = Pcg64::seed_from_u64(7010);
+        let _ = resolve_turn(
+            &mut world,
+            PlayerAction::FightDirection {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(world.dungeon().shop_rooms[0].angry);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("angry-shopkeeper-round-trip", &world, [24u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(loaded.dungeon().shop_rooms[0].angry);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shk-angry-greeting"
+        )));
+    }
+
+    #[test]
     fn round_trip_loaded_floor_items_stay_on_original_level() {
         use nethack_babel_data::schema::{ObjectClass, ObjectTypeId};
 
@@ -3262,6 +3365,7 @@ mod tests {
     fn round_trip_story_traversal_matrix() {
         for scenario in [
             SaveStoryTraversalScenario::QuestClosure,
+            SaveStoryTraversalScenario::QuestLeaderAnger,
             SaveStoryTraversalScenario::EndgameAscension,
         ] {
             let (world, final_events) = run_round_trip_story_traversal_scenario(scenario);
@@ -3285,6 +3389,24 @@ mod tests {
                         world
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.quest_completed)
+                    );
+                }
+                SaveStoryTraversalScenario::QuestLeaderAnger => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "quest-expelled"
+                    )));
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Quest);
+                    assert_eq!(world.dungeon().depth, 1);
+                    assert!(
+                        world
+                            .get_component::<QuestState>(player)
+                            .is_some_and(|state| state.leader_angry)
+                    );
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.quest_expelled)
                     );
                 }
                 SaveStoryTraversalScenario::EndgameAscension => {

@@ -538,19 +538,19 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 
 ### Roadmap (2026)
 
-1. Finish remaining parity wiring in turn resolution and command dispatch.
-2. Expand differential replay (C recordings vs Rust replay) and fuzzing for edge-case drift detection.
-3. Add more full-run stability tests across quest, Gehennom, ascension, and disclosure paths.
-4. Harden runtime interfaces: save compatibility policy, replay behavior, and server mode contracts.
-5. Keep contributor tooling and docs aligned with implementation changes.
+1. Finish domain-hostility parity for priests, shopkeepers, and quest NPCs with less runtime inference.
+2. Expand Wizard of Yendor harassment parity and long-run regression coverage.
+3. Grow traversal and save/load matrices into broader drift-detection harnesses for campaign-critical paths.
+4. Continue hardening level-local runtime caches and save compatibility rules as serialized world state evolves.
+5. Keep contributor tooling, data docs, and Guidebook/README parity aligned with live implementation.
 
 ### Active TODO
 
-- [x] Close remaining turn-pipeline wiring TODOs around prayer/action dispatch and inventory/equipment entity lookup.
-- [x] Add nightly differential/property/Monte-Carlo regression workflow (with optional C-side corpus refresh).
-- [x] Add win/lose scoring and disclosure touchstones for endgame closure paths.
-- [x] Audit wizard/debug command behavior and backfill parity tests.
-- [x] Improve contributor docs for adding monsters, objects, and levels with validation checklists.
+- [ ] Replace inferred temple/shop/quest NPC semantics with explicit ECS/runtime population where possible.
+- [ ] Extend Wizard of Yendor harassment parity beyond respawn, theft, cursing, and the current nasty summon pool.
+- [ ] Expand traversal/save-load matrices into stronger drift-detection coverage for economy, religion, and branch-state regressions.
+- [ ] Audit remaining level-local runtime state for cross-level leakage and serialization gaps.
+- [ ] Refresh contributor-facing docs after the next NPC/runtime contract cleanup lands.
 
 ### Save Format Policy
 

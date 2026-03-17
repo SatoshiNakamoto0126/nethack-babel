@@ -1751,6 +1751,12 @@ shop-theft-warning = { $shopkeeper } shouts: "Thief! Pay up or else!"
 priest-welcome = The priest intones a blessing upon you.
 priest-protection-offer = The priest offers divine protection for { $cost } gold.
 priest-donation-thanks = The priest thanks you for your generous donation.
+priest-not-enough-gold = The priest asks for { $cost } gold.
+priest-protection-granted = The priest grants you protection for { $cost } gold.
+shk-welcome = { $shopkeeper } says: "Welcome to my shop, { $honorific }."
+shk-angry-greeting = { $shopkeeper } glares at you angrily.
+shk-robbed-greeting = { $shopkeeper } says: "I still remember that robbery, { $honorific }."
+shk-surcharge-greeting = { $shopkeeper } says: "Prices are higher for you now, { $honorific }."
 
 ## ============================================================================
 ## Content delivery (rumors, oracles)
@@ -2202,6 +2208,9 @@ priest-angry = The priest gets angry!
 priest-calmed = The priest calms down.
 priest-virtues-of-poverty = The priest preaches the virtues of poverty.
 priest-wrong-alignment = The priest mutters disapprovingly.
+god-roars-suffer = A booming voice roars: "Suffer for thy blasphemy!"
+god-how-dare-harm-servant = A booming voice roars: "How darest thou harm my servant?"
+god-profane-shrine = A booming voice roars: "Thou hast profaned my shrine!"
 
 ## ============================================================================
 ## Punishment

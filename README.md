@@ -279,24 +279,24 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 
 ## Roadmap (2026)
 
-1. **Parity closure (mechanics wiring)**  
-   Finish remaining turn-loop wiring gaps so all already-implemented systems are reachable from live gameplay paths.
-2. **Differential validation at scale**  
-   Expand C-vs-Rust recording replay and fuzzing to run continuously and catch edge-case divergences automatically.
-3. **Start-to-end campaign hardening**  
-   Add more long-run tests for full runs (early game, quest branches, Gehennom, ascension, and death/disclosure paths).
-4. **Runtime and release hardening**  
-   Stabilize replay/server interfaces, improve save compatibility rules, and improve release packaging and reproducibility.
-5. **Modding and documentation tooling**  
-   Improve data schema docs, add workflow guides for content contributors, and keep Guidebook/README parity.
+1. **Domain hostility parity**  
+   Replace inference-heavy shopkeeper, priest, and quest NPC handling with explicit runtime population/components and finish their long-tail anger semantics.
+2. **Wizard harassment parity**  
+   Broaden Wizard of Yendor harassment beyond the current core actions, with depth-aware nasty pools and stronger long-run regression coverage.
+3. **Story drift detection**  
+   Expand traversal and save/load matrices into differential-style harnesses for quest closure, temple/shop conflicts, Gehennom, and ascension paths.
+4. **Runtime cache and save hardening**  
+   Continue auditing level-local runtime state and keep save-format rules explicit whenever serialized world semantics change.
+5. **Contributor and content tooling**  
+   Keep content docs, validation scripts, and schema guidance aligned with the live data-driven dungeon/topology pipeline.
 
 ## TODO (Short-Term)
 
-- [x] Close remaining action wiring TODOs in the turn pipeline (prayer, inventory entity lookup, ranged equipment lookup, summon hooks).
-- [x] Add nightly differential/property/Monte-Carlo regression workflow (with optional C corpus refresh).
-- [x] Add full-run touchstone scenarios covering win/lose disclosures and score pipeline.
-- [x] Audit wizard/debug commands for parity with documented behavior and add missing tests.
-- [x] Add contributor-facing docs for adding monsters/items/special levels safely with validation steps.
+- [ ] Replace inferred temple/shop/quest NPC semantics with explicit ECS/runtime population where possible.
+- [ ] Extend Wizard of Yendor harassment parity beyond respawn, theft, cursing, and the current nasty summon pool.
+- [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state.
+- [ ] Audit remaining level-local runtime state for cross-level leakage and save/load omissions.
+- [ ] Refresh contributor docs once the next round of NPC/runtime data contracts settles.
 
 ## Documentation
 
