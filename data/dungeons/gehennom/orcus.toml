@@ -1,7 +1,7 @@
 [level]
 name = "orcus"
 branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor"]
+flags = ["mazelevel", "noteleport", "hardfloor", "noprayer"]
 
 [map]
 halign = "center"
@@ -36,11 +36,11 @@ y = 5
 
 [[monsters]]
 id = "Orcus"
-x = 20
-y = 5
+x = 22
+y = 6
 
 [[objects]]
 id = "wand of death"
-x = 20
-y = 5
+x = 22
+y = 6
 chance = 75

@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use nethack_babel_data::components::{
     BucStatus, Enchantment, Erosion, KnowledgeState, ObjectCore, ObjectLocation,
 };
-use nethack_babel_data::{PlayerIdentity, PlayerSkills};
+use nethack_babel_data::{GameData, PlayerIdentity, PlayerSkills, loader::load_game_data};
 use nethack_babel_engine::action::Position;
 use nethack_babel_engine::attributes::{AttributeExercise, NaturalAttributes};
 use nethack_babel_engine::conduct::ConductState;
@@ -591,6 +591,7 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
     while world.turn() < data.turn {
         world.advance_turn();
     }
+    world.set_next_creation_order_value(data.next_creation_order);
 
     // Restore dungeon state.
     *world.dungeon_mut() = data.dungeon.clone();
@@ -674,6 +675,130 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
     world
 }
 
+fn restore_runtime_catalogs(world: &mut GameWorld, data: &GameData) {
+    world.set_spawn_catalogs(data.monsters.clone(), data.objects.clone());
+}
+
+#[allow(dead_code)]
+fn resolved_runtime_data_dir() -> anyhow::Result<PathBuf> {
+    if let Ok(path) = std::env::var("NETHACK_BABEL_DATA_DIR") {
+        let path = PathBuf::from(path);
+        if path.is_dir() {
+            return Ok(path);
+        }
+    }
+
+    let manifest_data = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    if manifest_data.is_dir() {
+        return Ok(manifest_data);
+    }
+
+    let cwd_data = Path::new("data");
+    if cwd_data.is_dir() {
+        return Ok(cwd_data.to_path_buf());
+    }
+
+    if let Ok(home) = std::env::var("HOME") {
+        let user_data = PathBuf::from(home).join(".nethack-babel").join("data");
+        if user_data.is_dir() {
+            return Ok(user_data);
+        }
+    }
+
+    for shared in [
+        Path::new("/usr/local/share/nethack-babel/data"),
+        Path::new("/usr/share/nethack-babel/data"),
+    ] {
+        if shared.is_dir() {
+            return Ok(shared.to_path_buf());
+        }
+    }
+
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(exe_dir) = exe.parent()
+    {
+        for candidate in [
+            exe_dir.join("data"),
+            exe_dir
+                .parent()
+                .map(|parent| parent.join("data"))
+                .unwrap_or_default(),
+        ] {
+            if candidate.is_dir() {
+                return Ok(candidate);
+            }
+        }
+    }
+
+    anyhow::bail!(
+        "Data directory not found while restoring save. Set NETHACK_BABEL_DATA_DIR or install data files."
+    )
+}
+
+#[allow(dead_code)]
+fn load_runtime_game_data() -> anyhow::Result<GameData> {
+    let data_dir = resolved_runtime_data_dir()?;
+    load_game_data(&data_dir).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to load game data from {}: {}",
+            data_dir.display(),
+            e
+        )
+    })
+}
+
+fn read_save_data(path: &Path, label: &str) -> anyhow::Result<SaveData> {
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path)?;
+
+    let mut magic = [0u8; 4];
+    file.read_exact(&mut magic)?;
+    if magic != SAVE_MAGIC {
+        anyhow::bail!(
+            "Invalid {label}: expected magic {:?}, got {:?}",
+            SAVE_MAGIC,
+            magic
+        );
+    }
+
+    let mut version = [0u8; 3];
+    file.read_exact(&mut version)?;
+    if !is_compatible_version(version) {
+        anyhow::bail!(
+            "{label} version mismatch: file has {}.{}.{}, binary expects {}.{}.{}",
+            version[0],
+            version[1],
+            version[2],
+            SAVE_VERSION[0],
+            SAVE_VERSION[1],
+            SAVE_VERSION[2],
+        );
+    }
+
+    let mut len_buf = [0u8; 8];
+    file.read_exact(&mut len_buf)?;
+    let payload_len = u64::from_le_bytes(len_buf) as usize;
+    if payload_len > 256 * 1024 * 1024 {
+        anyhow::bail!(
+            "{label} payload too large: {} bytes (max 256 MB)",
+            payload_len
+        );
+    }
+
+    let mut payload = vec![0u8; payload_len];
+    file.read_exact(&mut payload)?;
+
+    let (save_data, _): (SaveData, _) =
+        bincode::serde::decode_from_slice(&payload, bincode::config::standard())?;
+
+    if save_data.header.magic != SAVE_MAGIC {
+        anyhow::bail!("Corrupt {label}: embedded header has wrong magic bytes");
+    }
+
+    Ok(save_data)
+}
+
 // =========================================================================
 // Public API
 // =========================================================================
@@ -743,72 +868,24 @@ pub fn save_game(
 /// On success the save file is deleted to prevent save-scumming.
 ///
 /// Returns `(GameWorld, turn, depth, rng_state)`.
+#[allow(dead_code)]
 pub fn load_game(path: &Path) -> anyhow::Result<(GameWorld, u32, i32, [u8; 32])> {
-    use std::io::Read;
+    let data = load_runtime_game_data()?;
+    load_game_with_data(path, &data)
+}
 
-    let mut file = std::fs::File::open(path)?;
-
-    // Read and validate magic bytes.
-    let mut magic = [0u8; 4];
-    file.read_exact(&mut magic)?;
-    if magic != SAVE_MAGIC {
-        anyhow::bail!(
-            "Invalid save file: expected magic {:?}, got {:?}",
-            SAVE_MAGIC,
-            magic
-        );
-    }
-
-    // Read and validate version.
-    let mut version = [0u8; 3];
-    file.read_exact(&mut version)?;
-    if !is_compatible_version(version) {
-        anyhow::bail!(
-            "Save file version mismatch: file has {}.{}.{}, \
-             binary expects {}.{}.{}",
-            version[0],
-            version[1],
-            version[2],
-            SAVE_VERSION[0],
-            SAVE_VERSION[1],
-            SAVE_VERSION[2],
-        );
-    }
-
-    // Read payload length.
-    let mut len_buf = [0u8; 8];
-    file.read_exact(&mut len_buf)?;
-    let payload_len = u64::from_le_bytes(len_buf) as usize;
-
-    // Sanity check payload size (max 256 MB).
-    if payload_len > 256 * 1024 * 1024 {
-        anyhow::bail!(
-            "Save file payload too large: {} bytes (max 256 MB)",
-            payload_len
-        );
-    }
-
-    // Read payload.
-    let mut payload = vec![0u8; payload_len];
-    file.read_exact(&mut payload)?;
-
-    // Deserialize.
-    let (save_data, _): (SaveData, _) =
-        bincode::serde::decode_from_slice(&payload, bincode::config::standard())?;
-
-    // Validate embedded header magic (defense in depth).
-    if save_data.header.magic != SAVE_MAGIC {
-        anyhow::bail!("Corrupt save: embedded header has wrong magic bytes");
-    }
-
-    // Rebuild the world.
-    let world = rebuild_world(&save_data);
+/// Load a save using already-loaded runtime data.
+pub fn load_game_with_data(
+    path: &Path,
+    data: &GameData,
+) -> anyhow::Result<(GameWorld, u32, i32, [u8; 32])> {
+    let save_data = read_save_data(path, "save file")?;
+    let mut world = rebuild_world(&save_data);
+    restore_runtime_catalogs(&mut world, data);
     let turn = save_data.turn;
     let depth = save_data.dungeon.depth;
     let rng_state = save_data.rng_state;
 
-    // Delete save file after successful load (anti-savescumming).
-    drop(file);
     if let Err(e) = std::fs::remove_file(path) {
         tracing::warn!("Failed to delete save file after load: {e}");
     }
@@ -978,59 +1055,30 @@ pub fn install_panic_hook() {
 /// Looks for `<player_name>.panic.nbsv` and loads it if found.
 /// Unlike normal load, the panic file is renamed to `.recovered.nbsv`
 /// instead of deleted, so the player can inspect it.
+#[allow(dead_code)]
 pub fn try_recover(player_name: &str) -> anyhow::Result<Option<(GameWorld, u32, i32, [u8; 32])>> {
+    let data = load_runtime_game_data()?;
+    try_recover_with_data(player_name, &data)
+}
+
+pub fn try_recover_with_data(
+    player_name: &str,
+    data: &GameData,
+) -> anyhow::Result<Option<(GameWorld, u32, i32, [u8; 32])>> {
     let panic_path = save_file_path(player_name).with_extension("panic.nbsv");
 
     if !panic_path.exists() {
         return Ok(None);
     }
 
-    // Load without deleting (we'll rename instead).
-    use std::io::Read;
-
-    let mut file = std::fs::File::open(&panic_path)?;
-    let mut magic = [0u8; 4];
-    file.read_exact(&mut magic)?;
-    if magic != SAVE_MAGIC {
-        anyhow::bail!("Panic save file has invalid magic bytes");
-    }
-
-    let mut version = [0u8; 3];
-    file.read_exact(&mut version)?;
-    if !is_compatible_version(version) {
-        anyhow::bail!(
-            "Panic save version mismatch: {}.{}.{}",
-            version[0],
-            version[1],
-            version[2]
-        );
-    }
-
-    let mut len_buf = [0u8; 8];
-    file.read_exact(&mut len_buf)?;
-    let payload_len = u64::from_le_bytes(len_buf) as usize;
-
-    if payload_len > 256 * 1024 * 1024 {
-        anyhow::bail!("Panic save payload too large");
-    }
-
-    let mut payload = vec![0u8; payload_len];
-    file.read_exact(&mut payload)?;
-
-    let (save_data, _): (SaveData, _) =
-        bincode::serde::decode_from_slice(&payload, bincode::config::standard())?;
-
-    if save_data.header.magic != SAVE_MAGIC {
-        anyhow::bail!("Corrupt panic save: embedded header has wrong magic");
-    }
-
-    let world = rebuild_world(&save_data);
+    let save_data = read_save_data(&panic_path, "panic save file")?;
+    let mut world = rebuild_world(&save_data);
+    restore_runtime_catalogs(&mut world, data);
     let turn = save_data.turn;
     let depth = save_data.dungeon.depth;
     let rng_state = save_data.rng_state;
 
     // Rename to .recovered.nbsv instead of deleting.
-    drop(file);
     let recovered_path = panic_path.with_extension("recovered.nbsv");
     let _ = std::fs::rename(&panic_path, &recovered_path);
     tracing::info!(
@@ -1140,8 +1188,15 @@ mod tests {
         let dir = test_dir(label);
         let path = dir.join(format!("{label}.nbsv"));
         save_game(world, &path, SaveReason::Checkpoint, rng_state).unwrap();
-        let (mut loaded, _turn, _depth, loaded_rng) = load_game(&path).unwrap();
-        install_test_catalogs(&mut loaded);
+        let (loaded, _turn, _depth, loaded_rng) = load_game(&path).unwrap();
+        assert!(
+            !loaded.monster_catalog().is_empty(),
+            "loaded worlds should restore the monster catalog automatically"
+        );
+        assert!(
+            !loaded.object_catalog().is_empty(),
+            "loaded worlds should restore the object catalog automatically"
+        );
         let _ = std::fs::remove_dir_all(&dir);
         (loaded, loaded_rng)
     }
@@ -1215,6 +1270,36 @@ mod tests {
         let hp = loaded.get_component::<HitPoints>(loaded.player()).unwrap();
         assert_eq!(hp.current, 16);
         assert_eq!(hp.max, 16);
+        assert!(
+            !loaded.monster_catalog().is_empty(),
+            "plain load_game should restore runtime monster catalogs"
+        );
+        assert!(
+            !loaded.object_catalog().is_empty(),
+            "plain load_game should restore runtime object catalogs"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn round_trip_restores_next_creation_order_counter() {
+        let dir = test_dir("creation_order_v3");
+        let path = dir.join("creation_order.nbsv");
+
+        let mut world = make_world();
+        let _ = world.next_creation_order();
+        let _ = world.next_creation_order();
+        let expected_next = world.next_creation_order_value();
+
+        save_game(&world, &path, SaveReason::Checkpoint, [11u8; 32]).unwrap();
+
+        let (loaded, _, _, _) = load_game(&path).unwrap();
+        assert_eq!(
+            loaded.next_creation_order_value(),
+            expected_next,
+            "loading a save should restore the next creation order counter"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

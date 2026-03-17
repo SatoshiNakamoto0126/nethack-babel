@@ -332,6 +332,12 @@ impl GameWorld {
         self.next_creation_order
     }
 
+    /// Restore the next creation order counter after loading a save.
+    #[inline]
+    pub fn set_next_creation_order_value(&mut self, next_creation_order: u64) {
+        self.next_creation_order = next_creation_order.max(1);
+    }
+
     /// Install runtime catalogs for monster/object lookup.
     pub fn set_spawn_catalogs(&mut self, monsters: Vec<MonsterDef>, objects: Vec<ObjectDef>) {
         self.monster_catalog = monsters;

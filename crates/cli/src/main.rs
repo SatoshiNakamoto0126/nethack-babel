@@ -2027,12 +2027,12 @@ fn ensure_save_dir(save_path: &Path) -> Result<()> {
 /// Try to load an existing save file for the given player name.
 /// Returns `Some((world, turn, depth, rng_state))` if a save was found and
 /// successfully loaded; `None` if no save file exists.
-fn try_load_save(player_name: &str) -> Option<(GameWorld, u32, i32, [u8; 32])> {
+fn try_load_save(player_name: &str, data: &GameData) -> Option<(GameWorld, u32, i32, [u8; 32])> {
     let save_path = save::save_file_path(player_name);
     if !save::save_file_exists(&save_path) {
         return None;
     }
-    match save::load_game(&save_path) {
+    match save::load_game_with_data(&save_path, data) {
         Ok(result) => Some(result),
         Err(e) => {
             eprintln!("Warning: failed to load save file: {e}");
@@ -3235,7 +3235,7 @@ fn main() -> Result<()> {
     // 7. Try to restore from a save file, or create a new world.
     //    First try recovering from a crashed (panic) save, then try normal save.
     let player_name_for_save = cli.name.as_deref().unwrap_or("you");
-    let recovered = match save::try_recover(player_name_for_save) {
+    let recovered = match save::try_recover_with_data(player_name_for_save, &data) {
         Ok(Some(result)) => {
             tracing::info!("Recovered from panic save");
             Some(result)
@@ -3247,7 +3247,7 @@ fn main() -> Result<()> {
         }
     };
     let (mut world, legacy_info) = if let Some((restored_world, turn, depth, rng_state)) =
-        recovered.or_else(|| try_load_save(player_name_for_save))
+        recovered.or_else(|| try_load_save(player_name_for_save, &data))
     {
         // Re-seed the RNG from the saved state.
         rng = Pcg64::from_seed(rng_state);
@@ -3335,6 +3335,7 @@ fn main() -> Result<()> {
 
         let setup = create_world(&data, &mut rng, Some(&character_choice.name));
         let mut new_world = setup.world;
+        new_world.set_spawn_catalogs(data.monsters.clone(), data.objects.clone());
 
         // Apply role/race stats and name to the player.
         game_start::apply_character_choice(&mut new_world, &character_choice);
@@ -3345,8 +3346,6 @@ fn main() -> Result<()> {
 
         (new_world, Some((deity_name, role_name)))
     };
-    world.set_spawn_catalogs(data.monsters.clone(), data.objects.clone());
-
     apply_runtime_options(&mut world, &cfg);
 
     // 8. Register the world for emergency save on panic.

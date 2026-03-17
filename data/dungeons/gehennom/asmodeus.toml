@@ -1,7 +1,7 @@
 [level]
 name = "asmodeus"
 branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor"]
+flags = ["mazelevel", "noteleport", "hardfloor", "noprayer"]
 
 [map]
 halign = "center"

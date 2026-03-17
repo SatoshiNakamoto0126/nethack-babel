@@ -6054,6 +6054,150 @@ mod tests {
     }
 
     #[test]
+    fn test_revisiting_castle_does_not_duplicate_wand_of_wishing() {
+        let mut world = make_stair_world(Terrain::StairsDown, 24);
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+        let wand_otyp = resolve_object_type_by_spec(&test_game_data().objects, "wand of wishing")
+            .expect("wand of wishing should resolve against the catalog");
+
+        change_level(&mut world, 25, false, &mut rng, &mut events);
+        assert_eq!(count_objects_with_type(&world, wand_otyp), 1);
+
+        change_level(&mut world, 24, true, &mut rng, &mut events);
+        change_level(&mut world, 25, false, &mut rng, &mut events);
+
+        assert_eq!(
+            count_objects_with_type(&world, wand_otyp),
+            1,
+            "revisiting Castle should not duplicate the wand of wishing"
+        );
+    }
+
+    #[test]
+    fn test_revisiting_fort_ludios_does_not_duplicate_garrison() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::FortLudios,
+            1,
+            false,
+            &mut rng,
+            &mut events,
+        );
+
+        let soldiers = count_monsters_named(&world, "soldier");
+        let lieutenants = count_monsters_named(&world, "lieutenant");
+        let captains = count_monsters_named(&world, "captain");
+
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::Main,
+            1,
+            true,
+            &mut rng,
+            &mut events,
+        );
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::FortLudios,
+            1,
+            false,
+            &mut rng,
+            &mut events,
+        );
+
+        assert_eq!(
+            count_monsters_named(&world, "soldier"),
+            soldiers,
+            "revisiting Fort Ludios should not duplicate soldiers"
+        );
+        assert_eq!(
+            count_monsters_named(&world, "lieutenant"),
+            lieutenants,
+            "revisiting Fort Ludios should not duplicate lieutenants"
+        );
+        assert_eq!(
+            count_monsters_named(&world, "captain"),
+            captains,
+            "revisiting Fort Ludios should not duplicate captains"
+        );
+    }
+
+    #[test]
+    fn test_revisiting_vlad_tower_top_does_not_duplicate_vlad_or_candelabrum() {
+        let mut world = make_stair_world(Terrain::StairsDown, 2);
+        world.dungeon_mut().branch = crate::dungeon::DungeonBranch::VladsTower;
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+        let candelabrum_otyp =
+            resolve_object_type_by_spec(&test_game_data().objects, "Candelabrum of Invocation")
+                .expect("Candelabrum should resolve against the catalog");
+
+        change_level(&mut world, 3, false, &mut rng, &mut events);
+        assert_eq!(count_monsters_named(&world, "Vlad the Impaler"), 1);
+        assert_eq!(count_objects_with_type(&world, candelabrum_otyp), 1);
+
+        change_level(&mut world, 2, true, &mut rng, &mut events);
+        change_level(&mut world, 3, false, &mut rng, &mut events);
+
+        assert_eq!(
+            count_monsters_named(&world, "Vlad the Impaler"),
+            1,
+            "revisiting Vlad level 3 should not duplicate Vlad"
+        );
+        assert_eq!(
+            count_objects_with_type(&world, candelabrum_otyp),
+            1,
+            "revisiting Vlad level 3 should not duplicate the Candelabrum"
+        );
+    }
+
+    #[test]
+    fn test_revisiting_wizard_tower_top_does_not_duplicate_wizard() {
+        let mut world = make_stair_world(Terrain::StairsDown, 18);
+        world.dungeon_mut().branch = crate::dungeon::DungeonBranch::Gehennom;
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level(&mut world, 19, false, &mut rng, &mut events);
+        assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 1);
+
+        change_level(&mut world, 18, true, &mut rng, &mut events);
+        change_level(&mut world, 19, false, &mut rng, &mut events);
+
+        assert_eq!(
+            count_monsters_named(&world, "Wizard of Yendor"),
+            1,
+            "revisiting Wizard Tower 3 should not duplicate the Wizard of Yendor"
+        );
+    }
+
+    #[test]
+    fn test_revisiting_sanctum_does_not_duplicate_high_priest() {
+        let mut world = make_stair_world(Terrain::StairsDown, 19);
+        world.dungeon_mut().branch = crate::dungeon::DungeonBranch::Gehennom;
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level(&mut world, 20, false, &mut rng, &mut events);
+        assert_eq!(count_monsters_named(&world, "high priest"), 1);
+
+        change_level(&mut world, 19, true, &mut rng, &mut events);
+        change_level(&mut world, 20, false, &mut rng, &mut events);
+
+        assert_eq!(
+            count_monsters_named(&world, "high priest"),
+            1,
+            "revisiting Sanctum should not duplicate the high priest"
+        );
+    }
+
+    #[test]
     fn test_go_up_stairs() {
         let mut world = make_stair_world(Terrain::StairsUp, 2);
         let mut rng = test_rng();

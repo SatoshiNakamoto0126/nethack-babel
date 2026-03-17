@@ -1,25 +1,25 @@
 [level]
 name = "fakewiz1"
 branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor"]
+flags = ["mazelevel", "noteleport", "hardfloor", "nodig", "noprayer"]
 
 [map]
 halign = "center"
 valign = "center"
 data = """
------------
-|.........|
-|.........|
-|.........|
-|....F....|
-|.........|
-|.........|
-|.........|
------------
+.........
+.}}}}}}}.
+.}}---}}.
+.}--.--}.
+.}|...|}.
+.}--.--}.
+.}}---}}.
+.}}}}}}}.
+.........
 """
 
 [[regions]]
-area = [0, 0, 10, 8]
+area = [0, 0, 8, 8]
 lit = false
 
 [[stairs]]
@@ -29,5 +29,20 @@ y = 1
 
 [[stairs]]
 direction = "down"
-x = 9
+x = 7
 y = 7
+
+[[monsters]]
+id = "lich"
+x = 5
+y = 5
+
+[[monsters]]
+id = "vampire lord"
+x = 4
+y = 5
+
+[[monsters]]
+id = "kraken"
+x = 2
+y = 2

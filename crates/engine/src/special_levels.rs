@@ -6,6 +6,8 @@
 //! (`dat/*.lua`), but are expressed as pure Rust for the Babel
 //! reimplementation.
 
+use std::sync::OnceLock;
+
 use rand::Rng;
 
 use crate::action::Position;
@@ -18,9 +20,12 @@ use crate::quest::{
 use crate::role::Role;
 
 use nethack_babel_data::level_loader::{
-    ascii_to_terrain, get_embedded_level, load_level_from_str, parse_ascii_map,
+    ascii_to_terrain, get_embedded_level, get_embedded_topology, load_level_from_str,
+    load_topology_from_str, parse_ascii_map,
 };
-use nethack_babel_data::level_schema::{LevelDefinition, MapDefinition};
+use nethack_babel_data::level_schema::{
+    DungeonTopology as TopologyDefinition, LevelDefinition, MapDefinition,
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sokoban
@@ -2559,6 +2564,96 @@ fn embedded_level_name_for_toml(id: SpecialLevelId) -> Option<&'static str> {
     }
 }
 
+fn topology_branch_name(branch: crate::dungeon::DungeonBranch) -> &'static str {
+    use crate::dungeon::DungeonBranch;
+    match branch {
+        DungeonBranch::Main => "Main",
+        DungeonBranch::Mines => "Mines",
+        DungeonBranch::Sokoban => "Sokoban",
+        DungeonBranch::Quest => "Quest",
+        DungeonBranch::FortLudios => "FortLudios",
+        DungeonBranch::Gehennom => "Gehennom",
+        DungeonBranch::VladsTower => "VladsTower",
+        DungeonBranch::Endgame => "Endgame",
+    }
+}
+
+fn embedded_topology_definition() -> &'static TopologyDefinition {
+    static TOPOLOGY: OnceLock<TopologyDefinition> = OnceLock::new();
+    TOPOLOGY.get_or_init(|| {
+        load_topology_from_str(get_embedded_topology())
+            .expect("embedded dungeon topology should parse")
+    })
+}
+
+fn special_level_id_from_topology_name(name: &str) -> Option<SpecialLevelId> {
+    Some(match name {
+        "oracle" => SpecialLevelId::OracleLevel,
+        "rogue" => SpecialLevelId::Rogue,
+        "bigroom" => SpecialLevelId::BigRoom(0),
+        "medusa" => SpecialLevelId::Medusa(0),
+        "castle" => SpecialLevelId::Castle,
+        "minetown" => SpecialLevelId::Minetown,
+        "mines_end" => SpecialLevelId::MinesEnd,
+        "sokoban1" => SpecialLevelId::Sokoban(1),
+        "sokoban2" => SpecialLevelId::Sokoban(2),
+        "sokoban3" => SpecialLevelId::Sokoban(3),
+        "sokoban4" => SpecialLevelId::Sokoban(4),
+        "quest_start" => SpecialLevelId::QuestStart,
+        "quest_locator" => SpecialLevelId::QuestLocator,
+        "quest_goal" => SpecialLevelId::QuestGoal,
+        "fort_ludios" => SpecialLevelId::FortLudios,
+        "valley" => SpecialLevelId::Valley,
+        "juiblex" => SpecialLevelId::Juiblex,
+        "asmodeus" => SpecialLevelId::Asmodeus,
+        "baalzebub" => SpecialLevelId::Baalzebub,
+        "orcus" => SpecialLevelId::Orcus,
+        "fakewiz1" => SpecialLevelId::FakeWizard(1),
+        "fakewiz2" => SpecialLevelId::FakeWizard(2),
+        "wizard_tower" => SpecialLevelId::WizardTower,
+        "wizard_tower2" => SpecialLevelId::WizardTower2,
+        "wizard_tower3" => SpecialLevelId::WizardTower3,
+        "sanctum" => SpecialLevelId::Sanctum,
+        "vlad1" => SpecialLevelId::VladsTower(1),
+        "vlad2" => SpecialLevelId::VladsTower(2),
+        "vlad3" => SpecialLevelId::VladsTower(3),
+        "earth" => SpecialLevelId::EarthPlane,
+        "air" => SpecialLevelId::AirPlane,
+        "fire" => SpecialLevelId::FirePlane,
+        "water" => SpecialLevelId::WaterPlane,
+        "astral" => SpecialLevelId::AstralPlane,
+        _ => return None,
+    })
+}
+
+fn topology_special_level(
+    branch: crate::dungeon::DungeonBranch,
+    depth: i32,
+) -> Option<SpecialLevelId> {
+    let branch_name = topology_branch_name(branch);
+    let branch_def = embedded_topology_definition()
+        .branches
+        .iter()
+        .find(|entry| entry.name == branch_name)?;
+
+    for entry in &branch_def.special_levels {
+        if entry.depth == Some(depth)
+            && let Some(id) = special_level_id_from_topology_name(&entry.name)
+        {
+            return Some(id);
+        }
+    }
+
+    if matches!(branch, crate::dungeon::DungeonBranch::Quest)
+        && depth >= 2
+        && depth < branch_def.max_depth
+    {
+        return Some(SpecialLevelId::QuestFiller(depth as u8));
+    }
+
+    None
+}
+
 fn aligned_map_offsets(map_def: &MapDefinition, map_w: usize, map_h: usize) -> (i32, i32) {
     let (mw, mh, _) = parse_ascii_map(&map_def.data);
     let offset_x = match map_def.halign.as_str() {
@@ -2911,76 +3006,13 @@ pub fn population_for_special_level_with_role(
 
 /// Check if a branch+depth pair corresponds to a known special level.
 ///
-/// This is a simplified mapping; in full NetHack, the exact depths are
-/// randomized per game and stored in the dungeon topology.
+/// Fixed-depth levels are resolved from the embedded topology definition.
+/// Randomized Main-branch levels are handled by `DungeonState::check_topology_special`.
 pub fn identify_special_level(
     branch: crate::dungeon::DungeonBranch,
     depth: i32,
 ) -> Option<SpecialLevelId> {
-    use crate::dungeon::DungeonBranch;
-    match branch {
-        DungeonBranch::Main => {
-            // Oracle is around depth 5-9 (simplified: depth 7).
-            // Castle is at the bottom of the Main branch (depth 25).
-            // Medusa is at depth 24.
-            match depth {
-                25 => Some(SpecialLevelId::Castle),
-                24 => Some(SpecialLevelId::Medusa(0)),
-                _ => None,
-            }
-        }
-        DungeonBranch::Mines => {
-            match depth {
-                // Minetown is at depth 5 in the Mines.
-                5 => Some(SpecialLevelId::Minetown),
-                _ => None,
-            }
-        }
-        DungeonBranch::Sokoban => {
-            if depth >= 1 && depth <= 4 {
-                Some(SpecialLevelId::Sokoban(depth as u8))
-            } else {
-                None
-            }
-        }
-        DungeonBranch::FortLudios => Some(SpecialLevelId::FortLudios),
-        DungeonBranch::VladsTower => {
-            if depth >= 1 && depth <= 3 {
-                Some(SpecialLevelId::VladsTower(depth as u8))
-            } else {
-                None
-            }
-        }
-        DungeonBranch::Gehennom => match depth {
-            1 => Some(SpecialLevelId::Valley),
-            5 => Some(SpecialLevelId::Juiblex),
-            7 => Some(SpecialLevelId::Asmodeus),
-            10 => Some(SpecialLevelId::Baalzebub),
-            12 => Some(SpecialLevelId::Orcus),
-            14 => Some(SpecialLevelId::FakeWizard(1)),
-            15 => Some(SpecialLevelId::FakeWizard(2)),
-            17 => Some(SpecialLevelId::WizardTower),
-            18 => Some(SpecialLevelId::WizardTower2),
-            19 => Some(SpecialLevelId::WizardTower3),
-            20 => Some(SpecialLevelId::Sanctum),
-            _ => None,
-        },
-        DungeonBranch::Endgame => match depth {
-            1 => Some(SpecialLevelId::EarthPlane),
-            2 => Some(SpecialLevelId::AirPlane),
-            3 => Some(SpecialLevelId::FirePlane),
-            4 => Some(SpecialLevelId::WaterPlane),
-            5 => Some(SpecialLevelId::AstralPlane),
-            _ => None,
-        },
-        DungeonBranch::Quest => match depth {
-            1 => Some(SpecialLevelId::QuestStart),
-            4 => Some(SpecialLevelId::QuestLocator),
-            7 => Some(SpecialLevelId::QuestGoal),
-            d if d >= 2 => Some(SpecialLevelId::QuestFiller(d as u8)),
-            _ => None,
-        },
-    }
+    topology_special_level(branch, depth)
 }
 
 /// Dispatch to the appropriate special level generator based on the level ID.

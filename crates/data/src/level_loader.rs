@@ -90,362 +90,30 @@ pub fn get_embedded_level(name: &str) -> Option<&'static str> {
     }
 }
 
+/// Embedded dungeon topology definition.
+pub fn get_embedded_topology() -> &'static str {
+    DUNGEON_TOPOLOGY_TOML
+}
+
 // Embedded TOML definitions for key Gehennom levels
-// These are derived from the NetHack C source level definitions
-
-const VALLEY_TOML: &str = r#"
-[level]
-name = "valley"
-branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor", "nommap", "noautomap", "noprayer"]
-
-[map]
-halign = "center"
-valign = "center"
-data = """
----------------------------------------------------------------------------
-|G..S.|..|.....|  |.....-|      |................|   |...............| |...|
-|.._..+..|.....|  |......|      |................|   |...............| |...|
-|...S.|..|..G..|  |......+######+................+###+...............| |...|
-|-----|..|----+|  |------|      |.................S   |...............|.|...|
-      |..|    |S  S      |      |................|   |-+-------------|.|...|
-      |..+    |.  .|     |      |................|   | |             |.|...|
-      |..|    |.  .|     |      |-----+----------|   | |             |.|...|
-      |..|    |.  .|     |      |     |              | |             |.|...|
-      |..| |---G  .---|  |      |     |           |--| |          |---.---|
-      |..| |........  |  |      |     |           |    |          |.......|
-      |..| |........  |  |-+--+-|     |           |    |----------|.......|
-      |..| |........  |  |......|     |    -------+----+----      |.......|
-      |..| |..--------|  |......|     |    |...........|   |      |.......|
-      |..| |..|          |......|     |    |...........|   |      |.......|
-      |..| |..|  |-------|......|     |----|...........|   |------|.......|
-      |..| |..+  +.......+.....+     +....+...........|          |.......|
-      |..| |..|  |-------|......|     |----|......G....|----------|.......|
-      |..| |..|          |......|     |    |...........|                  |
-      |..|  ---          |------|     |     -----------                   |
-       --                                                                |
-
-"""
-
-[[regions]]
-area = [0, 0, 74, 20]
-lit = false
-
-[[stairs]]
-direction = "up"
-x = 1
-y = 1
-
-[[stairs]]
-direction = "down"
-x = 72
-y = 18
-
-[[monsters]]
-id = "ghost"
-
-[[monsters]]
-id = "ghost"
-
-[[monsters]]
-id = "vampire bat"
-
-[[monsters]]
-id = "master lich"
-
-[[monsters]]
-id = "vampire lord"
-
-[[monsters]]
-id = "ettin zombie"
-"#;
-
-const ASMODEUS_TOML: &str = r#"
-[level]
-name = "asmodeus"
-branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor", "noprayer"]
-
-[map]
-halign = "center"
-valign = "center"
-data = """
-------      ------
-|....|      |....|
-|....+######+....|
-|....|      |....|
-------      ------
-  ##          ##
-  ##          ##
-------      ------
-|....|      |....|
-|....+######+....|
-|....|      |....|
-------      ------
-"""
-
-[[regions]]
-area = [0, 0, 17, 11]
-lit = false
-
-[[stairs]]
-direction = "up"
-x = 2
-y = 1
-
-[[stairs]]
-direction = "down"
-x = 14
-y = 10
-
-[[monsters]]
-id = "Asmodeus"
-x = 14
-y = 4
-"#;
-
-const BAALZEBUB_TOML: &str = r#"
-[level]
-name = "baalzebub"
-branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor", "noprayer"]
-
-[map]
-halign = "center"
-valign = "center"
-data = """
----------------------
-|...................|
-|.-----+----+-----.|
-|.|....|....|....|.|
-|.|....|....|....|.|
-|.|....|....|....|.|
-|.------+--------.|
-|...................|
----------------------
-"""
-
-[[regions]]
-area = [0, 0, 20, 8]
-lit = false
-
-[[stairs]]
-direction = "up"
-x = 1
-y = 1
-
-[[stairs]]
-direction = "down"
-x = 19
-y = 7
-
-[[monsters]]
-id = "Baalzebub"
-x = 10
-y = 4
-"#;
-
-const JUIBLEX_TOML: &str = r#"
-[level]
-name = "juiblex"
-branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor", "noprayer"]
-
-[map]
-halign = "center"
-valign = "center"
-data = """
------------
-|.........|
-|.}}}}}}|.|
-|.}}}}}}|.|
-|.}}}}}}|.|
-|.-------.|
-|.........|
-|.--------+
-|.........|
------------
-"""
-
-[[regions]]
-area = [0, 0, 10, 9]
-lit = false
-
-[[stairs]]
-direction = "up"
-x = 1
-y = 1
-
-[[stairs]]
-direction = "down"
-x = 9
-y = 8
-
-[[monsters]]
-id = "Juiblex"
-x = 5
-y = 3
-"#;
-
-const ORCUS_TOML: &str = r#"
-[level]
-name = "orcus"
-branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor", "noprayer"]
-
-[map]
-halign = "center"
-valign = "center"
-data = """
---------------------------------------------
-|..........|.......|.........|.............|
-|..........+.......+.........+.............|
-|..........|.......|.........|.............|
-|----------+-------+---------+-------------|
-|.........................................S|
-|.........................................S|
-|..........|.......|.........|.............|
-|..........+.......+.........+.............|
-|..........|.......|.........|.............|
---------------------------------------------
-"""
-
-[[regions]]
-area = [0, 0, 43, 10]
-lit = false
-
-[[stairs]]
-direction = "up"
-x = 1
-y = 1
-
-[[stairs]]
-direction = "down"
-x = 42
-y = 5
-
-[[monsters]]
-id = "Orcus"
-x = 22
-y = 6
-
-[[objects]]
-id = "wand of death"
-x = 22
-y = 6
-chance = 75
-"#;
-
-const FAKEWIZ1_TOML: &str = r#"
-[level]
-name = "fakewiz1"
-branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor", "nodig", "noprayer"]
-
-[map]
-halign = "center"
-valign = "center"
-data = """
-.........
-.}}}}}}}.
-.}}---}}.
-.}--.--}.
-.}|...|}.
-.}--.--}.
-.}}---}}.
-.}}}}}}}.
-.........
-"""
-
-[[regions]]
-area = [0, 0, 8, 8]
-lit = false
-
-[[stairs]]
-direction = "up"
-x = 1
-y = 1
-
-[[stairs]]
-direction = "down"
-x = 7
-y = 7
-
-[[monsters]]
-id = "lich"
-x = 5
-y = 5
-
-[[monsters]]
-id = "vampire lord"
-x = 4
-y = 5
-
-[[monsters]]
-id = "kraken"
-x = 2
-y = 2
-"#;
-
-const FAKEWIZ2_TOML: &str = r#"
-[level]
-name = "fakewiz2"
-branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor", "nodig", "noprayer"]
-
-[map]
-halign = "center"
-valign = "center"
-data = """
-.........
-.}}}}}}}.
-.}}---}}.
-.}--.--}.
-.}|...|}.
-.}--.--}.
-.}}---}}.
-.}}}}}}}.
-.........
-"""
-
-[[regions]]
-area = [0, 0, 8, 8]
-lit = false
-
-[[stairs]]
-direction = "up"
-x = 1
-y = 1
-
-[[stairs]]
-direction = "down"
-x = 7
-y = 7
-
-[[monsters]]
-id = "lich"
-x = 5
-y = 5
-
-[[monsters]]
-id = "vampire lord"
-x = 4
-y = 5
-
-[[monsters]]
-id = "kraken"
-x = 2
-y = 2
-
-[[objects]]
-id = "Amulet of Yendor"
-x = 6
-y = 5
-"#;
+// These come directly from the canonical `data/dungeons/**` files to avoid
+// drift between runtime content and the data directory.
+const DUNGEON_TOPOLOGY_TOML: &str = include_str!("../../../data/dungeons/dungeon_topology.toml");
+const VALLEY_TOML: &str = include_str!("../../../data/dungeons/gehennom/valley.toml");
+const ASMODEUS_TOML: &str = include_str!("../../../data/dungeons/gehennom/asmodeus.toml");
+const BAALZEBUB_TOML: &str = include_str!("../../../data/dungeons/gehennom/baalzebub.toml");
+const JUIBLEX_TOML: &str = include_str!("../../../data/dungeons/gehennom/juiblex.toml");
+const ORCUS_TOML: &str = include_str!("../../../data/dungeons/gehennom/orcus.toml");
+const FAKEWIZ1_TOML: &str = include_str!("../../../data/dungeons/gehennom/fakewiz1.toml");
+const FAKEWIZ2_TOML: &str = include_str!("../../../data/dungeons/gehennom/fakewiz2.toml");
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_data_dir() -> std::path::PathBuf {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
+    }
 
     #[test]
     fn test_parse_level_definition() {
@@ -621,11 +289,9 @@ id = "goblin"
 
     #[test]
     fn test_load_dungeon_topology_file() {
-        let topo_path = std::path::Path::new(
-            "/Users/hz/Downloads/nethack-babel/data/dungeons/dungeon_topology.toml",
-        );
+        let topo_path = test_data_dir().join("dungeons/dungeon_topology.toml");
         if topo_path.exists() {
-            let topo = load_topology_from_file(topo_path).unwrap();
+            let topo = load_topology_from_file(&topo_path).unwrap();
             assert!(topo.branches.len() >= 8, "Should have at least 8 branches");
             assert!(topo.branches.iter().any(|b| b.name == "Main"));
             let gehen = topo.branches.iter().find(|b| b.name == "Gehennom").unwrap();
@@ -635,9 +301,9 @@ id = "goblin"
 
     #[test]
     fn test_load_gehennom_level_files() {
-        let dir = std::path::Path::new("/Users/hz/Downloads/nethack-babel/data/dungeons/gehennom");
+        let dir = test_data_dir().join("dungeons/gehennom");
         if dir.exists() {
-            for entry in std::fs::read_dir(dir).unwrap() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
                 let entry = entry.unwrap();
                 if entry.path().extension().map_or(false, |e| e == "toml") {
                     let level = load_level_from_file(&entry.path()).unwrap_or_else(|e| {
@@ -651,9 +317,9 @@ id = "goblin"
 
     #[test]
     fn test_load_sokoban_level_files() {
-        let dir = std::path::Path::new("/Users/hz/Downloads/nethack-babel/data/dungeons/sokoban");
+        let dir = test_data_dir().join("dungeons/sokoban");
         if dir.exists() {
-            for entry in std::fs::read_dir(dir).unwrap() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
                 let entry = entry.unwrap();
                 if entry.path().extension().map_or(false, |e| e == "toml") {
                     let level = load_level_from_file(&entry.path()).unwrap_or_else(|e| {
@@ -665,6 +331,14 @@ id = "goblin"
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_embedded_topology_parses() {
+        let topo = load_topology_from_str(get_embedded_topology())
+            .expect("embedded dungeon topology should parse");
+        assert!(topo.branches.iter().any(|b| b.name == "Gehennom"));
+        assert!(topo.connections.iter().any(|c| c.to_branch == "Endgame"));
     }
 
     #[test]
