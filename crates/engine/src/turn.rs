@@ -19,7 +19,7 @@ use crate::makemon::{GoodPosFlags, MakeMonFlags, enexto, goodpos, makemon};
 use crate::map_gen::generate_level;
 use crate::mkobj::mksobj_at;
 use crate::special_levels::{
-    dispatch_special_level, identify_special_level, population_for_special_level,
+    dispatch_special_level, identify_special_level,
 };
 use crate::traps::{TrapEntityInfo, detect_trap, trigger_trap_at};
 use crate::world::{
@@ -1911,12 +1911,18 @@ fn generate_or_special_topology(
 ) -> (
     crate::map_gen::GeneratedLevel,
     crate::special_levels::SpecialLevelFlags,
-    Option<crate::special_levels::SpecialLevelId>,
+    Option<crate::special_levels::SpecialLevelPopulation>,
 ) {
     if let Some(id) = world.dungeon().check_topology_special(&branch, depth)
         && let Some(special) = dispatch_special_level(id, None, rng)
     {
-        return (special.generated, special.flags, Some(id));
+        let population =
+            crate::special_levels::population_for_special_level(id, &special.generated);
+        return (
+            special.generated,
+            special.flags,
+            (!population.is_empty()).then_some(population),
+        );
     }
     (
         generate_level(depth as u8, rng),
@@ -2018,15 +2024,14 @@ fn change_level_to_branch(
                 None,
             )
         } else {
-            let (generated, flags, special_id) =
+            let (generated, flags, special_population) =
                 generate_or_special_topology(world, target_branch, target_depth, rng);
-            let population = special_id.map(|id| population_for_special_level(id, &generated));
             (
                 generated.map,
                 generated.up_stairs,
                 generated.down_stairs,
                 flags,
-                population,
+                special_population,
             )
         };
 
@@ -2170,15 +2175,14 @@ fn change_level(
             )
         } else {
             // Generate a new level.
-            let (generated, flags, special_id) =
+            let (generated, flags, special_population) =
                 generate_or_special_topology(world, target_branch, target_depth, rng);
-            let population = special_id.map(|id| population_for_special_level(id, &generated));
             (
                 generated.map,
                 generated.up_stairs,
                 generated.down_stairs,
                 flags,
-                population,
+                special_population,
             )
         };
 
@@ -4974,6 +4978,47 @@ mod tests {
             .current_level
             .set_terrain(Position::new(5, 5), player_terrain);
         world
+    }
+
+    #[test]
+    fn test_generate_or_special_topology_returns_population_for_special_levels() {
+        let world = make_test_world();
+        let mut rng = test_rng();
+
+        let (_generated, flags, population) = generate_or_special_topology(
+            &world,
+            crate::dungeon::DungeonBranch::Gehennom,
+            12,
+            &mut rng,
+        );
+
+        assert!(flags.no_prayer, "Orcus should preserve no_prayer flags");
+        let population = population.expect("special levels should carry population plans");
+        assert!(
+            population
+                .monsters
+                .iter()
+                .any(|spawn| spawn.name.eq_ignore_ascii_case("Orcus")),
+            "Orcus level should carry its boss population directly from generation"
+        );
+    }
+
+    #[test]
+    fn test_generate_or_special_topology_omits_population_for_random_levels() {
+        let world = make_test_world();
+        let mut rng = test_rng();
+
+        let (_generated, flags, population) =
+            generate_or_special_topology(&world, crate::dungeon::DungeonBranch::Main, 2, &mut rng);
+
+        assert!(
+            !flags.no_dig && !flags.no_teleport && !flags.no_prayer && !flags.is_endgame,
+            "ordinary random levels should not inherit any special flags"
+        );
+        assert!(
+            population.is_none(),
+            "ordinary random levels should not synthesize special population plans"
+        );
     }
 
     fn has_monster_named(world: &GameWorld, name: &str) -> bool {
