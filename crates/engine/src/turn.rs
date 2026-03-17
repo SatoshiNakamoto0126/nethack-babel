@@ -2542,17 +2542,27 @@ fn resolve_monster_id_by_spec(monster_defs: &[MonsterDef], spec: &str) -> Option
         .strip_prefix("the ")
         .or_else(|| spec.strip_prefix("The "))
         .unwrap_or(spec);
+    let alias = monster_spec_alias(normalized);
 
     monster_defs
         .iter()
         .find(|def| {
             def.names.male.eq_ignore_ascii_case(spec)
                 || def.names.male.eq_ignore_ascii_case(normalized)
+                || alias.is_some_and(|name| def.names.male.eq_ignore_ascii_case(name))
                 || def.names.female.as_ref().is_some_and(|f| {
                     f.eq_ignore_ascii_case(spec) || f.eq_ignore_ascii_case(normalized)
                 })
         })
         .map(|def| def.id)
+}
+
+fn monster_spec_alias(spec: &str) -> Option<&'static str> {
+    match spec.to_ascii_lowercase().as_str() {
+        "centaur" => Some("plains centaur"),
+        "ronin" => Some("samurai"),
+        _ => None,
+    }
 }
 
 fn resolve_object_type_by_spec(object_defs: &[ObjectDef], spec: &str) -> Option<ObjectTypeId> {
@@ -5223,10 +5233,14 @@ mod tests {
         count_monsters_named(world, name) > 0
     }
 
-    fn normalize_monster_lookup(name: &str) -> &str {
-        name.strip_prefix("the ")
+    fn normalize_monster_lookup(name: &str) -> String {
+        let normalized = name
+            .strip_prefix("the ")
             .or_else(|| name.strip_prefix("The "))
-            .unwrap_or(name)
+            .unwrap_or(name);
+        monster_spec_alias(normalized)
+            .unwrap_or(normalized)
+            .to_ascii_lowercase()
     }
 
     fn count_monsters_named(world: &GameWorld, name: &str) -> usize {
@@ -5235,7 +5249,7 @@ mod tests {
             .ecs()
             .query::<(&Monster, &Name)>()
             .iter()
-            .filter(|(_, (_m, n))| normalize_monster_lookup(&n.0).eq_ignore_ascii_case(expected))
+            .filter(|(_, (_m, n))| normalize_monster_lookup(&n.0) == expected)
             .count()
     }
 
@@ -5317,6 +5331,24 @@ mod tests {
         assert!(
             monster_id.is_some(),
             "special monster resolver should ignore an optional leading article"
+        );
+    }
+
+    #[test]
+    fn test_resolve_monster_id_by_spec_accepts_centaur_alias() {
+        let monster_id = resolve_monster_id_by_spec(&test_game_data().monsters, "centaur");
+        assert!(
+            monster_id.is_some(),
+            "special monster resolver should map the classic centaur alias"
+        );
+    }
+
+    #[test]
+    fn test_resolve_monster_id_by_spec_accepts_ronin_alias() {
+        let monster_id = resolve_monster_id_by_spec(&test_game_data().monsters, "ronin");
+        assert!(
+            monster_id.is_some(),
+            "special monster resolver should map the classic ronin alias"
         );
     }
 
@@ -5565,7 +5597,7 @@ mod tests {
     }
 
     #[test]
-    fn test_entering_all_quest_starts_spawn_role_specific_leaders() {
+    fn test_entering_all_quest_starts_spawn_role_specific_leaders_and_guardians() {
         for (idx, role) in crate::role::Role::ALL.into_iter().enumerate() {
             let mut world = make_test_world();
             install_test_catalogs(&mut world);
@@ -5591,6 +5623,12 @@ mod tests {
                 "{} quest start should spawn leader {}",
                 role.name(),
                 crate::quest::quest_leader_for_role(role)
+            );
+            assert!(
+                has_monster_named(&world, crate::quest::quest_guardian_for_role(role)),
+                "{} quest start should spawn guardian {}",
+                role.name(),
+                crate::quest::quest_guardian_for_role(role)
             );
         }
     }
@@ -5632,7 +5670,7 @@ mod tests {
     }
 
     #[test]
-    fn test_entering_all_quest_goals_spawn_role_specific_nemeses_and_artifacts() {
+    fn test_entering_all_quest_goals_spawn_role_specific_nemeses_enemies_and_artifacts() {
         for (idx, role) in crate::role::Role::ALL.into_iter().enumerate() {
             let mut world = make_test_world();
             install_test_catalogs(&mut world);
@@ -5657,11 +5695,24 @@ mod tests {
                 crate::quest::quest_artifact_for_role(role),
             )
             .unwrap_or_else(|| panic!("{} quest artifact should exist", role.name()));
+            let enemies = crate::quest::quest_enemies_for_role(role);
             assert!(
                 has_monster_named(&world, crate::quest::quest_nemesis_for_role(role)),
                 "{} quest goal should spawn nemesis {}",
                 role.name(),
                 crate::quest::quest_nemesis_for_role(role)
+            );
+            assert!(
+                has_monster_named(&world, enemies.enemy1),
+                "{} quest goal should spawn primary quest enemy {}",
+                role.name(),
+                enemies.enemy1
+            );
+            assert!(
+                has_monster_named(&world, enemies.enemy2),
+                "{} quest goal should spawn secondary quest enemy {}",
+                role.name(),
+                enemies.enemy2
             );
             assert_eq!(
                 count_objects_with_artifact(&world, artifact.id),
@@ -5729,7 +5780,14 @@ mod tests {
 
         let eye = crate::artifacts::find_artifact_by_name("The Eye of the Aethiopica")
             .expect("Eye of the Aethiopica should exist");
+        let xorns = count_monsters_named(&world, "xorn");
+        let vampire_bats = count_monsters_named(&world, "vampire bat");
         assert_eq!(count_monsters_named(&world, "Dark One"), 1);
+        assert!(xorns >= 1, "wizard quest goal should spawn xorn escorts");
+        assert!(
+            vampire_bats >= 1,
+            "wizard quest goal should spawn vampire bat escorts"
+        );
         assert_eq!(count_objects_with_artifact(&world, eye.id), 1);
 
         change_level(&mut world, 6, true, &mut rng, &mut events);
@@ -5739,6 +5797,16 @@ mod tests {
             count_monsters_named(&world, "Dark One"),
             1,
             "revisiting wizard quest goal should not duplicate the nemesis"
+        );
+        assert_eq!(
+            count_monsters_named(&world, "xorn"),
+            xorns,
+            "revisiting wizard quest goal should not duplicate xorn escorts"
+        );
+        assert_eq!(
+            count_monsters_named(&world, "vampire bat"),
+            vampire_bats,
+            "revisiting wizard quest goal should not duplicate vampire bat escorts"
         );
         assert_eq!(
             count_objects_with_artifact(&world, eye.id),

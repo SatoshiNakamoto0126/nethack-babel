@@ -11,7 +11,10 @@ use rand::Rng;
 use crate::action::Position;
 use crate::dungeon::{LevelMap, Terrain};
 use crate::map_gen::{GeneratedLevel, Room};
-use crate::quest::{quest_artifact_for_role, quest_leader_for_role, quest_nemesis_for_role};
+use crate::quest::{
+    quest_artifact_for_role, quest_enemies_for_role, quest_guardian_for_role,
+    quest_leader_for_role, quest_nemesis_for_role,
+};
 use crate::role::Role;
 
 use nethack_babel_data::level_loader::{
@@ -2449,6 +2452,42 @@ fn room_center_pos(room: &Room) -> Position {
     Position::new(cx as i32, cy as i32)
 }
 
+fn room_anchor_positions(room: &Room, exclude: &[Position]) -> Vec<Position> {
+    let left = room.x as i32;
+    let right = room.right() as i32;
+    let top = room.y as i32;
+    let bottom = room.bottom() as i32;
+    let (cx, cy) = room.center();
+    let candidates = [
+        Position::new(left, top),
+        Position::new(right, top),
+        Position::new(left, bottom),
+        Position::new(right, bottom),
+        Position::new(cx as i32, top),
+        Position::new(cx as i32, bottom),
+        Position::new(left, cy as i32),
+        Position::new(right, cy as i32),
+    ];
+
+    let mut anchors = Vec::with_capacity(candidates.len());
+    for pos in candidates {
+        if exclude.contains(&pos) || anchors.contains(&pos) {
+            continue;
+        }
+        anchors.push(pos);
+    }
+    anchors
+}
+
+fn find_room_containing_pos(rooms: &[Room], pos: Position) -> Option<&Room> {
+    rooms.iter().find(|room| {
+        room.contains(
+            usize::try_from(pos.x).unwrap_or_default(),
+            usize::try_from(pos.y).unwrap_or_default(),
+        )
+    })
+}
+
 fn find_first_terrain(map: &LevelMap, terrain: Terrain) -> Option<Position> {
     for y in 0..map.height {
         for x in 0..map.width {
@@ -2742,15 +2781,31 @@ pub fn population_for_special_level_with_role(
             let Some(role) = quest_role_from_name(role_name) else {
                 return SpecialLevelPopulation::default();
             };
-            let pos = generated.rooms.first().map(room_center_pos);
+            let Some(room) = generated.rooms.first() else {
+                return SpecialLevelPopulation::default();
+            };
+            let leader_pos = room_center_pos(room);
+            let mut monsters = vec![SpecialMonsterSpawn {
+                name: quest_leader_for_role(role).to_string(),
+                pos: Some(leader_pos),
+                chance: 100,
+                peaceful: Some(true),
+                asleep: Some(false),
+            }];
+            monsters.extend(
+                room_anchor_positions(room, &[leader_pos])
+                    .into_iter()
+                    .take(4)
+                    .map(|pos| SpecialMonsterSpawn {
+                        name: quest_guardian_for_role(role).to_string(),
+                        pos: Some(pos),
+                        chance: 100,
+                        peaceful: Some(true),
+                        asleep: Some(false),
+                    }),
+            );
             SpecialLevelPopulation {
-                monsters: vec![SpecialMonsterSpawn {
-                    name: quest_leader_for_role(role).to_string(),
-                    pos,
-                    chance: 100,
-                    peaceful: Some(true),
-                    asleep: Some(false),
-                }],
+                monsters,
                 objects: Vec::new(),
             }
         }
@@ -2760,17 +2815,39 @@ pub fn population_for_special_level_with_role(
             };
             let pos = find_first_terrain(&generated.map, Terrain::Altar)
                 .or_else(|| generated.rooms.first().map(room_center_pos));
+            let Some(nemesis_pos) = pos else {
+                return SpecialLevelPopulation::default();
+            };
+            let escort_room = find_room_containing_pos(&generated.rooms, nemesis_pos)
+                .or_else(|| generated.rooms.first());
+            let enemies = quest_enemies_for_role(role);
+            let mut monsters = vec![SpecialMonsterSpawn {
+                name: quest_nemesis_for_role(role).to_string(),
+                pos: Some(nemesis_pos),
+                chance: 100,
+                peaceful: Some(false),
+                asleep: Some(false),
+            }];
+            if let Some(room) = escort_room {
+                let escort_names = [enemies.enemy1, enemies.enemy1, enemies.enemy2];
+                monsters.extend(
+                    room_anchor_positions(room, &[nemesis_pos])
+                        .into_iter()
+                        .zip(escort_names)
+                        .map(|(pos, name)| SpecialMonsterSpawn {
+                            name: name.to_string(),
+                            pos: Some(pos),
+                            chance: 100,
+                            peaceful: Some(false),
+                            asleep: Some(false),
+                        }),
+                );
+            }
             SpecialLevelPopulation {
-                monsters: vec![SpecialMonsterSpawn {
-                    name: quest_nemesis_for_role(role).to_string(),
-                    pos,
-                    chance: 100,
-                    peaceful: Some(false),
-                    asleep: Some(false),
-                }],
+                monsters,
                 objects: vec![SpecialObjectSpawn {
                     name: quest_artifact_for_role(role).to_string(),
-                    pos,
+                    pos: Some(nemesis_pos),
                     chance: 100,
                     quantity: Some(1),
                 }],
@@ -7235,6 +7312,12 @@ mod tests {
                 .any(|m| m.name.eq_ignore_ascii_case("Neferet the Green")),
             "wizard quest start population should include Neferet the Green"
         );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("apprentice")),
+            "wizard quest start population should include apprentice guardians"
+        );
     }
 
     #[test]
@@ -7259,10 +7342,22 @@ mod tests {
                 .any(|o| o.name == "The Eye of the Aethiopica"),
             "wizard quest goal population should include the Eye artifact"
         );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("vampire bat")),
+            "wizard quest goal population should include wizard quest enemies"
+        );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("xorn")),
+            "wizard quest goal population should include the secondary wizard quest enemy"
+        );
     }
 
     #[test]
-    fn test_population_quest_roles_cover_all_leaders_nemeses_and_artifacts() {
+    fn test_population_quest_roles_cover_all_leaders_guardians_nemeses_enemies_and_artifacts() {
         for (idx, role) in Role::ALL.into_iter().enumerate() {
             let role_name = role.name().to_ascii_lowercase();
             let mut start_rng = Pcg64::seed_from_u64(7000 + idx as u64);
@@ -7288,6 +7383,15 @@ mod tests {
                 role.name(),
                 quest_leader_for_role(role)
             );
+            assert!(
+                start_pop
+                    .monsters
+                    .iter()
+                    .any(|m| m.name == quest_guardian_for_role(role)),
+                "{} quest start should include guardian {}",
+                role.name(),
+                quest_guardian_for_role(role)
+            );
 
             let goal = dispatch_special_level(
                 SpecialLevelId::QuestGoal,
@@ -7308,6 +7412,19 @@ mod tests {
                 "{} quest goal should include nemesis {}",
                 role.name(),
                 quest_nemesis_for_role(role)
+            );
+            let enemies = quest_enemies_for_role(role);
+            assert!(
+                goal_pop.monsters.iter().any(|m| m.name == enemies.enemy1),
+                "{} quest goal should include primary enemy {}",
+                role.name(),
+                enemies.enemy1
+            );
+            assert!(
+                goal_pop.monsters.iter().any(|m| m.name == enemies.enemy2),
+                "{} quest goal should include secondary enemy {}",
+                role.name(),
+                enemies.enemy2
             );
             assert!(
                 goal_pop
