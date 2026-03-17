@@ -1312,25 +1312,15 @@ fn resolve_player_action(
                 .find_map(|(entity, (_, pos))| (pos.0 == target_pos).then_some(entity));
             if let Some(monster_entity) = monster_at_target {
                 if world.dungeon().branch == DungeonBranch::Quest
-                    && let Some(role) = current_player_role(world)
-                    && let Some(monster_name) = world
-                        .get_component::<Name>(monster_entity)
-                        .map(|name| name.0.clone())
+                    && current_player_role(world).is_some()
                 {
-                    let is_leader = quest_name_matches(
-                        &monster_name,
-                        crate::quest::quest_leader_for_role(role),
-                    );
-                    let is_nemesis = quest_name_matches(
-                        &monster_name,
-                        crate::quest::quest_nemesis_for_role(role),
-                    );
-                    let is_guardian = quest_name_matches(
-                        &monster_name,
-                        crate::quest::quest_guardian_for_role(role),
-                    );
+                    let quest_role = quest_npc_role_for_entity(world, monster_entity);
+                    let is_leader = quest_role == Some(crate::quest::QuestNpcRole::Leader);
+                    let is_nemesis = quest_role == Some(crate::quest::QuestNpcRole::Nemesis);
+                    let is_guardian = quest_role == Some(crate::quest::QuestNpcRole::Guardian);
 
                     if is_leader || is_nemesis || is_guardian {
+                        let role = current_player_role(world).expect("checked above");
                         let mut quest_state = read_quest_state(world, player);
                         let alignment_record = world
                             .get_component::<crate::religion::ReligionState>(player)
@@ -1375,12 +1365,7 @@ fn resolve_player_action(
                 }
 
                 if let Some(priest_data) = infer_priest_runtime(world, monster_entity) {
-                    if world
-                        .get_component::<crate::npc::Priest>(monster_entity)
-                        .is_none()
-                    {
-                        let _ = world.ecs_mut().insert_one(monster_entity, priest_data);
-                    }
+                    upsert_priest_component(world, monster_entity, priest_data);
                     if world.get_component::<Peaceful>(monster_entity).is_none() {
                         events.push(EngineEvent::msg("npc-chat-no-response"));
                         return;
@@ -2704,6 +2689,15 @@ fn respawn_cached_monsters(world: &mut GameWorld, cached_mons: &[CachedMonster])
         if cm.is_peaceful {
             let _ = world.ecs_mut().insert_one(entity, Peaceful);
         }
+        if let Some(priest) = cm.priest {
+            let _ = world.ecs_mut().insert_one(entity, priest);
+        }
+        if let Some(shopkeeper) = &cm.shopkeeper {
+            let _ = world.ecs_mut().insert_one(entity, shopkeeper.clone());
+        }
+        if let Some(role) = cm.quest_npc_role {
+            let _ = world.ecs_mut().insert_one(entity, role);
+        }
     }
 }
 
@@ -2719,6 +2713,121 @@ fn rebind_shopkeepers(world: &GameWorld, runtime_state: &mut CachedLevelRuntimeS
             .find(|(_, (_, name))| name.0 == shop.shopkeeper_name)
         {
             shop.shopkeeper = entity;
+        }
+    }
+}
+
+fn shopkeeper_home_pos(shop: &crate::shop::ShopRoom) -> Position {
+    shop.door_pos.unwrap_or(Position::new(
+        (shop.top_left.x + shop.bottom_right.x) / 2,
+        (shop.top_left.y + shop.bottom_right.y) / 2,
+    ))
+}
+
+fn upsert_shopkeeper_component(
+    world: &mut GameWorld,
+    entity: hecs::Entity,
+    shop: &crate::shop::ShopRoom,
+) {
+    let expected = crate::npc::Shopkeeper {
+        following: false,
+        displaced: false,
+        home_pos: shopkeeper_home_pos(shop),
+        name: shop.shopkeeper_name.clone(),
+    };
+    if let Some(mut live) = world.get_component_mut::<crate::npc::Shopkeeper>(entity) {
+        *live = expected;
+    } else {
+        let _ = world.ecs_mut().insert_one(entity, expected);
+    }
+}
+
+fn upsert_priest_component(
+    world: &mut GameWorld,
+    entity: hecs::Entity,
+    priest: crate::npc::Priest,
+) {
+    if let Some(mut live) = world.get_component_mut::<crate::npc::Priest>(entity) {
+        *live = priest;
+    } else {
+        let _ = world.ecs_mut().insert_one(entity, priest);
+    }
+}
+
+fn upsert_quest_npc_role(
+    world: &mut GameWorld,
+    entity: hecs::Entity,
+    role: crate::quest::QuestNpcRole,
+) {
+    if let Some(mut live) = world.get_component_mut::<crate::quest::QuestNpcRole>(entity) {
+        *live = role;
+    } else {
+        let _ = world.ecs_mut().insert_one(entity, role);
+    }
+}
+
+fn quest_npc_role_for_entity(
+    world: &GameWorld,
+    entity: hecs::Entity,
+) -> Option<crate::quest::QuestNpcRole> {
+    if let Some(role) = world.get_component::<crate::quest::QuestNpcRole>(entity) {
+        return Some(*role);
+    }
+
+    let player_role = current_player_role(world)?;
+    let name = world.get_component::<Name>(entity)?;
+    crate::quest::quest_npc_role_by_name(player_role, &name.0)
+}
+
+pub fn sync_current_level_npc_state(world: &mut GameWorld) {
+    let shops = world.dungeon().shop_rooms.clone();
+    for shop in &shops {
+        if world.ecs().contains(shop.shopkeeper) {
+            upsert_shopkeeper_component(world, shop.shopkeeper, shop);
+            continue;
+        }
+
+        let rebound_entity = world
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .find_map(|(entity, (_, name))| (name.0 == shop.shopkeeper_name).then_some(entity));
+        if let Some(entity) = rebound_entity {
+            if let Some(live_shop) = world
+                .dungeon_mut()
+                .shop_rooms
+                .iter_mut()
+                .find(|live_shop| live_shop.shopkeeper_name == shop.shopkeeper_name)
+            {
+                live_shop.shopkeeper = entity;
+            }
+            upsert_shopkeeper_component(world, entity, shop);
+        }
+    }
+
+    let player_role = current_player_role(world);
+    let monster_entities: Vec<hecs::Entity> = world
+        .ecs()
+        .query::<(&Monster,)>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .collect();
+    for entity in monster_entities {
+        if let Some(priest) = infer_priest_runtime(world, entity) {
+            upsert_priest_component(world, entity, priest);
+        }
+        let quest_role = if world.dungeon().branch == DungeonBranch::Quest {
+            player_role.and_then(|role| {
+                world
+                    .get_component::<Name>(entity)
+                    .map(|name| name.0.clone())
+                    .and_then(|name| crate::quest::quest_npc_role_by_name(role, &name))
+            })
+        } else {
+            None
+        };
+        if let Some(quest_role) = quest_role {
+            upsert_quest_npc_role(world, entity, quest_role);
         }
     }
 }
@@ -2774,6 +2883,15 @@ pub(crate) fn change_level_to_branch(
                 .get_component::<CreationOrder>(entity)
                 .map(|order| order.0)
                 .unwrap_or(0),
+            priest: world
+                .get_component::<crate::npc::Priest>(entity)
+                .map(|priest| *priest),
+            shopkeeper: world
+                .get_component::<crate::npc::Shopkeeper>(entity)
+                .map(|shopkeeper| (*shopkeeper).clone()),
+            quest_npc_role: world
+                .get_component::<crate::quest::QuestNpcRole>(entity)
+                .map(|role| *role),
         });
     }
 
@@ -2849,6 +2967,7 @@ pub(crate) fn change_level_to_branch(
     if let Some(pop) = special_population {
         apply_special_level_population(world, pop, rng);
     }
+    sync_current_level_npc_state(world);
     maybe_spawn_astral_guardian_angel(world, first_visit, rng, events);
 
     // 6. Mark visited and check level feeling.
@@ -2923,6 +3042,15 @@ fn change_level(
                 .get_component::<CreationOrder>(entity)
                 .map(|order| order.0)
                 .unwrap_or(0),
+            priest: world
+                .get_component::<crate::npc::Priest>(entity)
+                .map(|priest| *priest),
+            shopkeeper: world
+                .get_component::<crate::npc::Shopkeeper>(entity)
+                .map(|shopkeeper| (*shopkeeper).clone()),
+            quest_npc_role: world
+                .get_component::<crate::quest::QuestNpcRole>(entity)
+                .map(|role| *role),
         });
     }
 
@@ -2995,6 +3123,7 @@ fn change_level(
     if let Some(pop) = special_population {
         apply_special_level_population(world, pop, rng);
     }
+    sync_current_level_npc_state(world);
     maybe_spawn_astral_guardian_angel(world, first_visit, rng, events);
 
     // 8. Emit LevelChanged event.
@@ -4615,15 +4744,8 @@ fn mark_angry_quest_leader_from_targets(
     targets: &std::collections::HashSet<hecs::Entity>,
 ) {
     let player = world.player();
-    let Some(role) = current_player_role(world) else {
-        return;
-    };
-
-    let leader_name = crate::quest::quest_leader_for_role(role);
     let attacked_leader = targets.iter().any(|entity| {
-        world
-            .get_component::<Name>(*entity)
-            .is_some_and(|name| quest_name_matches(&name.0, leader_name))
+        quest_npc_role_for_entity(world, *entity) == Some(crate::quest::QuestNpcRole::Leader)
     });
     if !attacked_leader {
         return;
@@ -4688,7 +4810,7 @@ fn strip_leading_article(name: &str) -> &str {
         .unwrap_or(name)
 }
 
-fn quest_name_matches(actual: &str, expected: &str) -> bool {
+pub(crate) fn quest_name_matches(actual: &str, expected: &str) -> bool {
     actual.eq_ignore_ascii_case(expected)
         || strip_leading_article(actual).eq_ignore_ascii_case(strip_leading_article(expected))
 }
@@ -8710,6 +8832,18 @@ mod tests {
             },
             MovementPoints(NORMAL_SPEED as i32),
         ));
+        let priest = spawn_full_monster(&mut world, Position::new(4, 5), "oracle", 18);
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: Alignment::Lawful,
+                    has_shrine: false,
+                    is_high_priest: false,
+                },
+            )
+            .expect("priest should accept explicit priest component");
         world
             .dungeon_mut()
             .trap_map
@@ -8804,6 +8938,20 @@ mod tests {
             .get_component::<Name>(restored_shopkeeper)
             .expect("restored shopkeeper entity should be rebound to a live monster");
         assert_eq!(restored_name.0, "Izchak");
+        assert!(
+            world
+                .get_component::<crate::npc::Shopkeeper>(restored_shopkeeper)
+                .is_some(),
+            "restored shopkeeper should carry its explicit shopkeeper component"
+        );
+
+        let restored_priest =
+            find_monster_named(&world, "oracle").expect("restored priest should exist");
+        let restored_priest_data = world
+            .get_component::<crate::npc::Priest>(restored_priest)
+            .expect("restored priest should keep explicit priest component");
+        assert_eq!(restored_priest_data.alignment, Alignment::Lawful);
+        assert!(!restored_priest_data.has_shrine);
     }
 
     #[test]
@@ -11192,6 +11340,90 @@ mod tests {
                 EngineEvent::Message { key, .. } if key == "priest-protection-granted"
             )),
             "hostile priests should no longer grant protection"
+        );
+    }
+
+    #[test]
+    fn test_chatting_with_explicit_priest_component_off_altar_grants_protection() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        let _gold = spawn_inventory_gold(&mut world, 1_000, 'g');
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("monster should accept peaceful marker");
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: Alignment::Lawful,
+                    has_shrine: false,
+                    is_high_priest: false,
+                },
+            )
+            .expect("monster should accept explicit priest component");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-protection-granted"
+        )));
+    }
+
+    #[test]
+    fn test_chatting_with_explicit_quest_leader_role_bypasses_name_matching() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Quest;
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        if let Some(mut level) = world.get_component_mut::<ExperienceLevel>(player) {
+            level.0 = 14;
+        }
+        let mut religion = default_religion_state(&world, player);
+        religion.alignment_record = 10;
+        world
+            .ecs_mut()
+            .insert_one(player, religion)
+            .expect("player should accept religion state");
+
+        let leader = spawn_full_monster(&mut world, Position::new(6, 5), "mysterious sage", 20);
+        world
+            .ecs_mut()
+            .insert_one(leader, crate::quest::QuestNpcRole::Leader)
+            .expect("monster should accept explicit quest role");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-assigned"
+        )));
+        assert!(
+            world
+                .get_component::<crate::quest::QuestState>(player)
+                .is_some_and(|state| state.status == crate::quest::QuestStatus::Assigned)
         );
     }
 

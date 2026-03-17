@@ -51,6 +51,12 @@ pub struct CachedMonster {
     pub is_peaceful: bool,
     #[serde(default)]
     pub creation_order: u64,
+    #[serde(default)]
+    pub priest: Option<crate::npc::Priest>,
+    #[serde(default)]
+    pub shopkeeper: Option<crate::npc::Shopkeeper>,
+    #[serde(default)]
+    pub quest_npc_role: Option<crate::quest::QuestNpcRole>,
 }
 
 /// What occupies a single map cell.
@@ -1206,6 +1212,9 @@ mod tests {
             is_tame: false,
             is_peaceful: false,
             creation_order: 0,
+            priest: None,
+            shopkeeper: None,
+            quest_npc_role: None,
         }];
         ds.cache_current_level(monsters);
 

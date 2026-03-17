@@ -15,7 +15,7 @@ use nethack_babel_engine::dungeon::DungeonState;
 use nethack_babel_engine::equipment::EquipmentSlots;
 use nethack_babel_engine::inventory::Inventory;
 use nethack_babel_engine::o_init::AppearanceTable;
-use nethack_babel_engine::quest::QuestState;
+use nethack_babel_engine::quest::{QuestNpcRole, QuestState};
 use nethack_babel_engine::religion::ReligionState;
 use nethack_babel_engine::spells::SpellBook;
 use nethack_babel_engine::status::{Intrinsics, StatusEffects};
@@ -24,6 +24,10 @@ use nethack_babel_engine::world::{
     ArmorClass, Encumbrance, EncumbranceLevel, ExperienceLevel, GameWorld, HeroSpeed,
     HeroSpeedBonus, HitPoints, Monster, MovementPoints, Name, Nutrition, PlayerCombat, Positioned,
     Power, Speed, Tame,
+};
+use nethack_babel_engine::{
+    npc::{Priest, Shopkeeper},
+    turn::sync_current_level_npc_state,
 };
 
 // =========================================================================
@@ -185,6 +189,12 @@ pub struct SerializableMonster {
     pub is_peaceful: bool,
     #[serde(default)]
     pub creation_order: u64,
+    #[serde(default)]
+    pub priest: Option<Priest>,
+    #[serde(default)]
+    pub shopkeeper: Option<Shopkeeper>,
+    #[serde(default)]
+    pub quest_npc_role: Option<QuestNpcRole>,
 }
 
 /// Flattened item state with full component data.
@@ -529,6 +539,13 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             .get_component::<nethack_babel_engine::world::CreationOrder>(entity)
             .map(|c| c.0)
             .unwrap_or(0);
+        let priest = world.get_component::<Priest>(entity).map(|priest| *priest);
+        let shopkeeper = world
+            .get_component::<Shopkeeper>(entity)
+            .map(|shopkeeper| (*shopkeeper).clone());
+        let quest_npc_role = world
+            .get_component::<QuestNpcRole>(entity)
+            .map(|role| *role);
 
         monsters.push(SerializableMonster {
             position,
@@ -540,6 +557,9 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             is_tame,
             is_peaceful,
             creation_order,
+            priest,
+            shopkeeper,
+            quest_npc_role,
         });
     }
     monsters
@@ -745,7 +765,18 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
                 .ecs_mut()
                 .insert_one(entity, nethack_babel_engine::world::Peaceful);
         }
+        if let Some(priest) = m.priest {
+            let _ = world.ecs_mut().insert_one(entity, priest);
+        }
+        if let Some(shopkeeper) = &m.shopkeeper {
+            let _ = world.ecs_mut().insert_one(entity, shopkeeper.clone());
+        }
+        if let Some(role) = m.quest_npc_role {
+            let _ = world.ecs_mut().insert_one(entity, role);
+        }
     }
+
+    sync_current_level_npc_state(&mut world);
 
     world
 }
@@ -1303,6 +1334,14 @@ mod tests {
             .iter()
             .filter(|(_, (_monster, monster_name))| monster_name.0.eq_ignore_ascii_case(name))
             .count()
+    }
+
+    fn find_monster_named(world: &GameWorld, name: &str) -> Option<hecs::Entity> {
+        world.ecs().query::<(&Monster, &Name)>().iter().find_map(
+            |(entity, (_monster, monster_name))| {
+                monster_name.0.eq_ignore_ascii_case(name).then_some(entity)
+            },
+        )
     }
 
     fn count_objects_with_artifact_name(world: &GameWorld, artifact_name: &str) -> usize {
@@ -3258,6 +3297,81 @@ mod tests {
         assert!(events.iter().any(|event| matches!(
             event,
             EngineEvent::Message { key, .. } if key == "shk-angry-greeting"
+        )));
+    }
+
+    #[test]
+    fn round_trip_loaded_restores_explicit_npc_components_on_current_level() {
+        let mut world = make_stair_world(DungeonBranch::Quest, 1, Terrain::Floor);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        if let Some(mut level) = world.get_component_mut::<ExperienceLevel>(player) {
+            level.0 = 14;
+        }
+        let religion = wizard_story_religion(&world, player);
+        world
+            .ecs_mut()
+            .insert_one(player, religion)
+            .expect("player should accept religion state");
+
+        let leader = spawn_full_monster(&mut world, Position::new(6, 5), "mysterious sage", 20);
+        world
+            .ecs_mut()
+            .insert_one(leader, nethack_babel_engine::quest::QuestNpcRole::Leader)
+            .expect("leader should accept explicit quest role");
+
+        let priest = spawn_full_monster(&mut world, Position::new(4, 5), "oracle", 18);
+        world
+            .ecs_mut()
+            .insert_one(priest, nethack_babel_engine::world::Peaceful)
+            .expect("priest should accept peaceful marker");
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                nethack_babel_engine::npc::Priest {
+                    alignment: Alignment::Chaotic,
+                    has_shrine: false,
+                    is_high_priest: false,
+                },
+            )
+            .expect("priest should accept explicit priest component");
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("explicit-npc-components-round-trip", &world, [26u8; 32]);
+
+        let loaded_leader =
+            find_monster_named(&loaded, "mysterious sage").expect("leader should survive load");
+        assert_eq!(
+            loaded
+                .get_component::<nethack_babel_engine::quest::QuestNpcRole>(loaded_leader)
+                .map(|role| *role),
+            Some(nethack_babel_engine::quest::QuestNpcRole::Leader)
+        );
+
+        let loaded_priest =
+            find_monster_named(&loaded, "oracle").expect("priest should survive load");
+        let loaded_priest_data = loaded
+            .get_component::<nethack_babel_engine::npc::Priest>(loaded_priest)
+            .map(|priest| *priest)
+            .expect("explicit priest component should survive load");
+        assert_eq!(loaded_priest_data.alignment, Alignment::Chaotic);
+        assert!(!loaded_priest_data.has_shrine);
+
+        let mut rng = Pcg64::from_seed(loaded_rng);
+        let quest_events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(quest_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-assigned"
         )));
     }
 

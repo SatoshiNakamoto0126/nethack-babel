@@ -15,6 +15,14 @@ use serde::{Deserialize, Serialize};
 use crate::event::EngineEvent;
 use crate::role::Role;
 
+/// Explicit runtime role for quest-branch NPCs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum QuestNpcRole {
+    Leader,
+    Guardian,
+    Nemesis,
+}
+
 // ---------------------------------------------------------------------------
 // Quest status
 // ---------------------------------------------------------------------------
@@ -54,6 +62,19 @@ pub struct QuestState {
     pub leader_gender: u8,
     /// Gender index for the nemesis.
     pub nemesis_gender: u8,
+}
+
+/// Resolve a quest NPC role from an in-world monster name for the given player role.
+pub fn quest_npc_role_by_name(role: Role, name: &str) -> Option<QuestNpcRole> {
+    if super::turn::quest_name_matches(name, quest_leader_for_role(role)) {
+        Some(QuestNpcRole::Leader)
+    } else if super::turn::quest_name_matches(name, quest_nemesis_for_role(role)) {
+        Some(QuestNpcRole::Nemesis)
+    } else if super::turn::quest_name_matches(name, quest_guardian_for_role(role)) {
+        Some(QuestNpcRole::Guardian)
+    } else {
+        None
+    }
 }
 
 impl Default for QuestState {

@@ -11,6 +11,7 @@
 
 use hecs::Entity;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 use nethack_babel_data::Alignment;
 
@@ -24,7 +25,7 @@ use crate::world::{GameWorld, HitPoints, Positioned};
 // ---------------------------------------------------------------------------
 
 /// Marker component for temple priest NPCs.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Priest {
     /// The alignment of this priest's temple.
     pub alignment: Alignment,
@@ -35,7 +36,7 @@ pub struct Priest {
 }
 
 /// State for angel / aligned minion NPCs.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Angel {
     /// The alignment this angel serves.
     pub alignment: Alignment,
@@ -44,7 +45,7 @@ pub struct Angel {
 }
 
 /// Shopkeeper NPC state (movement / behavior, not billing — see shop.rs).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Shopkeeper {
     /// Whether the shopkeeper is following the hero.
     pub following: bool,
@@ -57,7 +58,7 @@ pub struct Shopkeeper {
 }
 
 /// Guard patrol state (castle guards, not vault guards).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Guard {
     /// Position the guard patrols to.
     pub patrol_target: Position,
@@ -66,11 +67,11 @@ pub struct Guard {
 }
 
 /// Marker component for vault guard NPCs.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultGuard;
 
 /// State component for the Wizard of Yendor.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WizardOfYendor {
     /// Turn when the Wizard was last killed.  0 means never killed.
     pub last_killed_turn: u32,
@@ -94,7 +95,7 @@ impl WizardOfYendor {
 }
 
 /// Marker component for item-stealing monsters (nymphs, monkeys, etc.).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Thief {
     /// Whether the thief teleports away after stealing.
     pub teleports_after_steal: bool,
