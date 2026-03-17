@@ -2188,7 +2188,11 @@ mod tests {
                 bknown: false,
             },
             Enchantment { spe: 0 },
-            ObjectLocation::Floor { x: 5, y: 5 },
+            ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
         ));
 
         // First pickup: blessed -> becomes uncursed, spe stays 0.
@@ -3039,7 +3043,11 @@ mod tests {
                 bknown: false,
             },
             Enchantment { spe: 0 },
-            ObjectLocation::Floor { x: 5, y: 5 },
+            ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
         ));
 
         let (survived, _events) = scare_monster_pickup(&mut world, scroll);
@@ -3836,7 +3844,11 @@ mod tests {
                 bknown: false,
             },
             Enchantment { spe: 0 },
-            ObjectLocation::Floor { x: 5, y: 5 },
+            ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
         ));
 
         let (survived, _events) = scare_monster_pickup(&mut world, scroll);

@@ -14,7 +14,7 @@ use nethack_babel_data::{
 
 use crate::action::{Direction, NameTarget, PlayerAction, Position};
 use crate::conduct::ConductState;
-use crate::dungeon::{CachedMonster, DungeonBranch, Terrain};
+use crate::dungeon::{CachedLevelRuntimeState, CachedMonster, DungeonBranch, Terrain};
 use crate::event::{EngineEvent, HpSource, HungerLevel};
 use crate::makemon::{GoodPosFlags, MakeMonFlags, enexto, goodpos, makemon};
 use crate::map_gen::generate_level;
@@ -798,9 +798,12 @@ fn resolve_player_action(
                 .query::<&nethack_babel_data::ObjectLocation>()
                 .iter()
             {
-                if let nethack_babel_data::ObjectLocation::Floor { x, y } = *loc
-                    && x == player_pos.x as i16
-                    && y == player_pos.y as i16
+                if crate::dungeon::floor_position_on_level(
+                    loc,
+                    world.dungeon().branch,
+                    world.dungeon().depth,
+                )
+                .is_some_and(|pos| pos == player_pos)
                     && world
                         .get_component::<crate::environment::Container>(entity)
                         .is_some()
@@ -2153,6 +2156,42 @@ fn generate_or_special_topology(
     )
 }
 
+fn respawn_cached_monsters(world: &mut GameWorld, cached_mons: &[CachedMonster]) {
+    for cm in cached_mons {
+        world.spawn((
+            Monster,
+            Positioned(cm.position),
+            Name(cm.name.clone()),
+            HitPoints {
+                current: cm.hp_current,
+                max: cm.hp_max,
+            },
+            Speed(cm.speed),
+            DisplaySymbol {
+                symbol: cm.symbol,
+                color: cm.color,
+            },
+            MovementPoints(NORMAL_SPEED as i32),
+        ));
+    }
+}
+
+fn rebind_shopkeepers(world: &GameWorld, runtime_state: &mut CachedLevelRuntimeState) {
+    for shop in &mut runtime_state.shop_rooms {
+        if world.ecs().contains(shop.shopkeeper) {
+            continue;
+        }
+        if let Some((entity, _)) = world
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .find(|(_, (_, name))| name.0 == shop.shopkeeper_name)
+        {
+            shop.shopkeeper = entity;
+        }
+    }
+}
+
 /// Perform a level transition into a different branch.
 ///
 /// Similar to `change_level` but switches the dungeon branch.
@@ -2211,9 +2250,9 @@ pub(crate) fn change_level_to_branch(
     world.dungeon_mut().depth = target_depth;
 
     // 3. Load or generate the target level.
-    let (new_map, new_up_stairs, new_down_stairs, flags, special_population) =
+    let (new_map, new_up_stairs, new_down_stairs, runtime_state, special_population) =
         if world.dungeon().has_visited(target_branch, target_depth) {
-            let (map, cached_mons) = world
+            let (map, cached_mons, mut runtime_state) = world
                 .dungeon_mut()
                 .load_cached_level(target_branch, target_depth)
                 .expect("has_visited was true");
@@ -2221,31 +2260,10 @@ pub(crate) fn change_level_to_branch(
             let up_pos = find_terrain(&map, Terrain::StairsUp);
             let down_pos = find_terrain(&map, Terrain::StairsDown);
 
-            for cm in &cached_mons {
-                world.spawn((
-                    Monster,
-                    Positioned(cm.position),
-                    Name(cm.name.clone()),
-                    HitPoints {
-                        current: cm.hp_current,
-                        max: cm.hp_max,
-                    },
-                    Speed(cm.speed),
-                    DisplaySymbol {
-                        symbol: cm.symbol,
-                        color: cm.color,
-                    },
-                    MovementPoints(NORMAL_SPEED as i32),
-                ));
-            }
+            respawn_cached_monsters(world, &cached_mons);
+            rebind_shopkeepers(world, &mut runtime_state);
 
-            (
-                map,
-                up_pos,
-                down_pos,
-                crate::special_levels::SpecialLevelFlags::default(),
-                None,
-            )
+            (map, up_pos, down_pos, runtime_state, None)
         } else {
             let (generated, flags, special_population) =
                 generate_or_special_topology(world, target_branch, target_depth, rng);
@@ -2253,14 +2271,19 @@ pub(crate) fn change_level_to_branch(
                 generated.map,
                 generated.up_stairs,
                 generated.down_stairs,
-                flags,
+                CachedLevelRuntimeState {
+                    current_level_flags: flags.into(),
+                    ..Default::default()
+                },
                 special_population,
             )
         };
 
     // 4. Install the new level map and store flags.
     world.dungeon_mut().current_level = new_map;
-    world.dungeon_mut().current_level_flags = flags.into();
+    world
+        .dungeon_mut()
+        .restore_current_level_runtime_state(runtime_state);
     sync_current_level_invocation_access(world, rng);
 
     // 5. Place the player.
@@ -2370,10 +2393,10 @@ fn change_level(
 
     // 5. Load or generate the target level.
     let target_branch = branch;
-    let (new_map, new_up_stairs, new_down_stairs, flags, special_population) =
+    let (new_map, new_up_stairs, new_down_stairs, runtime_state, special_population) =
         if world.dungeon().has_visited(target_branch, target_depth) {
             // Load from cache.
-            let (map, cached_mons) = world
+            let (map, cached_mons, mut runtime_state) = world
                 .dungeon_mut()
                 .load_cached_level(target_branch, target_depth)
                 .expect("has_visited was true");
@@ -2383,31 +2406,10 @@ fn change_level(
             let down_pos = find_terrain(&map, Terrain::StairsDown);
 
             // Respawn cached monsters.
-            for cm in &cached_mons {
-                world.spawn((
-                    Monster,
-                    Positioned(cm.position),
-                    Name(cm.name.clone()),
-                    HitPoints {
-                        current: cm.hp_current,
-                        max: cm.hp_max,
-                    },
-                    Speed(cm.speed),
-                    DisplaySymbol {
-                        symbol: cm.symbol,
-                        color: cm.color,
-                    },
-                    MovementPoints(NORMAL_SPEED as i32),
-                ));
-            }
+            respawn_cached_monsters(world, &cached_mons);
+            rebind_shopkeepers(world, &mut runtime_state);
 
-            (
-                map,
-                up_pos,
-                down_pos,
-                crate::special_levels::SpecialLevelFlags::default(),
-                None,
-            )
+            (map, up_pos, down_pos, runtime_state, None)
         } else {
             // Generate a new level.
             let (generated, flags, special_population) =
@@ -2416,14 +2418,19 @@ fn change_level(
                 generated.map,
                 generated.up_stairs,
                 generated.down_stairs,
-                flags,
+                CachedLevelRuntimeState {
+                    current_level_flags: flags.into(),
+                    ..Default::default()
+                },
                 special_population,
             )
         };
 
     // 6. Install the new level map and store flags.
     world.dungeon_mut().current_level = new_map;
-    world.dungeon_mut().current_level_flags = flags.into();
+    world
+        .dungeon_mut()
+        .restore_current_level_runtime_state(runtime_state);
     sync_current_level_invocation_access(world, rng);
 
     // 7. Place the player on the appropriate stairs.
@@ -4465,6 +4472,7 @@ mod tests {
             ObjectLocation::Floor {
                 x: pos.x as i16,
                 y: pos.y as i16,
+                level: world.dungeon().current_data_dungeon_level(),
             },
         ))
     }
@@ -4711,7 +4719,7 @@ mod tests {
             "autopickup disabled should not pick coin"
         );
         let loc = world.get_component::<ObjectLocation>(coin).unwrap();
-        assert!(matches!(*loc, ObjectLocation::Floor { x: 6, y: 5 }));
+        assert!(matches!(*loc, ObjectLocation::Floor { x: 6, y: 5, .. }));
     }
 
     #[test]
@@ -4791,6 +4799,83 @@ mod tests {
         );
         assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
         assert_eq!(world.dungeon().depth, 21);
+    }
+
+    #[test]
+    fn test_invocation_traversal_reaches_endgame_from_gehennom() {
+        let mut world = make_stair_world(Terrain::StairsDown, 20);
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        let mut rng = test_rng();
+
+        let events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+        );
+        assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
+        assert_eq!(world.dungeon().depth, 21);
+
+        let invocation_pos = world
+            .dungeon()
+            .trap_map
+            .traps
+            .iter()
+            .find(|trap| trap.trap_type == TrapType::VibratingSquare)
+            .map(|trap| trap.pos)
+            .expect("Gehennom 21 should expose a vibrating square before invocation");
+        set_player_position(&mut world, invocation_pos);
+
+        let bell = spawn_inventory_object_by_name(&mut world, "Bell of Opening", 'b');
+        let candelabrum =
+            spawn_inventory_object_by_name(&mut world, "Candelabrum of Invocation", 'c');
+        let book = spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'd');
+        let current_turn = world.turn() as i64;
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(bell) {
+            core.age = current_turn;
+        }
+        world
+            .ecs_mut()
+            .insert_one(candelabrum, Enchantment { spe: 7 })
+            .expect("candelabrum should accept candle count");
+        world
+            .ecs_mut()
+            .insert_one(
+                candelabrum,
+                LightSource {
+                    lit: true,
+                    recharged: 0,
+                },
+            )
+            .expect("candelabrum should accept light state");
+
+        let invocation_events = resolve_turn(
+            &mut world,
+            PlayerAction::Read { item: Some(book) },
+            &mut rng,
+        );
+        assert!(invocation_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "invocation-complete"
+        )));
+
+        let portal_pos = find_terrain(&world.dungeon().current_level, Terrain::MagicPortal)
+            .expect("successful invocation should expose a magic portal");
+        let (entry_pos, direction) =
+            adjacent_walkable_step(&world.dungeon().current_level, portal_pos)
+                .expect("portal should have at least one adjacent walkable entry tile");
+        set_player_position(&mut world, entry_pos);
+
+        let portal_events = resolve_turn(&mut world, PlayerAction::Move { direction }, &mut rng);
+        assert!(
+            portal_events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+        );
+        assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+        assert_eq!(world.dungeon().depth, 1);
+        assert!(world.dungeon().current_level_flags.is_endgame);
     }
 
     #[test]
@@ -5896,6 +5981,29 @@ mod tests {
             .current_level
             .set_terrain(portal_pos, Terrain::MagicPortal);
         world
+    }
+
+    fn set_player_position(world: &mut GameWorld, pos: Position) {
+        if let Some(mut player_pos) = world.get_component_mut::<Positioned>(world.player()) {
+            player_pos.0 = pos;
+        }
+    }
+
+    fn adjacent_walkable_step(
+        map: &crate::dungeon::LevelMap,
+        target: Position,
+    ) -> Option<(Position, Direction)> {
+        let candidates = [
+            (Direction::East, Position::new(target.x - 1, target.y)),
+            (Direction::West, Position::new(target.x + 1, target.y)),
+            (Direction::South, Position::new(target.x, target.y - 1)),
+            (Direction::North, Position::new(target.x, target.y + 1)),
+        ];
+        candidates.into_iter().find_map(|(dir, pos)| {
+            map.get(pos)
+                .is_some_and(|cell| cell.terrain.is_walkable())
+                .then_some((pos, dir))
+        })
     }
 
     #[test]
@@ -7062,6 +7170,173 @@ mod tests {
             count_monsters_named(&world, "high priest"),
             1,
             "revisiting Sanctum should not duplicate the high priest"
+        );
+    }
+
+    #[test]
+    fn test_revisiting_level_restores_cached_runtime_state() {
+        let mut world = make_stair_world(Terrain::StairsDown, 1);
+        let shopkeeper = world.spawn((
+            Monster,
+            Positioned(Position::new(6, 5)),
+            Name("Izchak".to_string()),
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
+            Speed(12),
+            DisplaySymbol {
+                symbol: '@',
+                color: nethack_babel_data::Color::White,
+            },
+            MovementPoints(NORMAL_SPEED as i32),
+        ));
+        world
+            .dungeon_mut()
+            .trap_map
+            .traps
+            .push(crate::traps::TrapInstance {
+                pos: Position::new(4, 4),
+                trap_type: TrapType::Pit,
+                detected: true,
+                triggered_count: 1,
+            });
+        world
+            .dungeon_mut()
+            .engraving_map
+            .insert(crate::engrave::Engraving::new(
+                "Elbereth".to_string(),
+                crate::engrave::EngraveMethod::Blade,
+                Position::new(4, 5),
+            ));
+        world.dungeon_mut().current_level_flags.no_prayer = true;
+        world.dungeon_mut().current_level_flags.no_teleport = true;
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(crate::vault::VaultRoom {
+                top_left: Position::new(6, 6),
+                bottom_right: Position::new(7, 7),
+            });
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(3, 3),
+                Position::new(7, 7),
+                crate::shop::ShopType::General,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        world.dungeon_mut().vault_guard_present = true;
+        world
+            .dungeon_mut()
+            .gas_clouds
+            .push(crate::region::GasCloud {
+                position: Position::new(5, 6),
+                radius: 1,
+                turns_remaining: 3,
+                damage_type: crate::region::GasCloudType::Poison,
+                damage_per_turn: 6,
+            });
+
+        let mut rng = test_rng();
+        let down_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert!(
+            down_events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+        );
+
+        let up_stairs = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
+            .expect("generated level 2 should provide stairs up");
+        set_player_position(&mut world, up_stairs);
+        let up_events = resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+        assert!(
+            up_events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+        );
+
+        assert_eq!(world.dungeon().depth, 1);
+        assert!(
+            world
+                .dungeon()
+                .trap_map
+                .trap_at(Position::new(4, 4))
+                .is_some()
+        );
+        assert!(
+            world
+                .dungeon()
+                .engraving_map
+                .is_elbereth_at(Position::new(4, 5))
+        );
+        assert!(world.dungeon().current_level_flags.no_prayer);
+        assert!(world.dungeon().current_level_flags.no_teleport);
+        assert_eq!(world.dungeon().vault_rooms.len(), 1);
+        assert_eq!(world.dungeon().shop_rooms.len(), 1);
+        assert!(world.dungeon().vault_guard_present);
+        assert_eq!(world.dungeon().gas_clouds.len(), 1);
+        assert_eq!(world.dungeon().gas_clouds[0].turns_remaining, 2);
+
+        let restored_shopkeeper = world.dungeon().shop_rooms[0].shopkeeper;
+        let restored_name = world
+            .get_component::<Name>(restored_shopkeeper)
+            .expect("restored shopkeeper entity should be rebound to a live monster");
+        assert_eq!(restored_name.0, "Izchak");
+    }
+
+    #[test]
+    fn test_floor_items_stay_scoped_to_their_original_level() {
+        let mut world = make_stair_world(Terrain::StairsDown, 1);
+        let coin_pos = Position::new(4, 4);
+        let coin = spawn_floor_coin(&mut world, coin_pos);
+        let level_one = crate::dungeon::data_dungeon_level(DungeonBranch::Main, 1);
+        let mut rng = test_rng();
+
+        assert!(
+            crate::inventory::items_at_position(&world, coin_pos).contains(&coin),
+            "floor item should be visible on its origin level before moving away"
+        );
+        assert!(matches!(
+            *world
+                .get_component::<ObjectLocation>(coin)
+                .expect("coin should have ObjectLocation"),
+            ObjectLocation::Floor { x: 4, y: 4, level } if level == level_one
+        ));
+
+        let down_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert!(
+            down_events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+        );
+        assert_eq!(world.dungeon().depth, 2);
+        assert!(
+            !crate::inventory::items_at_position(&world, coin_pos).contains(&coin),
+            "depth-1 floor item should not leak onto depth 2"
+        );
+        assert!(matches!(
+            *world
+                .get_component::<ObjectLocation>(coin)
+                .expect("coin should retain its floor location"),
+            ObjectLocation::Floor { x: 4, y: 4, level } if level == level_one
+        ));
+
+        let up_stairs = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
+            .expect("generated level 2 should provide stairs up");
+        set_player_position(&mut world, up_stairs);
+        let up_events = resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+        assert!(
+            up_events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+        );
+        assert_eq!(world.dungeon().depth, 1);
+        assert!(
+            crate::inventory::items_at_position(&world, coin_pos).contains(&coin),
+            "revisiting depth 1 should make its floor item visible again"
         );
     }
 
@@ -8644,6 +8919,132 @@ mod tests {
             .get_component::<PlayerQuestItems>(player)
             .expect("quest sync should persist player quest item flags");
         assert!(quest_items.has_quest_artifact);
+    }
+
+    #[test]
+    fn test_quest_traversal_assignment_completion_and_return_to_leader() {
+        let mut world = make_stair_world(Terrain::StairsDown, 1);
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world.dungeon_mut().branch = DungeonBranch::Quest;
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        let mut religion = default_religion_state(&world, player);
+        religion.experience_level = 14;
+        religion.alignment_record = 10;
+        world
+            .ecs_mut()
+            .insert_one(player, religion)
+            .expect("player should accept religion state");
+        if let Some(mut level) = world.get_component_mut::<ExperienceLevel>(player) {
+            level.0 = 14;
+        }
+        world.spawn((
+            Monster,
+            Positioned(Position::new(6, 5)),
+            Name("Neferet the Green".to_string()),
+            HitPoints {
+                current: 30,
+                max: 30,
+            },
+            Speed(12),
+            DisplaySymbol {
+                symbol: '@',
+                color: nethack_babel_data::Color::Green,
+            },
+            MovementPoints(NORMAL_SPEED as i32),
+        ));
+
+        let mut rng = test_rng();
+        let assign_events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(assign_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-assigned"
+        )));
+
+        for expected_depth in 2..=7 {
+            if expected_depth > 2 {
+                let stairs_down = find_terrain(&world.dungeon().current_level, Terrain::StairsDown)
+                    .expect("quest traversal should preserve stairs down");
+                set_player_position(&mut world, stairs_down);
+            }
+            let events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+            assert!(
+                events
+                    .iter()
+                    .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                "descending into quest depth {expected_depth} should change levels"
+            );
+            assert_eq!(world.dungeon().depth, expected_depth);
+        }
+
+        let eye = crate::artifacts::find_artifact_by_name("The Eye of the Aethiopica")
+            .expect("wizard quest artifact should exist");
+        let artifact_entity = world
+            .ecs()
+            .query::<&ObjectCore>()
+            .iter()
+            .find_map(|(entity, core)| (core.artifact == Some(eye.id)).then_some(entity))
+            .expect("quest goal should place the Eye artifact");
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(artifact_entity) {
+            *loc = ObjectLocation::Inventory;
+        }
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.push(artifact_entity);
+        }
+
+        let dark_one = world
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .find_map(|(entity, (_, name))| {
+                quest_name_matches(&name.0, "Dark One").then_some(entity)
+            })
+            .expect("quest goal should spawn the Dark One");
+        world
+            .despawn(dark_one)
+            .expect("nemesis should despawn cleanly");
+
+        let _ = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+        let quest_status = world
+            .get_component::<crate::quest::QuestState>(player)
+            .map(|state| state.status)
+            .expect("quest traversal should persist quest state");
+        assert_eq!(quest_status, crate::quest::QuestStatus::Completed);
+
+        for expected_depth in (1..=6).rev() {
+            let stairs_up = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
+                .expect("quest traversal should preserve stairs up");
+            set_player_position(&mut world, stairs_up);
+            let events = resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+            assert!(
+                events
+                    .iter()
+                    .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                "ascending into quest depth {expected_depth} should change levels"
+            );
+            assert_eq!(world.dungeon().depth, expected_depth);
+        }
+
+        let leader_events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(leader_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "quest-leader-nemesis-dead"
+        )));
     }
 
     #[test]

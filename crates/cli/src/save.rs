@@ -32,7 +32,7 @@ use nethack_babel_engine::world::{
 
 /// Current save format version.  Bump minor for backward-compatible changes,
 /// major for breaking changes.
-const SAVE_VERSION: [u8; 3] = [0, 3, 3];
+const SAVE_VERSION: [u8; 3] = [1, 0, 0];
 
 /// Magic bytes identifying a NetHack Babel save file.
 const SAVE_MAGIC: [u8; 4] = *b"NBSV";
@@ -2178,14 +2178,13 @@ mod tests {
     }
 
     #[test]
-    fn version_compatibility_older_minor() {
-        // Older minor version (same major) should be compatible.
-        let older = [SAVE_VERSION[0], SAVE_VERSION[1].saturating_sub(1), 0];
-        assert!(is_compatible_version(older));
+    fn version_compatibility_older_major_rejected() {
+        let older = [SAVE_VERSION[0] - 1, 9, 9];
+        assert!(!is_compatible_version(older));
     }
 
     #[test]
-    fn version_compatibility_different_major() {
+    fn version_compatibility_newer_major_rejected() {
         let diff = [SAVE_VERSION[0] + 1, 0, 0];
         assert!(!is_compatible_version(diff));
     }
@@ -2585,6 +2584,214 @@ mod tests {
                 .iter()
                 .any(|trap| trap.trap_type == nethack_babel_data::TrapType::VibratingSquare),
             "the vibrating square marker should be gone once invocation has been recorded"
+        );
+    }
+
+    #[test]
+    fn round_trip_loaded_revisit_restores_cached_runtime_state() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::StairsDown);
+        let shopkeeper = world.spawn((
+            Monster,
+            Positioned(Position::new(6, 5)),
+            Name("Izchak".to_string()),
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
+            Speed(12),
+            nethack_babel_engine::world::DisplaySymbol {
+                symbol: '@',
+                color: nethack_babel_data::Color::White,
+            },
+            MovementPoints(12),
+        ));
+        world
+            .dungeon_mut()
+            .trap_map
+            .traps
+            .push(nethack_babel_engine::traps::TrapInstance {
+                pos: Position::new(4, 4),
+                trap_type: nethack_babel_data::TrapType::Pit,
+                detected: true,
+                triggered_count: 1,
+            });
+        world
+            .dungeon_mut()
+            .engraving_map
+            .insert(nethack_babel_engine::engrave::Engraving::new(
+                "Elbereth".to_string(),
+                nethack_babel_engine::engrave::EngraveMethod::Blade,
+                Position::new(4, 5),
+            ));
+        world.dungeon_mut().current_level_flags.no_prayer = true;
+        world.dungeon_mut().current_level_flags.no_teleport = true;
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(nethack_babel_engine::vault::VaultRoom {
+                top_left: Position::new(6, 6),
+                bottom_right: Position::new(7, 7),
+            });
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(nethack_babel_engine::shop::ShopRoom::new(
+                Position::new(3, 3),
+                Position::new(7, 7),
+                nethack_babel_engine::shop::ShopType::General,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        world.dungeon_mut().vault_guard_present = true;
+        world
+            .dungeon_mut()
+            .gas_clouds
+            .push(nethack_babel_engine::region::GasCloud {
+                position: Position::new(5, 6),
+                radius: 1,
+                turns_remaining: 3,
+                damage_type: nethack_babel_engine::region::GasCloudType::Poison,
+                damage_per_turn: 6,
+            });
+
+        let mut rng = Pcg64::seed_from_u64(7008);
+        resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(world.dungeon().depth, 2);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("runtime-cache-revisit", &world, [19u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let level2_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+            .expect("generated level 2 should have stairs up");
+        set_player_position(&mut loaded, level2_up);
+        resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+
+        assert_eq!(loaded.dungeon().depth, 1);
+        assert!(
+            loaded
+                .dungeon()
+                .trap_map
+                .trap_at(Position::new(4, 4))
+                .is_some()
+        );
+        assert!(
+            loaded
+                .dungeon()
+                .engraving_map
+                .is_elbereth_at(Position::new(4, 5))
+        );
+        assert!(loaded.dungeon().current_level_flags.no_prayer);
+        assert!(loaded.dungeon().current_level_flags.no_teleport);
+        assert_eq!(loaded.dungeon().vault_rooms.len(), 1);
+        assert_eq!(loaded.dungeon().shop_rooms.len(), 1);
+        assert!(loaded.dungeon().vault_guard_present);
+        assert_eq!(loaded.dungeon().gas_clouds.len(), 1);
+        assert_eq!(loaded.dungeon().gas_clouds[0].turns_remaining, 2);
+
+        let shopkeeper_name = loaded
+            .get_component::<Name>(loaded.dungeon().shop_rooms[0].shopkeeper)
+            .expect("restored shopkeeper should be rebound to a live entity");
+        assert_eq!(shopkeeper_name.0, "Izchak");
+    }
+
+    #[test]
+    fn round_trip_loaded_floor_items_stay_on_original_level() {
+        use nethack_babel_data::schema::{ObjectClass, ObjectTypeId};
+
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::StairsDown);
+        let coin_pos = Position::new(4, 4);
+        let level_one = world.dungeon().current_data_dungeon_level();
+        world.ecs_mut().spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Coin,
+                quantity: 42,
+                weight: 1,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            BucStatus {
+                cursed: false,
+                blessed: false,
+                bknown: false,
+            },
+            KnowledgeState {
+                known: false,
+                dknown: false,
+                rknown: false,
+                cknown: false,
+                lknown: false,
+                tknown: false,
+            },
+            ObjectLocation::Floor {
+                x: coin_pos.x as i16,
+                y: coin_pos.y as i16,
+                level: level_one,
+            },
+        ));
+
+        assert_eq!(
+            nethack_babel_engine::inventory::items_at_position(&world, coin_pos).len(),
+            1
+        );
+
+        let mut rng = Pcg64::seed_from_u64(7009);
+        resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(world.dungeon().depth, 2);
+        assert!(
+            nethack_babel_engine::inventory::items_at_position(&world, coin_pos).is_empty(),
+            "depth-1 floor item should not be visible on depth 2 before save"
+        );
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("floor-item-level-scope", &world, [20u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        assert_eq!(loaded.dungeon().depth, 2);
+        assert!(
+            nethack_babel_engine::inventory::items_at_position(&loaded, coin_pos).is_empty(),
+            "depth-1 floor item should still be hidden after save/load on depth 2"
+        );
+
+        let mut saw_saved_coin = false;
+        for (_entity, (core, loc)) in loaded
+            .ecs()
+            .query::<(&ObjectCore, &ObjectLocation)>()
+            .iter()
+        {
+            if core.object_class == ObjectClass::Coin
+                && core.quantity == 42
+                && matches!(
+                    *loc,
+                    ObjectLocation::Floor { x: 4, y: 4, level }
+                        if level
+                            == nethack_babel_engine::dungeon::data_dungeon_level(
+                                DungeonBranch::Main,
+                                1
+                            )
+                )
+            {
+                saw_saved_coin = true;
+                break;
+            }
+        }
+        assert!(
+            saw_saved_coin,
+            "serialized floor item should retain its original branch/depth metadata"
+        );
+
+        let level2_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+            .expect("generated level 2 should have stairs up");
+        set_player_position(&mut loaded, level2_up);
+        resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+
+        assert_eq!(loaded.dungeon().depth, 1);
+        assert_eq!(
+            nethack_babel_engine::inventory::items_at_position(&loaded, coin_pos).len(),
+            1,
+            "revisiting depth 1 after save/load should reveal the original floor item again"
         );
     }
 }

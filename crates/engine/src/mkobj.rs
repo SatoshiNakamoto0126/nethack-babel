@@ -135,11 +135,10 @@ pub fn mksobj_at(
     let entity = mksobj(world, otyp, init, obj_defs, rng)?;
 
     // Update location to floor.
+    let branch = world.dungeon().branch;
+    let depth = world.dungeon().depth;
     if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(entity) {
-        *loc = ObjectLocation::Floor {
-            x: pos.x as i16,
-            y: pos.y as i16,
-        };
+        *loc = crate::dungeon::floor_object_location(branch, depth, pos);
     }
 
     Some(entity)
@@ -1039,7 +1038,7 @@ mod tests {
         .expect("should create entity");
 
         let loc = world.get_component::<ObjectLocation>(entity).expect("loc");
-        assert!(matches!(*loc, ObjectLocation::Floor { x: 5, y: 7 }));
+        assert!(matches!(*loc, ObjectLocation::Floor { x: 5, y: 7, .. }));
     }
 
     // ── Test: weapon enchantment ranges are correct ──
@@ -1497,7 +1496,7 @@ mod tests {
 
         // Check position.
         let loc = world.get_component::<ObjectLocation>(entity).expect("loc");
-        assert!(matches!(*loc, ObjectLocation::Floor { x: 5, y: 5 }));
+        assert!(matches!(*loc, ObjectLocation::Floor { x: 5, y: 5, .. }));
     }
 
     // ── Test: make_statue creates entity with ObjectExtra ──
@@ -1557,6 +1556,6 @@ mod tests {
         let loc = world
             .get_component::<ObjectLocation>(info.entity)
             .expect("loc");
-        assert!(matches!(*loc, ObjectLocation::Floor { x: 10, y: 8 }));
+        assert!(matches!(*loc, ObjectLocation::Floor { x: 10, y: 8, .. }));
     }
 }

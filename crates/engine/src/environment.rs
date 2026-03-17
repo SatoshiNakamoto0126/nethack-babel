@@ -402,11 +402,10 @@ pub fn kick(
                         .is_some_and(|c| c.terrain.is_walkable())
                 {
                     // Move the item one tile.
+                    let branch = world.dungeon().branch;
+                    let depth = world.dungeon().depth;
                     if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item_entity) {
-                        *loc = ObjectLocation::Floor {
-                            x: beyond.x as i16,
-                            y: beyond.y as i16,
-                        };
+                        *loc = crate::dungeon::floor_object_location(branch, depth, beyond);
                     }
                     events.push(EngineEvent::msg("kick-item-moved"));
                 } else {
@@ -448,9 +447,12 @@ fn find_monster_at(world: &GameWorld, pos: Position) -> Option<Entity> {
 /// Find an item entity on the floor at the given position.
 fn find_floor_item_at(world: &GameWorld, pos: Position) -> Option<Entity> {
     for (entity, loc) in world.ecs().query::<&ObjectLocation>().iter() {
-        if let ObjectLocation::Floor { x, y } = *loc
-            && x == pos.x as i16
-            && y == pos.y as i16
+        if crate::dungeon::floor_position_on_level(
+            loc,
+            world.dungeon().branch,
+            world.dungeon().depth,
+        )
+        .is_some_and(|floor_pos| floor_pos == pos)
         {
             return Some(entity);
         }

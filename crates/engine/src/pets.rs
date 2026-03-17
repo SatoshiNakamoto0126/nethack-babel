@@ -553,9 +553,12 @@ fn find_food_nearby(world: &GameWorld, center: Position) -> Option<Position> {
             continue;
         }
         if let Some(loc) = world.get_component::<ObjectLocation>(_entity)
-            && let ObjectLocation::Floor { x, y } = *loc
+            && let Some(pos) = crate::dungeon::floor_position_on_level(
+                &loc,
+                world.dungeon().branch,
+                world.dungeon().depth,
+            )
         {
-            let pos = Position::new(x as i32, y as i32);
             let dist = chebyshev(center, pos);
             if dist <= SQSRCHRADIUS && (best.is_none() || dist < best.unwrap().1) {
                 best = Some((pos, dist));
@@ -584,9 +587,12 @@ fn pet_eat_food_at(world: &mut GameWorld, pet: Entity, current_turn: u32) -> Vec
                 continue;
             }
             if let Some(loc) = world.get_component::<ObjectLocation>(entity)
-                && let ObjectLocation::Floor { x, y } = *loc
-                && x as i32 == pet_pos.x
-                && y as i32 == pet_pos.y
+                && crate::dungeon::floor_position_on_level(
+                    &loc,
+                    world.dungeon().branch,
+                    world.dungeon().depth,
+                )
+                .is_some_and(|pos| pos == pet_pos)
             {
                 found = Some(entity);
                 break;
@@ -1771,6 +1777,7 @@ mod tests {
             ObjectLocation::Floor {
                 x: pos.x as i16,
                 y: pos.y as i16,
+                level: world.dungeon().current_data_dungeon_level(),
             },
         ))
     }

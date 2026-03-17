@@ -477,11 +477,10 @@ fn apply_grease(
             .get_component::<Positioned>(player)
             .map(|p| p.0)
             .unwrap_or(Position::new(0, 0));
+        let branch = world.dungeon().branch;
+        let depth = world.dungeon().depth;
         if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
-            *loc = ObjectLocation::Floor {
-                x: player_pos.x as i16,
-                y: player_pos.y as i16,
-            };
+            *loc = crate::dungeon::floor_object_location(branch, depth, player_pos);
         }
         return events;
     }

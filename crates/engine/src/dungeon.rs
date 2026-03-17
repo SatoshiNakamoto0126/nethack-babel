@@ -4,6 +4,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
+use nethack_babel_data::{DungeonLevel as DataDungeonLevel, ObjectLocation};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -499,6 +500,52 @@ fn topology_branch_name(branch: DungeonBranch) -> &'static str {
     }
 }
 
+/// Convert an engine dungeon branch to the serialized data-layer branch id.
+pub fn data_branch_id(branch: DungeonBranch) -> i16 {
+    match branch {
+        DungeonBranch::Main => 0,
+        DungeonBranch::Mines => 1,
+        DungeonBranch::Sokoban => 2,
+        DungeonBranch::Quest => 3,
+        DungeonBranch::FortLudios => 4,
+        DungeonBranch::Gehennom => 5,
+        DungeonBranch::VladsTower => 6,
+        DungeonBranch::Endgame => 7,
+    }
+}
+
+/// Convert an engine branch/depth pair into the serialized data-layer level key.
+pub fn data_dungeon_level(branch: DungeonBranch, depth: i32) -> DataDungeonLevel {
+    DataDungeonLevel {
+        branch: data_branch_id(branch),
+        depth: depth as i16,
+    }
+}
+
+/// Build a floor-object location for a specific dungeon level.
+pub fn floor_object_location(branch: DungeonBranch, depth: i32, pos: Position) -> ObjectLocation {
+    ObjectLocation::Floor {
+        x: pos.x as i16,
+        y: pos.y as i16,
+        level: data_dungeon_level(branch, depth),
+    }
+}
+
+/// Return the floor position if this object is on the requested level.
+pub fn floor_position_on_level(
+    location: &ObjectLocation,
+    branch: DungeonBranch,
+    depth: i32,
+) -> Option<Position> {
+    let expected = data_dungeon_level(branch, depth);
+    match location {
+        ObjectLocation::Floor { x, y, level } if *level == expected => {
+            Some(Position::new(*x as i32, *y as i32))
+        }
+        _ => None,
+    }
+}
+
 fn branch_from_topology_name(name: &str) -> Option<DungeonBranch> {
     Some(match name {
         "Main" => DungeonBranch::Main,
@@ -591,6 +638,31 @@ impl From<crate::special_levels::SpecialLevelFlags> for CurrentLevelFlags {
             is_endgame: f.is_endgame,
         }
     }
+}
+
+/// Cached runtime-only state associated with a visited level.
+///
+/// Unlike the level map itself, these fields are stored on `DungeonState`
+/// as the "currently active" level state. When the hero leaves a level we
+/// need to stash them alongside the map so that revisits restore traps,
+/// engravings, special flags, gas clouds, and room metadata instead of
+/// silently resetting them.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CachedLevelRuntimeState {
+    #[serde(default)]
+    pub trap_map: TrapMap,
+    #[serde(default)]
+    pub engraving_map: EngravingMap,
+    #[serde(default)]
+    pub current_level_flags: CurrentLevelFlags,
+    #[serde(default)]
+    pub vault_rooms: Vec<crate::vault::VaultRoom>,
+    #[serde(default)]
+    pub shop_rooms: Vec<crate::shop::ShopRoom>,
+    #[serde(default)]
+    pub vault_guard_present: bool,
+    #[serde(default)]
+    pub gas_clouds: Vec<GasCloud>,
 }
 
 /// Flags describing the current level's atmosphere, used to select
@@ -690,6 +762,9 @@ pub struct DungeonState {
     pub levels: HashMap<(DungeonBranch, i32), LevelMap>,
     /// Cache of monster state per level, keyed by (branch, depth).
     pub monster_cache: HashMap<(DungeonBranch, i32), Vec<CachedMonster>>,
+    /// Cache of non-map runtime state per level, keyed by (branch, depth).
+    #[serde(default)]
+    pub runtime_cache: HashMap<(DungeonBranch, i32), CachedLevelRuntimeState>,
     /// Traps on the current level.
     pub trap_map: TrapMap,
     /// Engravings on the current level.
@@ -745,6 +820,7 @@ impl DungeonState {
             branch: DungeonBranch::Main,
             levels: HashMap::new(),
             monster_cache: HashMap::new(),
+            runtime_cache: HashMap::new(),
             trap_map: TrapMap::new(),
             engraving_map: EngravingMap::new(),
             visited_set: HashSet::new(),
@@ -773,6 +849,7 @@ impl DungeonState {
             branch: DungeonBranch::Main,
             levels: HashMap::new(),
             monster_cache: HashMap::new(),
+            runtime_cache: HashMap::new(),
             trap_map: TrapMap::new(),
             engraving_map: EngravingMap::new(),
             visited_set: HashSet::new(),
@@ -804,6 +881,8 @@ impl DungeonState {
         let key = (self.branch, self.depth);
         self.levels.insert(key, self.current_level.clone());
         self.monster_cache.insert(key, monsters);
+        self.runtime_cache
+            .insert(key, self.current_level_runtime_state());
     }
 
     /// Check if a level has been visited before.
@@ -817,11 +896,36 @@ impl DungeonState {
         &mut self,
         branch: DungeonBranch,
         depth: i32,
-    ) -> Option<(LevelMap, Vec<CachedMonster>)> {
+    ) -> Option<(LevelMap, Vec<CachedMonster>, CachedLevelRuntimeState)> {
         let key = (branch, depth);
         let map = self.levels.get(&key)?.clone();
         let monsters = self.monster_cache.get(&key).cloned().unwrap_or_default();
-        Some((map, monsters))
+        let runtime = self.runtime_cache.get(&key).cloned().unwrap_or_default();
+        Some((map, monsters, runtime))
+    }
+
+    /// Snapshot runtime state associated with the active level.
+    pub fn current_level_runtime_state(&self) -> CachedLevelRuntimeState {
+        CachedLevelRuntimeState {
+            trap_map: self.trap_map.clone(),
+            engraving_map: self.engraving_map.clone(),
+            current_level_flags: self.current_level_flags,
+            vault_rooms: self.vault_rooms.clone(),
+            shop_rooms: self.shop_rooms.clone(),
+            vault_guard_present: self.vault_guard_present,
+            gas_clouds: self.gas_clouds.clone(),
+        }
+    }
+
+    /// Replace active runtime state with a cached snapshot.
+    pub fn restore_current_level_runtime_state(&mut self, state: CachedLevelRuntimeState) {
+        self.trap_map = state.trap_map;
+        self.engraving_map = state.engraving_map;
+        self.current_level_flags = state.current_level_flags;
+        self.vault_rooms = state.vault_rooms;
+        self.shop_rooms = state.shop_rooms;
+        self.vault_guard_present = state.vault_guard_present;
+        self.gas_clouds = state.gas_clouds;
     }
 
     /// Mark the current (branch, depth) as visited by the player.
@@ -1004,6 +1108,11 @@ impl DungeonState {
         DungeonLevel::new(self.branch, self.depth)
     }
 
+    /// Return the serialized data-layer level key for the current location.
+    pub fn current_data_dungeon_level(&self) -> DataDungeonLevel {
+        data_dungeon_level(self.branch, self.depth)
+    }
+
     /// Whether the current branch is hellish.
     pub fn is_hellish(&self) -> bool {
         branch_is_hellish(self.branch)
@@ -1096,7 +1205,7 @@ mod tests {
         ds.depth = 2;
 
         // Restore cached level 1.
-        let (map, mons) = ds
+        let (map, mons, runtime) = ds
             .load_cached_level(DungeonBranch::Main, 1)
             .expect("level 1 should be cached");
         assert_eq!(
@@ -1106,6 +1215,7 @@ mod tests {
         assert_eq!(mons.len(), 1);
         assert_eq!(mons[0].name, "grid bug");
         assert_eq!(mons[0].hp_current, 4);
+        assert!(runtime.trap_map.traps.is_empty());
     }
 
     #[test]
@@ -1761,17 +1871,65 @@ mod tests {
         ds.cache_current_level(vec![]);
 
         // Verify both are cached.
-        let (map1, _) = ds.load_cached_level(DungeonBranch::Main, 1).unwrap();
+        let (map1, _, _) = ds.load_cached_level(DungeonBranch::Main, 1).unwrap();
         assert_eq!(
             map1.get(Position::new(1, 1)).unwrap().terrain,
             Terrain::Floor
         );
 
-        let (map2, _) = ds.load_cached_level(DungeonBranch::Main, 2).unwrap();
+        let (map2, _, _) = ds.load_cached_level(DungeonBranch::Main, 2).unwrap();
         assert_eq!(
             map2.get(Position::new(2, 2)).unwrap().terrain,
             Terrain::Altar
         );
+    }
+
+    #[test]
+    fn test_cache_and_restore_level_runtime_state() {
+        let mut ds = DungeonState::with_entrance_depths(3, 3);
+        ds.trap_map.traps.push(crate::traps::TrapInstance {
+            pos: Position::new(4, 4),
+            trap_type: crate::traps::TrapType::Pit,
+            detected: true,
+            triggered_count: 1,
+        });
+        ds.engraving_map.insert(crate::engrave::Engraving::new(
+            "Elbereth".to_string(),
+            crate::engrave::EngraveMethod::Blade,
+            Position::new(5, 5),
+        ));
+        ds.current_level_flags.no_prayer = true;
+        ds.vault_rooms.push(crate::vault::VaultRoom {
+            top_left: Position::new(6, 6),
+            bottom_right: Position::new(7, 7),
+        });
+        ds.vault_guard_present = true;
+        ds.gas_clouds.push(crate::region::GasCloud {
+            position: Position::new(8, 8),
+            radius: 2,
+            turns_remaining: 3,
+            damage_type: crate::region::GasCloudType::Poison,
+            damage_per_turn: 6,
+        });
+
+        ds.cache_current_level(vec![]);
+
+        ds.trap_map = TrapMap::new();
+        ds.engraving_map = EngravingMap::new();
+        ds.current_level_flags = CurrentLevelFlags::default();
+        ds.vault_rooms.clear();
+        ds.vault_guard_present = false;
+        ds.gas_clouds.clear();
+
+        let (_map, _mons, runtime) = ds
+            .load_cached_level(DungeonBranch::Main, 1)
+            .expect("cached level should restore runtime state");
+        assert_eq!(runtime.trap_map.traps.len(), 1);
+        assert!(runtime.engraving_map.is_elbereth_at(Position::new(5, 5)));
+        assert!(runtime.current_level_flags.no_prayer);
+        assert_eq!(runtime.vault_rooms.len(), 1);
+        assert!(runtime.vault_guard_present);
+        assert_eq!(runtime.gas_clouds.len(), 1);
     }
 
     // ── DungeonTopology tests ───────────────────────────────────

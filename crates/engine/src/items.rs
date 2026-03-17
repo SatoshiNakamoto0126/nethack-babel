@@ -210,7 +210,11 @@ pub fn spawn_item(
     };
 
     let obj_loc = match location {
-        SpawnLocation::Floor(x, y) => ObjectLocation::Floor { x, y },
+        SpawnLocation::Floor(x, y) => ObjectLocation::Floor {
+            x,
+            y,
+            level: world.dungeon().current_data_dungeon_level(),
+        },
         SpawnLocation::Inventory => ObjectLocation::Inventory,
         SpawnLocation::Free => ObjectLocation::Free,
     };
@@ -532,14 +536,13 @@ pub fn drop_item(world: &mut GameWorld, player: Entity, item_entity: Entity) -> 
         core.inv_letter = None;
     }
     {
+        let branch = world.dungeon().branch;
+        let depth = world.dungeon().depth;
         let mut loc = match world.get_component_mut::<ObjectLocation>(item_entity) {
             Some(l) => l,
             None => return events,
         };
-        *loc = ObjectLocation::Floor {
-            x: pos.x as i16,
-            y: pos.y as i16,
-        };
+        *loc = crate::dungeon::floor_object_location(branch, depth, pos);
     }
 
     events.push(EngineEvent::ItemDropped {
@@ -617,7 +620,7 @@ mod tests {
         let loc = world
             .get_component::<ObjectLocation>(e)
             .expect("ObjectLocation");
-        assert!(matches!(*loc, ObjectLocation::Floor { x: 5, y: 5 }));
+        assert!(matches!(*loc, ObjectLocation::Floor { x: 5, y: 5, .. }));
 
         let ench = world.get_component::<Enchantment>(e).expect("Enchantment");
         assert_eq!(ench.spe, 3);
@@ -667,7 +670,7 @@ mod tests {
         assert!(matches!(events[0], EngineEvent::ItemDropped { .. }));
 
         let loc = world.get_component::<ObjectLocation>(item).unwrap();
-        assert!(matches!(*loc, ObjectLocation::Floor { x: 10, y: 10 }));
+        assert!(matches!(*loc, ObjectLocation::Floor { x: 10, y: 10, .. }));
 
         let core = world.get_component::<ObjectCore>(item).unwrap();
         assert!(core.inv_letter.is_none());

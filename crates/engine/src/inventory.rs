@@ -596,9 +596,12 @@ pub fn items_at_position(world: &GameWorld, pos: Position) -> Vec<Entity> {
     let mut result = Vec::new();
     for (entity, (core, loc)) in world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter() {
         let _ = core; // we just need the entity
-        if let ObjectLocation::Floor { x, y } = *loc
-            && x as i32 == pos.x
-            && y as i32 == pos.y
+        if crate::dungeon::floor_position_on_level(
+            loc,
+            world.dungeon().branch,
+            world.dungeon().depth,
+        )
+        .is_some_and(|floor_pos| floor_pos == pos)
         {
             result.push(entity);
         }
@@ -1824,7 +1827,7 @@ mod tests {
             .get_component::<ObjectLocation>(item)
             .expect("item should have ObjectLocation");
         assert!(
-            matches!(*loc, ObjectLocation::Floor { x: 10, y: 10 }),
+            matches!(*loc, ObjectLocation::Floor { x: 10, y: 10, .. }),
             "expected Floor(10,10), got {:?}",
             *loc
         );

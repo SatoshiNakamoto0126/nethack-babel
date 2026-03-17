@@ -666,9 +666,12 @@ fn apply_tinning_kit(
         .query::<(&ObjectCore, &nethack_babel_data::ObjectLocation)>()
         .iter()
     {
-        if let nethack_babel_data::ObjectLocation::Floor { x, y } = *loc
-            && x as i32 == player_pos.x
-            && y as i32 == player_pos.y
+        if crate::dungeon::floor_position_on_level(
+            loc,
+            world.dungeon().branch,
+            world.dungeon().depth,
+        )
+        .is_some_and(|pos| pos == player_pos)
         {
             // Check if it's a corpse (food class, name contains "corpse").
             if core.object_class == nethack_babel_data::ObjectClass::Food {
@@ -1206,6 +1209,7 @@ mod tests {
             ObjectLocation::Floor {
                 x: player_pos.x as i16,
                 y: player_pos.y as i16,
+                level: world.dungeon().current_data_dungeon_level(),
             },
             Name("giant ant corpse".to_string()),
         ));

@@ -77,6 +77,8 @@ pub enum ObjectLocation {
         x: i16,
         /// Y coordinate on the level map.
         y: i16,
+        /// Branch/depth of the dungeon level containing this floor object.
+        level: DungeonLevel,
     },
     /// OBJ_CONTAINED — object is inside a container.
     Contained {

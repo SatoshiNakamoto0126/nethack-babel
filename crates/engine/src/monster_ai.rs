@@ -977,8 +977,12 @@ pub fn monster_pickup(
                 && world
                     .get_component::<ObjectLocation>(entity)
                     .is_some_and(|loc| {
-                        matches!(*loc, ObjectLocation::Floor { x, y }
-                            if x as i32 == monster_pos.x && y as i32 == monster_pos.y)
+                        crate::dungeon::floor_position_on_level(
+                            &loc,
+                            world.dungeon().branch,
+                            world.dungeon().depth,
+                        )
+                        .is_some_and(|pos| pos == monster_pos)
                     })
         })
         .map(|(entity, _)| entity)
@@ -2446,6 +2450,7 @@ mod tests {
         let loc = ObjectLocation::Floor {
             x: x as i16,
             y: y as i16,
+            level: world.dungeon().current_data_dungeon_level(),
         };
         world.spawn((core, loc))
     }

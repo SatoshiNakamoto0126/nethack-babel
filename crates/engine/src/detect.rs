@@ -89,8 +89,9 @@ pub fn detect_objects(world: &GameWorld, _player: Entity) -> Vec<EngineEvent> {
     let mut detected: Vec<DetectedObject> = Vec::new();
 
     for (entity, (core, loc)) in world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter() {
-        if let ObjectLocation::Floor { x, y } = *loc {
-            let pos = Position::new(x as i32, y as i32);
+        if let Some(pos) =
+            crate::dungeon::floor_position_on_level(loc, world.dungeon().branch, world.dungeon().depth)
+        {
             detected.push(DetectedObject {
                 entity,
                 position: pos,
@@ -445,8 +446,12 @@ pub fn detect_gold(world: &GameWorld, _player: Entity) -> Vec<EngineEvent> {
 
     for (_entity, (core, loc)) in world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter() {
         if core.object_class == ObjectClass::Coin {
-            if let ObjectLocation::Floor { x, y } = *loc {
-                positions.push(Position::new(x as i32, y as i32));
+            if let Some(pos) = crate::dungeon::floor_position_on_level(
+                loc,
+                world.dungeon().branch,
+                world.dungeon().depth,
+            ) {
+                positions.push(pos);
             }
         }
     }
@@ -555,6 +560,7 @@ mod tests {
         let loc = ObjectLocation::Floor {
             x: pos.x as i16,
             y: pos.y as i16,
+            level: world.dungeon().current_data_dungeon_level(),
         };
         world.spawn((core, loc))
     }
