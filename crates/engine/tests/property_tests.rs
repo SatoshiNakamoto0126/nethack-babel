@@ -33,11 +33,6 @@ fn valid_ac() -> impl Strategy<Value = i32> {
     -50..50i32
 }
 
-/// Strategy for valid experience levels (1-30).
-fn valid_xlevel() -> impl Strategy<Value = u32> {
-    1..=30u32
-}
-
 /// Strategy for valid damage dice (1-10 dice, 1-20 sides).
 fn valid_dice() -> impl Strategy<Value = (u8, u8)> {
     (1..=10u8, 1..=20u8)

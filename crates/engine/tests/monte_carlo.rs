@@ -45,7 +45,7 @@ fn mc_hit_rate_easy_target() {
     let mut hits = 0;
     let mut rng = Pcg64::seed_from_u64(42);
     for _ in 0..SAMPLES {
-        let roll: u32 = rng.gen_range(1..=20);
+        let roll: u32 = rng.random_range(1..=20);
         if roll >= 15 {
             hits += 1;
         }
@@ -64,7 +64,7 @@ fn mc_hit_rate_hard_target() {
     let mut hits = 0;
     let mut rng = Pcg64::seed_from_u64(43);
     for _ in 0..SAMPLES {
-        let roll: u32 = rng.gen_range(1..=20);
+        let roll: u32 = rng.random_range(1..=20);
         if roll >= 5 {
             hits += 1;
         }
@@ -83,7 +83,7 @@ fn mc_natural_20_always_hits() {
     let mut nat20s = 0;
     let mut rng = Pcg64::seed_from_u64(44);
     for _ in 0..SAMPLES {
-        let roll: u32 = rng.gen_range(1..=20);
+        let roll: u32 = rng.random_range(1..=20);
         if roll == 20 {
             nat20s += 1;
         }
@@ -104,7 +104,7 @@ fn mc_d6_mean() {
     let mut total = 0u64;
     let mut rng = Pcg64::seed_from_u64(45);
     for _ in 0..SAMPLES {
-        total += rng.gen_range(1u64..=6);
+        total += rng.random_range(1u64..=6);
     }
     let mean = total as f64 / SAMPLES as f64;
     assert_mean_within_tolerance(mean, 3.5, 0.1, "1d6 mean");
@@ -116,8 +116,8 @@ fn mc_2d6_mean() {
     let mut total = 0u64;
     let mut rng = Pcg64::seed_from_u64(46);
     for _ in 0..SAMPLES {
-        total += rng.gen_range(1u64..=6);
-        total += rng.gen_range(1u64..=6);
+        total += rng.random_range(1u64..=6);
+        total += rng.random_range(1u64..=6);
     }
     let mean = total as f64 / SAMPLES as f64;
     assert_mean_within_tolerance(mean, 7.0, 0.15, "2d6 mean");
@@ -129,7 +129,7 @@ fn mc_d6_uniform_distribution() {
     let mut counts = [0u32; 6];
     let mut rng = Pcg64::seed_from_u64(47);
     for _ in 0..SAMPLES {
-        let roll: usize = rng.gen_range(0..6);
+        let roll: usize = rng.random_range(0..6);
         counts[roll] += 1;
     }
     for (face, &count) in counts.iter().enumerate() {
@@ -151,11 +151,11 @@ fn mc_rnl_positive_luck_biases_low() {
     let mut sum_neutral = 0i64;
     let mut rng = Pcg64::seed_from_u64(48);
     for _ in 0..SAMPLES {
-        let neutral: i64 = rng.gen_range(0..20);
+        let neutral: i64 = rng.random_range(0..20);
         sum_neutral += neutral;
 
-        let mut lucky: i64 = rng.gen_range(0..20);
-        let adj: i64 = rng.gen_range(0..=3); // luck 10 -> adj ~3
+        let mut lucky: i64 = rng.random_range(0..20);
+        let adj: i64 = rng.random_range(0..=3); // luck 10 -> adj ~3
         lucky = (lucky - adj).max(0);
         sum_lucky += lucky;
     }
@@ -178,7 +178,7 @@ fn mc_trap_detection_rate() {
     let mut found = 0;
     let mut rng = Pcg64::seed_from_u64(49);
     for _ in 0..SAMPLES {
-        if rng.gen_range(0u32..7) == 0 {
+        if rng.random_range(0u32..7) == 0 {
             found += 1;
         }
     }
@@ -198,7 +198,7 @@ fn mc_healing_potion_range() {
     let mut total = 0u64;
     let mut rng = Pcg64::seed_from_u64(50);
     for _ in 0..SAMPLES {
-        total += rng.gen_range(1u64..=8);
+        total += rng.random_range(1u64..=8);
     }
     let mean = total as f64 / SAMPLES as f64;
     assert_mean_within_tolerance(mean, 4.5, 0.15, "Healing potion mean");
@@ -211,8 +211,8 @@ fn mc_blessed_healing_higher_than_uncursed() {
     let mut sum_uncursed = 0u64;
     let mut rng = Pcg64::seed_from_u64(51);
     for _ in 0..SAMPLES {
-        sum_uncursed += rng.gen_range(1u64..=8);
-        sum_blessed += rng.gen_range(1u64..=8) + rng.gen_range(1u64..=8);
+        sum_uncursed += rng.random_range(1u64..=8);
+        sum_blessed += rng.random_range(1u64..=8) + rng.random_range(1u64..=8);
     }
     assert!(
         sum_blessed > sum_uncursed,
@@ -231,7 +231,7 @@ fn mc_identify_scroll_items_identified() {
     let mut full_id = 0;
     let mut rng = Pcg64::seed_from_u64(52);
     for _ in 0..SAMPLES {
-        if rng.gen_range(0u32..5) == 0 {
+        if rng.random_range(0u32..5) == 0 {
             full_id += 1;
         }
     }
@@ -251,7 +251,7 @@ fn mc_choking_rate_when_satiated() {
     let mut choked = 0;
     let mut rng = Pcg64::seed_from_u64(53);
     for _ in 0..SAMPLES {
-        if rng.gen_range(0u32..20) == 0 {
+        if rng.random_range(0u32..20) == 0 {
             choked += 1;
         }
     }
@@ -271,7 +271,7 @@ fn mc_random_monster_generation_rate() {
     let mut spawned = 0;
     let mut rng = Pcg64::seed_from_u64(54);
     for _ in 0..SAMPLES {
-        if rng.gen_range(0u32..70) == 0 {
+        if rng.random_range(0u32..70) == 0 {
             spawned += 1;
         }
     }
@@ -311,7 +311,7 @@ fn mc_corpse_intrinsic_gain_rate() {
     let mut gained = 0;
     let mut rng = Pcg64::seed_from_u64(55);
     for _ in 0..SAMPLES {
-        if rng.gen_range(0u32..3) == 0 {
+        if rng.random_range(0u32..3) == 0 {
             gained += 1;
         }
     }
@@ -334,7 +334,7 @@ fn mc_shop_unidentified_markup_distribution() {
     let mut rng = Pcg64::seed_from_u64(56);
     for _ in 0..SAMPLES {
         let variation = base_price / 4;
-        let price = base_price + rng.gen_range(-variation..=variation);
+        let price = base_price + rng.random_range(-variation..=variation);
         min_seen = min_seen.min(price);
         max_seen = max_seen.max(price);
     }
@@ -350,7 +350,7 @@ fn mc_special_room_selection_varies() {
     let mut types_seen = HashSet::new();
     let mut rng = Pcg64::seed_from_u64(57);
     for _ in 0..SAMPLES {
-        let room_type = match rng.gen_range(0u32..13) {
+        let room_type = match rng.random_range(0u32..13) {
             0 => "shop",
             1 => "temple",
             2 => "zoo",
@@ -384,7 +384,8 @@ fn mc_3d6_bell_curve() {
     let mut in_range = 0u32; // count rolls between 8 and 13 inclusive
     let mut rng = Pcg64::seed_from_u64(58);
     for _ in 0..SAMPLES {
-        let roll: u64 = rng.gen_range(1u64..=6) + rng.gen_range(1u64..=6) + rng.gen_range(1u64..=6);
+        let roll: u64 =
+            rng.random_range(1u64..=6) + rng.random_range(1u64..=6) + rng.random_range(1u64..=6);
         total += roll;
         if roll >= 8 && roll <= 13 {
             in_range += 1;
@@ -411,7 +412,7 @@ fn mc_saving_throw_rate() {
     let mut saves = 0;
     let mut rng = Pcg64::seed_from_u64(59);
     for _ in 0..SAMPLES {
-        if rng.gen_range(0u32..100) < mr {
+        if rng.random_range(0u32..100) < mr {
             saves += 1;
         }
     }
@@ -433,7 +434,7 @@ fn mc_fountain_wish_rate() {
     let mut wishes = 0;
     let mut rng = Pcg64::seed_from_u64(60);
     for _ in 0..large_samples {
-        if rng.gen_range(0u32..4000) == 0 {
+        if rng.random_range(0u32..4000) == 0 {
             wishes += 1;
         }
     }
@@ -457,7 +458,7 @@ fn mc_rust_erosion_rate() {
     let mut eroded = 0;
     let mut rng = Pcg64::seed_from_u64(61);
     for _ in 0..SAMPLES {
-        if rng.gen_range(0u32..2) == 0 {
+        if rng.random_range(0u32..2) == 0 {
             eroded += 1;
         }
     }

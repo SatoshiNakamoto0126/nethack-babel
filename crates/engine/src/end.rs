@@ -1320,7 +1320,7 @@ mod tests {
 
     #[test]
     fn early_death_message() {
-        let mut world = make_test_world();
+        let world = make_test_world();
         let player = world.player();
 
         // Turn 1 death.

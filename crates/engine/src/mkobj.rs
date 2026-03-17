@@ -1407,7 +1407,6 @@ mod tests {
 
     #[test]
     fn chest_trap_variety() {
-        let mut rng = test_rng();
         let mut seen = std::collections::HashSet::new();
 
         for seed in 0..500u64 {

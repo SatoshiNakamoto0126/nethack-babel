@@ -14,7 +14,7 @@ use nethack_babel_engine::conduct::{
     Conduct, ConductAction, ConductState, ScoreEntry, ScoreInput, Scoreboard, calculate_score,
     check_conduct, display_conducts, pudding_should_split,
 };
-use nethack_babel_engine::dungeon::{DungeonBranch, LevelMap, Terrain};
+use nethack_babel_engine::dungeon::{DungeonBranch, Terrain};
 use nethack_babel_engine::end::{
     DisclosureOption, DoneParams, EndHow, VanquishedEntry, auto_disclose,
     default_disclosure_options, done, format_disclosure, generate_disclosure, render_tombstone,
@@ -22,15 +22,14 @@ use nethack_babel_engine::end::{
 use nethack_babel_engine::event::{DeathCause, EngineEvent, PassiveEffect, StatusEffect};
 use nethack_babel_engine::exper::Experience;
 use nethack_babel_engine::religion::{
-    AmuletOfferingResult, PrayerType, ReligionState, evaluate_prayer_simple, has_invocation_items,
-    offer_amulet, pray_simple,
+    AmuletOfferingResult, PrayerType, evaluate_prayer_simple, has_invocation_items, offer_amulet,
+    pray_simple,
 };
 use nethack_babel_engine::role::Role;
 use nethack_babel_engine::shop::{
     ShopRoom, ShopType, get_cost, get_full_buy_price, kop_counts, pay_bill, rob_shop,
 };
 use nethack_babel_engine::traps::{TrapType, place_trap};
-use nethack_babel_engine::turn::resolve_turn;
 use nethack_babel_engine::wands::{WandCharges, WandType, zap_wand};
 use nethack_babel_engine::world::{
     Boulder, GameWorld, HitPoints, Monster, MovementPoints, NORMAL_SPEED, Name, Positioned, Speed,
@@ -40,7 +39,7 @@ use nethack_babel_engine::world::{
 use hecs::Entity;
 use nethack_babel_data::{Alignment, PlayerQuestItems};
 use rand::SeedableRng;
-use rand_pcg::{Pcg64, Pcg64Mcg};
+use rand_pcg::Pcg64;
 
 use common::{
     create_test_world, do_action, dummy_entity, entity_is_alive, make_religion_state,
@@ -3026,7 +3025,6 @@ fn touchstone_12_blessed_identify_reveals_items() {
 /// Cross-module chain: equipment → BUC → event.
 #[test]
 fn touchstone_12_cursed_equipment_blocks_removal() {
-    use nethack_babel_data::ObjectCore;
     use nethack_babel_engine::equipment::{EquipError, EquipSlot, EquipmentSlots, unequip_slot};
 
     let mut world = GameWorld::new(Position::new(5, 5));
@@ -3524,7 +3522,6 @@ fn touchstone_14_explosion_blast_radius() {
 /// Cross-module chain: polyself → world (attributes, HP, speed) → event.
 #[test]
 fn touchstone_15_polymorph_changes_form() {
-    use nethack_babel_data::MonsterDef;
     use nethack_babel_engine::polyself::{OriginalForm, is_polymorphed, polymorph_self};
 
     let mut world = GameWorld::new(Position::new(5, 5));
@@ -3573,9 +3570,7 @@ fn touchstone_15_polymorph_changes_form() {
 /// Touchstone 15.2 -- Polymorph revert restores original form.
 #[test]
 fn touchstone_15_polymorph_revert() {
-    use nethack_babel_engine::polyself::{
-        OriginalForm, is_polymorphed, polymorph_self, revert_form,
-    };
+    use nethack_babel_engine::polyself::{is_polymorphed, polymorph_self, revert_form};
 
     let mut world = GameWorld::new(Position::new(5, 5));
     let player = world.player();
@@ -3598,7 +3593,7 @@ fn touchstone_15_polymorph_revert() {
     assert!(is_polymorphed(&world, player));
 
     // Revert.
-    let events = revert_form(&mut world, player);
+    let _events = revert_form(&mut world, player);
     assert!(
         !is_polymorphed(&world, player),
         "should no longer be polymorphed"
@@ -3955,7 +3950,7 @@ fn touchstone_19_wand_of_fire_damages_monster() {
 
     // Place a monster in the beam path.
     let mon_pos = Position::new(6, 5);
-    let monster = world.spawn((
+    let _monster = world.spawn((
         Monster,
         Positioned(mon_pos),
         HitPoints {
@@ -4076,7 +4071,7 @@ fn touchstone_20_dungeon_branch_propagation() {
 /// Touchstone 20.2 -- Special branch properties: Gehennom is hellish.
 #[test]
 fn touchstone_20_branch_properties() {
-    use nethack_babel_engine::dungeon::{branch_is_hellish, branch_is_mazelike};
+    use nethack_babel_engine::dungeon::branch_is_hellish;
 
     assert!(
         branch_is_hellish(DungeonBranch::Gehennom),

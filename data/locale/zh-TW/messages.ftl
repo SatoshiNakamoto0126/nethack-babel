@@ -794,6 +794,7 @@ shop-leave = { $shopkeeper }說「歡迎再來！」
 shop-price = 「給你，{ $item }只要{ $price }枚金幣。」
 shop-stolen = 你有未付款的商品！
 shop-damage = { $shopkeeper }說「你得賠償損失！」
+shop-repair = { $shopkeeper }開始修理店裡的損壞。
 shop-shoplift = { $shopkeeper }尖叫道：「站住，小偷！」
 temple-enter = 你進入了{ $god }的神殿。
 temple-donate = { $priest }接受了你的捐贈。

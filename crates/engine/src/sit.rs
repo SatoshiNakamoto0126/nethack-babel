@@ -498,7 +498,6 @@ mod tests {
 
     #[test]
     fn full_heal_effect() {
-        let mut rng = test_rng();
         // Force effect 4 by trying many seeds
         for seed in 0..10000u64 {
             let mut r = SmallRng::seed_from_u64(seed);

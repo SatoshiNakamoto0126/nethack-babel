@@ -3411,7 +3411,7 @@ mod tests {
 
         let _item1 = spawn_inventory_item(&mut world, cursed());
         let _item2 = spawn_inventory_item(&mut world, cursed());
-        let weapon = spawn_weapon_in_inventory(&mut world, 0, cursed());
+        let _weapon = spawn_weapon_in_inventory(&mut world, 0, cursed());
 
         let scroll = spawn_scroll(&mut world, blessed());
         let _events = read_scroll(
@@ -3718,7 +3718,7 @@ mod tests {
         let mut rng = make_rng();
         let player = world.player();
 
-        let armor = spawn_armor_in_inventory(&mut world, 0, uncursed());
+        let _armor = spawn_armor_in_inventory(&mut world, 0, uncursed());
 
         let scroll = spawn_scroll(&mut world, uncursed());
         let events = read_scroll(
@@ -3730,11 +3730,6 @@ mod tests {
             &mut rng,
         );
 
-        let has_destroy = events.iter().any(|e| matches!(
-            e, EngineEvent::ItemDestroyed { .. }
-        )) || events.iter().any(|e| matches!(
-            e, EngineEvent::Message { key, .. } if key.contains("destroy") || key.contains("armor")
-        ));
         // Either the armor was destroyed or a message about it was emitted.
         assert!(!events.is_empty(), "destroy armor should produce events");
     }

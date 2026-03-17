@@ -354,7 +354,8 @@ fn skill_name_to_weapon_skill(name: &str) -> Option<WeaponSkill> {
 /// Simplified formula; the real NetHack calculation is in `src/hack.c`
 /// `max_carr_cap()` and uses `25*(adj_str-3)` for str <= 18 plus
 /// extra-strength bonuses.
-pub fn initial_carry_capacity(strength: i32, constitution: i32) -> i32 {
+#[cfg(test)]
+fn initial_carry_capacity(strength: i32, constitution: i32) -> i32 {
     let str_bonus = if strength >= 25 {
         1250
     } else if strength >= 19 {

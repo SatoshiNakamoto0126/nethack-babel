@@ -1536,6 +1536,7 @@ mod tests {
         QuestLeaderAnger,
         ShopkeeperFollow,
         ShopkeeperPayoff,
+        ShopRepair,
         TempleWrath,
         TempleCalm,
         EndgameAscension,
@@ -1548,6 +1549,7 @@ mod tests {
                 SaveStoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
                 SaveStoryTraversalScenario::ShopkeeperFollow => "shopkeeper-follow",
                 SaveStoryTraversalScenario::ShopkeeperPayoff => "shopkeeper-payoff",
+                SaveStoryTraversalScenario::ShopRepair => "shop-repair",
                 SaveStoryTraversalScenario::TempleWrath => "temple-wrath",
                 SaveStoryTraversalScenario::TempleCalm => "temple-calm",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
@@ -1815,6 +1817,42 @@ mod tests {
                     save_and_reload_world("story-matrix-shopkeeper-payoff", &world, [29u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(&mut loaded, PlayerAction::Pay, &mut rng);
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopRepair => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                set_player_position(&mut world, Position::new(6, 6));
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let damaged_pos = Position::new(5, 5);
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(damaged_pos, Terrain::Floor);
+                nethack_babel_engine::shop::record_shop_damage(
+                    &mut world.dungeon_mut().shop_rooms[0],
+                    damaged_pos,
+                    nethack_babel_engine::shop::ShopDamageType::DoorBroken,
+                );
+                sync_current_level_npc_state(&mut world);
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-repair", &world, [37u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
                 (loaded, events)
             }
             SaveStoryTraversalScenario::TempleWrath => {
@@ -3417,6 +3455,59 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_shop_damage_repairs_when_keeper_is_home() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(nethack_babel_engine::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                nethack_babel_engine::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let damaged_pos = Position::new(5, 5);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(damaged_pos, Terrain::Floor);
+        nethack_babel_engine::shop::record_shop_damage(
+            &mut world.dungeon_mut().shop_rooms[0],
+            damaged_pos,
+            nethack_babel_engine::shop::ShopDamageType::DoorBroken,
+        );
+        sync_current_level_npc_state(&mut world);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("shop-repair-round-trip", &world, [31u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+        let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
+
+        assert!(
+            loaded.dungeon().shop_rooms[0].damage_list.is_empty(),
+            "shop damage queue should continue repairing after save/load"
+        );
+        assert_eq!(
+            loaded
+                .dungeon()
+                .current_level
+                .get(damaged_pos)
+                .map(|cell| cell.terrain),
+            Some(Terrain::DoorClosed)
+        );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-repair"
+        )));
+    }
+
+    #[test]
     fn round_trip_loaded_preserves_peaceful_monsters_on_current_level() {
         let mut world = make_stair_world(DungeonBranch::Main, 3, Terrain::Floor);
         let angel = world.spawn((
@@ -3786,6 +3877,7 @@ mod tests {
             SaveStoryTraversalScenario::QuestLeaderAnger,
             SaveStoryTraversalScenario::ShopkeeperFollow,
             SaveStoryTraversalScenario::ShopkeeperPayoff,
+            SaveStoryTraversalScenario::ShopRepair,
             SaveStoryTraversalScenario::TempleWrath,
             SaveStoryTraversalScenario::TempleCalm,
             SaveStoryTraversalScenario::EndgameAscension,
@@ -3882,6 +3974,22 @@ mod tests {
                         .map(|state| (*state).clone())
                         .expect("shopkeeper should keep explicit runtime state");
                     assert!(!shopkeeper_state.following);
+                }
+                SaveStoryTraversalScenario::ShopRepair => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-repair"
+                    )));
+                    assert!(shop.damage_list.is_empty());
+                    assert_eq!(
+                        world
+                            .dungeon()
+                            .current_level
+                            .get(Position::new(5, 5))
+                            .map(|cell| cell.terrain),
+                        Some(Terrain::DoorClosed)
+                    );
                 }
                 SaveStoryTraversalScenario::TempleWrath => {
                     let priest = find_monster_named(&world, "priest").expect("priest should exist");

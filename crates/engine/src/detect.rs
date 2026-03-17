@@ -1028,7 +1028,7 @@ mod tests {
 
     #[test]
     fn test_reveal_monsters_in_area_none() {
-        let mut world = test_world();
+        let world = test_world();
         let player = world.player();
 
         let center = Position::new(40, 10);

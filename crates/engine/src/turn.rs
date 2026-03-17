@@ -676,6 +676,7 @@ fn process_new_turn(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<
     }
 
     process_wizard_of_yendor_turn(world, rng, events);
+    process_shop_repairs(world, events);
 
     events.push(EngineEvent::TurnEnd {
         turn_number: world.turn(),
@@ -5467,6 +5468,76 @@ fn spend_player_gold(world: &mut GameWorld, player: hecs::Entity, amount: u32) -
     true
 }
 
+fn process_shop_repairs(world: &mut GameWorld, events: &mut Vec<EngineEvent>) {
+    let shop_count = world.dungeon().shop_rooms.len();
+    let mut repair_indices = Vec::new();
+
+    for idx in 0..shop_count {
+        let shop = world.dungeon().shop_rooms[idx].clone();
+        if shop.angry || shop.damage_list.is_empty() {
+            continue;
+        }
+
+        let Some(shopkeeper) = world
+            .get_component::<crate::npc::Shopkeeper>(shop.shopkeeper)
+            .map(|state| (*state).clone())
+        else {
+            continue;
+        };
+        if shopkeeper.following {
+            continue;
+        }
+
+        let at_home = world
+            .get_component::<Positioned>(shop.shopkeeper)
+            .is_some_and(|pos| pos.0 == shopkeeper_home_pos(&shop));
+        if at_home {
+            repair_indices.push(idx);
+        }
+    }
+
+    for idx in repair_indices {
+        let repaired = {
+            let shop = &mut world.dungeon_mut().shop_rooms[idx];
+            let shopkeeper_name = shop.shopkeeper_name.clone();
+            crate::shop::repair_one_damage(shop).map(|damage| (damage, shopkeeper_name))
+        };
+
+        let Some((damage, shopkeeper_name)) = repaired else {
+            continue;
+        };
+
+        match damage.damage_type {
+            crate::shop::ShopDamageType::WallDestroyed => {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(damage.position, Terrain::Wall);
+            }
+            crate::shop::ShopDamageType::DoorBroken => {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(damage.position, Terrain::DoorClosed);
+                events.push(EngineEvent::DoorClosed {
+                    position: damage.position,
+                });
+            }
+            crate::shop::ShopDamageType::FloorDamaged => {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(damage.position, Terrain::Floor);
+            }
+        }
+
+        events.push(EngineEvent::msg_with(
+            "shop-repair",
+            vec![("shopkeeper", shopkeeper_name)],
+        ));
+    }
+}
+
 fn find_payable_shop_index(world: &GameWorld, player: hecs::Entity) -> Option<usize> {
     let player_pos = world.get_component::<Positioned>(player).map(|pos| pos.0)?;
     world
@@ -6110,6 +6181,7 @@ mod tests {
         QuestLeaderAnger,
         ShopkeeperFollow,
         ShopkeeperPayoff,
+        ShopRepair,
         TempleWrath,
         TempleCalm,
         EndgameAscension,
@@ -6122,6 +6194,7 @@ mod tests {
                 StoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
                 StoryTraversalScenario::ShopkeeperFollow => "shopkeeper-follow",
                 StoryTraversalScenario::ShopkeeperPayoff => "shopkeeper-payoff",
+                StoryTraversalScenario::ShopRepair => "shop-repair",
                 StoryTraversalScenario::TempleWrath => "temple-wrath",
                 StoryTraversalScenario::TempleCalm => "temple-calm",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
@@ -6364,6 +6437,41 @@ mod tests {
                 let mut rng = test_rng();
                 let pay_events = resolve_turn(&mut world, PlayerAction::Pay, &mut rng);
                 (world, pay_events)
+            }
+            StoryTraversalScenario::ShopRepair => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                set_player_position(&mut world, Position::new(6, 6));
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let damaged_pos = Position::new(5, 5);
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(damaged_pos, Terrain::Floor);
+                crate::shop::record_shop_damage(
+                    &mut world.dungeon_mut().shop_rooms[0],
+                    damaged_pos,
+                    crate::shop::ShopDamageType::DoorBroken,
+                );
+                sync_current_level_shopkeeper_state(&mut world);
+
+                let mut rng = test_rng();
+                let repair_events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+                (world, repair_events)
             }
             StoryTraversalScenario::TempleWrath => {
                 let mut world = make_test_world();
@@ -11861,6 +11969,104 @@ mod tests {
     }
 
     #[test]
+    fn test_new_turn_repairs_shop_damage_for_idle_shopkeeper() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let damaged_pos = Position::new(5, 5);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(damaged_pos, Terrain::Floor);
+        crate::shop::record_shop_damage(
+            &mut world.dungeon_mut().shop_rooms[0],
+            damaged_pos,
+            crate::shop::ShopDamageType::DoorBroken,
+        );
+        sync_current_level_shopkeeper_state(&mut world);
+
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+        process_new_turn(&mut world, &mut rng, &mut events);
+
+        assert!(
+            world.dungeon().shop_rooms[0].damage_list.is_empty(),
+            "idle shopkeeper should repair one queued damage entry at turn boundary"
+        );
+        assert_eq!(
+            world
+                .dungeon()
+                .current_level
+                .get(damaged_pos)
+                .map(|cell| cell.terrain),
+            Some(Terrain::DoorClosed)
+        );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-repair"
+        )));
+    }
+
+    #[test]
+    fn test_following_shopkeeper_does_not_repair_damage_until_home() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(5, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        let mut shop = crate::shop::ShopRoom::new(
+            Position::new(5, 4),
+            Position::new(7, 6),
+            crate::shop::ShopType::Tool,
+            shopkeeper,
+            "Izchak".to_string(),
+        );
+        shop.door_pos = Some(Position::new(7, 5));
+        world.dungeon_mut().shop_rooms.push(shop);
+        let damaged_pos = Position::new(7, 5);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(damaged_pos, Terrain::Floor);
+        crate::shop::record_shop_damage(
+            &mut world.dungeon_mut().shop_rooms[0],
+            damaged_pos,
+            crate::shop::ShopDamageType::DoorBroken,
+        );
+        sync_current_level_shopkeeper_state(&mut world);
+        if let Some(mut state) = world.get_component_mut::<crate::npc::Shopkeeper>(shopkeeper) {
+            state.following = true;
+        }
+
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+        process_new_turn(&mut world, &mut rng, &mut events);
+
+        assert_eq!(world.dungeon().shop_rooms[0].damage_list.len(), 1);
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "shop-repair"
+            )),
+            "shopkeeper should not repair while still following the player"
+        );
+    }
+
+    #[test]
     fn test_chatting_with_peaceful_priest_grants_protection() {
         let mut world = make_test_world();
         let player = world.player();
@@ -13011,6 +13217,7 @@ mod tests {
             StoryTraversalScenario::QuestLeaderAnger,
             StoryTraversalScenario::ShopkeeperFollow,
             StoryTraversalScenario::ShopkeeperPayoff,
+            StoryTraversalScenario::ShopRepair,
             StoryTraversalScenario::TempleWrath,
             StoryTraversalScenario::TempleCalm,
             StoryTraversalScenario::EndgameAscension,
@@ -13105,6 +13312,28 @@ mod tests {
                     assert!(
                         !shopkeeper_state.following,
                         "{} should stop follow behavior after full payment",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopRepair => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-repair"
+                    )));
+                    assert!(
+                        shop.damage_list.is_empty(),
+                        "{} should consume one queued repair entry",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        world
+                            .dungeon()
+                            .current_level
+                            .get(Position::new(5, 5))
+                            .map(|cell| cell.terrain),
+                        Some(Terrain::DoorClosed),
+                        "{} should restore the damaged door terrain",
                         scenario.label()
                     );
                 }

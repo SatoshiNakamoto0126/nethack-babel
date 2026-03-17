@@ -539,6 +539,7 @@ shk-welcome = { $shopkeeper } sagt: „Willkommen in meinem Laden, { $honorific 
 shk-angry-greeting = { $shopkeeper } starrt Euch wütend an.
 shk-robbed-greeting = { $shopkeeper } sagt: „Den Raub habe ich nicht vergessen, { $honorific }.“
 shk-surcharge-greeting = { $shopkeeper } sagt: „Für Euch sind die Preise jetzt höher, { $honorific }.“
+shop-repair = { $shopkeeper } repariert den Schaden.
 god-roars-suffer = Eine dröhnende Stimme donnert: „Leide für deine Lästerung!“
 god-how-dare-harm-servant = Eine dröhnende Stimme donnert: „Wie wagst du es, meinem Diener zu schaden?“
 god-profane-shrine = Eine dröhnende Stimme donnert: „Du hast meinen Schrein entweiht!“

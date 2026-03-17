@@ -538,7 +538,7 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 
 ### Roadmap (2026)
 
-1. Push temple/shop parity past the current `follow / payoff / pray / calm-down` runtime closure and finish the remaining sanctuary, damage/repair, and economy edge cases.
+1. Push temple/shop parity past the current `follow / payoff / pray / calm-down / repair` runtime closure and finish the remaining sanctuary and economy edge cases.
 2. Expand Wizard of Yendor harassment parity beyond the current respawn/theft/curse/nasty-summon runtime and repeated regression coverage.
 3. Grow traversal and save/load matrices beyond the current quest/endgame/shop/temple/wizard coverage into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
 4. Continue hardening level-local runtime caches and save compatibility rules as serialized world state evolves.
@@ -546,7 +546,7 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 
 ### Active TODO
 
-- [ ] Finish the remaining priest/shop edge cases beyond the current payoff/follow/pray/calm runtime path: sanctuary nuance, damage/repair fallout, and broader economy consequences.
+- [ ] Finish the remaining priest/shop edge cases beyond the current payoff/follow/pray/calm/repair runtime path: sanctuary nuance and broader economy consequences.
 - [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, theft, cursing, nasty summon, and repeated reload coverage.
 - [ ] Expand traversal/save-load matrices into stronger drift-detection coverage for economy, religion, and branch-state regressions beyond the current quest/endgame/shop/temple/wizard matrix.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and serialization gaps.

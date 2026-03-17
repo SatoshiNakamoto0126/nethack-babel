@@ -213,6 +213,20 @@ pub fn resolve_monster_turn(
             .get_component::<Shopkeeper>(monster)
             .map(|shopkeeper| (*shopkeeper).clone())
         {
+            if world
+                .dungeon()
+                .shop_rooms
+                .iter()
+                .find(|shop| shop.shopkeeper == monster)
+                .is_some_and(|shop| {
+                    !shop.angry
+                        && !shop.damage_list.is_empty()
+                        && !shopkeeper.following
+                        && monster_pos == shopkeeper.home_pos
+                })
+            {
+                return events;
+            }
             let goal = crate::npc::shopkeeper_goal(&shopkeeper, false, player_pos);
             if (shopkeeper.following || shopkeeper.displaced)
                 && monster_pos != goal
@@ -2590,6 +2604,58 @@ mod tests {
         assert!(
             !has_combat,
             "peaceful monsters should not attack the player"
+        );
+    }
+
+    #[test]
+    fn peaceful_shopkeeper_with_pending_damage_stays_home_to_repair() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        let shopkeeper = spawn_monster_at(&mut world, Position::new(6, 5), 10, 10);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .ecs_mut()
+            .insert_one(
+                shopkeeper,
+                Shopkeeper {
+                    following: false,
+                    displaced: false,
+                    home_pos: Position::new(6, 5),
+                    name: "Izchak".to_string(),
+                },
+            )
+            .expect("shopkeeper should accept runtime state");
+        let mut shop = crate::shop::ShopRoom::new(
+            Position::new(5, 4),
+            Position::new(7, 6),
+            crate::shop::ShopType::Tool,
+            shopkeeper,
+            "Izchak".to_string(),
+        );
+        crate::shop::record_shop_damage(
+            &mut shop,
+            Position::new(5, 5),
+            crate::shop::ShopDamageType::DoorBroken,
+        );
+        world.dungeon_mut().shop_rooms.push(shop);
+
+        let events = resolve_monster_turn(&mut world, shopkeeper, &mut rng);
+
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::EntityMoved { .. })),
+            "shopkeeper with pending repairs should stay home instead of wandering"
+        );
+        assert_eq!(
+            world
+                .get_component::<Positioned>(shopkeeper)
+                .map(|pos| pos.0),
+            Some(Position::new(6, 5))
         );
     }
 
