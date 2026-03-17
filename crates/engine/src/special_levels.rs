@@ -7262,6 +7262,66 @@ mod tests {
     }
 
     #[test]
+    fn test_population_quest_roles_cover_all_leaders_nemeses_and_artifacts() {
+        for (idx, role) in Role::ALL.into_iter().enumerate() {
+            let role_name = role.name().to_ascii_lowercase();
+            let mut start_rng = Pcg64::seed_from_u64(7000 + idx as u64);
+            let mut goal_rng = Pcg64::seed_from_u64(8000 + idx as u64);
+
+            let start = dispatch_special_level(
+                SpecialLevelId::QuestStart,
+                Some(role_name.as_str()),
+                &mut start_rng,
+            )
+            .unwrap_or_else(|| panic!("{} quest start should generate", role.name()));
+            let start_pop = population_for_special_level_with_role(
+                SpecialLevelId::QuestStart,
+                &start.generated,
+                Some(role_name.as_str()),
+            );
+            assert!(
+                start_pop
+                    .monsters
+                    .iter()
+                    .any(|m| m.name == quest_leader_for_role(role)),
+                "{} quest start should include leader {}",
+                role.name(),
+                quest_leader_for_role(role)
+            );
+
+            let goal = dispatch_special_level(
+                SpecialLevelId::QuestGoal,
+                Some(role_name.as_str()),
+                &mut goal_rng,
+            )
+            .unwrap_or_else(|| panic!("{} quest goal should generate", role.name()));
+            let goal_pop = population_for_special_level_with_role(
+                SpecialLevelId::QuestGoal,
+                &goal.generated,
+                Some(role_name.as_str()),
+            );
+            assert!(
+                goal_pop
+                    .monsters
+                    .iter()
+                    .any(|m| m.name == quest_nemesis_for_role(role)),
+                "{} quest goal should include nemesis {}",
+                role.name(),
+                quest_nemesis_for_role(role)
+            );
+            assert!(
+                goal_pop
+                    .objects
+                    .iter()
+                    .any(|o| o.name == quest_artifact_for_role(role)),
+                "{} quest goal should include artifact {}",
+                role.name(),
+                quest_artifact_for_role(role)
+            );
+        }
+    }
+
+    #[test]
     fn test_embedded_population_positions_land_on_walkable_tiles() {
         let mut rng = test_rng();
         let ids = [

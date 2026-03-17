@@ -2538,15 +2538,19 @@ fn resolve_monster_id_by_spec(monster_defs: &[MonsterDef], spec: &str) -> Option
             .map(|def| def.id);
     }
 
+    let normalized = spec
+        .strip_prefix("the ")
+        .or_else(|| spec.strip_prefix("The "))
+        .unwrap_or(spec);
+
     monster_defs
         .iter()
         .find(|def| {
             def.names.male.eq_ignore_ascii_case(spec)
-                || def
-                    .names
-                    .female
-                    .as_ref()
-                    .is_some_and(|f| f.eq_ignore_ascii_case(spec))
+                || def.names.male.eq_ignore_ascii_case(normalized)
+                || def.names.female.as_ref().is_some_and(|f| {
+                    f.eq_ignore_ascii_case(spec) || f.eq_ignore_ascii_case(normalized)
+                })
         })
         .map(|def| def.id)
 }
@@ -3833,16 +3837,23 @@ mod tests {
         }
     }
 
-    fn wizard_identity() -> PlayerIdentity {
+    fn identity_for_role(role: crate::role::Role) -> PlayerIdentity {
         PlayerIdentity {
             name: "tester".to_string(),
-            role: RoleId(crate::religion::roles::WIZARD),
+            role: role.to_id(),
             race: RaceId(0),
             gender: Gender::Male,
-            alignment: Alignment::Chaotic,
-            alignment_base: [Alignment::Chaotic, Alignment::Chaotic],
+            alignment: Alignment::Neutral,
+            alignment_base: [Alignment::Neutral, Alignment::Neutral],
             handedness: Handedness::RightHanded,
         }
+    }
+
+    fn wizard_identity() -> PlayerIdentity {
+        let mut id = identity_for_role(crate::role::Role::Wizard);
+        id.alignment = Alignment::Chaotic;
+        id.alignment_base = [Alignment::Chaotic, Alignment::Chaotic];
+        id
     }
 
     /// Spawn a monster at the given position with a given base speed.
@@ -5149,16 +5160,82 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_generate_or_special_topology_uses_all_player_roles_for_quest_levels() {
+        for role in crate::role::Role::ALL {
+            let mut world = make_test_world();
+            let player = world.player();
+            world
+                .ecs_mut()
+                .insert_one(player, identity_for_role(role))
+                .expect("test player should accept identity");
+            let mut start_rng = test_rng();
+            let mut goal_rng = test_rng();
+
+            let (_start_generated, _start_flags, start_population) = generate_or_special_topology(
+                &world,
+                crate::dungeon::DungeonBranch::Quest,
+                1,
+                &mut start_rng,
+            );
+            let (_goal_generated, _goal_flags, goal_population) = generate_or_special_topology(
+                &world,
+                crate::dungeon::DungeonBranch::Quest,
+                7,
+                &mut goal_rng,
+            );
+
+            let start_population =
+                start_population.expect("quest start should carry a role-specific population");
+            let goal_population =
+                goal_population.expect("quest goal should carry a role-specific population");
+            assert!(
+                start_population
+                    .monsters
+                    .iter()
+                    .any(|spawn| spawn.name == crate::quest::quest_leader_for_role(role)),
+                "{} quest start should target leader {}",
+                role.name(),
+                crate::quest::quest_leader_for_role(role)
+            );
+            assert!(
+                goal_population
+                    .monsters
+                    .iter()
+                    .any(|spawn| spawn.name == crate::quest::quest_nemesis_for_role(role)),
+                "{} quest goal should target nemesis {}",
+                role.name(),
+                crate::quest::quest_nemesis_for_role(role)
+            );
+            assert!(
+                goal_population
+                    .objects
+                    .iter()
+                    .any(|spawn| spawn.name == crate::quest::quest_artifact_for_role(role)),
+                "{} quest goal should target artifact {}",
+                role.name(),
+                crate::quest::quest_artifact_for_role(role)
+            );
+        }
+    }
+
     fn has_monster_named(world: &GameWorld, name: &str) -> bool {
         count_monsters_named(world, name) > 0
     }
 
+    fn normalize_monster_lookup(name: &str) -> &str {
+        name.strip_prefix("the ")
+            .or_else(|| name.strip_prefix("The "))
+            .unwrap_or(name)
+    }
+
     fn count_monsters_named(world: &GameWorld, name: &str) -> usize {
+        let expected = normalize_monster_lookup(name);
         world
             .ecs()
             .query::<(&Monster, &Name)>()
             .iter()
-            .filter(|(_, (_m, n))| n.0.eq_ignore_ascii_case(name))
+            .filter(|(_, (_m, n))| normalize_monster_lookup(&n.0).eq_ignore_ascii_case(expected))
             .count()
     }
 
@@ -5194,6 +5271,53 @@ mod tests {
                 artifact_name
             );
         }
+    }
+
+    #[test]
+    fn test_resolve_special_level_population_marks_all_quest_artifacts() {
+        let monster_defs = &test_game_data().monsters;
+        let object_defs = &test_game_data().objects;
+
+        for role in crate::role::Role::ALL {
+            let artifact_name = crate::quest::quest_artifact_for_role(role);
+            let artifact = crate::artifacts::find_artifact_by_name(artifact_name)
+                .unwrap_or_else(|| panic!("{} should exist in artifact table", artifact_name));
+            let resolved = resolve_special_level_population(
+                monster_defs,
+                object_defs,
+                crate::special_levels::SpecialLevelPopulation {
+                    monsters: Vec::new(),
+                    objects: vec![crate::special_levels::SpecialObjectSpawn {
+                        name: artifact_name.to_string(),
+                        pos: Some(Position::new(5, 5)),
+                        chance: 100,
+                        quantity: Some(1),
+                    }],
+                },
+            );
+            assert_eq!(
+                resolved.objects.len(),
+                1,
+                "{} should resolve into one special object spawn",
+                artifact_name
+            );
+            assert_eq!(
+                resolved.objects[0].artifact_id,
+                Some(artifact.id),
+                "{} should keep its artifact id through population resolution",
+                artifact_name
+            );
+        }
+    }
+
+    #[test]
+    fn test_resolve_monster_id_by_spec_accepts_optional_leading_article() {
+        let monster_id =
+            resolve_monster_id_by_spec(&test_game_data().monsters, "the Minion of Huhetotl");
+        assert!(
+            monster_id.is_some(),
+            "special monster resolver should ignore an optional leading article"
+        );
     }
 
     /// Spawn a monster with all components needed for stair caching.
@@ -5441,6 +5565,37 @@ mod tests {
     }
 
     #[test]
+    fn test_entering_all_quest_starts_spawn_role_specific_leaders() {
+        for (idx, role) in crate::role::Role::ALL.into_iter().enumerate() {
+            let mut world = make_test_world();
+            install_test_catalogs(&mut world);
+            let player = world.player();
+            world
+                .ecs_mut()
+                .insert_one(player, identity_for_role(role))
+                .expect("test player should accept identity");
+            let mut rng = Pcg64::seed_from_u64(9000 + idx as u64);
+            let mut events = Vec::new();
+
+            change_level_to_branch(
+                &mut world,
+                crate::dungeon::DungeonBranch::Quest,
+                1,
+                false,
+                &mut rng,
+                &mut events,
+            );
+
+            assert!(
+                has_monster_named(&world, crate::quest::quest_leader_for_role(role)),
+                "{} quest start should spawn leader {}",
+                role.name(),
+                crate::quest::quest_leader_for_role(role)
+            );
+        }
+    }
+
+    #[test]
     fn test_entering_wizard_quest_goal_spawns_role_specific_nemesis_and_artifact() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -5474,6 +5629,48 @@ mod tests {
             1,
             "wizard quest goal should place the Eye artifact as a real artifact object"
         );
+    }
+
+    #[test]
+    fn test_entering_all_quest_goals_spawn_role_specific_nemeses_and_artifacts() {
+        for (idx, role) in crate::role::Role::ALL.into_iter().enumerate() {
+            let mut world = make_test_world();
+            install_test_catalogs(&mut world);
+            let player = world.player();
+            world
+                .ecs_mut()
+                .insert_one(player, identity_for_role(role))
+                .expect("test player should accept identity");
+            let mut rng = Pcg64::seed_from_u64(10000 + idx as u64);
+            let mut events = Vec::new();
+
+            change_level_to_branch(
+                &mut world,
+                crate::dungeon::DungeonBranch::Quest,
+                7,
+                false,
+                &mut rng,
+                &mut events,
+            );
+
+            let artifact = crate::artifacts::find_artifact_by_name(
+                crate::quest::quest_artifact_for_role(role),
+            )
+            .unwrap_or_else(|| panic!("{} quest artifact should exist", role.name()));
+            assert!(
+                has_monster_named(&world, crate::quest::quest_nemesis_for_role(role)),
+                "{} quest goal should spawn nemesis {}",
+                role.name(),
+                crate::quest::quest_nemesis_for_role(role)
+            );
+            assert_eq!(
+                count_objects_with_artifact(&world, artifact.id),
+                1,
+                "{} quest goal should place artifact {} as a real artifact object",
+                role.name(),
+                crate::quest::quest_artifact_for_role(role)
+            );
+        }
     }
 
     #[test]
