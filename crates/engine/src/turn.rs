@@ -8,7 +8,8 @@
 use rand::Rng;
 
 use nethack_babel_data::{
-    MonsterDef, MonsterId, ObjectClass, ObjectCore, ObjectDef, ObjectTypeId,
+    ArtifactId, MonsterDef, MonsterId, ObjectClass, ObjectCore, ObjectDef, ObjectTypeId,
+    PlayerIdentity,
 };
 
 use crate::action::{Direction, NameTarget, PlayerAction, Position};
@@ -18,9 +19,7 @@ use crate::event::{EngineEvent, HpSource, HungerLevel};
 use crate::makemon::{GoodPosFlags, MakeMonFlags, enexto, goodpos, makemon};
 use crate::map_gen::generate_level;
 use crate::mkobj::mksobj_at;
-use crate::special_levels::{
-    dispatch_special_level, identify_special_level,
-};
+use crate::special_levels::{dispatch_special_level, identify_special_level};
 use crate::traps::{TrapEntityInfo, detect_trap, trigger_trap_at};
 use crate::world::{
     Boulder, CreationOrder, DisplaySymbol, Encumbrance, EncumbranceLevel, ExperienceLevel,
@@ -1900,6 +1899,28 @@ fn generate_or_special(
     )
 }
 
+fn current_player_role_name(world: &GameWorld) -> Option<String> {
+    world
+        .get_component::<PlayerIdentity>(world.player())
+        .and_then(|identity| crate::role::Role::from_id(identity.role))
+        .map(|role| role.name().to_ascii_lowercase())
+}
+
+fn special_level_role_name(
+    world: &GameWorld,
+    id: crate::special_levels::SpecialLevelId,
+) -> Option<String> {
+    match id {
+        crate::special_levels::SpecialLevelId::QuestStart
+        | crate::special_levels::SpecialLevelId::QuestLocator
+        | crate::special_levels::SpecialLevelId::QuestGoal
+        | crate::special_levels::SpecialLevelId::QuestFiller(_) => {
+            current_player_role_name(world).or_else(|| Some("valkyrie".to_string()))
+        }
+        _ => None,
+    }
+}
+
 /// Topology-aware special level dispatch; fall back to random generation.
 ///
 /// Uses the per-game randomized topology depths for the Main branch.
@@ -1913,16 +1934,20 @@ fn generate_or_special_topology(
     crate::special_levels::SpecialLevelFlags,
     Option<crate::special_levels::SpecialLevelPopulation>,
 ) {
-    if let Some(id) = world.dungeon().check_topology_special(&branch, depth)
-        && let Some(special) = dispatch_special_level(id, None, rng)
-    {
-        let population =
-            crate::special_levels::population_for_special_level(id, &special.generated);
-        return (
-            special.generated,
-            special.flags,
-            (!population.is_empty()).then_some(population),
-        );
+    if let Some(id) = world.dungeon().check_topology_special(&branch, depth) {
+        let role_name = special_level_role_name(world, id);
+        if let Some(special) = dispatch_special_level(id, role_name.as_deref(), rng) {
+            let population = crate::special_levels::population_for_special_level_with_role(
+                id,
+                &special.generated,
+                role_name.as_deref(),
+            );
+            return (
+                special.generated,
+                special.flags,
+                (!population.is_empty()).then_some(population),
+            );
+        }
     }
     (
         generate_level(depth as u8, rng),
@@ -2254,6 +2279,8 @@ struct ResolvedSpecialObjectSpawn {
     pos: Option<Position>,
     chance: u32,
     quantity: Option<u32>,
+    artifact_id: Option<ArtifactId>,
+    artifact_name: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -2284,12 +2311,31 @@ fn resolve_special_level_population(
     }
 
     for obj in population.objects {
-        if let Some(object_type) = resolve_object_type_by_spec(object_defs, &obj.name) {
+        if let Some(artifact) = crate::artifacts::find_artifact_by_name(&obj.name) {
+            if let Some(object_type) = resolve_artifact_base_object_type(object_defs, artifact) {
+                resolved.objects.push(ResolvedSpecialObjectSpawn {
+                    object_type,
+                    pos: obj.pos,
+                    chance: obj.chance,
+                    quantity: obj.quantity,
+                    artifact_id: Some(artifact.id),
+                    artifact_name: Some(artifact.name),
+                });
+            } else {
+                debug_assert!(
+                    false,
+                    "artifact base item missing from catalog: {}",
+                    obj.name
+                );
+            }
+        } else if let Some(object_type) = resolve_object_type_by_spec(object_defs, &obj.name) {
             resolved.objects.push(ResolvedSpecialObjectSpawn {
                 object_type,
                 pos: obj.pos,
                 chance: obj.chance,
                 quantity: obj.quantity,
+                artifact_id: None,
+                artifact_name: None,
             });
         } else {
             debug_assert!(false, "unresolved special object spec: {}", obj.name);
@@ -2297,6 +2343,38 @@ fn resolve_special_level_population(
     }
 
     resolved
+}
+
+fn resolve_artifact_base_object_type(
+    object_defs: &[ObjectDef],
+    artifact: &crate::artifacts::ArtifactDef,
+) -> Option<ObjectTypeId> {
+    if object_defs.iter().any(|def| def.id == artifact.base_item) {
+        return Some(artifact.base_item);
+    }
+
+    // Artifact tables still use the classic global object ids, while the
+    // data catalog is currently loaded from per-file local ids. Fall back to
+    // the canonical object name for quest artifacts so population planning
+    // can still materialize real artifact instances.
+    let fallback_spec = match artifact.id.0 {
+        21 => "crystal ball",
+        22 => "luckstone",
+        23 => "mace",
+        24 => "quarterstaff",
+        25 => "mirror",
+        26 => "lenses",
+        27 => "helm of brilliance",
+        28 => "bow",
+        29 => "skeleton key",
+        30 => "tsurugi",
+        31 => "credit card",
+        32 => "crystal ball",
+        33 => "amulet of ESP",
+        _ => return None,
+    };
+
+    resolve_object_type_by_spec(object_defs, fallback_spec)
 }
 
 fn roll_spawn_chance(chance: u32, rng: &mut impl Rng) -> bool {
@@ -2343,8 +2421,16 @@ fn spawn_special_object(
     };
 
     if let Some(entity) = mksobj_at(world, pos, spec.object_type, true, object_defs, rng) {
-        let display_name = crate::identification::typename(spec.object_type, object_defs);
+        let display_name = spec
+            .artifact_name
+            .map(str::to_string)
+            .unwrap_or_else(|| crate::identification::typename(spec.object_type, object_defs));
         let _ = world.ecs_mut().insert_one(entity, Name(display_name));
+        if let Some(artifact_id) = spec.artifact_id
+            && let Some(mut core) = world.get_component_mut::<ObjectCore>(entity)
+        {
+            core.artifact = Some(artifact_id);
+        }
         if let Some(q) = spec.quantity
             && q > 1
             && let Some(mut core) = world.get_component_mut::<ObjectCore>(entity)
@@ -3631,9 +3717,9 @@ mod tests {
     use crate::dungeon::Terrain;
     use crate::world::Name;
     use nethack_babel_data::{
-        Alignment, ArtifactId, BucStatus, GameData, Gender, Handedness, MonsterFlags,
-        ObjectClass, ObjectCore, ObjectLocation, ObjectTypeId, PlayerIdentity, PlayerSkills,
-        RaceId, RoleId, SkillState, WeaponSkill, load_game_data,
+        Alignment, ArtifactId, BucStatus, GameData, Gender, Handedness, MonsterFlags, ObjectClass,
+        ObjectCore, ObjectLocation, ObjectTypeId, PlayerIdentity, PlayerSkills, RaceId, RoleId,
+        SkillState, WeaponSkill, load_game_data,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
@@ -3743,6 +3829,18 @@ mod tests {
             gender: Gender::Male,
             alignment: Alignment::Lawful,
             alignment_base: [Alignment::Lawful, Alignment::Lawful],
+            handedness: Handedness::RightHanded,
+        }
+    }
+
+    fn wizard_identity() -> PlayerIdentity {
+        PlayerIdentity {
+            name: "tester".to_string(),
+            role: RoleId(crate::religion::roles::WIZARD),
+            race: RaceId(0),
+            gender: Gender::Male,
+            alignment: Alignment::Chaotic,
+            alignment_base: [Alignment::Chaotic, Alignment::Chaotic],
             handedness: Handedness::RightHanded,
         }
     }
@@ -5021,6 +5119,36 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_generate_or_special_topology_uses_player_role_for_quest_levels() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("test player should accept identity");
+        let mut rng = test_rng();
+
+        let (_generated, _flags, population) =
+            generate_or_special_topology(&world, crate::dungeon::DungeonBranch::Quest, 7, &mut rng);
+
+        let population = population.expect("quest goal should carry a role-specific population");
+        assert!(
+            population
+                .monsters
+                .iter()
+                .any(|spawn| spawn.name.eq_ignore_ascii_case("Dark One")),
+            "wizard quest goal should target the Dark One"
+        );
+        assert!(
+            population
+                .objects
+                .iter()
+                .any(|spawn| spawn.name == "The Eye of the Aethiopica"),
+            "wizard quest goal should carry the Eye artifact"
+        );
+    }
+
     fn has_monster_named(world: &GameWorld, name: &str) -> bool {
         count_monsters_named(world, name) > 0
     }
@@ -5041,6 +5169,31 @@ mod tests {
             .iter()
             .filter(|(_, core)| core.otyp == object_type)
             .count()
+    }
+
+    fn count_objects_with_artifact(world: &GameWorld, artifact_id: ArtifactId) -> usize {
+        world
+            .ecs()
+            .query::<&ObjectCore>()
+            .iter()
+            .filter(|(_, core)| core.artifact == Some(artifact_id))
+            .count()
+    }
+
+    #[test]
+    fn test_quest_artifact_base_items_resolve_against_loaded_catalog() {
+        for role in crate::role::Role::ALL {
+            let artifact_name = crate::quest::quest_artifact_for_role(role);
+            let artifact = crate::artifacts::find_artifact_by_name(artifact_name)
+                .unwrap_or_else(|| panic!("{} should exist in artifact table", artifact_name));
+            let object_type =
+                resolve_artifact_base_object_type(&test_game_data().objects, artifact);
+            assert!(
+                object_type.is_some(),
+                "{} should resolve to a real base object in the loaded catalog",
+                artifact_name
+            );
+        }
     }
 
     /// Spawn a monster with all components needed for stair caching.
@@ -5207,7 +5360,11 @@ mod tests {
 
         let _events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
 
-        assert_eq!(world.dungeon().depth, 3, "expected to descend to Vlad level 3");
+        assert_eq!(
+            world.dungeon().depth,
+            3,
+            "expected to descend to Vlad level 3"
+        );
         assert!(
             has_monster_named(&world, "Vlad the Impaler"),
             "entering Vlad level 3 should spawn Vlad the Impaler"
@@ -5245,11 +5402,151 @@ mod tests {
         let _events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
 
         assert_eq!(world.dungeon().depth, 15, "expected to descend to fakewiz2");
-        let amulet_otyp = resolve_object_type_by_spec(&test_game_data().objects, "Amulet of Yendor")
-            .expect("Amulet of Yendor should resolve against the catalog");
+        let amulet_otyp =
+            resolve_object_type_by_spec(&test_game_data().objects, "Amulet of Yendor")
+                .expect("Amulet of Yendor should resolve against the catalog");
         assert!(
             count_objects_with_type(&world, amulet_otyp) > 0,
             "entering fakewiz2 should place the Amulet of Yendor"
+        );
+    }
+
+    #[test]
+    fn test_entering_wizard_quest_start_spawns_role_specific_leader() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("test player should accept identity");
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::Quest,
+            1,
+            false,
+            &mut rng,
+            &mut events,
+        );
+
+        assert_eq!(world.dungeon().branch, crate::dungeon::DungeonBranch::Quest);
+        assert_eq!(world.dungeon().depth, 1);
+        assert!(
+            has_monster_named(&world, "Neferet the Green"),
+            "wizard quest start should spawn Neferet the Green"
+        );
+    }
+
+    #[test]
+    fn test_entering_wizard_quest_goal_spawns_role_specific_nemesis_and_artifact() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("test player should accept identity");
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::Quest,
+            7,
+            false,
+            &mut rng,
+            &mut events,
+        );
+
+        let eye = crate::artifacts::find_artifact_by_name("The Eye of the Aethiopica")
+            .expect("Eye of the Aethiopica should exist");
+        assert_eq!(world.dungeon().branch, crate::dungeon::DungeonBranch::Quest);
+        assert_eq!(world.dungeon().depth, 7);
+        assert!(
+            has_monster_named(&world, "Dark One"),
+            "wizard quest goal should spawn the Dark One"
+        );
+        assert_eq!(
+            count_objects_with_artifact(&world, eye.id),
+            1,
+            "wizard quest goal should place the Eye artifact as a real artifact object"
+        );
+    }
+
+    #[test]
+    fn test_entering_fort_ludios_spawns_garrison() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::FortLudios,
+            1,
+            false,
+            &mut rng,
+            &mut events,
+        );
+
+        assert_eq!(
+            count_monsters_named(&world, "soldier"),
+            2,
+            "Fort Ludios should place two soldiers from the planned garrison"
+        );
+        assert_eq!(
+            count_monsters_named(&world, "lieutenant"),
+            1,
+            "Fort Ludios should place its lieutenant"
+        );
+        assert_eq!(
+            count_monsters_named(&world, "captain"),
+            1,
+            "Fort Ludios should place its captain"
+        );
+    }
+
+    #[test]
+    fn test_revisiting_wizard_quest_goal_does_not_duplicate_nemesis_or_artifact() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("test player should accept identity");
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::Quest,
+            7,
+            false,
+            &mut rng,
+            &mut events,
+        );
+
+        let eye = crate::artifacts::find_artifact_by_name("The Eye of the Aethiopica")
+            .expect("Eye of the Aethiopica should exist");
+        assert_eq!(count_monsters_named(&world, "Dark One"), 1);
+        assert_eq!(count_objects_with_artifact(&world, eye.id), 1);
+
+        change_level(&mut world, 6, true, &mut rng, &mut events);
+        change_level(&mut world, 7, false, &mut rng, &mut events);
+
+        assert_eq!(
+            count_monsters_named(&world, "Dark One"),
+            1,
+            "revisiting wizard quest goal should not duplicate the nemesis"
+        );
+        assert_eq!(
+            count_objects_with_artifact(&world, eye.id),
+            1,
+            "revisiting wizard quest goal should not duplicate the quest artifact"
         );
     }
 

@@ -326,9 +326,9 @@ fn convert_monster(m: TomlMonster) -> Result<MonsterDef, LoadError> {
 
     let base_name = m.name.clone();
     let male_name = m.name_male.unwrap_or_else(|| base_name.clone());
-    let female_name = m.name_female.or_else(|| {
-        (male_name != base_name).then_some(base_name.clone())
-    });
+    let female_name = m
+        .name_female
+        .or_else(|| (male_name != base_name).then_some(base_name.clone()));
 
     Ok(MonsterDef {
         id: MonsterId(m.id),
@@ -1085,10 +1085,7 @@ mod tests {
             .find(|m| m.id == MonsterId(227))
             .expect("vampire leader should exist");
         assert_eq!(vampire_leader.names.male, "vampire lord");
-        assert_eq!(
-            vampire_leader.names.female.as_deref(),
-            Some("vampire lady")
-        );
+        assert_eq!(vampire_leader.names.female.as_deref(), Some("vampire lady"));
 
         let high_cleric = monsters
             .iter()

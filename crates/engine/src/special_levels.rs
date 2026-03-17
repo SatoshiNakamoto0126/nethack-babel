@@ -11,6 +11,8 @@ use rand::Rng;
 use crate::action::Position;
 use crate::dungeon::{LevelMap, Terrain};
 use crate::map_gen::{GeneratedLevel, Room};
+use crate::quest::{quest_artifact_for_role, quest_leader_for_role, quest_nemesis_for_role};
+use crate::role::Role;
 
 use nethack_babel_data::level_loader::{
     ascii_to_terrain, get_embedded_level, load_level_from_str, parse_ascii_map,
@@ -2447,6 +2449,37 @@ fn room_center_pos(room: &Room) -> Position {
     Position::new(cx as i32, cy as i32)
 }
 
+fn find_first_terrain(map: &LevelMap, terrain: Terrain) -> Option<Position> {
+    for y in 0..map.height {
+        for x in 0..map.width {
+            let pos = Position::new(x as i32, y as i32);
+            if map.get(pos).is_some_and(|cell| cell.terrain == terrain) {
+                return Some(pos);
+            }
+        }
+    }
+    None
+}
+
+fn quest_role_from_name(role_name: Option<&str>) -> Option<Role> {
+    match role_name?.trim().to_ascii_lowercase().as_str() {
+        "archeologist" => Some(Role::Archeologist),
+        "barbarian" => Some(Role::Barbarian),
+        "caveman" | "caveperson" => Some(Role::Caveperson),
+        "healer" => Some(Role::Healer),
+        "knight" => Some(Role::Knight),
+        "monk" => Some(Role::Monk),
+        "priest" => Some(Role::Priest),
+        "ranger" => Some(Role::Ranger),
+        "rogue" => Some(Role::Rogue),
+        "samurai" => Some(Role::Samurai),
+        "tourist" => Some(Role::Tourist),
+        "valkyrie" => Some(Role::Valkyrie),
+        "wizard" => Some(Role::Wizard),
+        _ => None,
+    }
+}
+
 fn embedded_level_name_for_toml(id: SpecialLevelId) -> Option<&'static str> {
     match id {
         SpecialLevelId::Valley => Some("valley"),
@@ -2481,7 +2514,9 @@ fn population_from_level_definition(def: &LevelDefinition) -> SpecialLevelPopula
     let (offset_x, offset_y) = def
         .map
         .as_ref()
-        .map(|map_def| aligned_map_offsets(map_def, LevelMap::DEFAULT_WIDTH, LevelMap::DEFAULT_HEIGHT))
+        .map(|map_def| {
+            aligned_map_offsets(map_def, LevelMap::DEFAULT_WIDTH, LevelMap::DEFAULT_HEIGHT)
+        })
         .unwrap_or((0, 0));
 
     for mon in &def.monsters {
@@ -2568,6 +2603,14 @@ pub fn population_for_special_level(
     id: SpecialLevelId,
     generated: &GeneratedLevel,
 ) -> SpecialLevelPopulation {
+    population_for_special_level_with_role(id, generated, None)
+}
+
+pub fn population_for_special_level_with_role(
+    id: SpecialLevelId,
+    generated: &GeneratedLevel,
+    role_name: Option<&str>,
+) -> SpecialLevelPopulation {
     match id {
         SpecialLevelId::OracleLevel => {
             let pos = generated.rooms.first().map(room_center_pos);
@@ -2609,6 +2652,46 @@ pub fn population_for_special_level(
                     chance: 100,
                     quantity: Some(1),
                 }],
+            }
+        }
+        SpecialLevelId::FortLudios => {
+            let mut monsters = Vec::new();
+            let room_positions: Vec<Position> =
+                generated.rooms.iter().map(room_center_pos).collect();
+            let throne_pos = find_first_terrain(&generated.map, Terrain::Throne)
+                .or_else(|| room_positions.get(2).copied())
+                .or_else(|| room_positions.first().copied());
+
+            monsters.push(SpecialMonsterSpawn {
+                name: "lieutenant".to_string(),
+                pos: throne_pos,
+                chance: 100,
+                peaceful: Some(false),
+                asleep: Some(false),
+            });
+
+            for pos in room_positions.iter().take(2) {
+                monsters.push(SpecialMonsterSpawn {
+                    name: "soldier".to_string(),
+                    pos: Some(*pos),
+                    chance: 100,
+                    peaceful: Some(false),
+                    asleep: Some(false),
+                });
+            }
+            if let Some(pos) = room_positions.get(3).copied().or(throne_pos) {
+                monsters.push(SpecialMonsterSpawn {
+                    name: "captain".to_string(),
+                    pos: Some(pos),
+                    chance: 100,
+                    peaceful: Some(false),
+                    asleep: Some(false),
+                });
+            }
+
+            SpecialLevelPopulation {
+                monsters,
+                objects: Vec::new(),
             }
         }
         SpecialLevelId::VladsTower(3) => {
@@ -2653,6 +2736,44 @@ pub fn population_for_special_level(
                     asleep: Some(false),
                 }],
                 objects: Vec::new(),
+            }
+        }
+        SpecialLevelId::QuestStart => {
+            let Some(role) = quest_role_from_name(role_name) else {
+                return SpecialLevelPopulation::default();
+            };
+            let pos = generated.rooms.first().map(room_center_pos);
+            SpecialLevelPopulation {
+                monsters: vec![SpecialMonsterSpawn {
+                    name: quest_leader_for_role(role).to_string(),
+                    pos,
+                    chance: 100,
+                    peaceful: Some(true),
+                    asleep: Some(false),
+                }],
+                objects: Vec::new(),
+            }
+        }
+        SpecialLevelId::QuestGoal => {
+            let Some(role) = quest_role_from_name(role_name) else {
+                return SpecialLevelPopulation::default();
+            };
+            let pos = find_first_terrain(&generated.map, Terrain::Altar)
+                .or_else(|| generated.rooms.first().map(room_center_pos));
+            SpecialLevelPopulation {
+                monsters: vec![SpecialMonsterSpawn {
+                    name: quest_nemesis_for_role(role).to_string(),
+                    pos,
+                    chance: 100,
+                    peaceful: Some(false),
+                    asleep: Some(false),
+                }],
+                objects: vec![SpecialObjectSpawn {
+                    name: quest_artifact_for_role(role).to_string(),
+                    pos,
+                    chance: 100,
+                    quantity: Some(1),
+                }],
             }
         }
         _ => {
@@ -3473,10 +3594,7 @@ pub fn build_level_from_toml(def: &LevelDefinition, _rng: &mut impl Rng) -> Spec
         if let (Some(sx), Some(sy)) = (stair.x, stair.y) {
             let local_x = if has_map { sx - 1 } else { sx };
             let local_y = if has_map { sy - 1 } else { sy };
-            let pos = Position::new(
-                local_x + placement_offset_x,
-                local_y + placement_offset_y,
-            );
+            let pos = Position::new(local_x + placement_offset_x, local_y + placement_offset_y);
             match stair.direction.as_str() {
                 "up" => {
                     map.set_terrain(pos, Terrain::StairsUp);
@@ -7074,6 +7192,76 @@ mod tests {
     }
 
     #[test]
+    fn test_population_fort_ludios_has_garrison() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::FortLudios, None, &mut rng)
+            .expect("Fort Ludios should generate");
+        let pop = population_for_special_level(SpecialLevelId::FortLudios, &sl.generated);
+        assert_eq!(
+            pop.monsters
+                .iter()
+                .filter(|m| m.name.eq_ignore_ascii_case("soldier"))
+                .count(),
+            2,
+            "Fort Ludios population should include two soldiers"
+        );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("lieutenant")),
+            "Fort Ludios population should include its lieutenant"
+        );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("captain")),
+            "Fort Ludios population should include its captain"
+        );
+    }
+
+    #[test]
+    fn test_population_quest_start_role_specific_leader() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::QuestStart, Some("wizard"), &mut rng)
+            .expect("wizard quest start should generate");
+        let pop = population_for_special_level_with_role(
+            SpecialLevelId::QuestStart,
+            &sl.generated,
+            Some("wizard"),
+        );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("Neferet the Green")),
+            "wizard quest start population should include Neferet the Green"
+        );
+    }
+
+    #[test]
+    fn test_population_quest_goal_role_specific_nemesis_and_artifact() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::QuestGoal, Some("wizard"), &mut rng)
+            .expect("wizard quest goal should generate");
+        let pop = population_for_special_level_with_role(
+            SpecialLevelId::QuestGoal,
+            &sl.generated,
+            Some("wizard"),
+        );
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("Dark One")),
+            "wizard quest goal population should include the Dark One"
+        );
+        assert!(
+            pop.objects
+                .iter()
+                .any(|o| o.name == "The Eye of the Aethiopica"),
+            "wizard quest goal population should include the Eye artifact"
+        );
+    }
+
+    #[test]
     fn test_embedded_population_positions_land_on_walkable_tiles() {
         let mut rng = test_rng();
         let ids = [
@@ -7160,7 +7348,10 @@ mod tests {
             pool_count
         );
         assert!(sl.flags.no_dig, "fakewiz1 dispatch should preserve no_dig");
-        assert!(sl.flags.no_prayer, "fakewiz1 dispatch should preserve no_prayer");
+        assert!(
+            sl.flags.no_prayer,
+            "fakewiz1 dispatch should preserve no_prayer"
+        );
     }
 
     #[test]
@@ -7171,10 +7362,22 @@ mod tests {
 
         let altar_count = count_terrain(&sl.generated.map, Terrain::Altar);
         let grave_count = count_terrain(&sl.generated.map, Terrain::Grave);
-        assert!(altar_count >= 1, "valley dispatch should preserve the altar");
-        assert!(grave_count >= 4, "valley dispatch should preserve grave terrain");
-        assert!(sl.flags.no_teleport, "valley dispatch should preserve noteleport");
-        assert!(sl.flags.no_prayer, "valley dispatch should preserve no_prayer");
+        assert!(
+            altar_count >= 1,
+            "valley dispatch should preserve the altar"
+        );
+        assert!(
+            grave_count >= 4,
+            "valley dispatch should preserve grave terrain"
+        );
+        assert!(
+            sl.flags.no_teleport,
+            "valley dispatch should preserve noteleport"
+        );
+        assert!(
+            sl.flags.no_prayer,
+            "valley dispatch should preserve no_prayer"
+        );
     }
 
     #[test]
