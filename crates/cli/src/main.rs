@@ -3345,6 +3345,7 @@ fn main() -> Result<()> {
 
         (new_world, Some((deity_name, role_name)))
     };
+    world.set_spawn_catalogs(data.monsters.clone(), data.objects.clone());
 
     apply_runtime_options(&mut world, &cfg);
 

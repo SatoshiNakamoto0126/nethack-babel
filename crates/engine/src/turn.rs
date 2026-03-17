@@ -7,12 +7,20 @@
 
 use rand::Rng;
 
+use nethack_babel_data::{
+    MonsterDef, MonsterId, ObjectClass, ObjectCore, ObjectDef, ObjectTypeId,
+};
+
 use crate::action::{Direction, NameTarget, PlayerAction, Position};
 use crate::conduct::ConductState;
 use crate::dungeon::{CachedMonster, Terrain};
 use crate::event::{EngineEvent, HpSource, HungerLevel};
+use crate::makemon::{GoodPosFlags, MakeMonFlags, enexto, goodpos, makemon};
 use crate::map_gen::generate_level;
-use crate::special_levels::{dispatch_special_level, identify_special_level};
+use crate::mkobj::mksobj_at;
+use crate::special_levels::{
+    dispatch_special_level, identify_special_level, population_for_special_level,
+};
 use crate::traps::{TrapEntityInfo, detect_trap, trigger_trap_at};
 use crate::world::{
     Boulder, CreationOrder, DisplaySymbol, Encumbrance, EncumbranceLevel, ExperienceLevel,
@@ -1903,15 +1911,17 @@ fn generate_or_special_topology(
 ) -> (
     crate::map_gen::GeneratedLevel,
     crate::special_levels::SpecialLevelFlags,
+    Option<crate::special_levels::SpecialLevelId>,
 ) {
     if let Some(id) = world.dungeon().check_topology_special(&branch, depth)
         && let Some(special) = dispatch_special_level(id, None, rng)
     {
-        return (special.generated, special.flags);
+        return (special.generated, special.flags, Some(id));
     }
     (
         generate_level(depth as u8, rng),
         crate::special_levels::SpecialLevelFlags::default(),
+        None,
     )
 }
 
@@ -1972,7 +1982,7 @@ fn change_level_to_branch(
     world.dungeon_mut().depth = target_depth;
 
     // 3. Load or generate the target level.
-    let (new_map, new_up_stairs, new_down_stairs, flags) =
+    let (new_map, new_up_stairs, new_down_stairs, flags, special_population) =
         if world.dungeon().has_visited(target_branch, target_depth) {
             let (map, cached_mons) = world
                 .dungeon_mut()
@@ -2005,15 +2015,18 @@ fn change_level_to_branch(
                 up_pos,
                 down_pos,
                 crate::special_levels::SpecialLevelFlags::default(),
+                None,
             )
         } else {
-            let (generated, flags) =
+            let (generated, flags, special_id) =
                 generate_or_special_topology(world, target_branch, target_depth, rng);
+            let population = special_id.map(|id| population_for_special_level(id, &generated));
             (
                 generated.map,
                 generated.up_stairs,
                 generated.down_stairs,
                 flags,
+                population,
             )
         };
 
@@ -2030,6 +2043,10 @@ fn change_level_to_branch(
 
     if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
         pos.0 = target_pos;
+    }
+
+    if let Some(pop) = special_population {
+        apply_special_level_population(world, pop, rng);
     }
 
     // 6. Mark visited and check level feeling.
@@ -2113,7 +2130,7 @@ fn change_level(
 
     // 5. Load or generate the target level.
     let target_branch = branch;
-    let (new_map, new_up_stairs, new_down_stairs, flags) =
+    let (new_map, new_up_stairs, new_down_stairs, flags, special_population) =
         if world.dungeon().has_visited(target_branch, target_depth) {
             // Load from cache.
             let (map, cached_mons) = world
@@ -2149,16 +2166,19 @@ fn change_level(
                 up_pos,
                 down_pos,
                 crate::special_levels::SpecialLevelFlags::default(),
+                None,
             )
         } else {
             // Generate a new level.
-            let (generated, flags) =
+            let (generated, flags, special_id) =
                 generate_or_special_topology(world, target_branch, target_depth, rng);
+            let population = special_id.map(|id| population_for_special_level(id, &generated));
             (
                 generated.map,
                 generated.up_stairs,
                 generated.down_stairs,
                 flags,
+                population,
             )
         };
 
@@ -2179,12 +2199,329 @@ fn change_level(
         pos.0 = target_pos;
     }
 
+    if let Some(pop) = special_population {
+        apply_special_level_population(world, pop, rng);
+    }
+
     // 8. Emit LevelChanged event.
     events.push(EngineEvent::LevelChanged {
         entity: player,
         from_depth: format!("{}", from_depth),
         to_depth: format!("{}", target_depth),
     });
+}
+
+fn apply_special_level_population(
+    world: &mut GameWorld,
+    population: crate::special_levels::SpecialLevelPopulation,
+    rng: &mut impl Rng,
+) {
+    let monster_defs: Vec<MonsterDef> = world.monster_catalog().to_vec();
+    let object_defs: Vec<ObjectDef> = world.object_catalog().to_vec();
+    let resolved = resolve_special_level_population(&monster_defs, &object_defs, population);
+
+    for mon in resolved.monsters {
+        if !roll_spawn_chance(mon.chance, rng) {
+            continue;
+        }
+        spawn_special_monster(world, mon, &monster_defs, rng);
+    }
+
+    for obj in resolved.objects {
+        if !roll_spawn_chance(obj.chance, rng) {
+            continue;
+        }
+        spawn_special_object(world, obj, &object_defs, rng);
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ResolvedSpecialMonsterSpawn {
+    monster_id: MonsterId,
+    pos: Option<Position>,
+    chance: u32,
+    peaceful: Option<bool>,
+    asleep: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ResolvedSpecialObjectSpawn {
+    object_type: ObjectTypeId,
+    pos: Option<Position>,
+    chance: u32,
+    quantity: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ResolvedSpecialLevelPopulation {
+    monsters: Vec<ResolvedSpecialMonsterSpawn>,
+    objects: Vec<ResolvedSpecialObjectSpawn>,
+}
+
+fn resolve_special_level_population(
+    monster_defs: &[MonsterDef],
+    object_defs: &[ObjectDef],
+    population: crate::special_levels::SpecialLevelPopulation,
+) -> ResolvedSpecialLevelPopulation {
+    let mut resolved = ResolvedSpecialLevelPopulation::default();
+
+    for mon in population.monsters {
+        if let Some(monster_id) = resolve_monster_id_by_spec(monster_defs, &mon.name) {
+            resolved.monsters.push(ResolvedSpecialMonsterSpawn {
+                monster_id,
+                pos: mon.pos,
+                chance: mon.chance,
+                peaceful: mon.peaceful,
+                asleep: mon.asleep,
+            });
+        } else {
+            debug_assert!(false, "unresolved special monster spec: {}", mon.name);
+        }
+    }
+
+    for obj in population.objects {
+        if let Some(object_type) = resolve_object_type_by_spec(object_defs, &obj.name) {
+            resolved.objects.push(ResolvedSpecialObjectSpawn {
+                object_type,
+                pos: obj.pos,
+                chance: obj.chance,
+                quantity: obj.quantity,
+            });
+        } else {
+            debug_assert!(false, "unresolved special object spec: {}", obj.name);
+        }
+    }
+
+    resolved
+}
+
+fn roll_spawn_chance(chance: u32, rng: &mut impl Rng) -> bool {
+    if chance >= 100 {
+        return true;
+    }
+    if chance == 0 {
+        return false;
+    }
+    rng.random_range(1..=100) <= chance
+}
+
+fn spawn_special_monster(
+    world: &mut GameWorld,
+    spec: ResolvedSpecialMonsterSpawn,
+    monster_defs: &[MonsterDef],
+    rng: &mut impl Rng,
+) {
+    let Some(monster_def) = monster_defs.iter().find(|def| def.id == spec.monster_id) else {
+        return;
+    };
+    let Some(pos) = resolve_special_monster_spawn_pos(world, spec.pos, monster_def, rng) else {
+        return;
+    };
+
+    let mut flags = MakeMonFlags::NO_GROUP;
+    if spec.peaceful.unwrap_or(false) {
+        flags |= MakeMonFlags::PEACEFUL;
+    }
+    if spec.asleep.unwrap_or(false) {
+        flags |= MakeMonFlags::ASLEEP;
+    }
+    let _ = makemon(world, monster_defs, Some(spec.monster_id), pos, flags, rng);
+}
+
+fn spawn_special_object(
+    world: &mut GameWorld,
+    spec: ResolvedSpecialObjectSpawn,
+    object_defs: &[ObjectDef],
+    rng: &mut impl Rng,
+) {
+    let Some(pos) = resolve_special_spawn_pos(world, spec.pos, rng) else {
+        return;
+    };
+
+    if let Some(entity) = mksobj_at(world, pos, spec.object_type, true, object_defs, rng) {
+        let display_name = crate::identification::typename(spec.object_type, object_defs);
+        let _ = world.ecs_mut().insert_one(entity, Name(display_name));
+        if let Some(q) = spec.quantity
+            && q > 1
+            && let Some(mut core) = world.get_component_mut::<ObjectCore>(entity)
+        {
+            core.quantity = q as i32;
+        }
+    }
+}
+
+fn resolve_special_spawn_pos(
+    world: &GameWorld,
+    requested: Option<Position>,
+    rng: &mut impl Rng,
+) -> Option<Position> {
+    let map = &world.dungeon().current_level;
+    let occupied = |p: Position| {
+        if world
+            .get_component::<Positioned>(world.player())
+            .is_some_and(|pp| pp.0 == p)
+        {
+            return true;
+        }
+        world
+            .ecs()
+            .query::<(&Monster, &Positioned)>()
+            .iter()
+            .any(|(_, (_m, pos))| pos.0 == p)
+    };
+
+    if let Some(pos) = requested
+        && map.get(pos).is_some_and(|c| c.terrain.is_walkable())
+        && !occupied(pos)
+    {
+        return Some(pos);
+    }
+
+    for _ in 0..200 {
+        let x = rng.random_range(0..map.width) as i32;
+        let y = rng.random_range(0..map.height) as i32;
+        let pos = Position::new(x, y);
+        if map.get(pos).is_some_and(|c| c.terrain.is_walkable()) && !occupied(pos) {
+            return Some(pos);
+        }
+    }
+
+    for y in 0..map.height {
+        for x in 0..map.width {
+            let pos = Position::new(x as i32, y as i32);
+            if map.get(pos).is_some_and(|c| c.terrain.is_walkable()) && !occupied(pos) {
+                return Some(pos);
+            }
+        }
+    }
+
+    None
+}
+
+fn resolve_special_monster_spawn_pos(
+    world: &GameWorld,
+    requested: Option<Position>,
+    monster_def: &MonsterDef,
+    rng: &mut impl Rng,
+) -> Option<Position> {
+    let flags = GoodPosFlags::AVOID_MONSTER;
+
+    if let Some(pos) = requested {
+        if goodpos(world, pos, Some(monster_def), flags) {
+            return Some(pos);
+        }
+        if let Some(nearby) = enexto(world, pos, monster_def) {
+            return Some(nearby);
+        }
+    }
+
+    let map = &world.dungeon().current_level;
+    for _ in 0..200 {
+        let x = rng.random_range(0..map.width) as i32;
+        let y = rng.random_range(0..map.height) as i32;
+        let pos = Position::new(x, y);
+        if goodpos(world, pos, Some(monster_def), flags) {
+            return Some(pos);
+        }
+    }
+
+    for y in 0..map.height {
+        for x in 0..map.width {
+            let pos = Position::new(x as i32, y as i32);
+            if goodpos(world, pos, Some(monster_def), flags) {
+                return Some(pos);
+            }
+        }
+    }
+
+    None
+}
+
+fn resolve_monster_id_by_spec(monster_defs: &[MonsterDef], spec: &str) -> Option<MonsterId> {
+    let spec = spec.trim();
+    if let Some(class_str) = spec.strip_prefix("class:") {
+        let mut chars = class_str.chars();
+        let class = chars.next()?;
+        return monster_defs
+            .iter()
+            .find(|def| def.symbol.eq_ignore_ascii_case(&class))
+            .map(|def| def.id);
+    }
+
+    monster_defs
+        .iter()
+        .find(|def| {
+            def.names.male.eq_ignore_ascii_case(spec)
+                || def
+                    .names
+                    .female
+                    .as_ref()
+                    .is_some_and(|f| f.eq_ignore_ascii_case(spec))
+        })
+        .map(|def| def.id)
+}
+
+fn resolve_object_type_by_spec(object_defs: &[ObjectDef], spec: &str) -> Option<ObjectTypeId> {
+    let spec = spec.trim();
+    if let Some(class_str) = spec.strip_prefix("class:") {
+        let class_char = class_str.chars().next()?;
+        let class = object_class_from_symbol(class_char)?;
+        return object_defs
+            .iter()
+            .find(|def| def.class == class)
+            .map(|def| def.id);
+    }
+
+    if let Some(def) = object_defs
+        .iter()
+        .find(|def| def.name.eq_ignore_ascii_case(spec))
+    {
+        return Some(def.id);
+    }
+
+    let lower = spec.to_ascii_lowercase();
+    let class_prefixes: &[(&str, ObjectClass)] = &[
+        ("scroll of ", ObjectClass::Scroll),
+        ("potion of ", ObjectClass::Potion),
+        ("wand of ", ObjectClass::Wand),
+        ("ring of ", ObjectClass::Ring),
+        ("spellbook of ", ObjectClass::Spellbook),
+        ("amulet of ", ObjectClass::Amulet),
+    ];
+
+    for &(prefix, class) in class_prefixes {
+        if let Some(base_name) = lower.strip_prefix(prefix)
+            && let Some(def) = object_defs
+                .iter()
+                .find(|def| def.class == class && def.name.eq_ignore_ascii_case(base_name.trim()))
+        {
+            return Some(def.id);
+        }
+    }
+
+    None
+}
+
+fn object_class_from_symbol(ch: char) -> Option<ObjectClass> {
+    match ch {
+        ')' => Some(ObjectClass::Weapon),
+        '[' => Some(ObjectClass::Armor),
+        '=' => Some(ObjectClass::Ring),
+        '"' => Some(ObjectClass::Amulet),
+        '(' => Some(ObjectClass::Tool),
+        '%' => Some(ObjectClass::Food),
+        '!' => Some(ObjectClass::Potion),
+        '?' => Some(ObjectClass::Scroll),
+        '+' => Some(ObjectClass::Spellbook),
+        '/' => Some(ObjectClass::Wand),
+        '$' => Some(ObjectClass::Coin),
+        '*' => Some(ObjectClass::Gem),
+        '`' => Some(ObjectClass::Rock),
+        '0' => Some(ObjectClass::Ball),
+        '_' => Some(ObjectClass::Chain),
+        '.' => Some(ObjectClass::Venom),
+        _ => None,
+    }
 }
 
 /// Find the first cell with the given terrain type on a map.
@@ -3290,16 +3627,35 @@ mod tests {
     use crate::dungeon::Terrain;
     use crate::world::Name;
     use nethack_babel_data::{
-        Alignment, ArtifactId, BucStatus, Gender, Handedness, MonsterFlags, ObjectClass,
-        ObjectCore, ObjectLocation, ObjectTypeId, PlayerIdentity, PlayerSkills, RaceId, RoleId,
-        SkillState, WeaponSkill,
+        Alignment, ArtifactId, BucStatus, GameData, Gender, Handedness, MonsterFlags,
+        ObjectClass, ObjectCore, ObjectLocation, ObjectTypeId, PlayerIdentity, PlayerSkills,
+        RaceId, RoleId, SkillState, WeaponSkill, load_game_data,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
 
     /// Deterministic RNG for reproducible tests.
     fn test_rng() -> Pcg64 {
         Pcg64::seed_from_u64(42)
+    }
+
+    fn data_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
+    }
+
+    fn test_game_data() -> &'static GameData {
+        static DATA: OnceLock<GameData> = OnceLock::new();
+        DATA.get_or_init(|| {
+            load_game_data(&data_dir())
+                .unwrap_or_else(|e| panic!("failed to load test game data: {}", e))
+        })
+    }
+
+    fn install_test_catalogs(world: &mut GameWorld) {
+        let data = test_game_data();
+        world.set_spawn_catalogs(data.monsters.clone(), data.objects.clone());
     }
 
     fn make_test_world() -> GameWorld {
@@ -4601,6 +4957,7 @@ mod tests {
     /// the specified terrain at position (5, 5).
     fn make_stair_world(player_terrain: Terrain, depth: i32) -> GameWorld {
         let mut world = GameWorld::new(Position::new(5, 5));
+        install_test_catalogs(&mut world);
         world.dungeon_mut().depth = depth;
         // Carve a small open room.
         for y in 3..=7 {
@@ -4617,6 +4974,28 @@ mod tests {
             .current_level
             .set_terrain(Position::new(5, 5), player_terrain);
         world
+    }
+
+    fn has_monster_named(world: &GameWorld, name: &str) -> bool {
+        count_monsters_named(world, name) > 0
+    }
+
+    fn count_monsters_named(world: &GameWorld, name: &str) -> usize {
+        world
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .filter(|(_, (_m, n))| n.0.eq_ignore_ascii_case(name))
+            .count()
+    }
+
+    fn count_objects_with_type(world: &GameWorld, object_type: ObjectTypeId) -> usize {
+        world
+            .ecs()
+            .query::<&ObjectCore>()
+            .iter()
+            .filter(|(_, core)| core.otyp == object_type)
+            .count()
     }
 
     /// Spawn a monster with all components needed for stair caching.
@@ -4663,6 +5042,201 @@ mod tests {
             )
         });
         assert!(level_changed, "expected LevelChanged event from 1 to 2");
+    }
+
+    #[test]
+    fn test_entering_medusa_spawns_medusa() {
+        let mut world = make_stair_world(Terrain::StairsDown, 23);
+        let mut rng = test_rng();
+
+        let _events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(world.dungeon().depth, 24, "expected to descend to depth 24");
+        assert!(
+            has_monster_named(&world, "medusa"),
+            "entering Medusa level should spawn Medusa"
+        );
+    }
+
+    #[test]
+    fn test_entering_castle_spawns_wand_of_wishing() {
+        let mut world = make_stair_world(Terrain::StairsDown, 24);
+        let mut rng = test_rng();
+
+        let _events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(world.dungeon().depth, 25, "expected to descend to depth 25");
+        let wand_otyp = resolve_object_type_by_spec(&test_game_data().objects, "wand of wishing")
+            .expect("wand of wishing should resolve against the catalog");
+        assert!(
+            count_objects_with_type(&world, wand_otyp) > 0,
+            "entering Castle should place a real wand of wishing"
+        );
+    }
+
+    #[test]
+    fn test_entering_orcus_spawns_orcus() {
+        let mut world = make_stair_world(Terrain::StairsDown, 11);
+        world.dungeon_mut().branch = crate::dungeon::DungeonBranch::Gehennom;
+        let mut rng = test_rng();
+
+        let _events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(world.dungeon().depth, 12, "expected to descend to depth 12");
+        assert!(
+            has_monster_named(&world, "orcus"),
+            "entering Orcus level should spawn Orcus"
+        );
+    }
+
+    #[test]
+    fn test_spawn_special_monster_uses_swimmer_requested_tile() {
+        let mut world = make_test_world();
+        let spawn_pos = Position::new(10, 10);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(spawn_pos, Terrain::Pool);
+        let mut rng = test_rng();
+        let monster_id = resolve_monster_id_by_spec(&test_game_data().monsters, "Juiblex")
+            .expect("Juiblex should resolve against the catalog");
+
+        spawn_special_monster(
+            &mut world,
+            ResolvedSpecialMonsterSpawn {
+                monster_id,
+                pos: Some(spawn_pos),
+                chance: 100,
+                peaceful: Some(false),
+                asleep: Some(false),
+            },
+            &test_game_data().monsters,
+            &mut rng,
+        );
+
+        let juiblex_pos = world
+            .ecs()
+            .query::<(&Monster, &Positioned, &Name)>()
+            .iter()
+            .find_map(|(_, (_monster, pos, name))| {
+                name.0.eq_ignore_ascii_case("Juiblex").then_some(pos.0)
+            });
+        assert_eq!(
+            juiblex_pos,
+            Some(spawn_pos),
+            "special monster spawning should preserve valid swimmer spawn tiles"
+        );
+    }
+
+    #[test]
+    fn test_entering_valley_uses_embedded_population_and_flags() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = crate::dungeon::DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 0;
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        change_level(&mut world, 1, false, &mut rng, &mut events);
+
+        assert_eq!(world.dungeon().depth, 1, "expected to arrive on Valley");
+        assert!(
+            world.dungeon().current_level_flags.no_prayer,
+            "Valley should set no_prayer through the live level flags"
+        );
+        assert!(
+            world.dungeon().current_level_flags.no_teleport,
+            "Valley should set noteleport through the live level flags"
+        );
+        assert!(
+            count_monsters_named(&world, "ghost") >= 1,
+            "entering Valley should spawn embedded undead population"
+        );
+    }
+
+    #[test]
+    fn test_entering_vlad_tower_top_spawns_vlad_and_candelabrum() {
+        let mut world = make_stair_world(Terrain::StairsDown, 2);
+        world.dungeon_mut().branch = crate::dungeon::DungeonBranch::VladsTower;
+        let mut rng = test_rng();
+
+        let _events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(world.dungeon().depth, 3, "expected to descend to Vlad level 3");
+        assert!(
+            has_monster_named(&world, "Vlad the Impaler"),
+            "entering Vlad level 3 should spawn Vlad the Impaler"
+        );
+        let candelabrum_otyp =
+            resolve_object_type_by_spec(&test_game_data().objects, "Candelabrum of Invocation")
+                .expect("Candelabrum should resolve against the catalog");
+        assert!(
+            count_objects_with_type(&world, candelabrum_otyp) > 0,
+            "Vlad level 3 should place the Candelabrum"
+        );
+    }
+
+    #[test]
+    fn test_entering_sanctum_spawns_high_priest() {
+        let mut world = make_stair_world(Terrain::StairsDown, 19);
+        world.dungeon_mut().branch = crate::dungeon::DungeonBranch::Gehennom;
+        let mut rng = test_rng();
+
+        let _events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(world.dungeon().depth, 20, "expected to descend to Sanctum");
+        assert!(
+            has_monster_named(&world, "high priest"),
+            "entering Sanctum should spawn the high priest"
+        );
+    }
+
+    #[test]
+    fn test_entering_fakewiz2_spawns_amulet_of_yendor() {
+        let mut world = make_stair_world(Terrain::StairsDown, 14);
+        world.dungeon_mut().branch = crate::dungeon::DungeonBranch::Gehennom;
+        let mut rng = test_rng();
+
+        let _events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+
+        assert_eq!(world.dungeon().depth, 15, "expected to descend to fakewiz2");
+        let amulet_otyp = resolve_object_type_by_spec(&test_game_data().objects, "Amulet of Yendor")
+            .expect("Amulet of Yendor should resolve against the catalog");
+        assert!(
+            count_objects_with_type(&world, amulet_otyp) > 0,
+            "entering fakewiz2 should place the Amulet of Yendor"
+        );
+    }
+
+    #[test]
+    fn test_revisiting_medusa_does_not_duplicate_medusa() {
+        let mut world = make_stair_world(Terrain::StairsDown, 23);
+        let mut rng = test_rng();
+
+        resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(count_monsters_named(&world, "medusa"), 1);
+
+        let medusa_down = find_terrain(&world.dungeon().current_level, Terrain::StairsDown)
+            .expect("Medusa level should have stairs down");
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(world.player()) {
+            pos.0 = medusa_down;
+        }
+        resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        assert_eq!(world.dungeon().depth, 25);
+
+        let castle_up = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
+            .expect("Castle should have stairs up");
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(world.player()) {
+            pos.0 = castle_up;
+        }
+        resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+
+        assert_eq!(world.dungeon().depth, 24);
+        assert_eq!(
+            count_monsters_named(&world, "medusa"),
+            1,
+            "revisiting Medusa should not duplicate the boss"
+        );
     }
 
     #[test]

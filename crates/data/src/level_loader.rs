@@ -58,6 +58,7 @@ pub fn ascii_to_terrain(ch: char) -> &'static str {
         '}' => "pool",
         '\\' => "throne",
         '_' => "altar",
+        'G' => "grave",
         '<' => "stairs_up",
         '>' => "stairs_down",
         '^' => "trap",
@@ -96,22 +97,22 @@ const VALLEY_TOML: &str = r#"
 [level]
 name = "valley"
 branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor", "nommap", "noautomap"]
+flags = ["mazelevel", "noteleport", "hardfloor", "nommap", "noautomap", "noprayer"]
 
 [map]
 halign = "center"
 valign = "center"
 data = """
 ---------------------------------------------------------------------------
-|...S.|..|.....|  |.....-|      |................|   |...............| |...|
-|.....+..|.....|  |......|      |................|   |...............| |...|
-|...S.|..|.....|  |......+######+................+###+...............| |...|
+|G..S.|..|.....|  |.....-|      |................|   |...............| |...|
+|.._..+..|.....|  |......|      |................|   |...............| |...|
+|...S.|..|..G..|  |......+######+................+###+...............| |...|
 |-----|..|----+|  |------|      |.................S   |...............|.|...|
       |..|    |S  S      |      |................|   |-+-------------|.|...|
       |..+    |.  .|     |      |................|   | |             |.|...|
       |..|    |.  .|     |      |-----+----------|   | |             |.|...|
       |..|    |.  .|     |      |     |              | |             |.|...|
-      |..| |---.  .---|  |      |     |           |--| |          |---.---|
+      |..| |---G  .---|  |      |     |           |--| |          |---.---|
       |..| |........  |  |      |     |           |    |          |.......|
       |..| |........  |  |-+--+-|     |           |    |----------|.......|
       |..| |........  |  |......|     |    -------+----+----      |.......|
@@ -119,7 +120,7 @@ data = """
       |..| |..|          |......|     |    |...........|   |      |.......|
       |..| |..|  |-------|......|     |----|...........|   |------|.......|
       |..| |..+  +.......+.....+     +....+...........|          |.......|
-      |..| |..|  |-------|......|     |----|...........|----------|.......|
+      |..| |..|  |-------|......|     |----|......G....|----------|.......|
       |..| |..|          |......|     |    |...........|                  |
       |..|  ---          |------|     |     -----------                   |
        --                                                                |
@@ -141,22 +142,29 @@ x = 72
 y = 18
 
 [[monsters]]
-id = "Orcus"
-x = 50
-y = 14
+id = "ghost"
 
-[[objects]]
-id = "wand of death"
-x = 50
-y = 14
-chance = 50
+[[monsters]]
+id = "ghost"
+
+[[monsters]]
+id = "vampire bat"
+
+[[monsters]]
+id = "master lich"
+
+[[monsters]]
+id = "vampire lord"
+
+[[monsters]]
+id = "ettin zombie"
 "#;
 
 const ASMODEUS_TOML: &str = r#"
 [level]
 name = "asmodeus"
 branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor"]
+flags = ["mazelevel", "noteleport", "hardfloor", "noprayer"]
 
 [map]
 halign = "center"
@@ -200,7 +208,7 @@ const BAALZEBUB_TOML: &str = r#"
 [level]
 name = "baalzebub"
 branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor"]
+flags = ["mazelevel", "noteleport", "hardfloor", "noprayer"]
 
 [map]
 halign = "center"
@@ -241,7 +249,7 @@ const JUIBLEX_TOML: &str = r#"
 [level]
 name = "juiblex"
 branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor"]
+flags = ["mazelevel", "noteleport", "hardfloor", "noprayer"]
 
 [map]
 halign = "center"
@@ -283,7 +291,7 @@ const ORCUS_TOML: &str = r#"
 [level]
 name = "orcus"
 branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor"]
+flags = ["mazelevel", "noteleport", "hardfloor", "noprayer"]
 
 [map]
 halign = "center"
@@ -318,13 +326,13 @@ y = 5
 
 [[monsters]]
 id = "Orcus"
-x = 20
-y = 5
+x = 22
+y = 6
 
 [[objects]]
 id = "wand of death"
-x = 20
-y = 5
+x = 22
+y = 6
 chance = 75
 "#;
 
@@ -332,25 +340,25 @@ const FAKEWIZ1_TOML: &str = r#"
 [level]
 name = "fakewiz1"
 branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor"]
+flags = ["mazelevel", "noteleport", "hardfloor", "nodig", "noprayer"]
 
 [map]
 halign = "center"
 valign = "center"
 data = """
------------
-|.........|
-|.........|
-|.........|
-|....F....|
-|.........|
-|.........|
-|.........|
------------
+.........
+.}}}}}}}.
+.}}---}}.
+.}--.--}.
+.}|...|}.
+.}--.--}.
+.}}---}}.
+.}}}}}}}.
+.........
 """
 
 [[regions]]
-area = [0, 0, 10, 8]
+area = [0, 0, 8, 8]
 lit = false
 
 [[stairs]]
@@ -360,33 +368,48 @@ y = 1
 
 [[stairs]]
 direction = "down"
-x = 9
+x = 7
 y = 7
+
+[[monsters]]
+id = "lich"
+x = 5
+y = 5
+
+[[monsters]]
+id = "vampire lord"
+x = 4
+y = 5
+
+[[monsters]]
+id = "kraken"
+x = 2
+y = 2
 "#;
 
 const FAKEWIZ2_TOML: &str = r#"
 [level]
 name = "fakewiz2"
 branch = "Gehennom"
-flags = ["mazelevel", "noteleport", "hardfloor"]
+flags = ["mazelevel", "noteleport", "hardfloor", "nodig", "noprayer"]
 
 [map]
 halign = "center"
 valign = "center"
 data = """
------------
-|.........|
-|.........|
-|.........|
-|....F....|
-|.........|
-|.........|
-|.........|
------------
+.........
+.}}}}}}}.
+.}}---}}.
+.}--.--}.
+.}|...|}.
+.}--.--}.
+.}}---}}.
+.}}}}}}}.
+.........
 """
 
 [[regions]]
-area = [0, 0, 10, 8]
+area = [0, 0, 8, 8]
 lit = false
 
 [[stairs]]
@@ -396,8 +419,28 @@ y = 1
 
 [[stairs]]
 direction = "down"
-x = 9
+x = 7
 y = 7
+
+[[monsters]]
+id = "lich"
+x = 5
+y = 5
+
+[[monsters]]
+id = "vampire lord"
+x = 4
+y = 5
+
+[[monsters]]
+id = "kraken"
+x = 2
+y = 2
+
+[[objects]]
+id = "Amulet of Yendor"
+x = 6
+y = 5
 "#;
 
 #[cfg(test)]
@@ -492,6 +535,7 @@ connection_type = "stairs"
         assert_eq!(ascii_to_terrain('+'), "door_closed");
         assert_eq!(ascii_to_terrain('{'), "fountain");
         assert_eq!(ascii_to_terrain('}'), "pool");
+        assert_eq!(ascii_to_terrain('G'), "grave");
         assert_eq!(ascii_to_terrain('L'), "lava");
         assert_eq!(ascii_to_terrain(' '), "stone");
     }

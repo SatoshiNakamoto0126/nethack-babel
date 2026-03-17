@@ -12,8 +12,10 @@ use crate::action::Position;
 use crate::dungeon::{LevelMap, Terrain};
 use crate::map_gen::{GeneratedLevel, Room};
 
-use nethack_babel_data::level_loader::{ascii_to_terrain, parse_ascii_map};
-use nethack_babel_data::level_schema::LevelDefinition;
+use nethack_babel_data::level_loader::{
+    ascii_to_terrain, get_embedded_level, load_level_from_str, parse_ascii_map,
+};
+use nethack_babel_data::level_schema::{LevelDefinition, MapDefinition};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sokoban
@@ -37,6 +39,39 @@ pub struct SpecialLevelFlags {
 pub struct SpecialLevel {
     pub generated: GeneratedLevel,
     pub flags: SpecialLevelFlags,
+}
+
+/// Monster placement directive produced by special-level population planning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpecialMonsterSpawn {
+    pub name: String,
+    pub pos: Option<Position>,
+    pub chance: u32,
+    pub peaceful: Option<bool>,
+    pub asleep: Option<bool>,
+}
+
+/// Object placement directive produced by special-level population planning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpecialObjectSpawn {
+    pub name: String,
+    pub pos: Option<Position>,
+    pub chance: u32,
+    pub quantity: Option<u32>,
+}
+
+/// Planned population payload for a generated special level.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SpecialLevelPopulation {
+    pub monsters: Vec<SpecialMonsterSpawn>,
+    pub objects: Vec<SpecialObjectSpawn>,
+}
+
+impl SpecialLevelPopulation {
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.monsters.is_empty() && self.objects.is_empty()
+    }
 }
 
 /// Which reward sits on the top floor of Sokoban.
@@ -2407,6 +2442,228 @@ pub enum SpecialLevelId {
     QuestFiller(u8),
 }
 
+fn room_center_pos(room: &Room) -> Position {
+    let (cx, cy) = room.center();
+    Position::new(cx as i32, cy as i32)
+}
+
+fn embedded_level_name_for_toml(id: SpecialLevelId) -> Option<&'static str> {
+    match id {
+        SpecialLevelId::Valley => Some("valley"),
+        SpecialLevelId::Asmodeus => Some("asmodeus"),
+        SpecialLevelId::Baalzebub => Some("baalzebub"),
+        SpecialLevelId::Juiblex => Some("juiblex"),
+        SpecialLevelId::Orcus => Some("orcus"),
+        SpecialLevelId::FakeWizard(1) => Some("fakewiz1"),
+        SpecialLevelId::FakeWizard(2) => Some("fakewiz2"),
+        _ => None,
+    }
+}
+
+fn aligned_map_offsets(map_def: &MapDefinition, map_w: usize, map_h: usize) -> (i32, i32) {
+    let (mw, mh, _) = parse_ascii_map(&map_def.data);
+    let offset_x = match map_def.halign.as_str() {
+        "left" => 1,
+        "right" => (map_w as i32 - mw as i32 - 1).max(1),
+        _ => ((map_w as i32 - mw as i32) / 2).max(1),
+    };
+    let offset_y = match map_def.valign.as_str() {
+        "top" => 1,
+        "bottom" => (map_h as i32 - mh as i32 - 1).max(1),
+        _ => ((map_h as i32 - mh as i32) / 2).max(1),
+    };
+    (offset_x, offset_y)
+}
+
+fn population_from_level_definition(def: &LevelDefinition) -> SpecialLevelPopulation {
+    let mut pop = SpecialLevelPopulation::default();
+    let has_map = def.map.is_some();
+    let (offset_x, offset_y) = def
+        .map
+        .as_ref()
+        .map(|map_def| aligned_map_offsets(map_def, LevelMap::DEFAULT_WIDTH, LevelMap::DEFAULT_HEIGHT))
+        .unwrap_or((0, 0));
+
+    for mon in &def.monsters {
+        let Some(name) = mon
+            .id
+            .as_ref()
+            .cloned()
+            .or_else(|| mon.class.as_ref().map(|c| format!("class:{}", c)))
+        else {
+            continue;
+        };
+
+        let pos = match (mon.x, mon.y) {
+            (Some(x), Some(y)) => {
+                let local_x = if has_map { x - 1 } else { x };
+                let local_y = if has_map { y - 1 } else { y };
+                Some(Position::new(local_x + offset_x, local_y + offset_y))
+            }
+            _ => None,
+        };
+
+        pop.monsters.push(SpecialMonsterSpawn {
+            name,
+            pos,
+            chance: mon.chance.min(100),
+            peaceful: mon.peaceful,
+            asleep: mon.asleep,
+        });
+    }
+
+    for obj in &def.objects {
+        let Some(name) = obj
+            .id
+            .as_ref()
+            .cloned()
+            .or_else(|| obj.class.as_ref().map(|c| format!("class:{}", c)))
+        else {
+            continue;
+        };
+
+        let pos = match (obj.x, obj.y) {
+            (Some(x), Some(y)) => {
+                let local_x = if has_map { x - 1 } else { x };
+                let local_y = if has_map { y - 1 } else { y };
+                Some(Position::new(local_x + offset_x, local_y + offset_y))
+            }
+            _ => None,
+        };
+
+        pop.objects.push(SpecialObjectSpawn {
+            name,
+            pos,
+            chance: obj.chance.min(100),
+            quantity: obj.quantity,
+        });
+    }
+
+    pop
+}
+
+fn population_from_embedded_toml(level_name: &str) -> SpecialLevelPopulation {
+    let Some(raw) = get_embedded_level(level_name) else {
+        return SpecialLevelPopulation::default();
+    };
+    let Ok(def) = load_level_from_str(raw) else {
+        return SpecialLevelPopulation::default();
+    };
+    population_from_level_definition(&def)
+}
+
+fn build_embedded_special_level(id: SpecialLevelId, rng: &mut impl Rng) -> Option<SpecialLevel> {
+    let level_name = embedded_level_name_for_toml(id)?;
+    let raw = get_embedded_level(level_name)?;
+    let def = load_level_from_str(raw).ok()?;
+    Some(build_level_from_toml(&def, rng))
+}
+
+/// Build population directives for a generated special level.
+///
+/// This bridges legacy hand-written terrain generators and data-driven
+/// level content definitions by returning the actors/items that must be
+/// present when the player first enters the level.
+pub fn population_for_special_level(
+    id: SpecialLevelId,
+    generated: &GeneratedLevel,
+) -> SpecialLevelPopulation {
+    match id {
+        SpecialLevelId::OracleLevel => {
+            let pos = generated.rooms.first().map(room_center_pos);
+            SpecialLevelPopulation {
+                monsters: vec![SpecialMonsterSpawn {
+                    name: "Oracle".to_string(),
+                    pos,
+                    chance: 100,
+                    peaceful: Some(true),
+                    asleep: Some(false),
+                }],
+                objects: Vec::new(),
+            }
+        }
+        SpecialLevelId::Medusa(_) => {
+            let pos = generated
+                .rooms
+                .get(1)
+                .or_else(|| generated.rooms.first())
+                .map(room_center_pos);
+            SpecialLevelPopulation {
+                monsters: vec![SpecialMonsterSpawn {
+                    name: "Medusa".to_string(),
+                    pos,
+                    chance: 100,
+                    peaceful: Some(false),
+                    asleep: Some(false),
+                }],
+                objects: Vec::new(),
+            }
+        }
+        SpecialLevelId::Castle => {
+            let pos = generated.rooms.first().map(room_center_pos);
+            SpecialLevelPopulation {
+                monsters: Vec::new(),
+                objects: vec![SpecialObjectSpawn {
+                    name: "wand of wishing".to_string(),
+                    pos,
+                    chance: 100,
+                    quantity: Some(1),
+                }],
+            }
+        }
+        SpecialLevelId::VladsTower(3) => {
+            let pos = generated.rooms.first().map(room_center_pos);
+            SpecialLevelPopulation {
+                monsters: vec![SpecialMonsterSpawn {
+                    name: "Vlad the Impaler".to_string(),
+                    pos,
+                    chance: 100,
+                    peaceful: Some(false),
+                    asleep: Some(false),
+                }],
+                objects: vec![SpecialObjectSpawn {
+                    name: "Candelabrum of Invocation".to_string(),
+                    pos,
+                    chance: 100,
+                    quantity: Some(1),
+                }],
+            }
+        }
+        SpecialLevelId::WizardTower3 => {
+            let pos = generated.rooms.first().map(room_center_pos);
+            SpecialLevelPopulation {
+                monsters: vec![SpecialMonsterSpawn {
+                    name: "Wizard of Yendor".to_string(),
+                    pos,
+                    chance: 100,
+                    peaceful: Some(false),
+                    asleep: Some(false),
+                }],
+                objects: Vec::new(),
+            }
+        }
+        SpecialLevelId::Sanctum => {
+            let pos = generated.rooms.first().map(room_center_pos);
+            SpecialLevelPopulation {
+                monsters: vec![SpecialMonsterSpawn {
+                    name: "high priest".to_string(),
+                    pos,
+                    chance: 100,
+                    peaceful: Some(false),
+                    asleep: Some(false),
+                }],
+                objects: Vec::new(),
+            }
+        }
+        _ => {
+            if let Some(name) = embedded_level_name_for_toml(id) {
+                return population_from_embedded_toml(name);
+            }
+            SpecialLevelPopulation::default()
+        }
+    }
+}
+
 /// Check if a branch+depth pair corresponds to a known special level.
 ///
 /// This is a simplified mapping; in full NetHack, the exact depths are
@@ -2517,13 +2774,15 @@ pub fn dispatch_special_level(
         SpecialLevelId::FirePlane => Some(generate_elemental_plane(ElementalPlane::Fire, rng)),
         SpecialLevelId::WaterPlane => Some(generate_elemental_plane(ElementalPlane::Water, rng)),
         SpecialLevelId::AstralPlane => Some(generate_astral_plane(rng)),
-        SpecialLevelId::Valley => Some(generate_valley(rng)),
+        SpecialLevelId::Valley
+        | SpecialLevelId::Asmodeus
+        | SpecialLevelId::Baalzebub
+        | SpecialLevelId::Juiblex
+        | SpecialLevelId::Orcus
+        | SpecialLevelId::FakeWizard(1)
+        | SpecialLevelId::FakeWizard(2) => build_embedded_special_level(id, rng),
         SpecialLevelId::BigRoom(v) => Some(generate_big_room(v, rng)),
         SpecialLevelId::Rogue => Some(generate_rogue_level(15, rng)),
-        SpecialLevelId::Asmodeus => Some(generate_asmodeus(rng)),
-        SpecialLevelId::Baalzebub => Some(generate_baalzebub(rng)),
-        SpecialLevelId::Juiblex => Some(generate_juiblex(rng)),
-        SpecialLevelId::Orcus => Some(generate_orcus(rng)),
         SpecialLevelId::FakeWizard(_) => Some(generate_fake_wizard(rng)),
         SpecialLevelId::WizardTower2 => Some(generate_wizard_tower_upper(2, rng)),
         SpecialLevelId::WizardTower3 => Some(generate_wizard_tower_upper(3, rng)),
@@ -3135,19 +3394,8 @@ pub fn build_level_from_toml(def: &LevelDefinition, _rng: &mut impl Rng) -> Spec
 
     // Parse the ASCII map if present.
     if let Some(ref map_def) = def.map {
-        let (mw, mh, grid) = parse_ascii_map(&map_def.data);
-
-        // Calculate offset for alignment.
-        let offset_x = match map_def.halign.as_str() {
-            "left" => 1,
-            "right" => (map_w as i32 - mw as i32 - 1).max(1) as usize,
-            _ => ((map_w as i32 - mw as i32) / 2).max(1) as usize,
-        };
-        let offset_y = match map_def.valign.as_str() {
-            "top" => 1,
-            "bottom" => (map_h as i32 - mh as i32 - 1).max(1) as usize,
-            _ => ((map_h as i32 - mh as i32) / 2).max(1) as usize,
-        };
+        let (_mw, _mh, grid) = parse_ascii_map(&map_def.data);
+        let (offset_x, offset_y) = aligned_map_offsets(map_def, map_w, map_h);
 
         let mut min_fx = map_w;
         let mut max_fx = 0usize;
@@ -3156,8 +3404,8 @@ pub fn build_level_from_toml(def: &LevelDefinition, _rng: &mut impl Rng) -> Spec
 
         for (gy, row) in grid.iter().enumerate() {
             for (gx, &ch) in row.iter().enumerate() {
-                let x = (offset_x + gx) as i32;
-                let y = (offset_y + gy) as i32;
+                let x = offset_x + gx as i32;
+                let y = offset_y + gy as i32;
                 if x < 0 || y < 0 || x >= map_w as i32 || y >= map_h as i32 {
                     continue;
                 }
@@ -3170,6 +3418,7 @@ pub fn build_level_from_toml(def: &LevelDefinition, _rng: &mut impl Rng) -> Spec
                     "door_closed" => Terrain::DoorClosed,
                     "door_secret" => Terrain::DoorClosed,
                     "fountain" => Terrain::Fountain,
+                    "grave" => Terrain::Grave,
                     "pool" => Terrain::Pool,
                     "throne" => Terrain::Throne,
                     "altar" => Terrain::Altar,
@@ -3182,6 +3431,7 @@ pub fn build_level_from_toml(def: &LevelDefinition, _rng: &mut impl Rng) -> Spec
                         Terrain::StairsDown
                     }
                     "lava" => Terrain::Lava,
+                    "drawbridge_raised" => Terrain::Drawbridge,
                     "tree" => Terrain::Tree,
                     "iron_bars" => Terrain::IronBars,
                     "water" => Terrain::Water,
@@ -3213,9 +3463,20 @@ pub fn build_level_from_toml(def: &LevelDefinition, _rng: &mut impl Rng) -> Spec
     }
 
     // Process explicit stair placements (override map-based ones).
+    let (placement_offset_x, placement_offset_y) = def
+        .map
+        .as_ref()
+        .map(|map_def| aligned_map_offsets(map_def, map_w, map_h))
+        .unwrap_or((0, 0));
+    let has_map = def.map.is_some();
     for stair in &def.stairs {
         if let (Some(sx), Some(sy)) = (stair.x, stair.y) {
-            let pos = Position::new(sx, sy);
+            let local_x = if has_map { sx - 1 } else { sx };
+            let local_y = if has_map { sy - 1 } else { sy };
+            let pos = Position::new(
+                local_x + placement_offset_x,
+                local_y + placement_offset_y,
+            );
             match stair.direction.as_str() {
                 "up" => {
                     map.set_terrain(pos, Terrain::StairsUp);
@@ -5505,9 +5766,60 @@ mod tests {
     use super::*;
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+
+    use crate::makemon::{GoodPosFlags, goodpos};
+    use crate::world::{GameWorld, Positioned};
+    use nethack_babel_data::{GameData, MonsterDef, loader::load_game_data};
 
     fn test_rng() -> Pcg64 {
         Pcg64::seed_from_u64(42)
+    }
+
+    fn data_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data")
+    }
+
+    fn test_game_data() -> &'static GameData {
+        static DATA: OnceLock<GameData> = OnceLock::new();
+        DATA.get_or_init(|| {
+            load_game_data(&data_dir())
+                .unwrap_or_else(|e| panic!("failed to load test game data: {}", e))
+        })
+    }
+
+    fn resolve_monster_def_for_test(spec: &str) -> Option<&'static MonsterDef> {
+        let spec = spec.trim();
+        let data = test_game_data();
+        if let Some(class_str) = spec.strip_prefix("class:") {
+            let class = class_str.chars().next()?;
+            return data
+                .monsters
+                .iter()
+                .find(|def| def.symbol.eq_ignore_ascii_case(&class));
+        }
+
+        data.monsters.iter().find(|def| {
+            def.names.male.eq_ignore_ascii_case(spec)
+                || def
+                    .names
+                    .female
+                    .as_ref()
+                    .is_some_and(|female| female.eq_ignore_ascii_case(spec))
+        })
+    }
+
+    fn make_population_test_world(map: LevelMap) -> GameWorld {
+        let mut world = GameWorld::new(Position::new(5, 5));
+        world.dungeon_mut().current_level = map;
+        if let Some(mut player_pos) = world.get_component_mut::<Positioned>(world.player()) {
+            player_pos.0 = Position::new(
+                (LevelMap::DEFAULT_WIDTH - 1) as i32,
+                (LevelMap::DEFAULT_HEIGHT - 1) as i32,
+            );
+        }
+        world
     }
 
     // ── Sokoban tests ────────────────────────────────────────────────
@@ -6658,6 +6970,214 @@ mod tests {
     }
 
     #[test]
+    fn test_population_oracle_contains_oracle() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::OracleLevel, None, &mut rng)
+            .expect("oracle level should generate");
+        let pop = population_for_special_level(SpecialLevelId::OracleLevel, &sl.generated);
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("oracle")),
+            "oracle population should include Oracle"
+        );
+    }
+
+    #[test]
+    fn test_population_medusa_contains_medusa() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::Medusa(0), None, &mut rng)
+            .expect("medusa level should generate");
+        let pop = population_for_special_level(SpecialLevelId::Medusa(0), &sl.generated);
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("medusa")),
+            "medusa population should include Medusa"
+        );
+    }
+
+    #[test]
+    fn test_population_castle_contains_wand_of_wishing() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::Castle, None, &mut rng)
+            .expect("castle level should generate");
+        let pop = population_for_special_level(SpecialLevelId::Castle, &sl.generated);
+        assert!(
+            pop.objects
+                .iter()
+                .any(|o| o.name.eq_ignore_ascii_case("wand of wishing")),
+            "castle population should include wand of wishing"
+        );
+    }
+
+    #[test]
+    fn test_population_vlad_top_contains_vlad_and_candelabrum() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::VladsTower(3), None, &mut rng)
+            .expect("Vlad tower top should generate");
+        let pop = population_for_special_level(SpecialLevelId::VladsTower(3), &sl.generated);
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("Vlad the Impaler")),
+            "Vlad tower top population should include Vlad"
+        );
+        assert!(
+            pop.objects
+                .iter()
+                .any(|o| o.name.eq_ignore_ascii_case("Candelabrum of Invocation")),
+            "Vlad tower top population should include the Candelabrum"
+        );
+    }
+
+    #[test]
+    fn test_population_wizard_tower3_contains_wizard() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::WizardTower3, None, &mut rng)
+            .expect("wizard tower 3 should generate");
+        let pop = population_for_special_level(SpecialLevelId::WizardTower3, &sl.generated);
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("Wizard of Yendor")),
+            "wizard tower 3 population should include the Wizard of Yendor"
+        );
+    }
+
+    #[test]
+    fn test_population_sanctum_contains_high_priest() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::Sanctum, None, &mut rng)
+            .expect("sanctum should generate");
+        let pop = population_for_special_level(SpecialLevelId::Sanctum, &sl.generated);
+        assert!(
+            pop.monsters
+                .iter()
+                .any(|m| m.name.eq_ignore_ascii_case("high priest")),
+            "sanctum population should include the high priest"
+        );
+    }
+
+    #[test]
+    fn test_population_fakewiz2_contains_amulet() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::FakeWizard(2), None, &mut rng)
+            .expect("fakewiz2 should generate");
+        let pop = population_for_special_level(SpecialLevelId::FakeWizard(2), &sl.generated);
+        assert!(
+            pop.objects
+                .iter()
+                .any(|o| o.name.eq_ignore_ascii_case("Amulet of Yendor")),
+            "fakewiz2 population should include the Amulet of Yendor"
+        );
+    }
+
+    #[test]
+    fn test_embedded_population_positions_land_on_walkable_tiles() {
+        let mut rng = test_rng();
+        let ids = [
+            SpecialLevelId::Valley,
+            SpecialLevelId::Asmodeus,
+            SpecialLevelId::Baalzebub,
+            SpecialLevelId::Juiblex,
+            SpecialLevelId::Orcus,
+            SpecialLevelId::FakeWizard(1),
+            SpecialLevelId::FakeWizard(2),
+        ];
+
+        for id in ids {
+            let sl = dispatch_special_level(id, None, &mut rng)
+                .unwrap_or_else(|| panic!("{:?} should generate", id));
+            let pop = population_for_special_level(id, &sl.generated);
+            let world = make_population_test_world(sl.generated.map.clone());
+
+            for mon in &pop.monsters {
+                if let Some(pos) = mon.pos {
+                    let monster_def = resolve_monster_def_for_test(&mon.name)
+                        .unwrap_or_else(|| panic!("{} should resolve for {:?}", mon.name, id));
+                    assert!(
+                        goodpos(&world, pos, Some(monster_def), GoodPosFlags::AVOID_MONSTER),
+                        "{:?} monster {:?} should target a valid spawn tile, got {:?}",
+                        id,
+                        mon.name,
+                        sl.generated.map.get(pos).map(|cell| cell.terrain)
+                    );
+                }
+            }
+
+            for obj in &pop.objects {
+                if let Some(pos) = obj.pos {
+                    assert!(
+                        sl.generated
+                            .map
+                            .get(pos)
+                            .is_some_and(|cell| cell.terrain.is_walkable()),
+                        "{:?} object {:?} should target a walkable tile, got {:?}",
+                        id,
+                        obj.name,
+                        sl.generated.map.get(pos).map(|cell| cell.terrain)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_population_gehennom_toml_contains_bosses() {
+        let mut rng = test_rng();
+        let ids_and_names = [
+            (SpecialLevelId::Asmodeus, "Asmodeus"),
+            (SpecialLevelId::Baalzebub, "Baalzebub"),
+            (SpecialLevelId::Juiblex, "Juiblex"),
+            (SpecialLevelId::Orcus, "Orcus"),
+        ];
+
+        for (id, expected_name) in ids_and_names {
+            let sl = dispatch_special_level(id, None, &mut rng)
+                .unwrap_or_else(|| panic!("{:?} should generate", id));
+            let pop = population_for_special_level(id, &sl.generated);
+            assert!(
+                pop.monsters
+                    .iter()
+                    .any(|m| m.name.eq_ignore_ascii_case(expected_name)),
+                "{:?} population should include {}",
+                id,
+                expected_name
+            );
+        }
+    }
+
+    #[test]
+    fn test_dispatch_fakewiz_uses_embedded_toml_layout() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::FakeWizard(1), None, &mut rng)
+            .expect("fakewiz1 should generate");
+        let pool_count = count_terrain(&sl.generated.map, Terrain::Pool);
+        assert!(
+            pool_count > 0,
+            "fakewiz1 dispatch should use embedded TOML water layout, got {} pool tiles",
+            pool_count
+        );
+        assert!(sl.flags.no_dig, "fakewiz1 dispatch should preserve no_dig");
+        assert!(sl.flags.no_prayer, "fakewiz1 dispatch should preserve no_prayer");
+    }
+
+    #[test]
+    fn test_dispatch_valley_uses_embedded_toml_layout() {
+        let mut rng = test_rng();
+        let sl = dispatch_special_level(SpecialLevelId::Valley, None, &mut rng)
+            .expect("valley should generate");
+
+        let altar_count = count_terrain(&sl.generated.map, Terrain::Altar);
+        let grave_count = count_terrain(&sl.generated.map, Terrain::Grave);
+        assert!(altar_count >= 1, "valley dispatch should preserve the altar");
+        assert!(grave_count >= 4, "valley dispatch should preserve grave terrain");
+        assert!(sl.flags.no_teleport, "valley dispatch should preserve noteleport");
+        assert!(sl.flags.no_prayer, "valley dispatch should preserve no_prayer");
+    }
+
+    #[test]
     fn test_gehennom_generators_produce_valid_levels() {
         let mut rng = test_rng();
         let ids: Vec<(SpecialLevelId, &str)> = vec![
@@ -6891,7 +7411,7 @@ halign = "center"
 valign = "center"
 data = """
 ----
-|.{|
+|G{|
 ----
 """
 "#;
@@ -6900,7 +7420,9 @@ data = """
         let sl = build_level_from_toml(&def, &mut rng);
 
         let fountain_count = count_terrain(&sl.generated.map, Terrain::Fountain);
+        let grave_count = count_terrain(&sl.generated.map, Terrain::Grave);
         assert!(fountain_count >= 1, "Should have a fountain");
+        assert!(grave_count >= 1, "Should have a grave");
     }
 
     #[test]
@@ -6912,11 +7434,24 @@ data = """
         let sl = build_level_from_toml(&def, &mut rng);
 
         assert!(sl.flags.no_teleport, "Valley TOML should set noteleport");
+        assert!(sl.flags.no_prayer, "Valley TOML should set no_prayer");
         let floor = count_terrain(&sl.generated.map, Terrain::Floor);
+        let altar_count = count_terrain(&sl.generated.map, Terrain::Altar);
+        let grave_count = count_terrain(&sl.generated.map, Terrain::Grave);
         assert!(
             floor > 50,
             "Valley from TOML should have many floor tiles, got {}",
             floor
+        );
+        assert!(altar_count >= 1, "Valley from TOML should include an altar");
+        assert!(grave_count >= 4, "Valley from TOML should include graves");
+        let map_def = def.map.as_ref().expect("Valley TOML should include a map");
+        let (offset_x, offset_y) =
+            aligned_map_offsets(map_def, LevelMap::DEFAULT_WIDTH, LevelMap::DEFAULT_HEIGHT);
+        assert_eq!(
+            sl.generated.up_stairs,
+            Some(Position::new(offset_x, offset_y)),
+            "Valley up stairs should honor map alignment plus 1-based local coordinates"
         );
     }
 

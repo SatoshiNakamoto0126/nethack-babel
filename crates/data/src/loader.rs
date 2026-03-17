@@ -178,6 +178,8 @@ struct TomlMonster {
     id: u16,
     name: String,
     #[serde(default)]
+    name_male: Option<String>,
+    #[serde(default)]
     name_female: Option<String>,
     symbol: String,
     color: String,
@@ -322,11 +324,17 @@ fn convert_monster(m: TomlMonster) -> Result<MonsterDef, LoadError> {
     let conveys = parse_resistance_set(&m.conveyed)?;
     let flags = parse_monster_flags(&m.flags)?;
 
+    let base_name = m.name.clone();
+    let male_name = m.name_male.unwrap_or_else(|| base_name.clone());
+    let female_name = m.name_female.or_else(|| {
+        (male_name != base_name).then_some(base_name.clone())
+    });
+
     Ok(MonsterDef {
         id: MonsterId(m.id),
         names: MonsterNames {
-            male: m.name,
-            female: m.name_female,
+            male: male_name,
+            female: female_name,
         },
         symbol,
         color,
@@ -1065,6 +1073,29 @@ mod tests {
         assert_eq!(monsters[0].color, Color::Brown);
         assert_eq!(monsters[0].attacks.len(), 1);
         assert_eq!(monsters[0].attacks[0].method, AttackMethod::Bite);
+    }
+
+    #[test]
+    fn test_load_monsters_preserves_gendered_aliases() {
+        let path = data_dir().join("monsters/base.toml");
+        let monsters = load_monsters(&path).expect("failed to load monsters/base.toml");
+
+        let vampire_leader = monsters
+            .iter()
+            .find(|m| m.id == MonsterId(227))
+            .expect("vampire leader should exist");
+        assert_eq!(vampire_leader.names.male, "vampire lord");
+        assert_eq!(
+            vampire_leader.names.female.as_deref(),
+            Some("vampire lady")
+        );
+
+        let high_cleric = monsters
+            .iter()
+            .find(|m| m.id == MonsterId(276))
+            .expect("high cleric should exist");
+        assert_eq!(high_cleric.names.male, "high priest");
+        assert_eq!(high_cleric.names.female.as_deref(), Some("high priestess"));
     }
 
     #[test]

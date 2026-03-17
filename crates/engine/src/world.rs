@@ -5,6 +5,7 @@
 //! this struct.
 
 use hecs::{Entity, World};
+use nethack_babel_data::{MonsterDef, ObjectDef};
 use serde::{Deserialize, Serialize};
 
 use crate::action::Position;
@@ -205,6 +206,12 @@ pub struct GameWorld {
     /// Shuffled appearance table for unidentified items (generated once
     /// per game from the RNG seed).
     pub appearance_table: AppearanceTable,
+    /// Static monster catalog used by systems that need `MonsterDef` lookup
+    /// during runtime world transitions (e.g. special-level population).
+    monster_catalog: Vec<MonsterDef>,
+    /// Static object catalog used by systems that need `ObjectDef` lookup
+    /// during runtime world transitions (e.g. special-level population).
+    object_catalog: Vec<ObjectDef>,
 }
 
 impl GameWorld {
@@ -264,6 +271,8 @@ impl GameWorld {
             dungeon: DungeonState::new(),
             next_creation_order: 1,
             appearance_table,
+            monster_catalog: Vec::new(),
+            object_catalog: Vec::new(),
         }
     }
 
@@ -321,6 +330,24 @@ impl GameWorld {
     #[inline]
     pub fn next_creation_order_value(&self) -> u64 {
         self.next_creation_order
+    }
+
+    /// Install runtime catalogs for monster/object lookup.
+    pub fn set_spawn_catalogs(&mut self, monsters: Vec<MonsterDef>, objects: Vec<ObjectDef>) {
+        self.monster_catalog = monsters;
+        self.object_catalog = objects;
+    }
+
+    /// Read-only monster catalog.
+    #[inline]
+    pub fn monster_catalog(&self) -> &[MonsterDef] {
+        &self.monster_catalog
+    }
+
+    /// Read-only object catalog.
+    #[inline]
+    pub fn object_catalog(&self) -> &[ObjectDef] {
+        &self.object_catalog
     }
 
     /// Look up the display name for an entity.
