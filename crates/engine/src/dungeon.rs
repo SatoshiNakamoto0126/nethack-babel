@@ -45,6 +45,12 @@ pub struct CachedMonster {
     pub speed: u32,
     pub symbol: char,
     pub color: nethack_babel_data::Color,
+    #[serde(default)]
+    pub is_tame: bool,
+    #[serde(default)]
+    pub is_peaceful: bool,
+    #[serde(default)]
+    pub creation_order: u64,
 }
 
 /// What occupies a single map cell.
@@ -1197,6 +1203,9 @@ mod tests {
             speed: 12,
             symbol: 'x',
             color: nethack_babel_data::Color::Magenta,
+            is_tame: false,
+            is_peaceful: false,
+            creation_order: 0,
         }];
         ds.cache_current_level(monsters);
 

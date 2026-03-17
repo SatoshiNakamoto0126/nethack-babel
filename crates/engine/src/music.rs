@@ -21,7 +21,7 @@ use rand::Rng;
 
 use crate::action::Position;
 use crate::event::{EngineEvent, StatusEffect};
-use crate::world::{GameWorld, Monster, Positioned, Tame};
+use crate::world::{GameWorld, Monster, Peaceful, Positioned, Tame};
 
 // ---------------------------------------------------------------------------
 // Dice helpers (local to this module)
@@ -211,6 +211,7 @@ fn play_charm_snakes(
 
     for snake in snakes_to_tame {
         let _ = world.ecs_mut().insert_one(snake, Tame);
+        let _ = world.ecs_mut().insert_one(snake, Peaceful);
         events.push(EngineEvent::msg_with(
             "snake-charmed",
             vec![("name", world.entity_name(snake))],
@@ -299,6 +300,7 @@ fn play_magic_harp(
 
     for target in targets {
         let _ = world.ecs_mut().insert_one(target, Tame);
+        let _ = world.ecs_mut().insert_one(target, Peaceful);
         events.push(EngineEvent::msg_with(
             "monster-tamed",
             vec![("name", world.entity_name(target))],

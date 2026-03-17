@@ -15,7 +15,7 @@ use nethack_babel_data::{
 
 use crate::action::Position;
 use crate::event::{DamageCause, DamageSource, EngineEvent, HpSource, StatusEffect};
-use crate::world::{GameWorld, HitPoints, Monster, Positioned, Power, Tame};
+use crate::world::{GameWorld, HitPoints, Monster, Peaceful, Positioned, Power, Tame};
 
 // ---------------------------------------------------------------------------
 // Scroll type enumeration
@@ -1253,6 +1253,7 @@ fn effect_taming<R: Rng>(
         // Tame monsters.
         for monster in &monsters {
             let _ = world.ecs_mut().insert_one(*monster, Tame);
+            let _ = world.ecs_mut().insert_one(*monster, Peaceful);
             events.push(EngineEvent::msg("scroll-taming"));
         }
     }

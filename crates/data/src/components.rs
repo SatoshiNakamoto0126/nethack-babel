@@ -522,6 +522,12 @@ pub struct PlayerEvents {
     pub hand_of_elbereth: u8,
     /// Whether the Wizard of Yendor has been killed.  From `u.uevent.udemigod`.
     pub killed_wizard: bool,
+    /// Turn when the Wizard of Yendor was last killed.
+    #[serde(default)]
+    pub wizard_last_killed_turn: u32,
+    /// Number of times the Wizard of Yendor has been killed.
+    #[serde(default)]
+    pub wizard_times_killed: u32,
     /// Whether the vibrating square was found.  From `u.uevent.ufound_vibsquare`.
     pub found_vibrating_square: bool,
     /// Whether the player ascended.
@@ -542,6 +548,8 @@ impl Default for PlayerEvents {
             gehennom_entered: false,
             hand_of_elbereth: 0,
             killed_wizard: false,
+            wizard_last_killed_turn: 0,
+            wizard_times_killed: 0,
             found_vibrating_square: false,
             ascended: false,
         }

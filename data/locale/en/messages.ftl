@@ -1720,6 +1720,7 @@ npc-chat-no-response = The creature doesn't seem to want to chat.
 chat-nobody-there = There is nobody there to talk to.
 
 ## Movement / travel
+peaceful-monster-blocks = You stop. { $monster } is in the way.
 ride-not-available = There is nothing here to ride.
 enhance-not-available = You cannot enhance any skills right now.
 enhance-success = You improve { $skill } to { $level }.
@@ -2617,6 +2618,7 @@ wizard-detect-traps = You feel warned about nearby traps.
 wizard-double-trouble = "Double Trouble..."
 wizard-identify-all = You feel self-knowledgeable...
 wizard-map-revealed = An image of your surroundings forms in your mind!
+wizard-respawned = The Wizard of Yendor rises again!
 wizard-steal-amulet = The Wizard of Yendor steals the Amulet!
 wizard-summon-nasties = New nasties appear from thin air!
 

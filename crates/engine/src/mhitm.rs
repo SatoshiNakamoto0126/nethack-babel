@@ -14,7 +14,7 @@ use nethack_babel_data::{AttackDef, AttackMethod, DamageType};
 use crate::action::Position;
 use crate::combat::{MonsterAttacks, MonsterResistances, resolve_monster_attack_slot};
 use crate::event::{DeathCause, EngineEvent, HpSource};
-use crate::world::{ArmorClass, ExperienceLevel, GameWorld, HitPoints, Positioned, Tame};
+use crate::world::{ArmorClass, ExperienceLevel, GameWorld, HitPoints, Peaceful, Positioned, Tame};
 
 // ---------------------------------------------------------------------------
 // Monster-vs-monster melee resolution
@@ -391,12 +391,9 @@ pub fn find_pet_combat_target(
             continue;
         }
 
-        // Skip peaceful monsters unless confused.
-        // Since there is no Peaceful marker in the ECS yet, we treat
-        // all non-tame monsters as valid targets. When a Peaceful
-        // component is added, this should check it.
-        // For now, the `is_confused` parameter is reserved for future use.
-        let _ = is_confused;
+        if world.get_component::<Peaceful>(entity).is_some() && !is_confused {
+            continue;
+        }
 
         // Score: prefer targets adjacent to the player.
         let near_player = chebyshev(pos.0, player_pos) <= 1;
@@ -434,7 +431,7 @@ mod tests {
     use crate::pets::PetState;
     use crate::world::{
         ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints, Monster, MovementPoints,
-        NORMAL_SPEED, Name, Positioned, Speed, Tame,
+        NORMAL_SPEED, Name, Peaceful, Positioned, Speed, Tame,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
@@ -604,12 +601,15 @@ mod tests {
         let pet_pos = Position::new(9, 8);
 
         let pet = spawn_pet(&mut world, pet_pos, "little dog", 15);
-        // Spawn another tame monster adjacent.
-        let _ally = spawn_pet(&mut world, Position::new(10, 8), "kitten", 10);
+        let ally = spawn_monster(&mut world, Position::new(10, 8), "kitten", 10, 2);
+        world
+            .ecs_mut()
+            .insert_one(ally, Peaceful)
+            .expect("ally should accept peaceful marker");
 
         let target = find_pet_combat_target(&world, pet, pet_pos, player_pos, false);
 
-        assert!(target.is_none(), "pet should not target tame allies");
+        assert!(target.is_none(), "pet should not target peaceful allies");
     }
 
     // ── Test: pet prefers target adjacent to player ─────────────

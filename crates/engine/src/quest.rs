@@ -135,7 +135,6 @@ impl QuestState {
     pub fn anger_leader(&mut self) {
         self.leader_angry = true;
     }
-
 }
 
 // ---------------------------------------------------------------------------

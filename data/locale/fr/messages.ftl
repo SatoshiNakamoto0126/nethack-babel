@@ -376,6 +376,7 @@ npc-chat-no-response = La créature ne semble pas vouloir discuter.
 chat-nobody-there = Il n'y a personne à qui parler.
 
 ## Déplacement / voyage
+peaceful-monster-blocks = Vous vous arrêtez. { $monster } vous bloque le passage.
 ride-not-available = Il n'y a rien à chevaucher ici.
 enhance-not-available = Vous ne pouvez améliorer aucune compétence pour le moment.
 enhance-success = Vous améliorez { $skill } au niveau { $level }.
@@ -389,6 +390,7 @@ adjust-not-implemented = L'ajustement d'inventaire n'est pas encore disponible.
 ## Mode assistant (debug)
 wizard-identify-all = Vous connaissez soudain tout votre équipement.
 wizard-map-revealed = Une image de votre environnement se forme dans votre esprit !
+wizard-respawned = Le Magicien de Yendor revient à la vie !
 wizard-detect-all = Vous sentez tout autour de vous.
 wizard-genesis = Un { $monster } apparaît à côté de vous.
 wizard-genesis-failed = Rien ne répond à votre demande de { $monster }.

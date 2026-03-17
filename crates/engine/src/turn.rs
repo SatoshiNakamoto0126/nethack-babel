@@ -26,7 +26,8 @@ use crate::traps::{TrapEntityInfo, detect_trap, trigger_trap_at};
 use crate::world::{
     Boulder, CreationOrder, DisplaySymbol, Encumbrance, EncumbranceLevel, ExperienceLevel,
     GameWorld, HeroSpeed, HeroSpeedBonus, HitPoints, Monster, MonsterSpeedMod, MovementPoints,
-    NORMAL_SPEED, Name, Nutrition, PlayerCombat, Positioned, Power, Speed, SpeedModifier, Tame,
+    NORMAL_SPEED, Name, Nutrition, Peaceful, PlayerCombat, Positioned, Power, Speed, SpeedModifier,
+    Tame,
 };
 
 // ── Movement point calculations ──────────────────────────────────────
@@ -189,6 +190,7 @@ pub fn resolve_turn(
     rng: &mut impl Rng,
 ) -> Vec<EngineEvent> {
     let mut events = Vec::with_capacity(16);
+    let known_wizards = wizard_of_yendor_entities(world);
 
     // ── Step 1: deduct NORMAL_SPEED from player movement points ──
     {
@@ -200,6 +202,7 @@ pub fn resolve_turn(
 
     // ── Step 2: execute the player's action ──────────────────────
     resolve_player_action(world, &action, rng, &mut events);
+    anger_peaceful_monsters_from_player_events(world, &events);
 
     // ── Step 3: monster loop ─────────────────────────────────────
     // Each monster with movement >= NORMAL_SPEED gets to act.
@@ -218,6 +221,7 @@ pub fn resolve_turn(
         process_new_turn(world, rng, &mut events);
     }
 
+    sync_wizard_of_yendor_from_events(world, &known_wizards, &events);
     sync_quest_state_from_world(world);
     sync_player_story_components(world, &events);
 
@@ -260,6 +264,7 @@ pub fn turn_events<'a, R: Rng>(
     action: PlayerAction,
     rng: &'a mut R,
 ) -> impl Iterator<Item = EngineEvent> + 'a {
+    let known_wizards = wizard_of_yendor_entities(world);
     // Pre-collect event buffers for each phase.  We drain them one
     // element at a time via `iter::from_fn`, giving the caller a
     // streaming interface while keeping the implementation simple
@@ -275,6 +280,7 @@ pub fn turn_events<'a, R: Rng>(
     }
     let mut player_events = Vec::with_capacity(4);
     resolve_player_action(world, &action, rng, &mut player_events);
+    anger_peaceful_monsters_from_player_events(world, &player_events);
 
     // Phase 2: monster turns.
     let mut monster_events = Vec::new();
@@ -290,6 +296,15 @@ pub fn turn_events<'a, R: Rng>(
     if player_mp < NORMAL_SPEED as i32 && !monsters_can_move {
         process_new_turn(world, rng, &mut new_turn_events);
     }
+
+    let mut story_events =
+        Vec::with_capacity(player_events.len() + monster_events.len() + new_turn_events.len());
+    story_events.extend(player_events.iter().cloned());
+    story_events.extend(monster_events.iter().cloned());
+    story_events.extend(new_turn_events.iter().cloned());
+    sync_wizard_of_yendor_from_events(world, &known_wizards, &story_events);
+    sync_quest_state_from_world(world);
+    sync_player_story_components(world, &story_events);
 
     // Chain the three phases into a single iterator that yields
     // events in the correct order, one at a time.
@@ -355,6 +370,8 @@ pub fn turn_events_gen<'a, R: Rng>(
     rng: &'a mut R,
 ) -> impl Iterator<Item = EngineEvent> + 'a {
     gen move {
+        let known_wizards = wizard_of_yendor_entities(world);
+        let mut story_events = Vec::new();
         // Phase 1: deduct NORMAL_SPEED from player movement points.
         {
             let player = world.player();
@@ -366,7 +383,9 @@ pub fn turn_events_gen<'a, R: Rng>(
         // Phase 2: resolve player action.
         let mut player_events = Vec::with_capacity(4);
         resolve_player_action(world, &action, rng, &mut player_events);
+        anger_peaceful_monsters_from_player_events(world, &player_events);
         for event in player_events {
+            story_events.push(event.clone());
             yield event;
         }
 
@@ -374,6 +393,7 @@ pub fn turn_events_gen<'a, R: Rng>(
         let mut monster_events = Vec::new();
         resolve_monster_turns(world, rng, &mut monster_events);
         for event in monster_events {
+            story_events.push(event.clone());
             yield event;
         }
 
@@ -387,10 +407,82 @@ pub fn turn_events_gen<'a, R: Rng>(
             let mut new_turn_events = Vec::new();
             process_new_turn(world, rng, &mut new_turn_events);
             for event in new_turn_events {
+                story_events.push(event.clone());
                 yield event;
             }
         }
+
+        sync_wizard_of_yendor_from_events(world, &known_wizards, &story_events);
+        sync_quest_state_from_world(world);
+        sync_player_story_components(world, &story_events);
     }
+}
+
+fn anger_peaceful_monsters_from_player_events(world: &mut GameWorld, events: &[EngineEvent]) {
+    let player = world.player();
+    let mut angered = std::collections::HashSet::new();
+
+    for event in events {
+        match event {
+            EngineEvent::MeleeHit {
+                attacker, defender, ..
+            } if *attacker == player => {
+                angered.insert(*defender);
+            }
+            EngineEvent::RangedHit {
+                attacker, defender, ..
+            } if *attacker == player => {
+                angered.insert(*defender);
+            }
+            EngineEvent::ExtraDamage { target, .. } => {
+                angered.insert(*target);
+            }
+            EngineEvent::HpChange { entity, amount, .. } if *amount < 0 => {
+                angered.insert(*entity);
+            }
+            EngineEvent::EntityDied {
+                entity,
+                killer: Some(killer),
+                ..
+            } if *killer == player => {
+                angered.insert(*entity);
+            }
+            EngineEvent::StatusApplied { entity, status, .. }
+                if status_is_hostile_toward_monster(*status) =>
+            {
+                angered.insert(*entity);
+            }
+            _ => {}
+        }
+    }
+
+    for entity in angered {
+        if entity == player || world.get_component::<Monster>(entity).is_none() {
+            continue;
+        }
+        let _ = world.ecs_mut().remove_one::<Peaceful>(entity);
+    }
+}
+
+fn status_is_hostile_toward_monster(status: crate::event::StatusEffect) -> bool {
+    matches!(
+        status,
+        crate::event::StatusEffect::Blind
+            | crate::event::StatusEffect::Confused
+            | crate::event::StatusEffect::Stunned
+            | crate::event::StatusEffect::Hallucinating
+            | crate::event::StatusEffect::Paralyzed
+            | crate::event::StatusEffect::Sleeping
+            | crate::event::StatusEffect::SlowSpeed
+            | crate::event::StatusEffect::Sick
+            | crate::event::StatusEffect::FoodPoisoned
+            | crate::event::StatusEffect::Stoning
+            | crate::event::StatusEffect::Slimed
+            | crate::event::StatusEffect::Strangled
+            | crate::event::StatusEffect::Polymorphed
+            | crate::event::StatusEffect::Lycanthropy
+            | crate::event::StatusEffect::Aggravate
+    )
 }
 
 /// Check if any monster has enough movement points to act.
@@ -526,6 +618,8 @@ fn process_new_turn(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<
         });
     }
 
+    process_wizard_of_yendor_turn(world, rng, events);
+
     events.push(EngineEvent::TurnEnd {
         turn_number: world.turn(),
     });
@@ -614,7 +708,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events, rng);
+            try_move_entity(world, world.player(), effective_dir, false, events, rng);
         }
         PlayerAction::Rest => {
             // Resting: no movement, just pass the turn.
@@ -1254,7 +1348,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events, rng);
+            try_move_entity(world, world.player(), effective_dir, false, events, rng);
         }
         PlayerAction::FightDirection { direction } => {
             // Force fight: move/attack in direction, skipping peaceful check.
@@ -1268,7 +1362,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events, rng);
+            try_move_entity(world, world.player(), effective_dir, true, events, rng);
         }
         PlayerAction::RunDirection { direction } => {
             // Run until interrupted (simplified — one step for now).
@@ -1282,7 +1376,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events, rng);
+            try_move_entity(world, world.player(), effective_dir, false, events, rng);
         }
         PlayerAction::RushDirection { direction } => {
             // Rush: run without picking up items (simplified — one step).
@@ -1296,7 +1390,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events, rng);
+            try_move_entity(world, world.player(), effective_dir, false, events, rng);
         }
         PlayerAction::MoveNoPickup { direction } => {
             // Move without auto-pickup.
@@ -1310,7 +1404,7 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, events, rng);
+            try_move_entity(world, world.player(), effective_dir, false, events, rng);
         }
         PlayerAction::Wait => {
             // Do nothing, consume one turn.
@@ -1336,7 +1430,7 @@ fn resolve_player_action(
                 } else {
                     direction
                 };
-                try_move_entity(world, world.player(), effective_dir, events, rng);
+                try_move_entity(world, world.player(), effective_dir, false, events, rng);
             }
         }
         PlayerAction::ToggleTwoWeapon => {
@@ -2468,7 +2562,7 @@ fn generate_or_special_topology(
 
 fn respawn_cached_monsters(world: &mut GameWorld, cached_mons: &[CachedMonster]) {
     for cm in cached_mons {
-        world.spawn((
+        let entity = world.spawn((
             Monster,
             Positioned(cm.position),
             Name(cm.name.clone()),
@@ -2482,7 +2576,14 @@ fn respawn_cached_monsters(world: &mut GameWorld, cached_mons: &[CachedMonster])
                 color: cm.color,
             },
             MovementPoints(NORMAL_SPEED as i32),
+            CreationOrder(cm.creation_order),
         ));
+        if cm.is_tame {
+            let _ = world.ecs_mut().insert_one(entity, Tame);
+        }
+        if cm.is_peaceful {
+            let _ = world.ecs_mut().insert_one(entity, Peaceful);
+        }
     }
 }
 
@@ -2547,6 +2648,12 @@ pub(crate) fn change_level_to_branch(
             speed: speed.0,
             symbol: sym.symbol,
             color: sym.color,
+            is_tame: world.get_component::<Tame>(entity).is_some(),
+            is_peaceful: world.get_component::<Peaceful>(entity).is_some(),
+            creation_order: world
+                .get_component::<CreationOrder>(entity)
+                .map(|order| order.0)
+                .unwrap_or(0),
         });
     }
 
@@ -2690,6 +2797,12 @@ fn change_level(
             speed: speed.0,
             symbol: sym.symbol,
             color: sym.color,
+            is_tame: world.get_component::<Tame>(entity).is_some(),
+            is_peaceful: world.get_component::<Peaceful>(entity).is_some(),
+            creation_order: world
+                .get_component::<CreationOrder>(entity)
+                .map(|order| order.0)
+                .unwrap_or(0),
         });
     }
 
@@ -2857,15 +2970,7 @@ fn maybe_spawn_astral_guardian_angel(
         return;
     };
 
-    // The runtime does not yet distinguish peaceful from tame monsters.
-    // Use the pet marker so the Astral guardian remains non-hostile.
-    let cha = world
-        .get_component::<crate::world::Attributes>(player)
-        .map(|attrs| attrs.charisma)
-        .unwrap_or(10);
-    let pet_state = crate::pets::PetState::new(cha, world.turn());
-    let _ = world.ecs_mut().insert_one(angel, Tame);
-    let _ = world.ecs_mut().insert_one(angel, pet_state);
+    let _ = world.ecs_mut().insert_one(angel, Peaceful);
     events.push(EngineEvent::msg("guardian-angel-appears"));
 }
 
@@ -3373,6 +3478,7 @@ fn try_move_entity(
     world: &mut GameWorld,
     entity: hecs::Entity,
     direction: Direction,
+    force_attack_non_hostile: bool,
     events: &mut Vec<EngineEvent>,
     rng: &mut impl Rng,
 ) {
@@ -3395,6 +3501,25 @@ fn try_move_entity(
         }
     } else {
         return;
+    }
+
+    if entity == world.player() {
+        if let Some(occupant) = monster_at(world, target_pos, entity) {
+            if world.get_component::<Tame>(occupant).is_some() && !force_attack_non_hostile {
+                swap_entities(world, entity, occupant, current_pos, target_pos, events);
+                finish_player_movement(world, entity, target_pos, events, rng);
+                return;
+            }
+            if world.get_component::<Peaceful>(occupant).is_some() && !force_attack_non_hostile {
+                events.push(EngineEvent::msg_with(
+                    "peaceful-monster-blocks",
+                    vec![("monster", world.entity_name(occupant))],
+                ));
+                return;
+            }
+            crate::combat::resolve_melee_attack(world, entity, occupant, rng, events);
+            return;
+        }
     }
 
     // Boulder pushing: check if there is a boulder at the target position.
@@ -3460,20 +3585,66 @@ fn try_move_entity(
         to: target_pos,
     });
 
-    // Check for traps at the destination tile.
-    if entity == world.player() {
-        let trap_info = build_player_trap_info(world, entity, target_pos);
-        let (trap_events, _triggered) =
-            trigger_trap_at(rng, &trap_info, &mut world.dungeon_mut().trap_map);
-        events.extend(trap_events);
+    finish_player_movement(world, entity, target_pos, events, rng);
+}
+
+fn monster_at(world: &GameWorld, pos: Position, exclude: hecs::Entity) -> Option<hecs::Entity> {
+    world
+        .ecs()
+        .query::<(&Monster, &Positioned)>()
+        .iter()
+        .find_map(|(entity, (_, positioned))| {
+            (entity != exclude && positioned.0 == pos).then_some(entity)
+        })
+}
+
+fn swap_entities(
+    world: &mut GameWorld,
+    a: hecs::Entity,
+    b: hecs::Entity,
+    a_from: Position,
+    b_from: Position,
+    events: &mut Vec<EngineEvent>,
+) {
+    if let Some(mut pos) = world.get_component_mut::<Positioned>(a) {
+        pos.0 = b_from;
+    }
+    if let Some(mut pos) = world.get_component_mut::<Positioned>(b) {
+        pos.0 = a_from;
+    }
+    events.push(EngineEvent::EntityMoved {
+        entity: a,
+        from: a_from,
+        to: b_from,
+    });
+    events.push(EngineEvent::EntityMoved {
+        entity: b,
+        from: b_from,
+        to: a_from,
+    });
+}
+
+fn finish_player_movement(
+    world: &mut GameWorld,
+    entity: hecs::Entity,
+    target_pos: Position,
+    events: &mut Vec<EngineEvent>,
+    rng: &mut impl Rng,
+) {
+    if entity != world.player() {
+        return;
     }
 
-    if entity == world.player()
-        && world
-            .dungeon()
-            .current_level
-            .get(target_pos)
-            .is_some_and(|cell| cell.terrain == Terrain::MagicPortal)
+    let trap_info = build_player_trap_info(world, entity, target_pos);
+    let (trap_events, _triggered) =
+        trigger_trap_at(rng, &trap_info, &mut world.dungeon_mut().trap_map);
+    events.extend(trap_events);
+
+    if world
+        .dungeon()
+        .current_level
+        .get(target_pos)
+        .is_some_and(|cell| cell.terrain == Terrain::MagicPortal)
         && crate::teleport::resolve_magic_portal_destination_at(world, target_pos).is_some()
     {
         let portal_events = crate::teleport::handle_magic_portal(world, entity, rng);
@@ -3481,50 +3652,40 @@ fn try_move_entity(
         return;
     }
 
-    // Check if the player entered a vault (spawn guard if needed).
-    if entity == world.player() {
-        let vault_rooms = world.dungeon().vault_rooms.clone();
-        let guard_present = world.dungeon().vault_guard_present;
-        if let Some(_vault_idx) = crate::vault::player_in_vault(target_pos, &vault_rooms) {
-            if !guard_present {
-                let guard_data = crate::vault::spawn_guard(rng);
-                world.dungeon_mut().vault_guard_present = true;
-                events.push(EngineEvent::msg_with(
-                    "guard-appears",
-                    vec![("name", guard_data.guard_name)],
-                ));
-            }
+    let vault_rooms = world.dungeon().vault_rooms.clone();
+    let guard_present = world.dungeon().vault_guard_present;
+    if let Some(_vault_idx) = crate::vault::player_in_vault(target_pos, &vault_rooms)
+        && !guard_present
+    {
+        let guard_data = crate::vault::spawn_guard(rng);
+        world.dungeon_mut().vault_guard_present = true;
+        events.push(EngineEvent::msg_with(
+            "guard-appears",
+            vec![("name", guard_data.guard_name)],
+        ));
+    }
+
+    if !crate::status::is_levitating(world, entity) {
+        let mut letter_state = crate::items::LetterState::default();
+        let (autopickup_enabled, autopickup_classes) = {
+            let d = world.dungeon();
+            (d.autopickup_enabled, d.autopickup_classes.clone())
+        };
+        if autopickup_enabled {
+            let pickup_events =
+                crate::inventory::autopickup(world, &mut letter_state, &[], &autopickup_classes);
+            events.extend(pickup_events);
         }
     }
 
-    // Run autopickup and then report any remaining floor items.
-    if entity == world.player() {
-        if !crate::status::is_levitating(world, entity) {
-            let mut letter_state = crate::items::LetterState::default();
-            let (autopickup_enabled, autopickup_classes) = {
-                let d = world.dungeon();
-                (d.autopickup_enabled, d.autopickup_classes.clone())
-            };
-            if autopickup_enabled {
-                let pickup_events = crate::inventory::autopickup(
-                    world,
-                    &mut letter_state,
-                    &[],
-                    &autopickup_classes,
-                );
-                events.extend(pickup_events);
-            }
-        }
-
-        let items_here = count_items_at(world, target_pos);
-        if items_here == 1 {
-            events.push(EngineEvent::msg("see-item-here"));
-        } else if items_here > 1 {
-            events.push(EngineEvent::msg_with(
-                "see-items-here",
-                vec![("count", items_here.to_string())],
-            ));
-        }
+    let items_here = count_items_at(world, target_pos);
+    if items_here == 1 {
+        events.push(EngineEvent::msg("see-item-here"));
+    } else if items_here > 1 {
+        events.push(EngineEvent::msg_with(
+            "see-items-here",
+            vec![("count", items_here.to_string())],
+        ));
     }
 }
 
@@ -4404,6 +4565,252 @@ fn detach_item_from_player_possessions(
     removed
 }
 
+fn wizard_of_yendor_entities(world: &GameWorld) -> Vec<hecs::Entity> {
+    world
+        .ecs()
+        .query::<(&Monster, &Name)>()
+        .iter()
+        .filter_map(|(entity, (_monster, name))| {
+            name.0
+                .eq_ignore_ascii_case("Wizard of Yendor")
+                .then_some(entity)
+        })
+        .collect()
+}
+
+fn sync_wizard_of_yendor_from_events(
+    world: &mut GameWorld,
+    known_wizards: &[hecs::Entity],
+    events: &[EngineEvent],
+) {
+    if known_wizards.is_empty() {
+        return;
+    }
+
+    let killed_count = events
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                EngineEvent::EntityDied { entity, .. } if known_wizards.contains(entity)
+            )
+        })
+        .count() as u32;
+    if killed_count == 0 {
+        return;
+    }
+
+    let player = world.player();
+    let mut player_events = read_player_events(world, player);
+    player_events.killed_wizard = true;
+    player_events.wizard_last_killed_turn = world.turn();
+    player_events.wizard_times_killed = player_events
+        .wizard_times_killed
+        .saturating_add(killed_count);
+    persist_player_events(world, player, player_events);
+}
+
+fn process_wizard_of_yendor_turn(
+    world: &mut GameWorld,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) {
+    let player = world.player();
+    let player_events = read_player_events(world, player);
+    let player_has_amulet = player_has_named_item(world, player, "Amulet of Yendor");
+    let wizard_times_killed = player_events
+        .wizard_times_killed
+        .max(u32::from(player_events.killed_wizard));
+
+    if !(player_has_amulet || player_events.invoked || player_events.killed_wizard) {
+        return;
+    }
+
+    let live_wizards = wizard_of_yendor_entities(world);
+    if live_wizards.is_empty() {
+        let wizard_state = crate::npc::WizardOfYendor {
+            last_killed_turn: player_events.wizard_last_killed_turn,
+            times_killed: wizard_times_killed,
+        };
+        if !crate::npc::wizard_should_respawn(&wizard_state, world.turn(), rng) {
+            return;
+        }
+
+        if let Some((wizard, pos)) =
+            spawn_named_monster_near_entity(world, player, "Wizard of Yendor", rng)
+        {
+            seed_wizard_runtime_state(world, wizard);
+            events.push(EngineEvent::MonsterGenerated {
+                entity: wizard,
+                position: pos,
+            });
+            events.push(EngineEvent::msg("wizard-respawned"));
+        }
+        return;
+    }
+
+    if rng.random_range(0..6) != 0 {
+        return;
+    }
+
+    let wizard = live_wizards[0];
+    seed_wizard_runtime_state(world, wizard);
+    let action = crate::npc::choose_wizard_action(world, wizard, player_has_amulet, rng);
+    events.extend(crate::npc::wizard_harass_events(action));
+    apply_wizard_harassment_action(world, wizard, player, action, rng, events);
+}
+
+fn apply_wizard_harassment_action(
+    world: &mut GameWorld,
+    wizard: hecs::Entity,
+    player: hecs::Entity,
+    action: crate::npc::WizardAction,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) {
+    match action {
+        crate::npc::WizardAction::StealAmulet => {
+            if let Some(amulet) = find_player_named_item(world, player, "Amulet of Yendor") {
+                wizard_steal_amulet(world, wizard, player, amulet);
+            }
+        }
+        crate::npc::WizardAction::DoubleTrouble => {
+            if wizard_of_yendor_entities(world).len() >= 2 {
+                return;
+            }
+            if let Some((clone, pos)) =
+                spawn_named_monster_near_entity(world, wizard, "Wizard of Yendor", rng)
+            {
+                seed_wizard_runtime_state(world, clone);
+                events.push(EngineEvent::MonsterGenerated {
+                    entity: clone,
+                    position: pos,
+                });
+            }
+        }
+        crate::npc::WizardAction::SummonNasties => {
+            for spec in ["vampire lord", "xorn"] {
+                if let Some((monster, pos)) =
+                    spawn_named_monster_near_entity(world, player, spec, rng)
+                {
+                    events.push(EngineEvent::MonsterGenerated {
+                        entity: monster,
+                        position: pos,
+                    });
+                }
+            }
+        }
+        crate::npc::WizardAction::CurseItems => {
+            curse_random_player_items(world, player, rng);
+        }
+    }
+}
+
+fn seed_wizard_runtime_state(world: &mut GameWorld, wizard: hecs::Entity) {
+    let player_events = read_player_events(world, world.player());
+    let state = crate::npc::WizardOfYendor {
+        last_killed_turn: player_events.wizard_last_killed_turn,
+        times_killed: player_events
+            .wizard_times_killed
+            .max(u32::from(player_events.killed_wizard)),
+    };
+    let _ = world.ecs_mut().insert_one(wizard, state);
+}
+
+fn spawn_named_monster_near_entity(
+    world: &mut GameWorld,
+    anchor: hecs::Entity,
+    monster_spec: &str,
+    rng: &mut impl Rng,
+) -> Option<(hecs::Entity, Position)> {
+    let anchor_pos = world.get_component::<Positioned>(anchor).map(|pos| pos.0)?;
+    let monster_defs = world.monster_catalog().to_vec();
+    if let Some(monster_id) = resolve_monster_id_by_spec(&monster_defs, monster_spec)
+        && let Some(monster_def) = monster_defs.iter().find(|def| def.id == monster_id)
+        && let Some(spawn_pos) = enexto(world, anchor_pos, monster_def)
+        && let Some(entity) = makemon(
+            world,
+            &monster_defs,
+            Some(monster_id),
+            spawn_pos,
+            MakeMonFlags::NO_GROUP,
+            rng,
+        )
+    {
+        return Some((entity, spawn_pos));
+    }
+
+    let spawn_pos = resolve_special_spawn_pos(world, Some(anchor_pos), rng)?;
+    let creation_order = world.next_creation_order();
+    let entity = world.spawn((
+        Monster,
+        Positioned(spawn_pos),
+        HitPoints {
+            current: 20,
+            max: 20,
+        },
+        Speed(NORMAL_SPEED),
+        MovementPoints(0),
+        Name(monster_spec.to_string()),
+        DisplaySymbol {
+            symbol: monster_spec.chars().next().unwrap_or('M'),
+            color: nethack_babel_data::Color::White,
+        },
+        creation_order,
+    ));
+    Some((entity, spawn_pos))
+}
+
+fn wizard_steal_amulet(
+    world: &mut GameWorld,
+    wizard: hecs::Entity,
+    player: hecs::Entity,
+    amulet: hecs::Entity,
+) {
+    if !detach_item_from_player_possessions(world, player, amulet) {
+        return;
+    }
+
+    let drop_origin = world
+        .get_component::<Positioned>(wizard)
+        .map(|pos| pos.0)
+        .or_else(|| world.get_component::<Positioned>(player).map(|pos| pos.0))
+        .unwrap_or(Position::new(0, 0));
+    let drop_pos = nearest_walkable_drop_pos(world, drop_origin);
+
+    if let Some(mut core) = world.get_component_mut::<ObjectCore>(amulet) {
+        core.inv_letter = None;
+    }
+    let branch = world.dungeon().branch;
+    let depth = world.dungeon().depth;
+    if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(amulet) {
+        *loc = crate::dungeon::floor_object_location(branch, depth, drop_pos);
+    }
+}
+
+fn curse_random_player_items(world: &mut GameWorld, player: hecs::Entity, rng: &mut impl Rng) {
+    let mut items: Vec<hecs::Entity> = crate::items::get_inventory(world, player)
+        .into_iter()
+        .map(|(item, _)| item)
+        .collect();
+    if items.is_empty() {
+        return;
+    }
+
+    let count = usize::min(
+        crate::sit::curse_count(rng, false, false) as usize,
+        items.len(),
+    );
+    for _ in 0..count {
+        let idx = rng.random_range(0..items.len());
+        let item = items.swap_remove(idx);
+        if let Some(mut buc) = world.get_component_mut::<BucStatus>(item) {
+            buc.cursed = true;
+            buc.blessed = false;
+        }
+    }
+}
+
 fn nearest_walkable_drop_pos(world: &GameWorld, origin: Position) -> Position {
     for dy in -1..=1 {
         for dx in -1..=1 {
@@ -4764,6 +5171,10 @@ fn sync_player_story_components(world: &mut GameWorld, events: &[EngineEvent]) {
 
     let quest_state = read_quest_state(world, player);
     let mut player_events = read_player_events(world, player);
+    if player_events.killed_wizard && player_events.wizard_times_killed == 0 {
+        player_events.wizard_times_killed = 1;
+    }
+    player_events.killed_wizard |= player_events.wizard_times_killed > 0;
     player_events.quest_called = quest_state.leader_met;
     player_events.quest_expelled = quest_state.times_expelled > 0;
     player_events.quest_completed = quest_state.status == crate::quest::QuestStatus::Completed;
@@ -4844,7 +5255,7 @@ mod tests {
     use crate::action::Position;
     use crate::conduct::ConductState;
     use crate::dungeon::Terrain;
-    use crate::world::Name;
+    use crate::world::{Name, Peaceful};
     use nethack_babel_data::{
         Alignment, ArtifactId, BucStatus, GameData, Gender, Handedness, MonsterFlags, ObjectClass,
         ObjectCore, ObjectLocation, ObjectTypeId, PlayerEvents, PlayerIdentity, PlayerQuestItems,
@@ -6889,6 +7300,17 @@ mod tests {
             .count()
     }
 
+    fn find_monster_named(world: &GameWorld, name: &str) -> Option<hecs::Entity> {
+        let expected = normalize_monster_lookup(name);
+        world
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .find_map(|(entity, (_m, n))| {
+                (normalize_monster_lookup(&n.0) == expected).then_some(entity)
+            })
+    }
+
     fn count_objects_with_type(world: &GameWorld, object_type: ObjectTypeId) -> usize {
         world
             .ecs()
@@ -8836,6 +9258,159 @@ mod tests {
         )));
     }
 
+    #[test]
+    fn wiz_kill_records_wizard_respawn_state() {
+        let mut world = make_test_world();
+        spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let mut rng = test_rng();
+
+        let _ = resolve_turn(&mut world, PlayerAction::WizKill, &mut rng);
+
+        let player_events = world
+            .get_component::<PlayerEvents>(world.player())
+            .expect("player should have story event state");
+        assert!(player_events.killed_wizard);
+        assert_eq!(player_events.wizard_times_killed, 1);
+        assert_eq!(
+            player_events.wizard_last_killed_turn,
+            world.turn(),
+            "wizard kill bookkeeping should record the current turn"
+        );
+    }
+
+    #[test]
+    fn test_wizard_respawns_after_recorded_death_interval() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+            player_events.killed_wizard = true;
+            player_events.wizard_times_killed = 1;
+            player_events.wizard_last_killed_turn = 0;
+        }
+        while world.turn() < 99 {
+            world.advance_turn();
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+
+        assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 1);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "wizard-respawned"
+        )));
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
+        );
+    }
+
+    #[test]
+    fn test_wizard_steal_amulet_drops_it_off_player() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            wizard,
+            player,
+            crate::npc::WizardAction::StealAmulet,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            !player_carries_item(&world, player, amulet),
+            "wizard harassment should remove the real amulet from the player's possessions"
+        );
+        let wizard_pos = world
+            .get_component::<Positioned>(wizard)
+            .expect("wizard should still exist")
+            .0;
+        let item_loc = world
+            .get_component::<ObjectLocation>(amulet)
+            .expect("stolen amulet should stay in the world");
+        assert!(matches!(
+            *item_loc,
+            ObjectLocation::Floor { x, y, level }
+                if (x as i32 - wizard_pos.x).abs() <= 1
+                    && (y as i32 - wizard_pos.y).abs() <= 1
+                    && level == world.dungeon().current_data_dungeon_level()
+        ));
+    }
+
+    #[test]
+    fn test_wizard_double_trouble_spawns_clone() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            wizard,
+            player,
+            crate::npc::WizardAction::DoubleTrouble,
+            &mut rng,
+            &mut events,
+        );
+
+        assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 2);
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
+        );
+    }
+
+    #[test]
+    fn test_wizard_curse_items_marks_inventory_cursed() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let item = spawn_inventory_object_by_name(&mut world, "long sword", 'a');
+        world
+            .ecs_mut()
+            .insert_one(
+                item,
+                BucStatus {
+                    cursed: false,
+                    blessed: false,
+                    bknown: false,
+                },
+            )
+            .expect("test inventory item should accept a BUC component");
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            wizard,
+            player,
+            crate::npc::WizardAction::CurseItems,
+            &mut rng,
+            &mut events,
+        );
+
+        let buc = world
+            .get_component::<BucStatus>(item)
+            .expect("inventory item should keep BUC state");
+        assert!(
+            buc.cursed,
+            "wizard curse should actually curse inventory items"
+        );
+    }
+
     // ── Cross-system wiring tests ──────────────────────────────
 
     #[test]
@@ -9139,6 +9714,204 @@ mod tests {
             .get_component::<WandCharges>(wand)
             .expect("wand should keep charges component");
         assert_eq!(charges.spe, 0, "zapping should consume one charge");
+    }
+
+    #[test]
+    fn test_striking_wand_on_peaceful_monster_removes_peaceful() {
+        use crate::monster_ai::WandTypeTag;
+        use crate::wands::{WandCharges, WandType};
+
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let target = spawn_idle_named_monster(&mut world, Position::new(6, 5), "gnome");
+        world
+            .ecs_mut()
+            .insert_one(target, Peaceful)
+            .expect("target should accept peaceful marker");
+
+        let wand = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Wand,
+                quantity: 1,
+                weight: 7,
+                age: 0,
+                inv_letter: Some('z'),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            WandTypeTag(WandType::Striking),
+            WandCharges {
+                spe: 1,
+                recharged: 0,
+            },
+        ));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::ZapWand {
+                item: wand,
+                direction: Some(Direction::East),
+            },
+            &mut rng,
+        );
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::ExtraDamage {
+                    target: entity,
+                    source: crate::event::DamageSource::Wand,
+                    ..
+                } if *entity == target
+            )),
+            "wand of striking should damage the peaceful monster"
+        );
+        assert!(
+            world.get_component::<Peaceful>(target).is_none(),
+            "damaging a peaceful monster with a wand should make it hostile"
+        );
+    }
+
+    #[test]
+    fn test_slow_monster_wand_on_peaceful_monster_removes_peaceful() {
+        use crate::monster_ai::WandTypeTag;
+        use crate::wands::{WandCharges, WandType};
+
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let target = spawn_idle_named_monster(&mut world, Position::new(6, 5), "gnome");
+        world
+            .ecs_mut()
+            .insert_one(target, Peaceful)
+            .expect("target should accept peaceful marker");
+
+        let wand = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Wand,
+                quantity: 1,
+                weight: 7,
+                age: 0,
+                inv_letter: Some('z'),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            WandTypeTag(WandType::SlowMonster),
+            WandCharges {
+                spe: 1,
+                recharged: 0,
+            },
+        ));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::ZapWand {
+                item: wand,
+                direction: Some(Direction::East),
+            },
+            &mut rng,
+        );
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::StatusApplied {
+                    entity,
+                    status: crate::event::StatusEffect::SlowSpeed,
+                    ..
+                } if *entity == target
+            )),
+            "wand of slow monster should apply a hostile status to the peaceful monster"
+        );
+        assert!(
+            world.get_component::<Peaceful>(target).is_none(),
+            "hostile status effects should also make peaceful monsters hostile"
+        );
+    }
+
+    #[test]
+    fn test_speed_monster_wand_on_peaceful_monster_keeps_peaceful() {
+        use crate::monster_ai::WandTypeTag;
+        use crate::wands::{WandCharges, WandType};
+
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let target = spawn_idle_named_monster(&mut world, Position::new(6, 5), "gnome");
+        world
+            .ecs_mut()
+            .insert_one(target, Peaceful)
+            .expect("target should accept peaceful marker");
+
+        let wand = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Wand,
+                quantity: 1,
+                weight: 7,
+                age: 0,
+                inv_letter: Some('z'),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            WandTypeTag(WandType::SpeedMonster),
+            WandCharges {
+                spe: 1,
+                recharged: 0,
+            },
+        ));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::ZapWand {
+                item: wand,
+                direction: Some(Direction::East),
+            },
+            &mut rng,
+        );
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::StatusApplied {
+                    entity,
+                    status: crate::event::StatusEffect::FastSpeed,
+                    ..
+                } if *entity == target
+            )),
+            "wand of speed monster should still affect the peaceful monster"
+        );
+        assert!(
+            world.get_component::<Peaceful>(target).is_some(),
+            "beneficial status effects should not make a peaceful monster hostile"
+        );
+    }
+
+    #[test]
+    fn test_ranged_hit_event_on_peaceful_monster_removes_peaceful() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let target = spawn_idle_named_monster(&mut world, Position::new(6, 5), "gnome");
+        let projectile = world.spawn(());
+        world
+            .ecs_mut()
+            .insert_one(target, Peaceful)
+            .expect("target should accept peaceful marker");
+
+        anger_peaceful_monsters_from_player_events(
+            &mut world,
+            &[EngineEvent::RangedHit {
+                attacker: player,
+                defender: target,
+                projectile,
+                damage: 3,
+            }],
+        );
+
+        assert!(
+            world.get_component::<Peaceful>(target).is_none(),
+            "direct ranged-hit events from the player should make peaceful monsters hostile"
+        );
     }
 
     #[test]
@@ -10557,6 +11330,11 @@ mod tests {
         assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
         assert_eq!(world.dungeon().depth, 5);
         assert_eq!(count_monsters_named(&world, "Angel"), 1);
+        let angel = find_monster_named(&world, "Angel").expect("guardian angel should exist");
+        assert!(
+            world.get_component::<Peaceful>(angel).is_some(),
+            "guardian angel should be peaceful on first Astral arrival"
+        );
         assert!(events.iter().any(|event| matches!(
             event,
             EngineEvent::Message { key, .. } if key == "guardian-angel-appears"
@@ -10593,12 +11371,93 @@ mod tests {
         assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
         assert_eq!(world.dungeon().depth, 5);
         assert_eq!(count_monsters_named(&world, "Angel"), 1);
+        let angel = find_monster_named(&world, "Angel").expect("guardian angel should still exist");
+        assert!(
+            world.get_component::<Peaceful>(angel).is_some(),
+            "guardian angel should stay peaceful after revisit restore"
+        );
         assert!(
             !events.iter().any(|event| matches!(
                 event,
                 EngineEvent::Message { key, .. } if key == "guardian-angel-appears"
             )),
             "Astral revisit should not respawn the guardian angel"
+        );
+    }
+
+    #[test]
+    fn test_move_into_peaceful_monster_requires_force_fight() {
+        let mut world = make_stair_world(Terrain::Floor, 1);
+        let player = world.player();
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
+            pos.0 = Position::new(5, 5);
+        }
+
+        let peaceful = world.spawn((
+            Monster,
+            Positioned(Position::new(6, 5)),
+            HitPoints {
+                current: 12,
+                max: 12,
+            },
+            Speed(12),
+            DisplaySymbol {
+                symbol: 'g',
+                color: nethack_babel_data::Color::Brown,
+            },
+            MovementPoints(NORMAL_SPEED as i32),
+            Name("gnome".to_string()),
+            Peaceful,
+        ));
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(
+            events.iter().any(
+                |event| matches!(event, EngineEvent::Message { key, .. } if key == "peaceful-monster-blocks")
+            ),
+            "normal movement should stop at a peaceful monster"
+        );
+        assert_eq!(
+            world.get_component::<Positioned>(player).map(|pos| pos.0),
+            Some(Position::new(5, 5))
+        );
+        assert_eq!(
+            world
+                .get_component::<HitPoints>(peaceful)
+                .map(|hp| hp.current),
+            Some(12)
+        );
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(peaceful) {
+            pos.0 = Position::new(6, 5);
+        }
+        let _ = world.ecs_mut().insert_one(peaceful, Peaceful);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::FightDirection {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(
+            events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+                )
+            }),
+            "fight direction should attack the peaceful blocker"
+        );
+        assert!(
+            world.get_component::<Peaceful>(peaceful).is_none(),
+            "force-attacking a peaceful monster should anger it"
         );
     }
 

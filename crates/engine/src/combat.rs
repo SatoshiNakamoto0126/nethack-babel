@@ -23,7 +23,8 @@ use crate::event::{
 use crate::status;
 use crate::steed;
 use crate::world::{
-    ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints, Name, PlayerCombat, Positioned,
+    ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints, Name, Peaceful, Player,
+    PlayerCombat, Positioned,
 };
 
 // ---------------------------------------------------------------------------
@@ -810,6 +811,10 @@ pub fn resolve_melee_attack_ex(
     rng: &mut impl Rng,
     events: &mut Vec<EngineEvent>,
 ) {
+    if world.get_component::<Player>(attacker).is_some() {
+        let _ = world.ecs_mut().remove_one::<Peaceful>(defender);
+    }
+
     // ---- Extract attacker stats ----
     let (str_val, str_extra, dex_val) = world
         .get_component::<Attributes>(attacker)

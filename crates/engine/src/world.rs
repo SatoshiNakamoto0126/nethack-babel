@@ -106,6 +106,10 @@ pub struct Boulder;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Tame;
 
+/// Marker component for peaceful non-hostile monsters.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Peaceful;
+
 /// Component: monotonically increasing creation order for deterministic
 /// turn ordering (Decision D2 from the spec).
 ///

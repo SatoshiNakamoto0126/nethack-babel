@@ -1672,6 +1672,7 @@ npc-chat-no-response = 這個生物似乎不想聊天。
 chat-nobody-there = 那裡沒有人可以交談。
 
 ## 移動/旅行
+peaceful-monster-blocks = 你停了下來。{ $monster } 擋住了去路。
 ride-not-available = 這裡沒有可以騎乘的東西。
 enhance-not-available = 你現在無法提升任何技能。
 enhance-success = 你的 { $skill } 提升到了 { $level }。
@@ -3171,6 +3172,9 @@ wizard-kill-none = There are no monsters here to wipe out.
 
 # TODO: translate
 wizard-map-revealed = An image of your surroundings forms in your mind!
+
+# TODO: translate
+wizard-respawned = The Wizard of Yendor rises again!
 
 # TODO: translate
 wizard-steal-amulet = The Wizard of Yendor steals the Amulet!

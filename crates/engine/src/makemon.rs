@@ -22,7 +22,7 @@ use crate::monster_ai::{
 use crate::status::{Intrinsics, StatusEffects};
 use crate::world::{
     ArmorClass, Boulder, DisplaySymbol, GameWorld, HitPoints, Monster, MovementPoints,
-    NORMAL_SPEED, Name, Positioned, Speed,
+    NORMAL_SPEED, Name, Peaceful, Positioned, Speed,
 };
 
 // ---------------------------------------------------------------------------
@@ -133,6 +133,11 @@ pub fn makemon(
     }
     if def.flags.contains(MonsterFlags::COVETOUS) {
         let _ = world.ecs_mut().insert_one(entity, Covetous);
+    }
+    if !flags.contains(MakeMonFlags::ANGRY)
+        && (flags.contains(MakeMonFlags::PEACEFUL) || def.flags.contains(MonsterFlags::PEACEFUL))
+    {
+        let _ = world.ecs_mut().insert_one(entity, Peaceful);
     }
 
     // Equip weapon/inventory unless suppressed.
@@ -1289,6 +1294,28 @@ mod tests {
         assert!(flags.contains(MakeMonFlags::ANGRY));
         assert!(flags.contains(MakeMonFlags::NO_GROUP));
         assert!(!flags.contains(MakeMonFlags::ASLEEP));
+    }
+
+    #[test]
+    fn makemon_peaceful_flag_inserts_peaceful_component() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let defs = test_monster_defs();
+
+        let entity = makemon(
+            &mut world,
+            &defs,
+            Some(MonsterId(3)),
+            Position::new(10, 10),
+            MakeMonFlags::NO_GROUP | MakeMonFlags::PEACEFUL,
+            &mut rng,
+        )
+        .expect("peaceful monster should spawn");
+
+        assert!(
+            world.get_component::<Peaceful>(entity).is_some(),
+            "PEACEFUL spawn flag should materialize as a Peaceful marker"
+        );
     }
 
     #[test]

@@ -179,7 +179,11 @@ pub struct SerializableMonster {
     pub speed: u32,
     pub movement_points: i32,
     pub name: String,
+    #[serde(default)]
     pub is_tame: bool,
+    #[serde(default)]
+    pub is_peaceful: bool,
+    #[serde(default)]
     pub creation_order: u64,
 }
 
@@ -518,6 +522,9 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             .unwrap_or(12);
         let name = world.entity_name(entity);
         let is_tame = world.get_component::<Tame>(entity).is_some();
+        let is_peaceful = world
+            .get_component::<nethack_babel_engine::world::Peaceful>(entity)
+            .is_some();
         let creation_order = world
             .get_component::<nethack_babel_engine::world::CreationOrder>(entity)
             .map(|c| c.0)
@@ -531,6 +538,7 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             movement_points,
             name,
             is_tame,
+            is_peaceful,
             creation_order,
         });
     }
@@ -731,6 +739,11 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
 
         if m.is_tame {
             let _ = world.ecs_mut().insert_one(entity, Tame);
+        }
+        if m.is_peaceful {
+            let _ = world
+                .ecs_mut()
+                .insert_one(entity, nethack_babel_engine::world::Peaceful);
         }
     }
 
@@ -2963,6 +2976,77 @@ mod tests {
                 .iter()
                 .any(|trap| trap.trap_type == nethack_babel_data::TrapType::VibratingSquare),
             "the vibrating square marker should be gone once invocation has been recorded"
+        );
+    }
+
+    #[test]
+    fn round_trip_loaded_wizard_respawn_state_survives_and_reanimates() {
+        let mut world = make_stair_world(DungeonBranch::Gehennom, 10, Terrain::Floor);
+        let player = world.player();
+        if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+            player_events.killed_wizard = true;
+            player_events.wizard_times_killed = 1;
+            player_events.wizard_last_killed_turn = 0;
+        }
+        while world.turn() < 99 {
+            world.advance_turn();
+        }
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("wizard-respawn-state", &world, [21u8; 32]);
+        let restored_events = {
+            let events = loaded
+                .get_component::<PlayerEvents>(loaded.player())
+                .expect("player events should survive save/load");
+            (*events).clone()
+        };
+        assert!(restored_events.killed_wizard);
+        assert_eq!(restored_events.wizard_times_killed, 1);
+        assert_eq!(restored_events.wizard_last_killed_turn, 0);
+
+        let mut rng = Pcg64::from_seed(loaded_rng);
+        let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
+
+        assert_eq!(count_monsters_named(&loaded, "Wizard of Yendor"), 1);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "wizard-respawned"
+        )));
+    }
+
+    #[test]
+    fn round_trip_loaded_preserves_peaceful_monsters_on_current_level() {
+        let mut world = make_stair_world(DungeonBranch::Main, 3, Terrain::Floor);
+        let angel = world.spawn((
+            Monster,
+            Positioned(Position::new(6, 5)),
+            Name("Angel".to_string()),
+            HitPoints {
+                current: 18,
+                max: 18,
+            },
+            Speed(12),
+            MovementPoints(12),
+            nethack_babel_engine::world::Peaceful,
+        ));
+        let _ = angel;
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("peaceful-current-level", &world, [22u8; 32]);
+        let restored_angel = loaded
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .find_map(|(entity, (_monster, name))| {
+                name.0.eq_ignore_ascii_case("Angel").then_some(entity)
+            })
+            .expect("peaceful angel should survive round-trip");
+
+        assert!(
+            loaded
+                .get_component::<nethack_babel_engine::world::Peaceful>(restored_angel)
+                .is_some(),
+            "live peaceful monsters should keep their peaceful marker across save/load"
         );
     }
 

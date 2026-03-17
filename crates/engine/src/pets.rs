@@ -14,8 +14,8 @@ use crate::action::Position;
 use crate::event::EngineEvent;
 use crate::monster_ai::is_valid_monster_move;
 use crate::world::{
-    Attributes, GameWorld, HitPoints, Monster, MovementPoints, NORMAL_SPEED, Name, Positioned,
-    Speed, Tame,
+    Attributes, GameWorld, HitPoints, Monster, MovementPoints, NORMAL_SPEED, Name, Peaceful,
+    Positioned, Speed, Tame,
 };
 
 use nethack_babel_data::{ObjectClass, ObjectCore, ObjectLocation};
@@ -719,6 +719,7 @@ pub fn abuse_pet(world: &mut GameWorld, pet: Entity, conflict: bool) {
 fn go_feral(world: &mut GameWorld, pet: Entity) {
     // Remove the Tame component.
     let _ = world.ecs_mut().remove_one::<Tame>(pet);
+    let _ = world.ecs_mut().remove_one::<Peaceful>(pet);
 }
 
 // ---------------------------------------------------------------------------
@@ -974,6 +975,7 @@ pub fn wary_dog(world: &mut GameWorld, pet: Entity, was_dead: bool, rng: &mut im
         } else {
             // Remove Tame but stays peaceful (just untame).
             let _ = world.ecs_mut().remove_one::<Tame>(pet);
+            let _ = world.ecs_mut().insert_one(pet, Peaceful);
         }
         return false;
     }
@@ -990,6 +992,7 @@ pub fn wary_dog(world: &mut GameWorld, pet: Entity, was_dead: bool, rng: &mut im
             go_feral(world, pet);
         } else {
             let _ = world.ecs_mut().remove_one::<Tame>(pet);
+            let _ = world.ecs_mut().insert_one(pet, Peaceful);
         }
         return false;
     }
@@ -1240,6 +1243,7 @@ pub fn tame_monster(
 
     // Add Tame marker and PetState.
     let _ = world.ecs_mut().insert_one(monster, Tame);
+    let _ = world.ecs_mut().insert_one(monster, Peaceful);
     let _ = world.ecs_mut().insert_one(monster, pet_state);
 
     true
@@ -1459,7 +1463,7 @@ fn pet_try_attack_adjacent(
                 pet_hp.1,
                 target_level,
                 false, // target_is_tame (already filtered)
-                false, // target_is_peaceful (simplified)
+                world.get_component::<Peaceful>(entity).is_some(),
                 false, // has_conflict
                 false, // is_dangerous_melee
             );

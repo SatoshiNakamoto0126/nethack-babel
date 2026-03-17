@@ -29,7 +29,7 @@ use crate::dungeon::Terrain;
 use crate::event::{EngineEvent, HpSource, StatusEffect};
 use crate::potions::PotionType;
 use crate::wands::{WandCharges, WandType};
-use crate::world::{GameWorld, HitPoints, Positioned};
+use crate::world::{GameWorld, HitPoints, Peaceful, Positioned, Tame};
 
 // ---------------------------------------------------------------------------
 // Monster intelligence classification
@@ -120,6 +120,8 @@ pub fn resolve_monster_turn(
 
     let is_covetous = world.get_component::<Covetous>(monster).is_some()
         || species_flags.intersects(MonsterFlags::COVETOUS);
+    let is_non_hostile = world.get_component::<Tame>(monster).is_some()
+        || world.get_component::<Peaceful>(monster).is_some();
 
     // Check adjacency (Chebyshev distance <= 1).
     let adjacent = is_adjacent(monster_pos, player_pos);
@@ -166,7 +168,7 @@ pub fn resolve_monster_turn(
     }
 
     // ── Phase 1: Covetous behavior ─────────────────────────────────
-    if is_covetous {
+    if is_covetous && !is_non_hostile {
         let covetous_events = covetous_behavior(
             world,
             monster,
@@ -201,6 +203,17 @@ pub fn resolve_monster_turn(
         // Flee: move away from player.
         if let Some(move_events) = move_away(world, monster, monster_pos, player_pos, rng) {
             events.extend(move_events);
+        }
+        return events;
+    }
+
+    if is_non_hostile {
+        if let Some(move_events) = wander(world, monster, monster_pos, rng) {
+            events.extend(move_events);
+        }
+        if intelligence != MonsterIntelligence::Animal {
+            let pickup_events = monster_pickup(world, monster, rng);
+            events.extend(pickup_events);
         }
         return events;
     }
@@ -244,8 +257,12 @@ pub fn resolve_monster_turn(
             crate::engrave::is_elbereth_at(&world.dungeon().engraving_map, player_pos);
         if elbereth_active {
             let is_blind = crate::status::is_blind(world, monster);
-            let immune =
-                crate::engrave::is_elbereth_immune(species_flags, is_blind, is_covetous, false);
+            let immune = crate::engrave::is_elbereth_immune(
+                species_flags,
+                is_blind,
+                is_covetous,
+                is_non_hostile,
+            );
             if !immune {
                 // Monster is scared by Elbereth — flee instead of attacking.
                 events.push(EngineEvent::msg("monster-scared-elbereth"));
@@ -2317,7 +2334,7 @@ mod tests {
     use crate::dungeon::Terrain;
     use crate::world::{
         ArmorClass, Attributes, CreationOrder, ExperienceLevel, HitPoints, Monster, MovementPoints,
-        NORMAL_SPEED, Name, Positioned, Speed,
+        NORMAL_SPEED, Name, Peaceful, Positioned, Speed, Tame,
     };
     use nethack_babel_data::{ObjectClass, ObjectCore, ObjectLocation, ObjectTypeId};
     use rand::SeedableRng;
@@ -2535,6 +2552,53 @@ mod tests {
             .iter()
             .any(|e| matches!(e, EngineEvent::EntityMoved { .. }));
         assert!(!moved, "attacking monster should not also move");
+    }
+
+    #[test]
+    fn peaceful_monster_adjacent_to_player_does_not_attack() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        let monster = spawn_monster_at(&mut world, Position::new(9, 8), 10, 10);
+        world
+            .ecs_mut()
+            .insert_one(monster, Peaceful)
+            .expect("monster should accept peaceful marker");
+
+        let events = resolve_monster_turn(&mut world, monster, &mut rng);
+
+        let has_combat = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+            )
+        });
+        assert!(
+            !has_combat,
+            "peaceful monsters should not attack the player"
+        );
+    }
+
+    #[test]
+    fn tame_monster_adjacent_to_player_does_not_attack() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        let monster = spawn_monster_at(&mut world, Position::new(9, 8), 10, 10);
+        world
+            .ecs_mut()
+            .insert_one(monster, Tame)
+            .expect("monster should accept tame marker");
+
+        let events = resolve_monster_turn(&mut world, monster, &mut rng);
+
+        let has_combat = events.iter().any(|e| {
+            matches!(
+                e,
+                EngineEvent::MeleeHit { .. } | EngineEvent::MeleeMiss { .. }
+            )
+        });
+        assert!(!has_combat, "tame monsters should not attack the player");
     }
 
     #[test]

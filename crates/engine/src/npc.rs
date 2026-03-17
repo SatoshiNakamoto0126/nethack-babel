@@ -636,7 +636,7 @@ pub fn wizard_should_respawn(
 }
 
 /// Wizard harassment actions.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WizardAction {
     /// Steal the Amulet of Yendor from the player.
     StealAmulet,
@@ -648,27 +648,29 @@ pub enum WizardAction {
     DoubleTrouble,
 }
 
-/// Resolve a Wizard of Yendor harassment action.
-///
-/// The Wizard chooses an action based on the situation:
-/// 1. If player carries the Amulet: steal it.
-/// 2. At full HP: clone self (Double Trouble).
-/// 3. Otherwise: summon nasties or curse items.
-pub fn wizard_harass(
-    world: &mut GameWorld,
+/// Convert a Wizard harassment action into user-facing message events.
+pub fn wizard_harass_events(action: WizardAction) -> Vec<EngineEvent> {
+    match action {
+        WizardAction::StealAmulet => vec![EngineEvent::msg("wizard-steal-amulet")],
+        WizardAction::DoubleTrouble => vec![EngineEvent::msg("wizard-double-trouble")],
+        WizardAction::SummonNasties => vec![EngineEvent::msg("wizard-summon-nasties")],
+        WizardAction::CurseItems => vec![EngineEvent::msg("wizard-curse-items")],
+    }
+}
+
+/// Determine which harassment action the Wizard of Yendor uses this turn.
+pub fn choose_wizard_action(
+    world: &GameWorld,
     wizard: Entity,
-    _player: Entity,
     player_has_amulet: bool,
     rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
-    let mut events = Vec::new();
-
+) -> WizardAction {
     let wizard_hp = world
         .get_component::<HitPoints>(wizard)
         .map(|hp| (hp.current, hp.max))
         .unwrap_or((1, 1));
 
-    let action = if player_has_amulet {
+    if player_has_amulet {
         WizardAction::StealAmulet
     } else if wizard_hp.0 >= wizard_hp.1 {
         WizardAction::DoubleTrouble
@@ -676,28 +678,24 @@ pub fn wizard_harass(
         WizardAction::SummonNasties
     } else {
         WizardAction::CurseItems
-    };
-
-    match action {
-        WizardAction::StealAmulet => {
-            events.push(EngineEvent::msg("wizard-steal-amulet"));
-            // The actual item removal is handled by the caller, since
-            // we don't know the specific Amulet entity here.
-            // We emit a message event for the UI layer.
-        }
-        WizardAction::DoubleTrouble => {
-            events.push(EngineEvent::msg("wizard-double-trouble"));
-            // Clone spawning is handled by the caller.
-        }
-        WizardAction::SummonNasties => {
-            events.push(EngineEvent::msg("wizard-summon-nasties"));
-        }
-        WizardAction::CurseItems => {
-            events.push(EngineEvent::msg("wizard-curse-items"));
-        }
     }
+}
 
-    events
+/// Resolve a Wizard of Yendor harassment action.
+///
+/// The Wizard chooses an action based on the current world state and emits the
+/// corresponding message event. Runtime side-effects are handled by the caller.
+pub fn wizard_harass(
+    world: &mut GameWorld,
+    wizard: Entity,
+    _player: Entity,
+    player_has_amulet: bool,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    let action = choose_wizard_action(world, wizard, player_has_amulet, rng);
+    // The actual side-effects are handled by the caller, since harassment can
+    // manipulate inventory and spawn monsters in engine-specific ways.
+    wizard_harass_events(action)
 }
 
 // ---------------------------------------------------------------------------

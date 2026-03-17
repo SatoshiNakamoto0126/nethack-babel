@@ -19,7 +19,9 @@ use crate::event::{EngineEvent, HpSource};
 use crate::religion::rnl;
 use crate::status;
 use crate::steed;
-use crate::world::{Attributes, CarryWeight, GameWorld, Monster, PlayerCombat, Positioned, Tame};
+use crate::world::{
+    Attributes, CarryWeight, GameWorld, Monster, Peaceful, PlayerCombat, Positioned, Tame,
+};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -76,6 +78,13 @@ pub fn resolve_move(
                 target_pos,
                 &mut events,
             );
+            return events;
+        }
+        if is_peaceful(world, occupant) {
+            events.push(EngineEvent::msg_with(
+                "peaceful-monster-blocks",
+                vec![("monster", world.entity_name(occupant))],
+            ));
             return events;
         }
         if is_monster(world, occupant) {
@@ -447,6 +456,11 @@ fn is_tame(world: &GameWorld, entity: Entity) -> bool {
     world.get_component::<Tame>(entity).is_some()
 }
 
+/// Whether an entity has the `Peaceful` component.
+fn is_peaceful(world: &GameWorld, entity: Entity) -> bool {
+    world.get_component::<Peaceful>(entity).is_some()
+}
+
 // ---------------------------------------------------------------------------
 // Ice sliding
 // ---------------------------------------------------------------------------
@@ -811,7 +825,7 @@ mod tests {
     use crate::action::Position;
     use crate::dungeon::Terrain;
     use crate::world::{
-        Attributes, CarryWeight, HitPoints, Monster, Name, Positioned, Speed, Tame,
+        Attributes, CarryWeight, HitPoints, Monster, Name, Peaceful, Positioned, Speed, Tame,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
@@ -934,6 +948,32 @@ mod tests {
             .iter()
             .any(|e| matches!(e, EngineEvent::Message { key, .. } if key.contains("locked")));
         assert!(has_locked_msg, "expected locked door message");
+    }
+
+    #[test]
+    fn peaceful_monster_blocks_normal_movement() {
+        let mut world = make_test_world();
+        let monster = world.spawn((
+            Monster,
+            Positioned(Position::new(6, 5)),
+            HitPoints {
+                current: 10,
+                max: 10,
+            },
+            Speed(12),
+            Name("gnome".to_string()),
+            Peaceful,
+        ));
+        let _ = monster;
+
+        let mut rng = test_rng();
+        let events = resolve_move(&mut world, Direction::East, &mut rng);
+
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
+        assert_eq!(pos.0, Position::new(5, 5));
+        assert!(events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "peaceful-monster-blocks")
+        ));
     }
 
     #[test]
