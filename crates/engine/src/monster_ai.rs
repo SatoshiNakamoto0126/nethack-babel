@@ -27,6 +27,7 @@ use crate::combat::{
 };
 use crate::dungeon::Terrain;
 use crate::event::{EngineEvent, HpSource, StatusEffect};
+use crate::npc::Shopkeeper;
 use crate::potions::PotionType;
 use crate::wands::{WandCharges, WandType};
 use crate::world::{GameWorld, HitPoints, Peaceful, Positioned, Tame};
@@ -208,6 +209,19 @@ pub fn resolve_monster_turn(
     }
 
     if is_non_hostile {
+        if let Some(shopkeeper) = world
+            .get_component::<Shopkeeper>(monster)
+            .map(|shopkeeper| (*shopkeeper).clone())
+        {
+            let goal = crate::npc::shopkeeper_goal(&shopkeeper, false, player_pos);
+            if (shopkeeper.following || shopkeeper.displaced)
+                && monster_pos != goal
+                && let Some(move_events) = move_toward(world, monster, monster_pos, goal, rng)
+            {
+                events.extend(move_events);
+                return events;
+            }
+        }
         if let Some(move_events) = wander(world, monster, monster_pos, rng) {
             events.extend(move_events);
         }

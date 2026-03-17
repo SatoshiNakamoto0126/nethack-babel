@@ -279,12 +279,12 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 
 ## Roadmap (2026)
 
-1. **Domain hostility parity**  
-   Replace inference-heavy shopkeeper, priest, and quest NPC handling with explicit runtime population/components and finish their long-tail anger semantics.
+1. **Temple and shop long-tail parity**  
+   Finish the remaining priest/shopkeeper behavior that goes beyond identity and basic anger state: sanctuary rules, calm-down paths, follow-home logic, and economy-side consequences.
 2. **Wizard harassment parity**  
-   Broaden Wizard of Yendor harassment beyond the current core actions, with depth-aware nasty pools and stronger long-run regression coverage.
+   Broaden Wizard of Yendor harassment beyond the current core actions, with richer nasty pools, repeated-harassment coverage, and stronger mid-run save/load regression tests.
 3. **Story drift detection**  
-   Expand traversal and save/load matrices into differential-style harnesses for quest closure, temple/shop conflicts, Gehennom, and ascension paths.
+   Expand traversal and save/load matrices into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
 4. **Runtime cache and save hardening**  
    Continue auditing level-local runtime state and keep save-format rules explicit whenever serialized world semantics change.
 5. **Contributor and content tooling**  
@@ -292,11 +292,11 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 
 ## TODO (Short-Term)
 
-- [ ] Replace inferred temple/shop/quest NPC semantics with explicit ECS/runtime population where possible.
-- [ ] Extend Wizard of Yendor harassment parity beyond respawn, theft, cursing, and the current nasty summon pool.
+- [ ] Finish shopkeeper and priest long-tail runtime semantics: follow-home behavior, sanctuary/calm-down paths, and economy-side regressions.
+- [ ] Extend Wizard of Yendor harassment parity beyond respawn, theft, cursing, and the current nasty summon pool/replay matrix.
 - [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and save/load omissions.
-- [ ] Refresh contributor docs once the next round of NPC/runtime data contracts settles.
+- [ ] Keep contributor docs and content-editing docs aligned as runtime/save contracts continue to harden.
 
 ## Documentation
 

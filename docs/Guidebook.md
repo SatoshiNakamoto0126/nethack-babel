@@ -538,19 +538,19 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 
 ### Roadmap (2026)
 
-1. Finish domain-hostility parity for priests, shopkeepers, and quest NPCs with less runtime inference.
-2. Expand Wizard of Yendor harassment parity and long-run regression coverage.
-3. Grow traversal and save/load matrices into broader drift-detection harnesses for campaign-critical paths.
+1. Finish the remaining temple/shop long-tail semantics: sanctuary rules, calm-down behavior, follow-home logic, and economy-side consequences.
+2. Expand Wizard of Yendor harassment parity and repeated-harassment regression coverage.
+3. Grow traversal and save/load matrices into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
 4. Continue hardening level-local runtime caches and save compatibility rules as serialized world state evolves.
 5. Keep contributor tooling, data docs, and Guidebook/README parity aligned with live implementation.
 
 ### Active TODO
 
-- [ ] Replace inferred temple/shop/quest NPC semantics with explicit ECS/runtime population where possible.
-- [ ] Extend Wizard of Yendor harassment parity beyond respawn, theft, cursing, and the current nasty summon pool.
+- [ ] Finish shopkeeper and priest long-tail runtime semantics: follow-home behavior, sanctuary/calm-down paths, and economy-side regressions.
+- [ ] Extend Wizard of Yendor harassment parity beyond respawn, theft, cursing, and the current nasty summon pool/replay matrix.
 - [ ] Expand traversal/save-load matrices into stronger drift-detection coverage for economy, religion, and branch-state regressions.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and serialization gaps.
-- [ ] Refresh contributor-facing docs after the next NPC/runtime contract cleanup lands.
+- [ ] Keep contributor-facing docs aligned as runtime/save contracts continue to harden.
 
 ### Save Format Policy
 

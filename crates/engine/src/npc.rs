@@ -33,6 +33,9 @@ pub struct Priest {
     pub has_shrine: bool,
     /// Whether this is the high priest of Moloch (sanctum).
     pub is_high_priest: bool,
+    /// Whether this priest is angry with the player.
+    #[serde(default)]
+    pub angry: bool,
 }
 
 /// State for angel / aligned minion NPCs.
@@ -882,6 +885,7 @@ mod tests {
                 alignment: Alignment::Lawful,
                 has_shrine: false,
                 is_high_priest: false,
+                angry: false,
             },
         );
 
@@ -914,6 +918,7 @@ mod tests {
                 alignment: Alignment::Lawful,
                 has_shrine: false,
                 is_high_priest: false,
+                angry: false,
             },
         );
 

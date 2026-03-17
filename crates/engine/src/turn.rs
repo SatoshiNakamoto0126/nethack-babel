@@ -204,6 +204,7 @@ pub fn resolve_turn(
     resolve_player_action(world, &action, rng, &mut events);
     apply_domain_hostility_side_effects_from_player_events(world, &mut events, rng);
     anger_peaceful_monsters_from_player_events(world, &events);
+    sync_current_level_shopkeeper_state(world);
 
     // ── Step 3: monster loop ─────────────────────────────────────
     // Each monster with movement >= NORMAL_SPEED gets to act.
@@ -225,6 +226,7 @@ pub fn resolve_turn(
     sync_wizard_of_yendor_from_events(world, &known_wizards, &events);
     sync_quest_state_from_world(world);
     sync_player_story_components(world, &events);
+    sync_current_level_shopkeeper_state(world);
 
     events
 }
@@ -283,6 +285,7 @@ pub fn turn_events<'a, R: Rng>(
     resolve_player_action(world, &action, rng, &mut player_events);
     apply_domain_hostility_side_effects_from_player_events(world, &mut player_events, rng);
     anger_peaceful_monsters_from_player_events(world, &player_events);
+    sync_current_level_shopkeeper_state(world);
 
     // Phase 2: monster turns.
     let mut monster_events = Vec::new();
@@ -307,6 +310,7 @@ pub fn turn_events<'a, R: Rng>(
     sync_wizard_of_yendor_from_events(world, &known_wizards, &story_events);
     sync_quest_state_from_world(world);
     sync_player_story_components(world, &story_events);
+    sync_current_level_shopkeeper_state(world);
 
     // Chain the three phases into a single iterator that yields
     // events in the correct order, one at a time.
@@ -387,6 +391,7 @@ pub fn turn_events_gen<'a, R: Rng>(
         resolve_player_action(world, &action, rng, &mut player_events);
         apply_domain_hostility_side_effects_from_player_events(world, &mut player_events, rng);
         anger_peaceful_monsters_from_player_events(world, &player_events);
+        sync_current_level_shopkeeper_state(world);
         for event in player_events {
             story_events.push(event.clone());
             yield event;
@@ -418,6 +423,7 @@ pub fn turn_events_gen<'a, R: Rng>(
         sync_wizard_of_yendor_from_events(world, &known_wizards, &story_events);
         sync_quest_state_from_world(world);
         sync_player_story_components(world, &story_events);
+        sync_current_level_shopkeeper_state(world);
     }
 }
 
@@ -500,11 +506,14 @@ fn apply_domain_hostility_side_effects_from_player_events(
 
     let mut extra_events = Vec::new();
     for entity in targets {
-        if let Some(priest) = infer_priest_runtime(world, entity) {
+        if let Some(mut priest) = infer_priest_runtime(world, entity) {
+            priest.angry = true;
+            upsert_priest_component(world, entity, priest);
             let mut temple = crate::priest::TempleInfo::new(priest.alignment);
             temple.has_priest = true;
             temple.has_shrine = priest.has_shrine;
             temple.is_sanctum = priest.is_high_priest;
+            temple.priest_angry = priest.angry;
             extra_events.extend(crate::priest::anger_priest(&mut temple));
             extra_events.extend(crate::priest::ghod_hitsu(&temple, rng));
         }
@@ -1366,7 +1375,9 @@ fn resolve_player_action(
 
                 if let Some(priest_data) = infer_priest_runtime(world, monster_entity) {
                     upsert_priest_component(world, monster_entity, priest_data);
-                    if world.get_component::<Peaceful>(monster_entity).is_none() {
+                    if priest_data.angry
+                        || world.get_component::<Peaceful>(monster_entity).is_none()
+                    {
                         events.push(EngineEvent::msg("npc-chat-no-response"));
                         return;
                     }
@@ -2729,16 +2740,19 @@ fn upsert_shopkeeper_component(
     entity: hecs::Entity,
     shop: &crate::shop::ShopRoom,
 ) {
-    let expected = crate::npc::Shopkeeper {
-        following: false,
-        displaced: false,
-        home_pos: shopkeeper_home_pos(shop),
-        name: shop.shopkeeper_name.clone(),
-    };
     if let Some(mut live) = world.get_component_mut::<crate::npc::Shopkeeper>(entity) {
-        *live = expected;
+        live.home_pos = shopkeeper_home_pos(shop);
+        live.name = shop.shopkeeper_name.clone();
     } else {
-        let _ = world.ecs_mut().insert_one(entity, expected);
+        let _ = world.ecs_mut().insert_one(
+            entity,
+            crate::npc::Shopkeeper {
+                following: false,
+                displaced: false,
+                home_pos: shopkeeper_home_pos(shop),
+                name: shop.shopkeeper_name.clone(),
+            },
+        );
     }
 }
 
@@ -2748,9 +2762,15 @@ fn upsert_priest_component(
     priest: crate::npc::Priest,
 ) {
     if let Some(mut live) = world.get_component_mut::<crate::npc::Priest>(entity) {
-        *live = priest;
+        live.alignment = priest.alignment;
+        live.has_shrine = priest.has_shrine;
+        live.is_high_priest = priest.is_high_priest;
+        live.angry |= priest.angry;
     } else {
         let _ = world.ecs_mut().insert_one(entity, priest);
+    }
+    if priest.angry {
+        let _ = world.ecs_mut().remove_one::<Peaceful>(entity);
     }
 }
 
@@ -2828,6 +2848,47 @@ pub fn sync_current_level_npc_state(world: &mut GameWorld) {
         };
         if let Some(quest_role) = quest_role {
             upsert_quest_npc_role(world, entity, quest_role);
+        }
+    }
+    sync_current_level_shopkeeper_state(world);
+}
+
+fn sync_current_level_shopkeeper_state(world: &mut GameWorld) {
+    let Some(player_pos) = world
+        .get_component::<Positioned>(world.player())
+        .map(|pos| pos.0)
+    else {
+        return;
+    };
+
+    let shops = world.dungeon().shop_rooms.clone();
+    for shop in &shops {
+        let entity = shop.shopkeeper;
+        if !world.ecs().contains(entity) {
+            continue;
+        }
+        let home_pos = shopkeeper_home_pos(shop);
+        let current_pos = world.get_component::<Positioned>(entity).map(|pos| pos.0);
+        let has_unpaid_items = !shop.bill.is_empty() || shop.debit > shop.credit;
+        let hero_left_shop = !shop.contains(player_pos);
+        let following =
+            crate::npc::shopkeeper_should_follow(shop.angry, has_unpaid_items, hero_left_shop);
+        let displaced = current_pos.is_some_and(|pos| pos != home_pos);
+        if let Some(mut live) = world.get_component_mut::<crate::npc::Shopkeeper>(entity) {
+            live.following = following;
+            live.displaced = displaced;
+            live.home_pos = home_pos;
+            live.name = shop.shopkeeper_name.clone();
+        } else {
+            let _ = world.ecs_mut().insert_one(
+                entity,
+                crate::npc::Shopkeeper {
+                    following,
+                    displaced,
+                    home_pos,
+                    name: shop.shopkeeper_name.clone(),
+                },
+            );
         }
     }
 }
@@ -4801,6 +4862,7 @@ fn infer_priest_runtime(world: &GameWorld, entity: hecs::Entity) -> Option<crate
         alignment: current_player_alignment(world, world.player()),
         has_shrine: on_altar,
         is_high_priest: name.contains("high priest"),
+        angry: false,
     })
 }
 
@@ -5873,6 +5935,8 @@ mod tests {
     enum StoryTraversalScenario {
         QuestClosure,
         QuestLeaderAnger,
+        ShopkeeperFollow,
+        TempleWrath,
         EndgameAscension,
     }
 
@@ -5881,6 +5945,8 @@ mod tests {
             match self {
                 StoryTraversalScenario::QuestClosure => "quest-closure",
                 StoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
+                StoryTraversalScenario::ShopkeeperFollow => "shopkeeper-follow",
+                StoryTraversalScenario::TempleWrath => "temple-wrath",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
         }
@@ -6022,6 +6088,93 @@ mod tests {
 
                 let blocked_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
                 (world, blocked_events)
+            }
+            StoryTraversalScenario::ShopkeeperFollow => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let unpaid_item = world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Tool,
+                        quantity: 1,
+                        weight: 10,
+                        age: 0,
+                        inv_letter: Some('u'),
+                        artifact: None,
+                    },
+                    ObjectLocation::Floor {
+                        x: 6,
+                        y: 5,
+                        level: world.dungeon().current_data_dungeon_level(),
+                    },
+                ));
+                assert!(
+                    world.dungeon_mut().shop_rooms[0]
+                        .bill
+                        .add(unpaid_item, 100, 1),
+                    "shop bill should accept an unpaid entry"
+                );
+
+                let mut rng = test_rng();
+                let move_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Move {
+                        direction: Direction::West,
+                    },
+                    &mut rng,
+                );
+                (world, move_events)
+            }
+            StoryTraversalScenario::TempleWrath => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 1_000, 'g');
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let mut rng = test_rng();
+                let _attack_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::FightDirection {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                let chat_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, chat_events)
             }
             StoryTraversalScenario::EndgameAscension => {
                 let mut world = make_stair_world(Terrain::StairsDown, 20);
@@ -8841,6 +8994,7 @@ mod tests {
                     alignment: Alignment::Lawful,
                     has_shrine: false,
                     is_high_priest: false,
+                    angry: false,
                 },
             )
             .expect("priest should accept explicit priest component");
@@ -11243,6 +11397,75 @@ mod tests {
     }
 
     #[test]
+    fn test_peaceful_shopkeeper_with_unpaid_bill_follows_player_outside_shop() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let unpaid_item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('u'),
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: 6,
+                y: 5,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
+        ));
+        assert!(
+            world.dungeon_mut().shop_rooms[0]
+                .bill
+                .add(unpaid_item, 100, 1),
+            "shop bill should accept an unpaid item"
+        );
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::West,
+            },
+            &mut rng,
+        );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::EntityMoved { entity, .. } if *entity == shopkeeper
+        )));
+        let shopkeeper_state = world
+            .get_component::<crate::npc::Shopkeeper>(shopkeeper)
+            .map(|state| (*state).clone())
+            .expect("shopkeeper should have explicit runtime state");
+        assert!(shopkeeper_state.following);
+        let final_pos = world
+            .get_component::<Positioned>(shopkeeper)
+            .map(|pos| pos.0)
+            .expect("shopkeeper should still have a position after moving");
+        assert!(
+            final_pos.x <= 5,
+            "shopkeeper follow movement should advance toward the player, got {:?}",
+            final_pos
+        );
+    }
+
+    #[test]
     fn test_chatting_with_peaceful_priest_grants_protection() {
         let mut world = make_test_world();
         let player = world.player();
@@ -11326,6 +11549,12 @@ mod tests {
             event,
             EngineEvent::Message { key, .. } if key == "god-lightning-bolt"
         )));
+        assert!(
+            world
+                .get_component::<crate::npc::Priest>(priest)
+                .is_some_and(|state| state.angry),
+            "attacking a priest should persist explicit angry state"
+        );
 
         let chat_events = resolve_turn(
             &mut world,
@@ -11365,6 +11594,7 @@ mod tests {
                     alignment: Alignment::Lawful,
                     has_shrine: false,
                     is_high_priest: false,
+                    angry: false,
                 },
             )
             .expect("monster should accept explicit priest component");
@@ -12326,6 +12556,8 @@ mod tests {
         for scenario in [
             StoryTraversalScenario::QuestClosure,
             StoryTraversalScenario::QuestLeaderAnger,
+            StoryTraversalScenario::ShopkeeperFollow,
+            StoryTraversalScenario::TempleWrath,
             StoryTraversalScenario::EndgameAscension,
         ] {
             let (world, final_events) = run_story_traversal_scenario(scenario);
@@ -12368,6 +12600,53 @@ mod tests {
                     );
                     assert_eq!(world.dungeon().branch, DungeonBranch::Quest);
                     assert_eq!(world.dungeon().depth, 1);
+                }
+                StoryTraversalScenario::ShopkeeperFollow => {
+                    let shopkeeper =
+                        find_monster_named(&world, "Izchak").expect("shopkeeper should exist");
+                    let shopkeeper_state = world
+                        .get_component::<crate::npc::Shopkeeper>(shopkeeper)
+                        .map(|state| (*state).clone())
+                        .expect("shopkeeper should keep explicit runtime state");
+                    assert!(
+                        shopkeeper_state.following,
+                        "{} should mark the shopkeeper as following after the hero leaves with unpaid goods",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        world
+                            .get_component::<Positioned>(shopkeeper)
+                            .map(|pos| pos.0.x),
+                        Some(5),
+                        "{} should move the peaceful shopkeeper toward the player",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::TempleWrath => {
+                    let priest =
+                        find_monster_named(&world, "priest").expect("priest should still exist");
+                    let priest_state = world
+                        .get_component::<crate::npc::Priest>(priest)
+                        .map(|state| *state)
+                        .expect("priest should keep explicit runtime state");
+                    assert!(
+                        priest_state.angry,
+                        "{} should preserve priest anger",
+                        scenario.label()
+                    );
+                    assert!(
+                        world.get_component::<Peaceful>(priest).is_none(),
+                        "{} should remove peaceful status from an angered priest",
+                        scenario.label()
+                    );
+                    assert!(
+                        !final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "priest-protection-granted"
+                        )),
+                        "{} should not allow protection after wrath",
+                        scenario.label()
+                    );
                 }
                 StoryTraversalScenario::EndgameAscension => {
                     assert!(

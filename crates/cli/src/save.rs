@@ -1209,7 +1209,9 @@ mod tests {
     };
 
     use nethack_babel_data::{
-        Alignment, GameData, Gender, Handedness, RaceId, loader::load_game_data,
+        Alignment, GameData, Gender, Handedness, RaceId,
+        loader::load_game_data,
+        schema::{ObjectClass, ObjectTypeId},
     };
     use nethack_babel_engine::{
         action::{Direction, PlayerAction},
@@ -1500,6 +1502,8 @@ mod tests {
     enum SaveStoryTraversalScenario {
         QuestClosure,
         QuestLeaderAnger,
+        ShopkeeperFollow,
+        TempleWrath,
         EndgameAscension,
     }
 
@@ -1508,6 +1512,8 @@ mod tests {
             match self {
                 SaveStoryTraversalScenario::QuestClosure => "quest-closure",
                 SaveStoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
+                SaveStoryTraversalScenario::ShopkeeperFollow => "shopkeeper-follow",
+                SaveStoryTraversalScenario::TempleWrath => "temple-wrath",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
         }
@@ -1670,6 +1676,99 @@ mod tests {
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let blocked_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
                 (loaded, blocked_events)
+            }
+            SaveStoryTraversalScenario::ShopkeeperFollow => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let unpaid_item = world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Tool,
+                        quantity: 1,
+                        weight: 10,
+                        age: 0,
+                        inv_letter: Some('u'),
+                        artifact: None,
+                    },
+                    ObjectLocation::Floor {
+                        x: 6,
+                        y: 5,
+                        level: world.dungeon().current_data_dungeon_level(),
+                    },
+                ));
+                assert!(
+                    world.dungeon_mut().shop_rooms[0]
+                        .bill
+                        .add(unpaid_item, 100, 1),
+                    "shop bill should accept an unpaid entry"
+                );
+
+                let mut rng = Pcg64::seed_from_u64(7104);
+                let _leave_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Move {
+                        direction: Direction::West,
+                    },
+                    &mut rng,
+                );
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shopkeeper-follow", &world, [27u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::TempleWrath => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, wizard_identity())
+                    .expect("player should accept wizard identity");
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, nethack_babel_engine::world::Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let mut rng = Pcg64::seed_from_u64(7105);
+                let _attack_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::FightDirection {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-temple-wrath", &world, [28u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
             }
             SaveStoryTraversalScenario::EndgameAscension => {
                 let mut world = make_stair_world(DungeonBranch::Gehennom, 20, Terrain::StairsDown);
@@ -3336,6 +3435,7 @@ mod tests {
                     alignment: Alignment::Chaotic,
                     has_shrine: false,
                     is_high_priest: false,
+                    angry: false,
                 },
             )
             .expect("priest should accept explicit priest component");
@@ -3480,6 +3580,8 @@ mod tests {
         for scenario in [
             SaveStoryTraversalScenario::QuestClosure,
             SaveStoryTraversalScenario::QuestLeaderAnger,
+            SaveStoryTraversalScenario::ShopkeeperFollow,
+            SaveStoryTraversalScenario::TempleWrath,
             SaveStoryTraversalScenario::EndgameAscension,
         ] {
             let (world, final_events) = run_round_trip_story_traversal_scenario(scenario);
@@ -3521,6 +3623,51 @@ mod tests {
                         world
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.quest_expelled)
+                    );
+                }
+                SaveStoryTraversalScenario::ShopkeeperFollow => {
+                    let shopkeeper =
+                        find_monster_named(&world, "Izchak").expect("shopkeeper should exist");
+                    let shopkeeper_state = world
+                        .get_component::<Shopkeeper>(shopkeeper)
+                        .map(|state| (*state).clone())
+                        .expect("shopkeeper should keep explicit runtime state");
+                    assert!(shopkeeper_state.following);
+                    let pos = world
+                        .get_component::<Positioned>(shopkeeper)
+                        .map(|pos| pos.0)
+                        .expect("shopkeeper should still have a position");
+                    assert!(
+                        pos.x <= 5,
+                        "shopkeeper should keep advancing toward the hero after save/load, got {:?}",
+                        pos
+                    );
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::world::Peaceful>(shopkeeper)
+                            .is_some(),
+                        "non-hostile follow behavior should not require losing Peaceful status"
+                    );
+                }
+                SaveStoryTraversalScenario::TempleWrath => {
+                    let priest = find_monster_named(&world, "priest").expect("priest should exist");
+                    let priest_state = world
+                        .get_component::<Priest>(priest)
+                        .map(|state| *state)
+                        .expect("priest should keep explicit runtime state");
+                    assert!(priest_state.angry);
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::world::Peaceful>(priest)
+                            .is_none(),
+                        "angered priest should stay hostile after save/load"
+                    );
+                    assert!(
+                        !final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "priest-protection-granted"
+                        )),
+                        "hostile priest should not grant protection after save/load"
                     );
                 }
                 SaveStoryTraversalScenario::EndgameAscension => {
