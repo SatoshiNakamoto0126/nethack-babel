@@ -3386,6 +3386,38 @@ npc-cuss-not-too-late = { $monster } says: "It's not too late."
 npc-cuss-doomed = { $monster } says: "We're all doomed."
 # TODO: translate
 npc-spell-cantrip = { $monster } seems to mutter a cantrip.
+# TODO: translate
+npc-seduce-hello-sailor = { $monster } says: "Hello, sailor."
+# TODO: translate
+npc-seduce-comes-on = { $monster } comes on to you.
+# TODO: translate
+npc-seduce-cajoles = { $monster } cajoles you.
+# TODO: translate
+npc-nurse-put-weapon-away = { $monster } says: "Put that weapon away before you hurt someone!"
+# TODO: translate
+npc-nurse-doc-cooperate = { $monster } says: "Doc, I can't help you unless you cooperate."
+# TODO: translate
+npc-nurse-please-undress = { $monster } says: "Please undress so I can examine you."
+# TODO: translate
+npc-nurse-take-off-shirt = { $monster } says: "Take off your shirt, please."
+# TODO: translate
+npc-nurse-relax = { $monster } says: "Relax, this won't hurt a bit."
+# TODO: translate
+npc-guard-drop-gold = { $monster } says: "Please drop that gold and follow me."
+# TODO: translate
+npc-guard-follow-me = { $monster } says: "Please follow me."
+# TODO: translate
+npc-soldier-pay = { $monster } says: "What lousy pay we're getting here!"
+# TODO: translate
+npc-soldier-food = { $monster } says: "The food's not fit for Orcs!"
+# TODO: translate
+npc-soldier-feet = { $monster } says: "My feet hurt, I've been on them all day!"
+# TODO: translate
+npc-soldier-resistance = { $monster } says: "Resistance is useless!"
+# TODO: translate
+npc-soldier-dog-meat = { $monster } says: "You're dog meat!"
+# TODO: translate
+npc-soldier-surrender = { $monster } says: "Surrender!"
 
 # TODO: translate
 worn-helm-brilliance-on = You feel brilliant!

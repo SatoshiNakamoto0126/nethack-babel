@@ -1964,6 +1964,10 @@ fn resolve_player_action(
                         aggravate_monsters_on_current_level(world, rng, events);
                         return;
                     }
+                    let player_equipment = world
+                        .get_component::<crate::equipment::EquipmentSlots>(player)
+                        .map(|slots| (*slots).clone())
+                        .unwrap_or_default();
                     let chat_state = crate::npc::MonsterChatState {
                         is_peaceful,
                         is_tame,
@@ -1978,6 +1982,16 @@ fn resolve_player_action(
                         hurt,
                         badly_hurt,
                         chat_roll: rng.random_range(0..4),
+                        player_has_gold: player_gold(world, player) > 0,
+                        player_armed: player_equipment.weapon.is_some(),
+                        player_armored: player_equipment.cloak.is_some()
+                            || player_equipment.body_armor.is_some()
+                            || player_equipment.helmet.is_some()
+                            || player_equipment.shield.is_some()
+                            || player_equipment.gloves.is_some()
+                            || player_equipment.boots.is_some(),
+                        player_has_shirt: player_equipment.shirt.is_some(),
+                        player_is_healer: matches!(current_player_role(world), Some(Role::Healer)),
                     };
                     if let Some(outcome) = crate::npc::contextual_monster_chat(
                         monster_def,
@@ -16811,6 +16825,111 @@ mod tests {
         assert!(events.iter().any(|event| {
             matches!(event, EngineEvent::Message { key, .. } if key == "npc-djinni-free")
         }));
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_guard_with_gold_demands_drop() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let guard_name = monster_name_with_sound(&world, MonsterSound::Guard);
+        let guard = spawn_full_monster(&mut world, Position::new(6, 5), &guard_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(guard, Peaceful)
+            .expect("guard should accept peaceful marker");
+        let _gold = spawn_inventory_gold(&mut world, 150, 'g');
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "npc-guard-drop-gold"
+        )));
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_nurse_mentions_weapon() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let nurse_name = monster_name_with_sound(&world, MonsterSound::Nurse);
+        let nurse = spawn_full_monster(&mut world, Position::new(6, 5), &nurse_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(nurse, Peaceful)
+            .expect("nurse should accept peaceful marker");
+        let player = world.player();
+        let weapon = spawn_inventory_object_by_name(&mut world, "long sword", 'w');
+        world
+            .get_component_mut::<crate::equipment::EquipmentSlots>(player)
+            .expect("player should have equipment slots")
+            .weapon = Some(weapon);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "npc-nurse-put-weapon-away"
+        )));
+    }
+
+    #[test]
+    fn test_chatting_with_hostile_soldier_uses_soldier_bark() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let soldier_name = monster_name_with_sound(&world, MonsterSound::Soldier);
+        spawn_full_monster(&mut world, Position::new(6, 5), &soldier_name, 10);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. }
+                if key == "npc-soldier-resistance"
+                    || key == "npc-soldier-dog-meat"
+                    || key == "npc-soldier-surrender"
+        )));
+    }
+
+    #[test]
+    fn test_chatting_with_seductress_uses_seduction_line() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let seducer_name = monster_name_with_sound(&world, MonsterSound::Seduce);
+        spawn_full_monster(&mut world, Position::new(6, 5), &seducer_name, 10);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. }
+                if key == "npc-seduce-hello-sailor"
+                    || key == "npc-seduce-comes-on"
+                    || key == "npc-seduce-cajoles"
+        )));
     }
 
     #[test]

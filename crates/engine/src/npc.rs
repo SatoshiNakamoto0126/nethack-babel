@@ -650,6 +650,11 @@ pub struct MonsterChatState {
     pub hurt: bool,
     pub badly_hurt: bool,
     pub chat_roll: u32,
+    pub player_has_gold: bool,
+    pub player_armed: bool,
+    pub player_armored: bool,
+    pub player_has_shirt: bool,
+    pub player_is_healer: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -787,6 +792,54 @@ pub fn contextual_monster_chat(
             }
         }
         MonsterSound::Spell => Some(chat_outcome("npc-spell-cantrip", monster_name)),
+        MonsterSound::Seduce => {
+            let key = match state.chat_roll % 3 {
+                2 => "npc-seduce-hello-sailor",
+                1 => "npc-seduce-comes-on",
+                _ => "npc-seduce-cajoles",
+            };
+            Some(chat_outcome(key, monster_name))
+        }
+        MonsterSound::Nurse => {
+            let key = if state.player_armed {
+                "npc-nurse-put-weapon-away"
+            } else if state.player_armored {
+                if state.player_is_healer {
+                    "npc-nurse-doc-cooperate"
+                } else {
+                    "npc-nurse-please-undress"
+                }
+            } else if state.player_has_shirt {
+                "npc-nurse-take-off-shirt"
+            } else {
+                "npc-nurse-relax"
+            };
+            Some(chat_outcome(key, monster_name))
+        }
+        MonsterSound::Guard => {
+            let key = if state.player_has_gold {
+                "npc-guard-drop-gold"
+            } else {
+                "npc-guard-follow-me"
+            };
+            Some(chat_outcome(key, monster_name))
+        }
+        MonsterSound::Soldier => {
+            let key = if state.is_peaceful {
+                match state.chat_roll % 3 {
+                    0 => "npc-soldier-pay",
+                    1 => "npc-soldier-food",
+                    _ => "npc-soldier-feet",
+                }
+            } else {
+                match state.chat_roll % 3 {
+                    0 => "npc-soldier-resistance",
+                    1 => "npc-soldier-dog-meat",
+                    _ => "npc-soldier-surrender",
+                }
+            };
+            Some(chat_outcome(key, monster_name))
+        }
         _ => None,
     }
 }
@@ -2599,6 +2652,80 @@ mod tests {
         .expect("peaceful djinni should speak");
         assert!(
             matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-djinni-free")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_nurse_mentions_weapon() {
+        let monster = fake_monster(MonsterSound::Nurse, "nurse", '@', MonsterFlags::HUMANOID);
+        let outcome = contextual_monster_chat(
+            &monster,
+            "nurse",
+            MonsterChatState {
+                is_peaceful: true,
+                player_armed: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("nurse should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-nurse-put-weapon-away")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_guard_demands_gold_drop() {
+        let monster = fake_monster(MonsterSound::Guard, "guard", '@', MonsterFlags::HUMAN);
+        let outcome = contextual_monster_chat(
+            &monster,
+            "guard",
+            MonsterChatState {
+                is_peaceful: true,
+                player_has_gold: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("guard should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-guard-drop-gold")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_hostile_soldier_demands_surrender() {
+        let monster = fake_monster(MonsterSound::Soldier, "soldier", '@', MonsterFlags::MERC);
+        let outcome = contextual_monster_chat(
+            &monster,
+            "soldier",
+            MonsterChatState {
+                chat_roll: 2,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("soldier should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-soldier-surrender")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_seductress_says_hello_sailor() {
+        let monster = fake_monster(MonsterSound::Seduce, "nymph", 'n', MonsterFlags::HUMANOID);
+        let outcome = contextual_monster_chat(
+            &monster,
+            "nymph",
+            MonsterChatState {
+                chat_roll: 2,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("seducers should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-seduce-hello-sailor")
         );
     }
 
