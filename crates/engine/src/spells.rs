@@ -723,8 +723,10 @@ fn apply_spell_effect(
             apply_detect_unseen(world, caster)
         }
         SpellType::Clairvoyance => {
-            // Reveal map in vicinity
-            vec![EngineEvent::msg("spell-clairvoyance")]
+            let mut events = crate::status::make_clairvoyant(world, caster, 250);
+            events.extend(crate::detect::clairvoyance(world, caster, 8));
+            events.push(EngineEvent::msg("spell-clairvoyance"));
+            events
         }
         SpellType::DetectTreasure => apply_detect_objects(world, caster, "spell-detect-treasure"),
         SpellType::MagicMapping => {
@@ -2595,6 +2597,45 @@ mod tests {
             )
         });
         assert!(has_status, "backfire should apply confusion or stun");
+    }
+
+    #[test]
+    fn test_clairvoyance_spell_reveals_map_and_applies_status() {
+        let (mut world, player, mut rng) = setup();
+        learn_spell(&mut world, player, SpellType::Clairvoyance);
+        set_power(&mut world, player, 500, 500);
+        set_intelligence(&mut world, player, 18);
+        set_xl(&mut world, player, 14);
+
+        let mut success_events = Vec::new();
+        for _ in 0..16 {
+            let events = cast_spell(&mut world, player, SpellId(0), None, &mut rng);
+            if events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::Message { key, .. } if key == "spell-clairvoyance"
+                )
+            }) {
+                success_events = events;
+                break;
+            }
+        }
+
+        assert!(success_events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "spell-clairvoyance"
+        )));
+        assert!(success_events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. }
+                if key == "clairvoyance-reveal" || key == "clairvoyance-nothing-new"
+        )));
+        assert!(
+            world
+                .get_component::<StatusEffects>(player)
+                .is_some_and(|status| status.clairvoyance > 0),
+            "clairvoyance should apply a timed status to the caster"
+        );
     }
 
     // ── test_multiple_spells_in_book ─────────────────────────────────
