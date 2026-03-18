@@ -3315,6 +3315,79 @@ worn-gauntlets-power-on = You feel stronger!
 worn-helm-brilliance-off = You feel ordinary.
 
 # TODO: translate
+npc-humanoid-threatens = { $monster } threatens you.
+# TODO: translate
+npc-humanoid-avoid = { $monster } wants nothing to do with you.
+# TODO: translate
+npc-humanoid-moans = { $monster } moans.
+# TODO: translate
+npc-humanoid-huh = { $monster } says: "Huh?"
+# TODO: translate
+npc-humanoid-what = { $monster } says: "What?"
+# TODO: translate
+npc-humanoid-eh = { $monster } says: "Eh?"
+# TODO: translate
+npc-humanoid-cant-see = { $monster } says: "I can't see!"
+# TODO: translate
+npc-humanoid-trapped = { $monster } says: "I'm trapped!"
+# TODO: translate
+npc-humanoid-healing = { $monster } asks for a potion of healing.
+# TODO: translate
+npc-humanoid-hungry = { $monster } says: "I'm hungry."
+# TODO: translate
+npc-humanoid-curses-orcs = { $monster } curses orcs.
+# TODO: translate
+npc-humanoid-mining = { $monster } talks about mining.
+# TODO: translate
+npc-humanoid-spellcraft = { $monster } talks about spellcraft.
+# TODO: translate
+npc-humanoid-hunting = { $monster } discusses hunting.
+# TODO: translate
+npc-humanoid-gnome = { $monster } says: "Many enter the dungeon, and few return to the sunlit lands."
+# TODO: translate
+npc-humanoid-one-ring = { $monster } asks you about the One Ring.
+# TODO: translate
+npc-humanoid-aloha = { $monster } says: "Aloha."
+# TODO: translate
+npc-humanoid-spelunker-today = { $monster } describes a recent article in "Spelunker Today" magazine.
+# TODO: translate
+npc-humanoid-dungeon-exploration = { $monster } discusses dungeon exploration.
+# TODO: translate
+npc-boast-gem-collection = { $monster } boasts about its gem collection.
+# TODO: translate
+npc-boast-mutton = { $monster } complains about a diet of mutton.
+# TODO: translate
+npc-boast-fee-fie-foe-foo = { $monster } shouts "Fee Fie Foe Foo!" and guffaws.
+# TODO: translate
+npc-arrest-facts-maam = { $monster } says: "Just the facts, Ma'am."
+# TODO: translate
+npc-arrest-facts-sir = { $monster } says: "Just the facts, Sir."
+# TODO: translate
+npc-arrest-anything-you-say = { $monster } says: "Anything you say can be used against you."
+# TODO: translate
+npc-arrest-under-arrest = { $monster } says: "You're under arrest!"
+# TODO: translate
+npc-arrest-stop-law = { $monster } says: "Stop in the name of the Law!"
+# TODO: translate
+npc-djinni-no-wishes = { $monster } says: "Sorry, I'm all out of wishes."
+# TODO: translate
+npc-djinni-free = { $monster } says: "I'm free!"
+# TODO: translate
+npc-djinni-get-me-out = { $monster } says: "Get me out of here."
+# TODO: translate
+npc-djinni-disturb = { $monster } says: "This will teach you not to disturb me!"
+# TODO: translate
+npc-cuss-curses = { $monster } curses.
+# TODO: translate
+npc-cuss-imprecates = { $monster } imprecates.
+# TODO: translate
+npc-cuss-not-too-late = { $monster } says: "It's not too late."
+# TODO: translate
+npc-cuss-doomed = { $monster } says: "We're all doomed."
+# TODO: translate
+npc-spell-cantrip = { $monster } seems to mutter a cantrip.
+
+# TODO: translate
 worn-helm-brilliance-on = You feel brilliant!
 
 # TODO: translate

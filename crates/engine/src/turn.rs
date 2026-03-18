@@ -1919,9 +1919,20 @@ fn resolve_player_action(
                         .get_component::<crate::pets::PetState>(monster_entity)
                         .is_some_and(|pet| pet.hungrytime > world.turn().saturating_add(1000));
                     let confused = crate::status::is_confused(world, monster_entity);
+                    let blinded = crate::status::is_blind(world, monster_entity);
                     let fleeing = world
                         .get_component::<crate::monster_ai::FleeTimer>(monster_entity)
                         .is_some_and(|timer| timer.0 > 0);
+                    let trapped = world
+                        .get_component::<crate::traps::Trapped>(monster_entity)
+                        .is_some();
+                    let (hurt, badly_hurt) = world
+                        .get_component::<HitPoints>(monster_entity)
+                        .map(|hp| {
+                            let max = hp.max.max(1);
+                            (hp.current < max / 2, hp.current < max / 4)
+                        })
+                        .unwrap_or((false, false));
                     let monster_name = world
                         .get_component::<Name>(monster_entity)
                         .map(|name| name.0.clone())
@@ -1953,19 +1964,46 @@ fn resolve_player_action(
                         aggravate_monsters_on_current_level(world, rng, events);
                         return;
                     }
+                    let chat_state = crate::npc::MonsterChatState {
+                        is_peaceful,
+                        is_tame,
+                        tameness,
+                        confused,
+                        fleeing,
+                        hungry,
+                        satiated,
+                        full_moon: crate::were::is_full_moon(world.turn()),
+                        blinded,
+                        trapped,
+                        hurt,
+                        badly_hurt,
+                        chat_roll: rng.random_range(0..4),
+                    };
+                    if let Some(outcome) = crate::npc::contextual_monster_chat(
+                        monster_def,
+                        &monster_name,
+                        chat_state,
+                        current_player_is_female(world, player),
+                    ) {
+                        events.push(outcome.event);
+                        if let Some(radius) = outcome.wake_radius
+                            && let Some(monster_pos) = world
+                                .get_component::<Positioned>(monster_entity)
+                                .map(|pos| pos.0)
+                        {
+                            wake_sleeping_monsters_near_position(
+                                world,
+                                monster_pos,
+                                radius,
+                                events,
+                            );
+                        }
+                        return;
+                    }
                     if let Some(sound_event) = crate::npc::voiced_monster_chat(
                         &monster_name,
                         monster_def.sound,
-                        crate::npc::MonsterChatState {
-                            is_peaceful,
-                            is_tame,
-                            tameness,
-                            confused,
-                            fleeing,
-                            hungry,
-                            satiated,
-                            full_moon: crate::were::is_full_moon(world.turn()),
-                        },
+                        chat_state,
                     ) {
                         events.push(sound_event);
                         if monster_def.sound == nethack_babel_data::schema::MonsterSound::Were
@@ -8052,6 +8090,7 @@ mod tests {
         WizardIntervention,
         WizardAmuletWake,
         WizardBlackGlowBlind,
+        HumanoidAlohaChat,
         WereFullMoonChat,
         WizardLevelTeleport,
         EndgameAscension,
@@ -8100,6 +8139,7 @@ mod tests {
                 StoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 StoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 StoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
+                StoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
                 StoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
                 StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
@@ -9756,6 +9796,24 @@ mod tests {
                     &mut events,
                 );
 
+                (world, events)
+            }
+            StoryTraversalScenario::HumanoidAlohaChat => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let tourist = spawn_full_monster(&mut world, Position::new(6, 5), "tourist", 10);
+                world
+                    .ecs_mut()
+                    .insert_one(tourist, Peaceful)
+                    .expect("tourist should accept peaceful marker");
+
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
+                );
                 (world, events)
             }
             StoryTraversalScenario::WereFullMoonChat => {
@@ -16661,6 +16719,101 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_hostile_humanoid_threatens() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let humanoid_name = monster_name_with_sound(&world, MonsterSound::Humanoid);
+        spawn_full_monster(&mut world, Position::new(6, 5), &humanoid_name, 10);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-humanoid-threatens")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_tourist_says_aloha() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let tourist = spawn_full_monster(&mut world, Position::new(6, 5), "tourist", 10);
+        world
+            .ecs_mut()
+            .insert_one(tourist, Peaceful)
+            .expect("tourist should accept peaceful marker");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-humanoid-aloha")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_watchman_uses_facts_line() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let arrest_name = monster_name_with_sound(&world, MonsterSound::Arrest);
+        let watchman = spawn_full_monster(&mut world, Position::new(6, 5), &arrest_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(watchman, Peaceful)
+            .expect("watchman should accept peaceful marker");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-arrest-facts-sir")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_djinni_is_free() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let djinni_name = monster_name_with_sound_excluding(
+            &world,
+            MonsterSound::Djinni,
+            &["water demon", "prisoner"],
+        );
+        let djinni = spawn_full_monster(&mut world, Position::new(6, 5), &djinni_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(djinni, Peaceful)
+            .expect("djinni should accept peaceful marker");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-djinni-free")
+        }));
+    }
+
+    #[test]
     fn test_chatting_with_hostile_raven_says_nevermore() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -20358,6 +20511,7 @@ mod tests {
             StoryTraversalScenario::WizardIntervention,
             StoryTraversalScenario::WizardAmuletWake,
             StoryTraversalScenario::WizardBlackGlowBlind,
+            StoryTraversalScenario::HumanoidAlohaChat,
             StoryTraversalScenario::WereFullMoonChat,
             StoryTraversalScenario::WizardLevelTeleport,
             StoryTraversalScenario::EndgameAscension,
@@ -21231,6 +21385,12 @@ mod tests {
                         "{} should still curse inventory despite suppressing the message",
                         scenario.label()
                     );
+                }
+                StoryTraversalScenario::HumanoidAlohaChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-humanoid-aloha"
+                    )));
                 }
                 StoryTraversalScenario::WereFullMoonChat => {
                     assert!(final_events.iter().any(|event| matches!(

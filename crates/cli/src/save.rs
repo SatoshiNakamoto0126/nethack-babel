@@ -1787,6 +1787,7 @@ mod tests {
         WizardIntervention,
         WizardAmuletWake,
         WizardBlackGlowBlind,
+        HumanoidAlohaChat,
         WereFullMoonChat,
         WizardLevelTeleport,
         EndgameAscension,
@@ -1837,6 +1838,7 @@ mod tests {
                 SaveStoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 SaveStoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 SaveStoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
+                SaveStoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
                 SaveStoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
                 SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
@@ -3550,6 +3552,26 @@ mod tests {
                         .get_component::<BucStatus>(sword)
                         .is_some_and(|status| status.cursed),
                     "deterministic black-glow harness should still curse the tracked item"
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::HumanoidAlohaChat => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let tourist = spawn_full_monster(&mut world, Position::new(6, 5), "tourist", 10);
+                world
+                    .ecs_mut()
+                    .insert_one(tourist, nethack_babel_engine::world::Peaceful)
+                    .expect("tourist should accept peaceful marker");
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-humanoid-aloha-chat", &world, [67u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
                 );
                 (loaded, events)
             }
@@ -6529,6 +6551,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardIntervention,
             SaveStoryTraversalScenario::WizardAmuletWake,
             SaveStoryTraversalScenario::WizardBlackGlowBlind,
+            SaveStoryTraversalScenario::HumanoidAlohaChat,
             SaveStoryTraversalScenario::WereFullMoonChat,
             SaveStoryTraversalScenario::WizardLevelTeleport,
             SaveStoryTraversalScenario::EndgameAscension,
@@ -7328,6 +7351,12 @@ mod tests {
                         !nethack_babel_engine::status::is_sleeping(&world, sleeper),
                         "full moon were chat should still wake nearby sleeping monsters after save/load"
                     );
+                }
+                SaveStoryTraversalScenario::HumanoidAlohaChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-humanoid-aloha"
+                    )));
                 }
                 SaveStoryTraversalScenario::WizardLevelTeleport => {
                     assert!(final_events.iter().any(|event| matches!(

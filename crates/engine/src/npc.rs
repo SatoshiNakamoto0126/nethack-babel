@@ -13,7 +13,10 @@ use hecs::Entity;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use nethack_babel_data::{Alignment, schema::MonsterSound};
+use nethack_babel_data::{
+    Alignment,
+    schema::{MonsterDef, MonsterSound},
+};
 
 use crate::action::Position;
 use crate::event::EngineEvent;
@@ -642,6 +645,150 @@ pub struct MonsterChatState {
     pub hungry: bool,
     pub satiated: bool,
     pub full_moon: bool,
+    pub blinded: bool,
+    pub trapped: bool,
+    pub hurt: bool,
+    pub badly_hurt: bool,
+    pub chat_roll: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct MonsterChatOutcome {
+    pub event: EngineEvent,
+    pub wake_radius: Option<i32>,
+}
+
+fn chat_outcome(key: &str, monster_name: &str) -> MonsterChatOutcome {
+    MonsterChatOutcome {
+        event: EngineEvent::msg_with(key, vec![("monster", monster_name.to_string())]),
+        wake_radius: None,
+    }
+}
+
+pub fn contextual_monster_chat(
+    monster_def: &MonsterDef,
+    monster_name: &str,
+    state: MonsterChatState,
+    player_is_female: bool,
+) -> Option<MonsterChatOutcome> {
+    match monster_def.sound {
+        MonsterSound::Humanoid => {
+            if !state.is_peaceful {
+                Some(chat_outcome("npc-humanoid-threatens", monster_name))
+            } else if state.fleeing {
+                Some(chat_outcome("npc-humanoid-avoid", monster_name))
+            } else if state.badly_hurt {
+                Some(chat_outcome("npc-humanoid-moans", monster_name))
+            } else if state.confused {
+                let key = match state.chat_roll % 3 {
+                    0 => "npc-humanoid-huh",
+                    1 => "npc-humanoid-what",
+                    _ => "npc-humanoid-eh",
+                };
+                Some(chat_outcome(key, monster_name))
+            } else if state.blinded {
+                Some(chat_outcome("npc-humanoid-cant-see", monster_name))
+            } else if state.trapped {
+                Some(chat_outcome("npc-humanoid-trapped", monster_name))
+            } else if state.hurt {
+                Some(chat_outcome("npc-humanoid-healing", monster_name))
+            } else if state.is_tame && state.hungry {
+                Some(chat_outcome("npc-humanoid-hungry", monster_name))
+            } else if crate::mondata::is_elf(monster_def) {
+                Some(chat_outcome("npc-humanoid-curses-orcs", monster_name))
+            } else if crate::mondata::is_dwarf(monster_def) {
+                Some(chat_outcome("npc-humanoid-mining", monster_name))
+            } else if crate::mondata::likes_magic(monster_def) {
+                Some(chat_outcome("npc-humanoid-spellcraft", monster_name))
+            } else if monster_def.symbol == 'C' {
+                Some(chat_outcome("npc-humanoid-hunting", monster_name))
+            } else if crate::mondata::is_gnome(monster_def) {
+                Some(chat_outcome("npc-humanoid-gnome", monster_name))
+            } else if monster_name.eq_ignore_ascii_case("hobbit") {
+                Some(chat_outcome("npc-humanoid-one-ring", monster_name))
+            } else if monster_name.eq_ignore_ascii_case("tourist") {
+                Some(chat_outcome("npc-humanoid-aloha", monster_name))
+            } else if monster_name.eq_ignore_ascii_case("archaeologist") {
+                Some(chat_outcome("npc-humanoid-spelunker-today", monster_name))
+            } else {
+                Some(chat_outcome(
+                    "npc-humanoid-dungeon-exploration",
+                    monster_name,
+                ))
+            }
+        }
+        MonsterSound::Boast => {
+            if state.is_peaceful {
+                contextual_monster_chat(
+                    &MonsterDef {
+                        sound: MonsterSound::Humanoid,
+                        ..monster_def.clone()
+                    },
+                    monster_name,
+                    state,
+                    player_is_female,
+                )
+            } else {
+                let mut outcome = match state.chat_roll % 4 {
+                    0 => chat_outcome("npc-boast-gem-collection", monster_name),
+                    1 => chat_outcome("npc-boast-mutton", monster_name),
+                    _ => chat_outcome("npc-boast-fee-fie-foe-foo", monster_name),
+                };
+                if matches!(state.chat_roll % 4, 2 | 3) {
+                    outcome.wake_radius = Some(7);
+                }
+                Some(outcome)
+            }
+        }
+        MonsterSound::Arrest => {
+            if state.is_peaceful {
+                let key = if player_is_female {
+                    "npc-arrest-facts-maam"
+                } else {
+                    "npc-arrest-facts-sir"
+                };
+                Some(chat_outcome(key, monster_name))
+            } else {
+                let key = match state.chat_roll % 3 {
+                    0 => "npc-arrest-anything-you-say",
+                    1 => "npc-arrest-under-arrest",
+                    _ => "npc-arrest-stop-law",
+                };
+                Some(chat_outcome(key, monster_name))
+            }
+        }
+        MonsterSound::Djinni => {
+            if state.is_tame {
+                Some(chat_outcome("npc-djinni-no-wishes", monster_name))
+            } else if state.is_peaceful {
+                if monster_name.eq_ignore_ascii_case("water demon") {
+                    Some(chat_outcome("npc-gurgle-gurgles", monster_name))
+                } else {
+                    Some(chat_outcome("npc-djinni-free", monster_name))
+                }
+            } else if monster_name.eq_ignore_ascii_case("prisoner") {
+                Some(chat_outcome("npc-djinni-get-me-out", monster_name))
+            } else {
+                Some(chat_outcome("npc-djinni-disturb", monster_name))
+            }
+        }
+        MonsterSound::Bribe | MonsterSound::Cuss => {
+            if !state.is_peaceful {
+                let key = match state.chat_roll % 3 {
+                    0 => "npc-cuss-curses",
+                    1 => "npc-cuss-imprecates",
+                    _ => "npc-cuss-doomed",
+                };
+                Some(chat_outcome(key, monster_name))
+            } else if crate::mondata::is_minion(monster_def) {
+                Some(chat_outcome("npc-cuss-not-too-late", monster_name))
+            } else {
+                Some(chat_outcome("npc-cuss-doomed", monster_name))
+            }
+        }
+        MonsterSound::Spell => Some(chat_outcome("npc-spell-cantrip", monster_name)),
+        _ => None,
+    }
 }
 
 pub fn voiced_monster_chat(
@@ -1243,6 +1390,10 @@ mod tests {
         ArmorClass, Attributes, ExperienceLevel, GameWorld, HitPoints, Monster, MovementPoints,
         NORMAL_SPEED, Name, Positioned, Speed,
     };
+    use arrayvec::ArrayVec;
+    use nethack_babel_data::schema::{
+        GenoFlags, MonsterDef, MonsterFlags, MonsterNames, MonsterSize, ResistanceSet,
+    };
     use nethack_babel_data::{ObjectClass, ObjectCore, ObjectTypeId};
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
@@ -1279,6 +1430,39 @@ mod tests {
             MovementPoints(NORMAL_SPEED as i32),
             Name(name.to_string()),
         ))
+    }
+
+    fn fake_monster(
+        sound: MonsterSound,
+        name: &str,
+        symbol: char,
+        flags: MonsterFlags,
+    ) -> MonsterDef {
+        MonsterDef {
+            id: nethack_babel_data::MonsterId(0),
+            names: MonsterNames {
+                male: name.to_string(),
+                female: None,
+            },
+            symbol,
+            color: nethack_babel_data::Color::White,
+            base_level: 1,
+            speed: 12,
+            armor_class: 10,
+            magic_resistance: 0,
+            alignment: 0,
+            difficulty: 1,
+            attacks: ArrayVec::new(),
+            geno_flags: GenoFlags::empty(),
+            frequency: 1,
+            corpse_weight: 10,
+            corpse_nutrition: 10,
+            sound,
+            size: MonsterSize::Medium,
+            resistances: ResistanceSet::empty(),
+            conveys: ResistanceSet::empty(),
+            flags,
+        }
     }
 
     // ── Priest tests ─────────────────────────────────────────────
@@ -2327,6 +2511,95 @@ mod tests {
         let evt = voiced_monster_chat("raven", MonsterSound::Sqawk, MonsterChatState::default())
             .expect("hostile raven should emit a chat line");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-squawk-nevermore"));
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_peaceful_tourist_says_aloha() {
+        let monster = fake_monster(MonsterSound::Humanoid, "tourist", '@', MonsterFlags::HUMAN);
+        let outcome = contextual_monster_chat(
+            &monster,
+            "tourist",
+            MonsterChatState {
+                is_peaceful: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("tourist should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-humanoid-aloha")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_hostile_humanoid_threatens() {
+        let monster = fake_monster(
+            MonsterSound::Humanoid,
+            "hobbit",
+            'h',
+            MonsterFlags::HUMANOID,
+        );
+        let outcome =
+            contextual_monster_chat(&monster, "hobbit", MonsterChatState::default(), false)
+                .expect("hostile humanoids should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-humanoid-threatens")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_hostile_giant_guffaw_wakes_nearby() {
+        let monster = fake_monster(MonsterSound::Boast, "giant", 'H', MonsterFlags::GIANT);
+        let outcome = contextual_monster_chat(
+            &monster,
+            "giant",
+            MonsterChatState {
+                chat_roll: 2,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("hostile giants should boast");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-boast-fee-fie-foe-foo")
+        );
+        assert_eq!(outcome.wake_radius, Some(7));
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_peaceful_watchman_uses_facts_line() {
+        let monster = fake_monster(MonsterSound::Arrest, "watchman", '@', MonsterFlags::HUMAN);
+        let outcome = contextual_monster_chat(
+            &monster,
+            "watchman",
+            MonsterChatState {
+                is_peaceful: true,
+                ..MonsterChatState::default()
+            },
+            true,
+        )
+        .expect("peaceful arrest monsters should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-arrest-facts-maam")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_peaceful_djinni_is_free() {
+        let monster = fake_monster(MonsterSound::Djinni, "djinni", '&', MonsterFlags::empty());
+        let outcome = contextual_monster_chat(
+            &monster,
+            "djinni",
+            MonsterChatState {
+                is_peaceful: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("peaceful djinni should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-djinni-free")
+        );
     }
 
     // ── Guard patrol tests ───────────────────────────────────────
