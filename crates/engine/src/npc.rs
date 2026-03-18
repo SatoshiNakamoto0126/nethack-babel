@@ -991,12 +991,23 @@ pub fn voiced_monster_chat(
                 "npc-neigh-whickers"
             }
         }
-        MonsterSound::Moo => "npc-moo-moos",
+        MonsterSound::Moo => {
+            if state.is_tame {
+                "npc-moo-moos"
+            } else {
+                "npc-bellow-bellows"
+            }
+        }
         MonsterSound::Wail => "npc-wail-wails",
         MonsterSound::Gurgle => "npc-gurgle-gurgles",
         MonsterSound::Burble => "npc-burble-burbles",
         MonsterSound::Trumpet => "npc-trumpet-trumpets",
-        MonsterSound::Groan => "npc-groan-groans",
+        MonsterSound::Groan => {
+            if !state.chat_roll.is_multiple_of(3) {
+                return None;
+            }
+            "npc-groan-groans"
+        }
         _ => return None,
     };
 
@@ -2604,6 +2615,56 @@ mod tests {
         )
         .expect("neighing monsters should emit a chat line");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-neigh-whinnies"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_tame_moo_stays_moo() {
+        let evt = voiced_monster_chat(
+            "rothe",
+            MonsterSound::Moo,
+            MonsterChatState {
+                is_tame: true,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("tame mooing monsters should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-moo-moos"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_hostile_moo_becomes_bellow() {
+        let evt = voiced_monster_chat("rothe", MonsterSound::Moo, MonsterChatState::default())
+            .expect("untamed mooing monsters should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-bellow-bellows"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_groan_can_fall_silent() {
+        assert!(
+            voiced_monster_chat(
+                "zombie",
+                MonsterSound::Groan,
+                MonsterChatState {
+                    chat_roll: 1,
+                    ..MonsterChatState::default()
+                },
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_groan_can_emit_message() {
+        let evt = voiced_monster_chat(
+            "zombie",
+            MonsterSound::Groan,
+            MonsterChatState {
+                chat_roll: 0,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("groaning monsters should sometimes emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-groan-groans"));
     }
 
     #[test]
