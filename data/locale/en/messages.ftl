@@ -1790,6 +1790,7 @@ npc-laugh-giggles = { $monster } giggles.
 npc-laugh-chuckles = { $monster } chuckles.
 npc-laugh-snickers = { $monster } snickers.
 npc-laugh-laughs = { $monster } laughs.
+npc-gecko-geico-pitch = { $monster } says: "Fifteen minutes could save you fifteen zorkmids."
 
 ## ============================================================================
 ## Content delivery (rumors, oracles)

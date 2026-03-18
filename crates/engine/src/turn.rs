@@ -1891,17 +1891,24 @@ fn resolve_player_action(
                 if !crate::status::is_deaf(world, player)
                     && let Some(monster_def) =
                         current_level_monster_def_for_entity(world, monster_entity)
-                    && monster_def.sound == nethack_babel_data::schema::MonsterSound::Laugh
                 {
                     let monster_name = world
                         .get_component::<Name>(monster_entity)
                         .map(|name| name.0.clone())
                         .unwrap_or_else(|| monster_def.names.male.clone());
+                    if crate::status::is_hallucinating(world, player)
+                        && monster_def.names.male == "gecko"
+                    {
+                        events.push(crate::npc::gecko_hallucination_pitch(&monster_name));
+                        return;
+                    }
+                    if monster_def.sound == nethack_babel_data::schema::MonsterSound::Laugh {
                     events.push(crate::npc::laughing_monster_chat(
                         &monster_name,
                         rng.random_range(0..4),
                     ));
                     return;
+                    }
                 }
 
                 events.push(EngineEvent::msg("npc-chat-no-response"));
@@ -16123,6 +16130,30 @@ mod tests {
             matches!(
                 event,
                 EngineEvent::Message { key, .. } if key.starts_with("npc-laugh-")
+            )
+        }));
+    }
+
+    #[test]
+    fn test_hallucinating_chatting_with_gecko_can_emit_fake_shop_pitch() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        spawn_full_monster(&mut world, Position::new(6, 5), "gecko", 8);
+        let _ = crate::status::make_hallucinated(&mut world, player, 200);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-gecko-geico-pitch"
             )
         }));
     }

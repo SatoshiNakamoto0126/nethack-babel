@@ -3387,6 +3387,9 @@ npc-laugh-snickers = { $monster } snickers.
 npc-laugh-laughs = { $monster } laughs.
 
 # TODO: translate
+npc-gecko-geico-pitch = { $monster } says: "Fifteen minutes could save you fifteen zorkmids."
+
+# TODO: translate
 god-roars-suffer = A booming voice roars: "Suffer for thy blasphemy!"
 
 # TODO: translate

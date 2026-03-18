@@ -502,6 +502,7 @@ npc-laugh-giggles = { $monster } giggles.
 npc-laugh-chuckles = { $monster } chuckles.
 npc-laugh-snickers = { $monster } snickers.
 npc-laugh-laughs = { $monster } laughs.
+npc-gecko-geico-pitch = { $monster } says: "Fifteen minutes could save you fifteen zorkmids."
 shop-enter-digging-tool = Une voix venue de la boutique vous avertit de laisser votre outil de creusement dehors.
 shop-enter-steed = Une voix venue de la boutique exige que vous laissiez { $steed } dehors.
 shop-enter-invisible = Une voix soupçonneuse avertit que les clients invisibles ne sont pas les bienvenus.

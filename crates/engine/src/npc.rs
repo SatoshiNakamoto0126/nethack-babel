@@ -607,6 +607,13 @@ pub fn laughing_monster_chat(monster_name: &str, roll: u32) -> EngineEvent {
     EngineEvent::msg_with(key, vec![("monster", monster_name.to_string())])
 }
 
+pub fn gecko_hallucination_pitch(monster_name: &str) -> EngineEvent {
+    EngineEvent::msg_with(
+        "npc-gecko-geico-pitch",
+        vec![("monster", monster_name.to_string())],
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Guard patrol
 // ---------------------------------------------------------------------------
@@ -2044,6 +2051,12 @@ mod tests {
     fn test_laughing_monster_chat_event() {
         let evt = laughing_monster_chat("gremlin", 2);
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-laugh-snickers"));
+    }
+
+    #[test]
+    fn test_gecko_hallucination_pitch_event() {
+        let evt = gecko_hallucination_pitch("gecko");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-gecko-geico-pitch"));
     }
 
     // ── Guard patrol tests ───────────────────────────────────────
