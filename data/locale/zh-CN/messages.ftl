@@ -3387,6 +3387,18 @@ npc-cuss-doomed = { $monster } says: "We're all doomed."
 # TODO: translate
 npc-spell-cantrip = { $monster } seems to mutter a cantrip.
 # TODO: translate
+npc-vampire-tame-craving = { $monster } says: "I can stand this craving no longer!"
+# TODO: translate
+npc-vampire-tame-weary = { $monster } says: "I find myself growing a little weary."
+# TODO: translate
+npc-vampire-peaceful = { $monster } says: "I only drink... potions."
+# TODO: translate
+npc-vampire-hostile-blood = { $monster } says: "I vant to suck your blood!"
+# TODO: translate
+npc-vampire-hostile-hunt = { $monster } says: "I vill come after you without regret!"
+# TODO: translate
+npc-imitate-imitates = { $monster } imitates you.
+# TODO: translate
 npc-seduce-hello-sailor = { $monster } says: "Hello, sailor."
 # TODO: translate
 npc-seduce-comes-on = { $monster } comes on to you.

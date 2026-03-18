@@ -6043,6 +6043,80 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_chatting_with_peaceful_vampire_mentions_potions() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let vampire_name = monster_name_with_sound(&world, MonsterSound::Vampire);
+        let vampire = spawn_full_monster(&mut world, Position::new(6, 5), &vampire_name, 8);
+        world
+            .ecs_mut()
+            .insert_one(vampire, Peaceful)
+            .expect("vampire should accept peaceful marker");
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("vampire-chat-round-trip", &world, [86u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-vampire-peaceful"
+            )
+        }));
+    }
+
+    #[test]
+    fn round_trip_loaded_chatting_with_trumpeting_monster_keeps_wake_effect() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let trumpet_name = monster_name_with_sound(&world, MonsterSound::Trumpet);
+        spawn_full_monster(&mut world, Position::new(6, 5), &trumpet_name, 8);
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+        let _ = nethack_babel_engine::status::make_sleeping(&mut world, sleeper, 20);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("trumpet-chat-round-trip", &world, [87u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-trumpet-trumpets"
+            )
+        }));
+        let woken = loaded
+            .ecs()
+            .query::<(
+                &nethack_babel_engine::world::Monster,
+                &nethack_babel_engine::world::Name,
+            )>()
+            .iter()
+            .find_map(|(entity, (_, name))| (name.0 == "kobold").then_some(entity))
+            .and_then(|entity| {
+                loaded.get_component::<nethack_babel_engine::status::StatusEffects>(entity)
+            })
+            .is_none_or(|status| status.sleeping == 0);
+        assert!(
+            woken,
+            "trumpet chat should still wake nearby sleeping monsters after load"
+        );
+    }
+
+    #[test]
     fn round_trip_loaded_chatting_with_satiated_tame_cat_keeps_purr_line() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         let mew_name = monster_name_with_sound(&world, MonsterSound::Mew);

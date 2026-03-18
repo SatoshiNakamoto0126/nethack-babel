@@ -840,6 +840,23 @@ pub fn contextual_monster_chat(
             };
             Some(chat_outcome(key, monster_name))
         }
+        MonsterSound::Vampire => {
+            let key = if state.is_tame {
+                if state.hungry {
+                    "npc-vampire-tame-craving"
+                } else {
+                    "npc-vampire-tame-weary"
+                }
+            } else if state.is_peaceful {
+                "npc-vampire-peaceful"
+            } else if state.chat_roll.is_multiple_of(2) {
+                "npc-vampire-hostile-blood"
+            } else {
+                "npc-vampire-hostile-hunt"
+            };
+            Some(chat_outcome(key, monster_name))
+        }
+        MonsterSound::Imitate => Some(chat_outcome("npc-imitate-imitates", monster_name)),
         _ => None,
     }
 }
@@ -2778,6 +2795,68 @@ mod tests {
         .expect("seducers should speak");
         assert!(
             matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-seduce-hello-sailor")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_peaceful_vampire_only_drinks_potions() {
+        let monster = fake_monster(
+            MonsterSound::Vampire,
+            "vampire",
+            'V',
+            MonsterFlags::HUMANOID,
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "vampire",
+            MonsterChatState {
+                is_peaceful: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("peaceful vampire should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-vampire-peaceful")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_hostile_vampire_threatens_blood() {
+        let monster = fake_monster(
+            MonsterSound::Vampire,
+            "vampire",
+            'V',
+            MonsterFlags::HUMANOID,
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "vampire",
+            MonsterChatState {
+                chat_roll: 0,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("hostile vampire should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-vampire-hostile-blood")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_imitator_imitates_you() {
+        let monster = fake_monster(
+            MonsterSound::Imitate,
+            "leocrotta",
+            'f',
+            MonsterFlags::empty(),
+        );
+        let outcome =
+            contextual_monster_chat(&monster, "leocrotta", MonsterChatState::default(), false)
+                .expect("imitators should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-imitate-imitates")
         );
     }
 

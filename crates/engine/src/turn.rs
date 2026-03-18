@@ -2020,13 +2020,23 @@ fn resolve_player_action(
                         chat_state,
                     ) {
                         events.push(sound_event);
-                        if monster_def.sound == nethack_babel_data::schema::MonsterSound::Were
-                            && crate::were::is_full_moon(world.turn())
-                            && let Some(monster_pos) = world
-                                .get_component::<Positioned>(monster_entity)
-                                .map(|pos| pos.0)
+                        if let Some(monster_pos) = world
+                            .get_component::<Positioned>(monster_entity)
+                            .map(|pos| pos.0)
                         {
-                            wake_sleeping_monsters_near_position(world, monster_pos, 11, events);
+                            let wakes_nearby = (monster_def.sound
+                                == nethack_babel_data::schema::MonsterSound::Were
+                                && crate::were::is_full_moon(world.turn()))
+                                || monster_def.sound
+                                    == nethack_babel_data::schema::MonsterSound::Trumpet;
+                            if wakes_nearby {
+                                wake_sleeping_monsters_near_position(
+                                    world,
+                                    monster_pos,
+                                    11,
+                                    events,
+                                );
+                            }
                         }
                         return;
                     }
@@ -17031,6 +17041,87 @@ mod tests {
                     || key == "npc-seduce-comes-on"
                     || key == "npc-seduce-cajoles"
         )));
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_vampire_mentions_potions() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let vampire_name = monster_name_with_sound(&world, MonsterSound::Vampire);
+        let vampire = spawn_full_monster(&mut world, Position::new(6, 5), &vampire_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(vampire, Peaceful)
+            .expect("vampire should accept peaceful marker");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-vampire-peaceful"
+            )
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_imitator_mimics_player() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let imitate_name = monster_name_with_sound(&world, MonsterSound::Imitate);
+        spawn_full_monster(&mut world, Position::new(6, 5), &imitate_name, 10);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-imitate-imitates"
+            )
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_trumpeting_monster_wakes_sleepers() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let trumpet_name = monster_name_with_sound(&world, MonsterSound::Trumpet);
+        spawn_full_monster(&mut world, Position::new(6, 5), &trumpet_name, 10);
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+        let _ = crate::status::make_sleeping(&mut world, sleeper, 20);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-trumpet-trumpets"
+            )
+        }));
+        assert!(
+            world
+                .get_component::<crate::status::StatusEffects>(sleeper)
+                .is_none_or(|status| status.sleeping == 0),
+            "trumpet chat should wake nearby sleeping monsters"
+        );
     }
 
     #[test]
