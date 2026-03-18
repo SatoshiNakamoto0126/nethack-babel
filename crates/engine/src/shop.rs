@@ -788,6 +788,12 @@ pub fn enter_shop(world: &GameWorld, player: Entity, shop: &ShopRoom) -> Vec<Eng
             ("shoptype", shop.shop_type.display_name().to_string()),
         ],
     ));
+    if world
+        .get_component::<crate::status::StatusEffects>(player)
+        .is_some_and(|status| status.invisibility > 0)
+    {
+        events.push(EngineEvent::msg("shop-enter-invisible"));
+    }
     if player_has_digging_tool(world, player) {
         events.push(EngineEvent::msg("shop-enter-digging-tool"));
     }

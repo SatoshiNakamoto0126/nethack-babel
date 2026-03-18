@@ -816,6 +816,7 @@ shop-price = "For you, { $item } only { $price } gold piece{ $price ->
 shop-stolen = You have unpaid merchandise!
 shop-enter-digging-tool = A voice from the shop warns you to leave your digging tool outside.
 shop-enter-steed = A voice from the shop insists that you leave { $steed } outside.
+shop-enter-invisible = A suspicious voice warns that invisible customers are not welcome.
 shop-leave-warning = { $shopkeeper } shouts "Please pay before leaving!"
 shop-damage = { $shopkeeper } says "You'll pay for the damage!"
 shop-repair = { $shopkeeper } repairs the damage.
@@ -1781,6 +1782,9 @@ shk-debit-reminder = { $shopkeeper } reminds you that you owe { $amount } gold.
 shk-credit-reminder = { $shopkeeper } encourages you to use your { $amount } gold of credit.
 shk-robbed-greeting = { $shopkeeper } says: "I still remember that robbery, { $honorific }."
 shk-surcharge-greeting = { $shopkeeper } says: "Prices are higher for you now, { $honorific }."
+shk-business-bad = { $shopkeeper } complains that business is bad.
+shk-business-good = { $shopkeeper } says that business is good.
+shk-shoplifters = { $shopkeeper } talks about the problem of shoplifters.
 
 ## ============================================================================
 ## Content delivery (rumors, oracles)

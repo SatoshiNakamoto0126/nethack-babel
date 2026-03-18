@@ -572,13 +572,20 @@ pub fn shopkeeper_chat(
                 ("honorific", honorific.to_string()),
             ],
         )
+    } else if shop.shopkeeper_gold < 50 {
+        EngineEvent::msg_with(
+            "shk-business-bad",
+            vec![("shopkeeper", shop.shopkeeper_name.clone())],
+        )
+    } else if shop.shopkeeper_gold > 4000 {
+        EngineEvent::msg_with(
+            "shk-business-good",
+            vec![("shopkeeper", shop.shopkeeper_name.clone())],
+        )
     } else {
         EngineEvent::msg_with(
-            "shk-welcome",
-            vec![
-                ("shopkeeper", shop.shopkeeper_name.clone()),
-                ("honorific", honorific.to_string()),
-            ],
+            "shk-shoplifters",
+            vec![("shopkeeper", shop.shopkeeper_name.clone())],
         )
     }
 }
@@ -883,7 +890,7 @@ pub fn maybe_wizard_taunt(
 }
 
 fn wizard_can_taunt_player(world: &GameWorld, wizard: Entity, player: Entity) -> bool {
-    if crate::status::is_deaf(world, player) || crate::status::is_blind(world, player) {
+    if crate::status::is_deaf(world, player) {
         return false;
     }
 
@@ -900,9 +907,8 @@ fn wizard_can_taunt_player(world: &GameWorld, wizard: Entity, player: Entity) ->
         return false;
     }
 
-    if world
-        .get_component::<crate::status::StatusEffects>(wizard)
-        .is_some_and(|status| status.invisibility > 0)
+    if let Some(status) = world.get_component::<crate::status::StatusEffects>(wizard)
+        && (status.invisibility > 0 || status.sleeping > 0 || status.paralysis > 0)
     {
         return false;
     }
@@ -1403,7 +1409,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wizard_taunt_suppressed_when_player_is_blind() {
+    fn test_wizard_taunt_still_reaches_blind_player() {
         let mut world = make_test_world();
         let player = world.player();
         let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 20);
@@ -1412,8 +1418,8 @@ mod tests {
         let mut rng = test_rng();
         let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng);
         assert!(
-            event.is_none(),
-            "blind players should not get wizard taunts"
+            event.is_some(),
+            "blind players should still hear wizard taunts"
         );
     }
 
@@ -1452,6 +1458,30 @@ mod tests {
             event.is_none(),
             "wizard taunts should stay within the original ranged-pressure distance"
         );
+    }
+
+    #[test]
+    fn test_wizard_taunt_suppressed_when_wizard_is_sleeping() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 20);
+        let _ = crate::status::make_sleeping(&mut world, wizard, 50);
+
+        let mut rng = test_rng();
+        let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng);
+        assert!(event.is_none(), "sleeping wizards should not taunt");
+    }
+
+    #[test]
+    fn test_wizard_taunt_suppressed_when_wizard_is_paralyzed() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 20);
+        let _ = crate::status::make_paralyzed(&mut world, wizard, 50);
+
+        let mut rng = test_rng();
+        let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng);
+        assert!(event.is_none(), "paralyzed wizards should not taunt");
     }
 
     // ── Stealing tests ───────────────────────────────────────────
@@ -1959,6 +1989,19 @@ mod tests {
         shop.credit = 25;
         let evt = shopkeeper_chat(&shop, false, "sir");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-credit-reminder"));
+
+        shop.credit = 0;
+        shop.shopkeeper_gold = 25;
+        let evt = shopkeeper_chat(&shop, false, "sir");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-business-bad"));
+
+        shop.shopkeeper_gold = 4500;
+        let evt = shopkeeper_chat(&shop, false, "sir");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-business-good"));
+
+        shop.shopkeeper_gold = 500;
+        let evt = shopkeeper_chat(&shop, false, "sir");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-shoplifters"));
     }
 
     // ── Guard patrol tests ───────────────────────────────────────

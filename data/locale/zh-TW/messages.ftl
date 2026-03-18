@@ -795,6 +795,7 @@ shop-price = 「給你，{ $item }只要{ $price }枚金幣。」
 shop-stolen = 你有未付款的商品！
 shop-enter-digging-tool = 店裡傳來警告，要你把挖掘工具留在外面。
 shop-enter-steed = 店裡傳來聲音，堅持要你把{ $steed }留在外面。
+shop-enter-invisible = 店裡傳來懷疑的聲音：隱形顧客不受歡迎。
 shop-leave-warning = { $shopkeeper }喊道：「請先付款再離開！」
 shop-damage = { $shopkeeper }說「你得賠償損失！」
 shop-repair = { $shopkeeper }開始修理店裡的損壞。
@@ -3324,6 +3325,15 @@ shk-robbed-greeting = { $shopkeeper } says: "I still remember that robbery, { $h
 
 # TODO: translate
 shk-surcharge-greeting = { $shopkeeper } says: "Prices are higher for you now, { $honorific }."
+
+# TODO: translate
+shk-business-bad = { $shopkeeper } complains that business is bad.
+
+# TODO: translate
+shk-business-good = { $shopkeeper } says that business is good.
+
+# TODO: translate
+shk-shoplifters = { $shopkeeper } talks about the problem of shoplifters.
 
 # TODO: translate
 god-roars-suffer = A booming voice roars: "Suffer for thy blasphemy!"

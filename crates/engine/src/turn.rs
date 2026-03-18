@@ -847,12 +847,26 @@ fn ambient_branch_name(branch: DungeonBranch) -> &'static str {
 }
 
 fn current_level_has_temple_ambient(world: &GameWorld) -> bool {
+    let Some(player_pos) = world
+        .get_component::<Positioned>(world.player())
+        .map(|pos| pos.0)
+    else {
+        return false;
+    };
     world
         .ecs()
         .query::<(&Monster, &crate::npc::Priest)>()
         .iter()
         .any(|(entity, (_, priest))| {
-            live_monster_entity(world, entity) && priest.has_shrine && !priest.is_high_priest
+            live_monster_entity(world, entity)
+                && priest.has_shrine
+                && !priest.is_high_priest
+                && world
+                    .get_component::<crate::status::StatusEffects>(entity)
+                    .is_none_or(|status| status.sleeping == 0 && status.paralysis == 0)
+                && world
+                    .get_component::<Positioned>(entity)
+                    .is_some_and(|pos| crate::ball::chebyshev_distance(player_pos, pos.0) > 3)
         })
 }
 
@@ -5326,6 +5340,24 @@ fn find_player_named_item(
         })
 }
 
+fn player_has_worn_or_wielded_named_item(
+    world: &GameWorld,
+    player: hecs::Entity,
+    expected_name: &str,
+) -> bool {
+    world
+        .get_component::<crate::equipment::EquipmentSlots>(player)
+        .is_some_and(|slots| {
+            [slots.weapon, slots.amulet]
+                .into_iter()
+                .flatten()
+                .any(|item| {
+                    item_display_name(world, item)
+                        .is_some_and(|name| quest_name_matches(&name, expected_name))
+                })
+        })
+}
+
 fn player_carries_item(world: &GameWorld, player: hecs::Entity, item: hecs::Entity) -> bool {
     world
         .get_component::<crate::inventory::Inventory>(player)
@@ -5372,11 +5404,17 @@ fn wizard_of_yendor_entities(world: &GameWorld) -> Vec<hecs::Entity> {
         .query::<(&Monster, &Name)>()
         .iter()
         .filter_map(|(entity, (_monster, name))| {
-            name.0
-                .eq_ignore_ascii_case("Wizard of Yendor")
+            (live_monster_entity(world, entity) && name.0.eq_ignore_ascii_case("Wizard of Yendor"))
                 .then_some(entity)
         })
         .collect()
+}
+
+fn wizard_ready_for_harassment(world: &GameWorld, wizard: hecs::Entity) -> bool {
+    live_monster_entity(world, wizard)
+        && world
+            .get_component::<crate::status::StatusEffects>(wizard)
+            .is_none_or(|status| status.sleeping == 0 && status.paralysis == 0)
 }
 
 fn sync_wizard_of_yendor_from_events(
@@ -5464,6 +5502,14 @@ fn process_wizard_of_yendor_turn(
         return;
     }
 
+    let Some(active_wizard) = live_wizards
+        .iter()
+        .copied()
+        .find(|wizard| wizard_ready_for_harassment(world, *wizard))
+    else {
+        return;
+    };
+
     let harassment_period = if player_has_amulet {
         4
     } else if player_events.invoked || player_events.killed_wizard {
@@ -5473,23 +5519,21 @@ fn process_wizard_of_yendor_turn(
     };
     if rng.random_range(0..harassment_period) != 0 {
         if rng.random_range(0..3) == 0
-            && let Some(taunt) = crate::npc::maybe_wizard_taunt(
-                world,
-                live_wizards[0],
-                player,
-                player_has_amulet,
-                rng,
-            )
+            && let Some(taunt) =
+                crate::npc::maybe_wizard_taunt(world, active_wizard, player, player_has_amulet, rng)
         {
             events.push(taunt);
-            if let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) {
-                wake_sleeping_monsters_near_position(world, player_pos, 5, events);
+            if let Some(wizard_pos) = world
+                .get_component::<Positioned>(active_wizard)
+                .map(|pos| pos.0)
+            {
+                wake_sleeping_monsters_near_position(world, wizard_pos, 5, events);
             }
         }
         return;
     }
 
-    let wizard = live_wizards[0];
+    let wizard = active_wizard;
     seed_wizard_runtime_state(world, wizard);
     if should_wizard_level_teleport_player(world, player_has_amulet, rng)
         && apply_wizard_level_teleport(world, rng, events)
@@ -5867,7 +5911,9 @@ fn process_amulet_portal_sense(
     events: &mut Vec<EngineEvent>,
 ) {
     let player = world.player();
-    if !player_has_named_item(world, player, "Amulet of Yendor") || rng.random_range(0..15) != 0 {
+    if !player_has_worn_or_wielded_named_item(world, player, "Amulet of Yendor")
+        || rng.random_range(0..15) != 0
+    {
         return;
     }
 
@@ -13710,6 +13756,39 @@ mod tests {
     }
 
     #[test]
+    fn test_sleeping_wizard_does_not_emit_live_taunts_or_harassment() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let _ = crate::status::make_sleeping(&mut world, wizard, 500);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+            hp.current = 4;
+            hp.max = 20;
+        }
+        let mut player_events = read_player_events(&world, player);
+        player_events.invoked = true;
+        persist_player_events(&mut world, player, player_events);
+
+        let mut rng = test_rng();
+        for _ in 0..64 {
+            let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+            assert!(
+                !events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. }
+                        if key.starts_with("wizard-taunt-")
+                            || key == "wizard-steal-amulet"
+                            || key == "wizard-double-trouble"
+                            || key == "wizard-summon-nasties"
+                            || key == "wizard-curse-items"
+                )),
+                "sleeping wizards should not drive live harassment"
+            );
+        }
+    }
+
+    #[test]
     fn test_live_wizard_taunt_wakes_nearby_sleepers() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -14046,7 +14125,11 @@ mod tests {
     fn test_amulet_portal_sense_emits_heat_message_near_magic_portal() {
         let mut world = make_portal_world(DungeonBranch::Gehennom, 21, Position::new(7, 5));
         install_test_catalogs(&mut world);
-        let _amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        world
+            .get_component_mut::<crate::equipment::EquipmentSlots>(world.player())
+            .expect("player should have equipment slots")
+            .amulet = Some(amulet);
         set_player_position(&mut world, Position::new(6, 5));
         let mut rng = test_rng();
 
@@ -14064,6 +14147,30 @@ mod tests {
         }
 
         panic!("expected deterministic amulet portal sense to emit a heat message");
+    }
+
+    #[test]
+    fn test_amulet_portal_sense_requires_worn_or_wielded_amulet() {
+        let mut world = make_portal_world(DungeonBranch::Gehennom, 21, Position::new(7, 5));
+        install_test_catalogs(&mut world);
+        let _amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        set_player_position(&mut world, Position::new(6, 5));
+        let mut rng = test_rng();
+
+        for _ in 0..64 {
+            let mut events = Vec::new();
+            process_amulet_portal_sense(&world, &mut rng, &mut events);
+            assert!(
+                !events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. }
+                        if key == "amulet-feels-hot"
+                            || key == "amulet-feels-very-warm"
+                            || key == "amulet-feels-warm"
+                )),
+                "amulet portal sense should not trigger for a merely carried amulet"
+            );
+        }
     }
 
     #[test]
@@ -15362,6 +15469,7 @@ mod tests {
                 shopkeeper,
                 "Izchak".to_string(),
             ));
+        world.dungeon_mut().shop_rooms[0].shopkeeper_gold = 500;
 
         let mut rng = test_rng();
         let greet_events = resolve_turn(
@@ -15373,7 +15481,7 @@ mod tests {
         );
         assert!(greet_events.iter().any(|event| matches!(
             event,
-            EngineEvent::Message { key, .. } if key == "shk-welcome"
+            EngineEvent::Message { key, .. } if key == "shk-shoplifters"
         )));
 
         let _ = resolve_turn(
@@ -15822,6 +15930,59 @@ mod tests {
         assert!(events.iter().any(|event| matches!(
             event,
             EngineEvent::Message { key, .. } if key == "shop-enter-digging-tool"
+        )));
+    }
+
+    #[test]
+    fn test_entering_shop_while_invisible_emits_presence_warning() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let mut status = world
+            .get_component::<crate::status::StatusEffects>(player)
+            .map(|status| (*status).clone())
+            .unwrap_or_default();
+        status.invisibility = 50;
+        if world
+            .get_component::<crate::status::StatusEffects>(player)
+            .is_some()
+        {
+            *world
+                .get_component_mut::<crate::status::StatusEffects>(player)
+                .expect("player should have status effects") = status;
+        } else {
+            world
+                .ecs_mut()
+                .insert_one(player, status)
+                .expect("player should accept status effects");
+        }
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-enter-invisible"
         )));
     }
 
@@ -16644,6 +16805,7 @@ mod tests {
                 },
             )
             .expect("priest should accept explicit runtime state");
+        set_player_position(&mut world, Position::new(2, 2));
 
         let mut rng = test_rng();
         let mut found = false;
@@ -16665,6 +16827,38 @@ mod tests {
             found,
             "temple levels should eventually emit live ambient temple texture"
         );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_suppressed_near_temple_priest() {
+        let mut world = make_test_world();
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: Alignment::Lawful,
+                    has_shrine: true,
+                    is_high_priest: false,
+                    angry: false,
+                },
+            )
+            .expect("priest should accept explicit runtime state");
+        set_player_position(&mut world, Position::new(5, 5));
+
+        let mut rng = test_rng();
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            assert!(
+                !events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-temple-")
+                )),
+                "temple ambient should not fire while the player is already at the shrine"
+            );
+        }
     }
 
     #[test]
