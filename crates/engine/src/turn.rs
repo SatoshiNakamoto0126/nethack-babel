@@ -834,6 +834,8 @@ fn emit_ambient_dungeon_sound(
         has_shop,
         has_temple,
         has_oracle,
+        has_swamp: current_level_has_swamp_ambient(world),
+        has_barracks: current_level_has_barracks_ambient(world),
         has_fountain: current_level_has_terrain(world, Terrain::Fountain),
         has_sink: current_level_has_terrain(world, Terrain::Sink),
         hallucinating: crate::status::is_hallucinating(world, player),
@@ -888,6 +890,49 @@ fn current_level_has_oracle_ambient(world: &GameWorld) -> bool {
         == Some(crate::special_levels::SpecialLevelId::OracleLevel)
 }
 
+fn current_level_has_swamp_ambient(world: &GameWorld) -> bool {
+    let has_swamp_lair_monster = world
+        .ecs()
+        .query::<(&Monster, &Name)>()
+        .iter()
+        .any(|(entity, (_, name))| {
+            if !live_monster_entity(world, entity) {
+                return false;
+            }
+            let lower = name.0.to_ascii_lowercase();
+            lower.contains("eel") || lower.contains("fungus") || lower.contains("mold")
+        });
+    has_swamp_lair_monster && current_level_terrain_count(world, Terrain::Pool) >= 12
+}
+
+fn current_level_has_barracks_ambient(world: &GameWorld) -> bool {
+    let mut sleeping_mercenaries = 0usize;
+    let mut mercenary_count = 0usize;
+
+    for (entity, (_, name)) in world.ecs().query::<(&Monster, &Name)>().iter() {
+        if !live_monster_entity(world, entity) {
+            continue;
+        }
+        let lower = name.0.to_ascii_lowercase();
+        let is_mercenary = lower.contains("soldier")
+            || lower.contains("sergeant")
+            || lower.contains("lieutenant")
+            || lower.contains("captain");
+        if !is_mercenary {
+            continue;
+        }
+        mercenary_count += 1;
+        if world
+            .get_component::<crate::status::StatusEffects>(entity)
+            .is_some_and(|status| status.sleeping > 0)
+        {
+            sleeping_mercenaries += 1;
+        }
+    }
+
+    sleeping_mercenaries > 0 || mercenary_count > 5
+}
+
 fn current_level_has_terrain(world: &GameWorld, terrain: Terrain) -> bool {
     world
         .dungeon()
@@ -896,6 +941,17 @@ fn current_level_has_terrain(world: &GameWorld, terrain: Terrain) -> bool {
         .iter()
         .flatten()
         .any(|cell| cell.terrain == terrain)
+}
+
+fn current_level_terrain_count(world: &GameWorld, terrain: Terrain) -> usize {
+    world
+        .dungeon()
+        .current_level
+        .cells
+        .iter()
+        .flatten()
+        .filter(|cell| cell.terrain == terrain)
+        .count()
 }
 
 fn current_level_vault_ambient_kind(world: &GameWorld) -> Option<crate::music::VaultAmbientKind> {
@@ -17250,6 +17306,104 @@ mod tests {
         assert!(
             found,
             "hallucinating levels with a sink should eventually emit sink ambience"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_swamp_texture() {
+        let mut world = make_test_world();
+        for y in 5..9 {
+            for x in 5..11 {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(x, y), Terrain::Pool);
+            }
+        }
+        world.spawn((
+            Monster,
+            Positioned(Position::new(7, 7)),
+            Name("giant eel".to_string()),
+            HitPoints { current: 8, max: 8 },
+            Speed(12),
+            MovementPoints(0),
+            DisplaySymbol {
+                symbol: ';',
+                color: nethack_babel_data::Color::Green,
+            },
+        ));
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-swamp-")
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "levels with swamp terrain and swamp fauna should eventually emit swamp ambience"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_barracks_texture() {
+        let mut world = make_test_world();
+        for idx in 0..6 {
+            let soldier = spawn_full_monster(&mut world, Position::new(5 + idx, 5), "soldier", 12);
+            if let Some(mut symbol) = world.get_component_mut::<DisplaySymbol>(soldier) {
+                symbol.symbol = '@';
+            }
+            if idx == 0 {
+                if let Some(mut status) =
+                    world.get_component_mut::<crate::status::StatusEffects>(soldier)
+                {
+                    status.sleeping = 20;
+                } else {
+                    world
+                        .ecs_mut()
+                        .insert_one(
+                            soldier,
+                            crate::status::StatusEffects {
+                                sleeping: 20,
+                                ..Default::default()
+                            },
+                        )
+                        .expect("soldier should accept sleeping status");
+                }
+            }
+        }
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-barracks-")
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "levels with sleeping mercenaries should eventually emit barracks ambience"
         );
     }
 

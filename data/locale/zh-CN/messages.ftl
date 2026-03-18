@@ -3378,6 +3378,20 @@ ambient-oracle-ravings = You hear convulsive ravings.
 # TODO: translate
 ambient-oracle-snakes = You hear snoring snakes.
 # TODO: translate
+ambient-barracks-honed = You hear blades being honed.
+# TODO: translate
+ambient-barracks-snoring = You hear loud snoring.
+# TODO: translate
+ambient-barracks-dice = You hear dice being thrown.
+# TODO: translate
+ambient-barracks-macarthur = You hear General MacArthur!
+# TODO: translate
+ambient-swamp-mosquitoes = You hear mosquitoes!
+# TODO: translate
+ambient-swamp-marsh-gas = You smell marsh gas!
+# TODO: translate
+ambient-swamp-donald-duck = You hear Donald Duck!
+# TODO: translate
 ambient-fountain-bubbling = You hear bubbling water.
 # TODO: translate
 ambient-fountain-coins = You hear water falling on coins.

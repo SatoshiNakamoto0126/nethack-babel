@@ -1510,6 +1510,35 @@ mod tests {
         ))
     }
 
+    fn spawn_monster_with_symbol(
+        world: &mut GameWorld,
+        pos: Position,
+        name: &str,
+        hp: i32,
+        symbol: char,
+        sleeping: u32,
+    ) -> hecs::Entity {
+        let entity = spawn_full_monster(world, pos, name, hp);
+        if let Some(mut display) =
+            world.get_component_mut::<nethack_babel_engine::world::DisplaySymbol>(entity)
+        {
+            display.symbol = symbol;
+        }
+        if sleeping > 0 {
+            world
+                .ecs_mut()
+                .insert_one(
+                    entity,
+                    nethack_babel_engine::status::StatusEffects {
+                        sleeping,
+                        ..Default::default()
+                    },
+                )
+                .expect("monster should accept sleeping status");
+        }
+        entity
+    }
+
     fn adjacent_walkable_step(map: &LevelMap, target: Position) -> Option<(Position, Direction)> {
         for direction in [
             Direction::North,
@@ -5322,6 +5351,76 @@ mod tests {
         }
 
         panic!("fountain ambience should survive save/load round-trip");
+    }
+
+    #[test]
+    fn round_trip_loaded_swamp_ambient_preserves_runtime_conditions() {
+        let mut world = make_stair_world(DungeonBranch::Main, 18, Terrain::Floor);
+        for y in 5..9 {
+            for x in 5..11 {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(x, y), Terrain::Pool);
+            }
+        }
+        spawn_monster_with_symbol(&mut world, Position::new(7, 7), "giant eel", 12, ';', 0);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("swamp-ambient-round-trip", &world, [68u8; 32]);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-swamp-")
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("swamp ambience should survive save/load round-trip");
+    }
+
+    #[test]
+    fn round_trip_loaded_barracks_ambient_preserves_runtime_conditions() {
+        let mut world = make_stair_world(DungeonBranch::Main, 18, Terrain::Floor);
+        for idx in 0..6 {
+            let sleeping = if idx == 0 { 20 } else { 0 };
+            spawn_monster_with_symbol(
+                &mut world,
+                Position::new(5 + idx, 5),
+                "soldier",
+                12,
+                '@',
+                sleeping,
+            );
+        }
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("barracks-ambient-round-trip", &world, [69u8; 32]);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-barracks-")
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("barracks ambience should survive save/load round-trip");
     }
 
     #[test]

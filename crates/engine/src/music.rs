@@ -518,6 +518,8 @@ pub struct AmbientSoundContext<'a> {
     pub has_shop: bool,
     pub has_temple: bool,
     pub has_oracle: bool,
+    pub has_swamp: bool,
+    pub has_barracks: bool,
     pub has_fountain: bool,
     pub has_sink: bool,
     pub hallucinating: bool,
@@ -532,6 +534,8 @@ impl<'a> AmbientSoundContext<'a> {
             has_shop: false,
             has_temple: false,
             has_oracle: false,
+            has_swamp: false,
+            has_barracks: false,
             has_fountain: false,
             has_sink: false,
             hallucinating: false,
@@ -583,6 +587,22 @@ pub fn ambient_sounds(ctx: AmbientSoundContext<'_>, rng: &mut impl Rng) -> Optio
                     0 => "ambient-oracle-wind",
                     1 => "ambient-oracle-ravings",
                     _ => "ambient-oracle-snakes",
+                })
+            } else if ctx.has_barracks {
+                Some(match (ctx.hallucinating, rng.random_range(0..3u32)) {
+                    (false, 0) => "ambient-barracks-honed",
+                    (false, 1) => "ambient-barracks-snoring",
+                    (false, _) => "ambient-barracks-dice",
+                    (true, 0) => "ambient-barracks-snoring",
+                    (true, 1) => "ambient-barracks-dice",
+                    (true, _) => "ambient-barracks-macarthur",
+                })
+            } else if ctx.has_swamp {
+                Some(match (ctx.hallucinating, rng.random_range(0..2u32)) {
+                    (false, 0) => "ambient-swamp-mosquitoes",
+                    (false, _) => "ambient-swamp-marsh-gas",
+                    (true, 0) => "ambient-swamp-marsh-gas",
+                    (true, _) => "ambient-swamp-donald-duck",
                 })
             } else if ctx.has_fountain {
                 Some(match (ctx.hallucinating, rng.random_range(0..3u32)) {
@@ -1316,6 +1336,59 @@ mod tests {
             found,
             "should eventually get a hallucinating sink ambient sound"
         );
+    }
+
+    #[test]
+    fn ambient_sounds_swamp() {
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    has_swamp: true,
+                    ..AmbientSoundContext::new(18, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert!(
+                    matches!(msg, "ambient-swamp-mosquitoes" | "ambient-swamp-marsh-gas"),
+                    "swamp sound should be thematic: {}",
+                    msg
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "should eventually get a swamp ambient sound");
+    }
+
+    #[test]
+    fn ambient_sounds_barracks() {
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    has_barracks: true,
+                    ..AmbientSoundContext::new(18, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert!(
+                    matches!(
+                        msg,
+                        "ambient-barracks-honed"
+                            | "ambient-barracks-snoring"
+                            | "ambient-barracks-dice"
+                    ),
+                    "barracks sound should be thematic: {}",
+                    msg
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "should eventually get a barracks ambient sound");
     }
 
     // -----------------------------------------------------------------------
