@@ -2751,6 +2751,8 @@ ambient-oracle-zot = You hear a loud ZOT!
 # TODO: translate
 ambient-vault-scrooge = You hear Ebenezer Scrooge!
 # TODO: translate
+ambient-vault-quarterback = You hear the quarterback calling the play.
+# TODO: translate
 ambient-shop-neiman-marcus = You hear Neiman and Marcus arguing!
 # TODO: translate
 spell-polymorph-miss = You miss { $target }.

@@ -566,4 +566,5 @@ ambient-zoo-dolittle = You hear Doctor Dolittle!
 ambient-oracle-woodchucks = You hear someone say, "No more woodchucks!"
 ambient-oracle-zot = You hear a loud ZOT!
 ambient-vault-scrooge = You hear Ebenezer Scrooge!
+ambient-vault-quarterback = You hear the quarterback calling the play.
 ambient-shop-neiman-marcus = You hear Neiman and Marcus arguing!

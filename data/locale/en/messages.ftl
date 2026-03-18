@@ -2770,6 +2770,7 @@ ambient-vault-counting = You hear someone counting money.
 ambient-vault-searching = You hear someone searching.
 ambient-vault-footsteps = You hear the footsteps of a guard on patrol.
 ambient-vault-scrooge = You hear Ebenezer Scrooge!
+ambient-vault-quarterback = You hear the quarterback calling the play.
 ambient-shop-neiman-marcus = You hear Neiman and Marcus arguing!
 ambient-deep-crunching = You hear a crunching sound.
 ambient-deep-hollow = You hear a hollow sound.

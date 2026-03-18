@@ -5363,6 +5363,44 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_hallucinating_gold_vault_can_emit_quarterback() {
+        let mut world = make_stair_world(DungeonBranch::Main, 5, Terrain::Floor);
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(nethack_babel_engine::vault::VaultRoom {
+                top_left: Position::new(6, 5),
+                bottom_right: Position::new(7, 6),
+            });
+        spawn_floor_coin(&mut world, Position::new(6, 5));
+        if let Some(mut status) =
+            world.get_component_mut::<nethack_babel_engine::status::StatusEffects>(world.player())
+        {
+            status.hallucination = 20;
+        }
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("vault-quarterback-round-trip", &world, [75u8; 32]);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "ambient-vault-quarterback"
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("hallucinating gold-vault ambience should survive save/load round-trip");
+    }
+
+    #[test]
     fn round_trip_loaded_fountain_ambient_preserves_runtime_conditions() {
         let mut world = make_stair_world(DungeonBranch::Main, 5, Terrain::Floor);
         world

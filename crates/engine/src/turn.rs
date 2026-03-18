@@ -19,6 +19,7 @@ use crate::dungeon::{
     CachedLevelRuntimeState, CachedMonster, DungeonBranch, Terrain, branch_max_depth,
 };
 use crate::event::{DeathCause, EngineEvent, HpSource, HungerLevel};
+use crate::fov::FovMap;
 use crate::makemon::{GoodPosFlags, MakeMonFlags, enexto, goodpos, makemon};
 use crate::map_gen::generate_level;
 use crate::mkobj::mksobj_at;
@@ -890,8 +891,41 @@ fn current_level_has_temple_ambient(world: &GameWorld) -> bool {
 }
 
 fn current_level_has_oracle_ambient(world: &GameWorld) -> bool {
-    identify_special_level(world.dungeon().branch, world.dungeon().depth)
-        == Some(crate::special_levels::SpecialLevelId::OracleLevel)
+    let special_level = world
+        .dungeon()
+        .check_topology_special(&world.dungeon().branch, world.dungeon().depth)
+        .or_else(|| identify_special_level(world.dungeon().branch, world.dungeon().depth));
+    if special_level != Some(crate::special_levels::SpecialLevelId::OracleLevel)
+    {
+        return false;
+    }
+
+    let player = world.player();
+    if crate::status::is_hallucinating(world, player) || crate::status::is_blind(world, player) {
+        return world
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .any(|(entity, (_, name))| live_monster_entity(world, entity) && name.0 == "Oracle");
+    }
+
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return false;
+    };
+    let map = &world.dungeon().current_level;
+    let mut fov = FovMap::new(map.width, map.height);
+    fov.compute(player_pos, 8, |x, y| {
+        map.get(Position::new(x, y))
+            .is_none_or(|cell| cell.terrain.is_opaque())
+    });
+
+    world
+        .ecs()
+        .query::<(&Monster, &Name, &Positioned)>()
+        .iter()
+        .any(|(entity, (_, name, pos))| {
+            live_monster_entity(world, entity) && name.0 == "Oracle" && !fov.is_visible_pos(pos.0)
+        })
 }
 
 fn current_level_monster_def_by_name<'a>(world: &'a GameWorld, name: &str) -> Option<&'a MonsterDef> {
@@ -7631,6 +7665,15 @@ mod tests {
             }
         }
         world
+    }
+
+    fn oracle_depth_for_world(world: &GameWorld) -> i32 {
+        (1..=29)
+            .find(|depth| {
+                world.dungeon().check_topology_special(&DungeonBranch::Main, *depth)
+                    == Some(crate::special_levels::SpecialLevelId::OracleLevel)
+            })
+            .expect("test dungeon topology should place the Oracle somewhere in Main")
     }
 
     fn spawn_inventory_item(world: &mut GameWorld, letter: char) -> hecs::Entity {
@@ -17405,6 +17448,105 @@ mod tests {
         assert!(
             found,
             "hallucinating vault levels should eventually emit the Scrooge texture"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_hallucinating_gold_vault_can_emit_quarterback() {
+        let mut world = make_test_world();
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(crate::vault::VaultRoom {
+                top_left: Position::new(6, 5),
+                bottom_right: Position::new(7, 6),
+            });
+        spawn_floor_coin(&mut world, Position::new(6, 5));
+        let player = world.player();
+        crate::status::make_hallucinated(&mut world, player, 20);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..4096 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "ambient-vault-quarterback"
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "hallucinating gold vault levels should eventually emit the quarterback texture"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_visible_oracle_suppresses_oracle_texture() {
+        let mut world = make_stair_world(Terrain::Floor, 1);
+        world.dungeon_mut().branch = DungeonBranch::Main;
+        world.dungeon_mut().depth = oracle_depth_for_world(&world);
+        let oracle = spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        world
+            .ecs_mut()
+            .insert_one(oracle, Name("Oracle".to_string()))
+            .expect("oracle should accept canonical name");
+        set_player_position(&mut world, Position::new(5, 5));
+
+        let mut rng = test_rng();
+        for _ in 0..4096 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            assert!(
+                !events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-oracle-")
+                )),
+                "visible Oracle should suppress oracle ambience"
+            );
+        }
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_hallucinating_visible_oracle_keeps_oracle_texture() {
+        let mut world = make_stair_world(Terrain::Floor, 1);
+        world.dungeon_mut().branch = DungeonBranch::Main;
+        world.dungeon_mut().depth = oracle_depth_for_world(&world);
+        let oracle = spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        world
+            .ecs_mut()
+            .insert_one(oracle, Name("Oracle".to_string()))
+            .expect("oracle should accept canonical name");
+        let player = world.player();
+        crate::status::make_hallucinated(&mut world, player, 20);
+        set_player_position(&mut world, Position::new(5, 5));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..4096 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-oracle-")
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "hallucinating players should still hear Oracle ambience even when the Oracle is visible"
         );
     }
 
