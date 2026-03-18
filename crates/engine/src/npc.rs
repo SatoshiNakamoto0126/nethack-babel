@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use nethack_babel_data::{
     Alignment,
-    schema::{MonsterDef, MonsterSound},
+    schema::{MonsterDef, MonsterFlags, MonsterSound},
 };
 
 use crate::action::Position;
@@ -779,10 +779,24 @@ pub fn contextual_monster_chat(
         }
         MonsterSound::Bribe | MonsterSound::Cuss => {
             if !state.is_peaceful {
-                let key = match state.chat_roll % 3 {
-                    0 => "npc-cuss-curses",
-                    1 => "npc-cuss-imprecates",
-                    _ => "npc-cuss-doomed",
+                let key = if monster_def.flags.contains(MonsterFlags::MINION)
+                    && monster_def.alignment > 0
+                {
+                    ANGEL_CUSS_KEYS[(state.chat_roll as usize) % ANGEL_CUSS_KEYS.len()]
+                } else if monster_def.flags.contains(MonsterFlags::DEMON)
+                    || monster_def.flags.contains(MonsterFlags::MINION)
+                {
+                    if state.chat_roll.is_multiple_of(5) {
+                        "npc-cuss-ancestry"
+                    } else {
+                        DEMON_CUSS_KEYS[(state.chat_roll as usize) % DEMON_CUSS_KEYS.len()]
+                    }
+                } else {
+                    match state.chat_roll % 3 {
+                        0 => "npc-cuss-curses",
+                        1 => "npc-cuss-imprecates",
+                        _ => "npc-cuss-doomed",
+                    }
                 };
                 Some(chat_outcome(key, monster_name))
             } else if crate::mondata::is_minion(monster_def) {
@@ -1163,6 +1177,23 @@ const WIZARD_MALEDICTIONS: &[&str] = &[
     "There shall be no mercy",
     "Thou art doomed",
     "Thy fate is sealed",
+];
+
+const ANGEL_CUSS_KEYS: &[&str] = &[
+    "npc-cuss-angel-repent",
+    "npc-cuss-angel-insolence",
+    "npc-cuss-angel-maker",
+    "npc-cuss-angel-wrath",
+    "npc-cuss-angel-not-worthy",
+];
+
+const DEMON_CUSS_KEYS: &[&str] = &[
+    "npc-cuss-demon-slime",
+    "npc-cuss-demon-clumsy",
+    "npc-cuss-demon-laughter",
+    "npc-cuss-demon-amulet",
+    "npc-cuss-demon-comedian",
+    "npc-cuss-demon-odor",
 ];
 
 /// Convert a Wizard harassment action into user-facing message events.

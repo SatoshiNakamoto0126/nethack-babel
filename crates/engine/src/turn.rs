@@ -8081,6 +8081,18 @@ mod tests {
             .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
     }
 
+    fn monster_name_and_id_matching(
+        world: &GameWorld,
+        predicate: impl Fn(&nethack_babel_data::schema::MonsterDef) -> bool,
+    ) -> (String, nethack_babel_data::MonsterId) {
+        world
+            .monster_catalog()
+            .iter()
+            .find(|def| predicate(def))
+            .map(|def| (def.names.male.clone(), def.id))
+            .unwrap_or_else(|| panic!("test catalog should contain a monster matching predicate"))
+    }
+
     fn make_tame_pet_state(
         world: &mut GameWorld,
         monster: hecs::Entity,
@@ -16961,6 +16973,66 @@ mod tests {
         assert!(events.iter().any(|event| {
             matches!(event, EngineEvent::Message { key, .. } if key == "npc-djinni-free")
         }));
+    }
+
+    #[test]
+    fn test_chatting_with_hostile_angel_uses_angelic_cuss_texture() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let (angel_name, angel_id) = monster_name_and_id_matching(&world, |def| {
+            def.sound == MonsterSound::Cuss
+                && def.flags.contains(MonsterFlags::MINION)
+                && def.alignment > 0
+        });
+        let angel = spawn_full_monster(&mut world, Position::new(6, 5), &angel_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(angel, crate::world::MonsterIdentity(angel_id))
+            .expect("angel should accept explicit monster identity");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. }
+                if key.starts_with("npc-cuss-angel-")
+        )));
+    }
+
+    #[test]
+    fn test_chatting_with_hostile_demon_uses_demonic_cuss_texture() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let (demon_name, demon_id) = monster_name_and_id_matching(&world, |def| {
+            matches!(def.sound, MonsterSound::Bribe | MonsterSound::Cuss)
+                && def.flags.contains(MonsterFlags::DEMON)
+                && def.alignment < 0
+        });
+        let demon = spawn_full_monster(&mut world, Position::new(6, 5), &demon_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(demon, crate::world::MonsterIdentity(demon_id))
+            .expect("demon should accept explicit monster identity");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. }
+                if key.starts_with("npc-cuss-demon-") || key == "npc-cuss-ancestry"
+        )));
     }
 
     #[test]

@@ -3385,6 +3385,30 @@ npc-cuss-not-too-late = { $monster } says: "It's not too late."
 # TODO: translate
 npc-cuss-doomed = { $monster } says: "We're all doomed."
 # TODO: translate
+npc-cuss-ancestry = { $monster } casts aspersions on your ancestry.
+# TODO: translate
+npc-cuss-angel-repent = { $monster } says: "Repent, and thou shalt be saved!"
+# TODO: translate
+npc-cuss-angel-insolence = { $monster } says: "Thou shalt pay for thine insolence!"
+# TODO: translate
+npc-cuss-angel-maker = { $monster } says: "Very soon, my child, thou shalt meet thy maker."
+# TODO: translate
+npc-cuss-angel-wrath = { $monster } says: "The wrath of heaven is now upon you!"
+# TODO: translate
+npc-cuss-angel-not-worthy = { $monster } says: "Thou art not worthy to seek the Amulet."
+# TODO: translate
+npc-cuss-demon-slime = { $monster } says: "Eat slime and die!"
+# TODO: translate
+npc-cuss-demon-clumsy = { $monster } says: "Hast thou been drinking, or art thou always so clumsy?"
+# TODO: translate
+npc-cuss-demon-laughter = { $monster } says: "Mercy! Dost thou wish me to die of laughter?"
+# TODO: translate
+npc-cuss-demon-amulet = { $monster } says: "Why search for the Amulet? Thou wouldst but lose it, cretin."
+# TODO: translate
+npc-cuss-demon-comedian = { $monster } says: "Thou ought to be a comedian, thy skills are so laughable!"
+# TODO: translate
+npc-cuss-demon-odor = { $monster } says: "Hast thou considered masking thine odour?"
+# TODO: translate
 npc-spell-cantrip = { $monster } seems to mutter a cantrip.
 # TODO: translate
 npc-vampire-tame-craving = { $monster } says: "I can stand this craving no longer!"
