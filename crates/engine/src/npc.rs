@@ -860,7 +860,11 @@ pub fn voiced_monster_chat(
             {
                 return None;
             } else if state.is_tame
-                && (state.confused || state.fleeing || tame_level < 5 || state.hungry)
+                && (state.confused
+                    || state.fleeing
+                    || state.trapped
+                    || tame_level < 5
+                    || state.hungry)
             {
                 "npc-bark-whines"
             } else if state.is_tame && state.satiated {
@@ -884,7 +888,7 @@ pub fn voiced_monster_chat(
         }
         MonsterSound::Mew => {
             if state.is_tame {
-                if state.confused || state.fleeing || tame_level < 5 {
+                if state.confused || state.fleeing || state.trapped || tame_level < 5 {
                     "npc-mew-yowls"
                 } else if state.hungry {
                     "npc-mew-meows"
@@ -2522,6 +2526,54 @@ mod tests {
         )
         .expect("satiated tame cats should emit a chat line");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-mew-purrs"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_tame_cat_yowls_when_trapped() {
+        let evt = voiced_monster_chat(
+            "kitten",
+            MonsterSound::Mew,
+            MonsterChatState {
+                is_tame: true,
+                tameness: Some(10),
+                trapped: true,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("trapped tame cats should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-mew-yowls"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_tame_barker_whines_when_trapped() {
+        let evt = voiced_monster_chat(
+            "little dog",
+            MonsterSound::Bark,
+            MonsterChatState {
+                is_tame: true,
+                tameness: Some(10),
+                trapped: true,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("trapped tame barkers should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-bark-whines"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_peaceful_dingo_stays_silent() {
+        let evt = voiced_monster_chat(
+            "dingo",
+            MonsterSound::Bark,
+            MonsterChatState {
+                is_peaceful: true,
+                ..MonsterChatState::default()
+            },
+        );
+        assert!(
+            evt.is_none(),
+            "peaceful dingoes should not emit a bark line"
+        );
     }
 
     #[test]

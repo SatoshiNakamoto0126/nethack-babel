@@ -58,6 +58,8 @@ pub struct CachedMonster {
     #[serde(default)]
     pub quest_npc_role: Option<crate::quest::QuestNpcRole>,
     #[serde(default)]
+    pub trapped: Option<crate::traps::Trapped>,
+    #[serde(default)]
     pub status_effects: crate::status::StatusEffects,
 }
 
@@ -1217,6 +1219,7 @@ mod tests {
             priest: None,
             shopkeeper: None,
             quest_npc_role: None,
+            trapped: None,
             status_effects: crate::status::StatusEffects::default(),
         }];
         ds.cache_current_level(monsters);

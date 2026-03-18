@@ -3372,6 +3372,9 @@ fn respawn_cached_monsters(world: &mut GameWorld, cached_mons: &[CachedMonster])
         if let Some(role) = cm.quest_npc_role {
             let _ = world.ecs_mut().insert_one(entity, role);
         }
+        if let Some(trapped) = cm.trapped {
+            let _ = world.ecs_mut().insert_one(entity, trapped);
+        }
     }
 }
 
@@ -3646,6 +3649,9 @@ pub(crate) fn change_level_to_branch(
             quest_npc_role: world
                 .get_component::<crate::quest::QuestNpcRole>(entity)
                 .map(|role| *role),
+            trapped: world
+                .get_component::<crate::traps::Trapped>(entity)
+                .map(|trapped| *trapped),
             status_effects: world
                 .get_component::<crate::status::StatusEffects>(entity)
                 .map(|status| (*status).clone())
@@ -3810,6 +3816,9 @@ fn change_level(
             quest_npc_role: world
                 .get_component::<crate::quest::QuestNpcRole>(entity)
                 .map(|role| *role),
+            trapped: world
+                .get_component::<crate::traps::Trapped>(entity)
+                .map(|trapped| *trapped),
             status_effects: world
                 .get_component::<crate::status::StatusEffects>(entity)
                 .map(|status| (*status).clone())
@@ -14257,6 +14266,7 @@ mod tests {
                 priest: None,
                 shopkeeper: None,
                 quest_npc_role: None,
+                trapped: None,
                 status_effects: crate::status::StatusEffects {
                     blindness: 9,
                     sleeping: 12,
@@ -14337,6 +14347,7 @@ mod tests {
                 priest: None,
                 shopkeeper: None,
                 quest_npc_role: None,
+                trapped: None,
                 status_effects: crate::status::StatusEffects {
                     blindness: 5,
                     sleeping: 10,
@@ -16610,6 +16621,64 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_trapped_tame_barker_whines() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        advance_world_turns(&mut world, 20);
+        let bark_name = monster_name_with_sound_excluding(&world, MonsterSound::Bark, &["dingo"]);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &bark_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(
+                monster,
+                crate::traps::Trapped {
+                    kind: crate::traps::TrappedIn::BearTrap,
+                    turns_remaining: 5,
+                },
+            )
+            .expect("barker should accept trapped state");
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, monster, 10, current_turn.saturating_add(100));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-bark-whines")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_dingo_gets_no_response() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        advance_world_turns(&mut world, 20);
+        let dingo = spawn_full_monster(&mut world, Position::new(6, 5), "dingo", 10);
+        world
+            .ecs_mut()
+            .insert_one(dingo, Peaceful)
+            .expect("dingo should accept peaceful marker");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "npc-chat-no-response"
+        )));
+    }
+
+    #[test]
     fn test_chatting_with_full_moon_wolf_howls() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -16706,6 +16775,38 @@ mod tests {
 
         assert!(events.iter().any(|event| {
             matches!(event, EngineEvent::Message { key, .. } if key == "npc-mew-purrs")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_trapped_tame_cat_yowls() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let mew_name = monster_name_with_sound(&world, MonsterSound::Mew);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &mew_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(
+                monster,
+                crate::traps::Trapped {
+                    kind: crate::traps::TrappedIn::BearTrap,
+                    turns_remaining: 5,
+                },
+            )
+            .expect("cat should accept trapped state");
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, monster, 10, current_turn.saturating_add(100));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-mew-yowls")
         }));
     }
 

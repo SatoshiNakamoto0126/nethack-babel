@@ -206,6 +206,8 @@ pub struct SerializableMonster {
     #[serde(default)]
     pub pet_state: Option<PetState>,
     #[serde(default)]
+    pub trapped: Option<nethack_babel_engine::traps::Trapped>,
+    #[serde(default)]
     pub status_effects: StatusEffects,
 }
 
@@ -575,6 +577,9 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
         let pet_state = world
             .get_component::<PetState>(entity)
             .map(|pet_state| (*pet_state).clone());
+        let trapped = world
+            .get_component::<nethack_babel_engine::traps::Trapped>(entity)
+            .map(|trapped| *trapped);
         let status_effects = world
             .get_component::<StatusEffects>(entity)
             .map(|status| (*status).clone())
@@ -595,6 +600,7 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             shopkeeper,
             quest_npc_role,
             pet_state,
+            trapped,
             status_effects,
         });
     }
@@ -830,6 +836,9 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
         }
         if let Some(pet_state) = &m.pet_state {
             let _ = world.ecs_mut().insert_one(entity, pet_state.clone());
+        }
+        if let Some(trapped) = m.trapped {
+            let _ = world.ecs_mut().insert_one(entity, trapped);
         }
         let _ = world.ecs_mut().insert_one(entity, m.status_effects.clone());
     }
@@ -6055,6 +6064,70 @@ mod tests {
 
         assert!(events.iter().any(|event| {
             matches!(event, EngineEvent::Message { key, .. } if key == "npc-mew-purrs")
+        }));
+    }
+
+    #[test]
+    fn round_trip_loaded_chatting_with_trapped_tame_cat_keeps_yowl_line() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let mew_name = monster_name_with_sound(&world, MonsterSound::Mew);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &mew_name, 8);
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, monster, 10, current_turn.saturating_add(1500));
+        world
+            .ecs_mut()
+            .insert_one(
+                monster,
+                nethack_babel_engine::traps::Trapped {
+                    kind: nethack_babel_engine::traps::TrappedIn::BearTrap,
+                    turns_remaining: 5,
+                },
+            )
+            .expect("cat should accept trapped state");
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("mew-trapped-chat-round-trip", &world, [84u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-mew-yowls")
+        }));
+    }
+
+    #[test]
+    fn round_trip_loaded_chatting_with_peaceful_dingo_stays_silent() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        while nethack_babel_engine::were::is_full_moon(world.turn()) {
+            world.advance_turn();
+        }
+        let dingo = spawn_full_monster(&mut world, Position::new(6, 5), "dingo", 8);
+        world
+            .ecs_mut()
+            .insert_one(dingo, nethack_babel_engine::world::Peaceful)
+            .expect("dingo should accept peaceful marker");
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("dingo-chat-round-trip", &world, [85u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-chat-no-response")
         }));
     }
 
