@@ -1248,12 +1248,12 @@ pub fn trigger_trap_at<R: Rng>(
 
 /// After a landmine explodes, convert it to a pit trap at the same position.
 pub fn convert_landmine_to_pit(trap_map: &mut TrapMap, pos: Position) {
-    if let Some(trap) = trap_map.trap_at_mut(pos) {
-        if trap.trap_type == TrapType::Landmine {
-            trap.trap_type = TrapType::Pit;
-            trap.detected = true;
-            trap.triggered_count = 0;
-        }
+    if let Some(trap) = trap_map.trap_at_mut(pos)
+        && trap.trap_type == TrapType::Landmine
+    {
+        trap.trap_type = TrapType::Pit;
+        trap.detected = true;
+        trap.triggered_count = 0;
     }
 }
 

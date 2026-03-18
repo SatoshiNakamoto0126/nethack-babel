@@ -433,14 +433,14 @@ pub fn apply_wish_restrictions(result: &mut WishResult) -> Vec<WishRestriction> 
     let mut restrictions = Vec::new();
 
     // Clamp enchantment.
-    if let Some(ench) = result.enchantment {
-        if ench > MAX_WISH_ENCHANTMENT {
-            restrictions.push(WishRestriction::EnchantmentClamped {
-                requested: ench,
-                granted: MAX_WISH_ENCHANTMENT,
-            });
-            result.enchantment = Some(MAX_WISH_ENCHANTMENT);
-        }
+    if let Some(ench) = result.enchantment
+        && ench > MAX_WISH_ENCHANTMENT
+    {
+        restrictions.push(WishRestriction::EnchantmentClamped {
+            requested: ench,
+            granted: MAX_WISH_ENCHANTMENT,
+        });
+        result.enchantment = Some(MAX_WISH_ENCHANTMENT);
     }
 
     // Clamp quantity for non-stackable items (simplified: max 1 for

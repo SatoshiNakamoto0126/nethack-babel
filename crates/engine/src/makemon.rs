@@ -418,11 +418,9 @@ pub fn m_initweap(
             }
         }
         // S_ANGEL ('A') — angels get blessed weapons.
-        'A' => {
-            if monster_def.flags.contains(MonsterFlags::HUMANOID) {
-                give_weapon_item(world, carrier_id, ObjectTypeId(10), 40); // long sword
-                give_armor_item(world, carrier_id, ObjectTypeId(60), 100); // shield
-            }
+        'A' if monster_def.flags.contains(MonsterFlags::HUMANOID) => {
+            give_weapon_item(world, carrier_id, ObjectTypeId(10), 40); // long sword
+            give_armor_item(world, carrier_id, ObjectTypeId(60), 100); // shield
         }
         // S_ORC and S_HUMANOID dwarves ('h') — dwarves get axes.
         'h' => {
@@ -468,16 +466,12 @@ pub fn m_initinv(
             }
         }
         // S_NYMPH ('n') — nymphs may get a mirror.
-        'n' => {
-            if rng.random_range(0..2u32) == 0 {
-                give_tool_item(world, carrier_id, ObjectTypeId(110), 13); // mirror
-            }
+        'n' if rng.random_range(0..2u32) == 0 => {
+            give_tool_item(world, carrier_id, ObjectTypeId(110), 13); // mirror
         }
         // S_ORC ('o') — orcs get orcish helm.
-        'o' => {
-            if rng.random_range(0..2u32) == 0 {
-                give_armor_item(world, carrier_id, ObjectTypeId(54), 30); // orcish helm
-            }
+        'o' if rng.random_range(0..2u32) == 0 => {
+            give_armor_item(world, carrier_id, ObjectTypeId(54), 30); // orcish helm
         }
         // S_GIANT ('H') — giants get gems.
         'H' => {
@@ -519,12 +513,14 @@ pub fn monster_starting_inventory(
                 items.push((ObjectClass::Food, ObjectTypeId(100), 10));
             }
         }
+        'o' if rng.random_range(0..2u32) == 0 => {
+            // Orcs.
+            items.push((ObjectClass::Weapon, ObjectTypeId(2), 15)); // orcish dagger
+            items.push((ObjectClass::Armor, ObjectTypeId(54), 30)); // orcish helm
+        }
         'o' => {
             // Orcs.
             items.push((ObjectClass::Weapon, ObjectTypeId(2), 15)); // orcish dagger
-            if rng.random_range(0..2u32) == 0 {
-                items.push((ObjectClass::Armor, ObjectTypeId(54), 30)); // orcish helm
-            }
         }
         'k' => {
             // Kobolds.
@@ -535,11 +531,9 @@ pub fn monster_starting_inventory(
             items.push((ObjectClass::Weapon, ObjectTypeId(10), 40)); // long sword
             items.push((ObjectClass::Armor, ObjectTypeId(60), 100)); // shield
         }
-        'H' => {
+        'H' if rng.random_range(0..2u32) == 0 => {
             // Giants.
-            if rng.random_range(0..2u32) == 0 {
-                items.push((ObjectClass::Weapon, ObjectTypeId(30), 400)); // boulder
-            }
+            items.push((ObjectClass::Weapon, ObjectTypeId(30), 400)); // boulder
         }
         _ => {}
     }

@@ -1828,16 +1828,16 @@ fn apply_jumping(
     let dest = caster_pos.step(dir).step(dir);
 
     let map = &world.dungeon().current_level;
-    if let Some(cell) = map.get(dest) {
-        if cell.terrain.is_walkable() {
-            events.push(EngineEvent::EntityMoved {
-                entity: caster,
-                from: caster_pos,
-                to: dest,
-            });
-            events.push(EngineEvent::msg("spell-jumping"));
-            return events;
-        }
+    if let Some(cell) = map.get(dest)
+        && cell.terrain.is_walkable()
+    {
+        events.push(EngineEvent::EntityMoved {
+            entity: caster,
+            from: caster_pos,
+            to: dest,
+        });
+        events.push(EngineEvent::msg("spell-jumping"));
+        return events;
     }
 
     events.push(EngineEvent::msg("spell-jumping-blocked"));

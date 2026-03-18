@@ -1386,20 +1386,19 @@ pub fn throw_potion<R: Rng>(
                     source: Some(thrower),
                 });
             }
-            PotionType::Sickness => {
+            PotionType::Sickness if !has_poison_resistance(world, *target) => {
                 // Sickness halves HP (like C do_illness).
-                if !has_poison_resistance(world, *target) {
-                    let hp_current = world
-                        .get_component::<HitPoints>(*target)
-                        .map(|hp| hp.current);
-                    if let Some(cur) = hp_current {
-                        if cur > 2 {
-                            let dmg = cur - cur / 2;
-                            events.extend(apply_damage(world, *target, dmg));
-                        }
-                    }
+                let hp_current = world
+                    .get_component::<HitPoints>(*target)
+                    .map(|hp| hp.current);
+                if let Some(cur) = hp_current
+                    && cur > 2
+                {
+                    let dmg = cur - cur / 2;
+                    events.extend(apply_damage(world, *target, dmg));
                 }
             }
+            PotionType::Sickness => {}
             PotionType::Booze => {
                 // Booze causes confusion when thrown at monster (like C).
                 let duration = d(rng, 3, 8);
@@ -1415,10 +1414,10 @@ pub fn throw_potion<R: Rng>(
                 let heal_amount = world
                     .get_component::<HitPoints>(*target)
                     .map(|hp| (hp.max - hp.current).max(0));
-                if let Some(heal) = heal_amount {
-                    if heal > 0 {
-                        events.extend(apply_healing(world, *target, heal));
-                    }
+                if let Some(heal) = heal_amount
+                    && heal > 0
+                {
+                    events.extend(apply_healing(world, *target, heal));
                 }
             }
             PotionType::Water

@@ -142,57 +142,63 @@ pub enum DonationEffect {
     Cleansed,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct DonationEffectContext {
+    pub offer: i32,
+    pub player_gold_after: i32,
+    pub player_level: u8,
+    pub alignment_record: i32,
+    pub coaligned: bool,
+    pub current_protection: i32,
+    pub has_protection_intrinsic: bool,
+    pub turns_since_cleansed: u32,
+}
+
 /// Determine the effect of a donation to a temple priest.
 ///
 /// Mirrors the donation tiers in C's `priest_talk()`.
-pub fn donation_effect(
-    offer: i32,
-    player_gold_after: i32,
-    player_level: u8,
-    alignment_record: i32,
-    coaligned: bool,
-    current_protection: i32,
-    has_protection_intrinsic: bool,
-    turns_since_cleansed: u32,
-    rng: &mut impl Rng,
-) -> DonationEffect {
-    if offer <= 0 {
+pub fn donation_effect(context: DonationEffectContext, rng: &mut impl Rng) -> DonationEffect {
+    if context.offer <= 0 {
         return DonationEffect::RegretWarning;
     }
 
-    let threshold = player_level as i32 * 200;
+    let threshold = context.player_level as i32 * 200;
 
-    if offer < threshold {
+    if context.offer < threshold {
         // Small donation tier.
-        if player_gold_after > offer {
+        if context.player_gold_after > context.offer {
             DonationEffect::Cheapskate
         } else {
             DonationEffect::SmallThanks
         }
-    } else if offer < threshold * 2 {
+    } else if context.offer < threshold * 2 {
         // Pious tier.
         // If poor + coaligned + sinned: clairvoyance blessing.
-        if player_gold_after < offer && coaligned && alignment_record <= ALGN_SINNED {
+        if context.player_gold_after < context.offer
+            && context.coaligned
+            && context.alignment_record <= ALGN_SINNED
+        {
             let turns = rng.random_range(500..1000);
             DonationEffect::Clairvoyance { turns }
         } else {
             DonationEffect::Pious
         }
-    } else if offer < threshold * 3
-        && (!has_protection_intrinsic
-            || (current_protection < 20
-                && (current_protection < 9 || rng.random_range(0..current_protection.max(1)) == 0)))
+    } else if context.offer < threshold * 3
+        && (!context.has_protection_intrinsic
+            || (context.current_protection < 20
+                && (context.current_protection < 9
+                    || rng.random_range(0..context.current_protection.max(1)) == 0)))
     {
         // Protection reward tier.
         DonationEffect::ProtectionGranted {
-            new_level: current_protection + 1,
+            new_level: context.current_protection + 1,
         }
     } else {
         // Selfless generosity tier.
-        if player_gold_after < offer
-            && coaligned
-            && alignment_record < 0
-            && turns_since_cleansed > 5000
+        if context.player_gold_after < context.offer
+            && context.coaligned
+            && context.alignment_record < 0
+            && context.turns_since_cleansed > 5000
         {
             DonationEffect::Cleansed
         } else {
@@ -333,7 +339,19 @@ mod tests {
     #[test]
     fn test_donation_regret() {
         let mut rng = test_rng();
-        let effect = donation_effect(0, 1000, 14, 5, true, 0, false, 0, &mut rng);
+        let effect = donation_effect(
+            DonationEffectContext {
+                offer: 0,
+                player_gold_after: 1000,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 0,
+                has_protection_intrinsic: false,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(effect, DonationEffect::RegretWarning);
     }
 
@@ -341,7 +359,19 @@ mod tests {
     fn test_donation_cheapskate() {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 100, gold_after 9900 > 100.
-        let effect = donation_effect(100, 9900, 14, 5, true, 0, false, 0, &mut rng);
+        let effect = donation_effect(
+            DonationEffectContext {
+                offer: 100,
+                player_gold_after: 9900,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 0,
+                has_protection_intrinsic: false,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(effect, DonationEffect::Cheapskate);
     }
 
@@ -349,7 +379,19 @@ mod tests {
     fn test_donation_small_thanks() {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 100, gold_after 50 < 100.
-        let effect = donation_effect(100, 50, 14, 5, true, 0, false, 0, &mut rng);
+        let effect = donation_effect(
+            DonationEffectContext {
+                offer: 100,
+                player_gold_after: 50,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 0,
+                has_protection_intrinsic: false,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(effect, DonationEffect::SmallThanks);
     }
 
@@ -357,7 +399,19 @@ mod tests {
     fn test_donation_pious() {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 3000 (>= 2800 < 5600). Gold 10000.
-        let effect = donation_effect(3000, 7000, 14, 5, true, 0, false, 0, &mut rng);
+        let effect = donation_effect(
+            DonationEffectContext {
+                offer: 3000,
+                player_gold_after: 7000,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 0,
+                has_protection_intrinsic: false,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(effect, DonationEffect::Pious);
     }
 
@@ -365,7 +419,19 @@ mod tests {
     fn test_donation_protection() {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 7000 (>= 5600 < 8400). Protection 0.
-        let effect = donation_effect(7000, 13000, 14, 5, true, 0, false, 0, &mut rng);
+        let effect = donation_effect(
+            DonationEffectContext {
+                offer: 7000,
+                player_gold_after: 13000,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 0,
+                has_protection_intrinsic: false,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(effect, DonationEffect::ProtectionGranted { new_level: 1 });
     }
 
@@ -373,7 +439,19 @@ mod tests {
     fn test_donation_selfless() {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 10000 (>= 8400). Protection 20 (too high).
-        let effect = donation_effect(10000, 40000, 14, 5, true, 20, true, 0, &mut rng);
+        let effect = donation_effect(
+            DonationEffectContext {
+                offer: 10000,
+                player_gold_after: 40000,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 20,
+                has_protection_intrinsic: true,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(effect, DonationEffect::SelflessGenerosity);
     }
 
@@ -382,7 +460,19 @@ mod tests {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 10000. Gold_after 5000 < 10000.
         // Coaligned, alignment_record < 0, turns since cleansed > 5000.
-        let effect = donation_effect(10000, 5000, 14, -2, true, 20, true, 6000, &mut rng);
+        let effect = donation_effect(
+            DonationEffectContext {
+                offer: 10000,
+                player_gold_after: 5000,
+                player_level: 14,
+                alignment_record: -2,
+                coaligned: true,
+                current_protection: 20,
+                has_protection_intrinsic: true,
+                turns_since_cleansed: 6000,
+            },
+            &mut rng,
+        );
         assert_eq!(effect, DonationEffect::Cleansed);
     }
 

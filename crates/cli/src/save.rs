@@ -1141,18 +1141,18 @@ pub fn install_panic_hook() {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         // Attempt emergency save.
-        if let Ok(guard) = PANIC_STATE.lock() {
-            if let Some(ref state) = *guard {
-                // SAFETY: We trust the caller of register_panic_save
-                // to keep the world alive.
-                let world = unsafe { &*state.world_ptr };
-                let path = save_file_path(&state.player_name).with_extension("panic.nbsv");
-                if let Some(parent) = path.parent() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
-                let _ = save_game(world, &path, SaveReason::Panic, state.rng_state);
-                eprintln!("Emergency save written to {}", path.display());
+        if let Ok(guard) = PANIC_STATE.lock()
+            && let Some(ref state) = *guard
+        {
+            // SAFETY: We trust the caller of register_panic_save
+            // to keep the world alive.
+            let world = unsafe { &*state.world_ptr };
+            let path = save_file_path(&state.player_name).with_extension("panic.nbsv");
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
             }
+            let _ = save_game(world, &path, SaveReason::Panic, state.rng_state);
+            eprintln!("Emergency save written to {}", path.display());
         }
         // Continue with the default panic handler.
         default_hook(info);
@@ -1215,9 +1215,10 @@ mod tests {
     use nethack_babel_engine::{
         action::{Direction, PlayerAction},
         artifacts::find_artifact_by_name,
-        dungeon::{DungeonBranch, LevelMap, Terrain},
+        dungeon::{DungeonBranch, LevelMap, PortalLink, Terrain},
         event::{DeathCause, EngineEvent},
         role::Role,
+        teleport::handle_magic_portal,
         turn::resolve_turn,
     };
     use rand::SeedableRng;
@@ -1565,6 +1566,8 @@ mod tests {
         MedusaRevisit,
         CastleRevisit,
         OrcusRevisit,
+        FortLudiosRevisit,
+        VladTopEntry,
         InvocationPortalRevisit,
         ShopEntry,
         ShopEntryWelcomeBack,
@@ -1594,6 +1597,8 @@ mod tests {
                 SaveStoryTraversalScenario::MedusaRevisit => "medusa-revisit",
                 SaveStoryTraversalScenario::CastleRevisit => "castle-revisit",
                 SaveStoryTraversalScenario::OrcusRevisit => "orcus-revisit",
+                SaveStoryTraversalScenario::FortLudiosRevisit => "fort-ludios-revisit",
+                SaveStoryTraversalScenario::VladTopEntry => "vlad-top-entry",
                 SaveStoryTraversalScenario::InvocationPortalRevisit => "invocation-portal-revisit",
                 SaveStoryTraversalScenario::ShopEntry => "shop-entry",
                 SaveStoryTraversalScenario::ShopEntryWelcomeBack => "shop-entry-welcome-back",
@@ -1873,6 +1878,81 @@ mod tests {
                 set_player_position(&mut loaded, gehennom_down);
                 let revisit_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
                 (loaded, revisit_events)
+            }
+            SaveStoryTraversalScenario::FortLudiosRevisit => {
+                let mut world = make_stair_world(DungeonBranch::Main, 20, Terrain::MagicPortal);
+                let mut rng = Pcg64::seed_from_u64(7110);
+                let player = world.player();
+                let portal_pos = Position::new(5, 5);
+                world.dungeon_mut().add_portal(PortalLink {
+                    from_branch: DungeonBranch::Main,
+                    from_depth: 20,
+                    from_pos: portal_pos,
+                    to_branch: DungeonBranch::FortLudios,
+                    to_depth: 1,
+                    to_pos: portal_pos,
+                });
+                world.dungeon_mut().add_portal(PortalLink {
+                    from_branch: DungeonBranch::FortLudios,
+                    from_depth: 1,
+                    from_pos: portal_pos,
+                    to_branch: DungeonBranch::Main,
+                    to_depth: 20,
+                    to_pos: portal_pos,
+                });
+
+                let enter_events = handle_magic_portal(&mut world, player, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+                assert_eq!(count_monsters_named(&world, "soldier"), 2);
+                assert_eq!(count_monsters_named(&world, "lieutenant"), 1);
+                assert_eq!(count_monsters_named(&world, "captain"), 1);
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-fort-ludios-revisit", &world, [60u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let loaded_player = loaded.player();
+
+                loaded
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(portal_pos, Terrain::MagicPortal);
+                set_player_position(&mut loaded, portal_pos);
+                let return_events = handle_magic_portal(&mut loaded, loaded_player, &mut rng);
+                assert!(
+                    return_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+
+                loaded
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(portal_pos, Terrain::MagicPortal);
+                set_player_position(&mut loaded, portal_pos);
+                let revisit_events = handle_magic_portal(&mut loaded, loaded_player, &mut rng);
+                (loaded, revisit_events)
+            }
+            SaveStoryTraversalScenario::VladTopEntry => {
+                let mut world = make_stair_world(DungeonBranch::VladsTower, 2, Terrain::StairsDown);
+                install_test_catalogs(&mut world);
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-vlad-top-entry", &world, [61u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let candelabrum_name = "Candelabrum of Invocation";
+
+                let enter_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+                assert_eq!(count_monsters_named(&loaded, "Vlad the Impaler"), 1);
+                assert_eq!(count_objects_named(&loaded, candelabrum_name), 1);
+                (loaded, enter_events)
             }
             SaveStoryTraversalScenario::InvocationPortalRevisit => {
                 let mut world = make_stair_world(DungeonBranch::Gehennom, 20, Terrain::StairsDown);
@@ -4494,6 +4574,8 @@ mod tests {
             SaveStoryTraversalScenario::MedusaRevisit,
             SaveStoryTraversalScenario::CastleRevisit,
             SaveStoryTraversalScenario::OrcusRevisit,
+            SaveStoryTraversalScenario::FortLudiosRevisit,
+            SaveStoryTraversalScenario::VladTopEntry,
             SaveStoryTraversalScenario::InvocationPortalRevisit,
             SaveStoryTraversalScenario::ShopEntry,
             SaveStoryTraversalScenario::ShopEntryWelcomeBack,
@@ -4569,6 +4651,19 @@ mod tests {
                     assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
                     assert_eq!(world.dungeon().depth, 12);
                     assert_eq!(count_monsters_named(&world, "orcus"), 1);
+                }
+                SaveStoryTraversalScenario::FortLudiosRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::FortLudios);
+                    assert_eq!(world.dungeon().depth, 1);
+                    assert_eq!(count_monsters_named(&world, "soldier"), 2);
+                    assert_eq!(count_monsters_named(&world, "lieutenant"), 1);
+                    assert_eq!(count_monsters_named(&world, "captain"), 1);
+                }
+                SaveStoryTraversalScenario::VladTopEntry => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::VladsTower);
+                    assert_eq!(world.dungeon().depth, 3);
+                    assert_eq!(count_monsters_named(&world, "Vlad the Impaler"), 1);
+                    assert_eq!(count_objects_named(&world, "Candelabrum of Invocation"), 1);
                 }
                 SaveStoryTraversalScenario::InvocationPortalRevisit => {
                     assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);

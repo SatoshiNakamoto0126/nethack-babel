@@ -447,14 +447,14 @@ pub fn detect_gold(world: &GameWorld, _player: Entity) -> Vec<EngineEvent> {
     let mut positions: Vec<Position> = Vec::new();
 
     for (_entity, (core, loc)) in world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter() {
-        if core.object_class == ObjectClass::Coin {
-            if let Some(pos) = crate::dungeon::floor_position_on_level(
+        if core.object_class == ObjectClass::Coin
+            && let Some(pos) = crate::dungeon::floor_position_on_level(
                 loc,
                 world.dungeon().branch,
                 world.dungeon().depth,
-            ) {
-                positions.push(pos);
-            }
+            )
+        {
+            positions.push(pos);
         }
     }
 

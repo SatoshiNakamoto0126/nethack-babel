@@ -2645,13 +2645,12 @@ pub fn load_nethackrc(path: &str, config: &mut Config) -> Result<(), String> {
             continue;
         }
         // Only process OPTIONS= lines
-        if line.starts_with("OPTIONS=")
+        if (line.starts_with("OPTIONS=")
             || line.starts_with("OPTIONS =")
-            || line.starts_with("OPTION=")
+            || line.starts_with("OPTION="))
+            && let Err(e) = parse_options_line(line, config)
         {
-            if let Err(e) = parse_options_line(line, config) {
-                errors.push(format!("line {}: {e}", lineno + 1));
-            }
+            errors.push(format!("line {}: {e}", lineno + 1));
         }
     }
 

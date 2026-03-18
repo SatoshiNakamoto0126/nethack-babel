@@ -287,10 +287,10 @@ pub fn not_fully_identified(
         return true;
     }
 
-    if let Some(ref b) = buc {
-        if !b.bknown {
-            return true;
-        }
+    if let Some(ref b) = buc
+        && !b.bknown
+    {
+        return true;
     }
 
     // Check type-level knowledge.
@@ -309,19 +309,18 @@ pub fn not_fully_identified(
     // Check rknown for damageable items.
     if !k.rknown {
         let def = obj_defs.iter().find(|d| d.id == core.otyp);
-        if let Some(d) = def {
-            if is_damageable_material(d.material)
-                && matches!(
-                    core.object_class,
-                    ObjectClass::Weapon
-                        | ObjectClass::Armor
-                        | ObjectClass::Tool
-                        | ObjectClass::Ball
-                        | ObjectClass::Chain
-                )
-            {
-                return true;
-            }
+        if let Some(d) = def
+            && is_damageable_material(d.material)
+            && matches!(
+                core.object_class,
+                ObjectClass::Weapon
+                    | ObjectClass::Armor
+                    | ObjectClass::Tool
+                    | ObjectClass::Ball
+                    | ObjectClass::Chain
+            )
+        {
+            return true;
         }
     }
 
@@ -1506,10 +1505,10 @@ pub fn doname(
     }
 
     // --- D. Greased ---
-    if let Some(ref e) = erosion {
-        if e.greased {
-            prefix.push_str("greased ");
-        }
+    if let Some(ref e) = erosion
+        && e.greased
+    {
+        prefix.push_str("greased ");
     }
 
     // --- E. Erosion words (for weapons, armor, tools) ---
@@ -1520,13 +1519,11 @@ pub fn doname(
             | ObjectClass::Tool
             | ObjectClass::Ball
             | ObjectClass::Chain
-    ) {
-        if let Some(ref e) = erosion {
-            if let Some(def) = obj_def {
-                let ep = erosion_prefix(e, def.material, class, rknown);
-                prefix.push_str(&ep);
-            }
-        }
+    ) && let Some(ref e) = erosion
+        && let Some(def) = obj_def
+    {
+        let ep = erosion_prefix(e, def.material, class, rknown);
+        prefix.push_str(&ep);
     }
 
     // --- F. Enchantment ---
@@ -1535,13 +1532,12 @@ pub fn doname(
             class,
             ObjectClass::Weapon | ObjectClass::Armor | ObjectClass::Ring
         )
+        && let Some(ref ench) = enchant
     {
-        if let Some(ref ench) = enchant {
-            if ench.spe >= 0 {
-                prefix.push_str(&format!("+{} ", ench.spe));
-            } else {
-                prefix.push_str(&format!("{} ", ench.spe));
-            }
+        if ench.spe >= 0 {
+            prefix.push_str(&format!("+{} ", ench.spe));
+        } else {
+            prefix.push_str(&format!("{} ", ench.spe));
         }
     }
 

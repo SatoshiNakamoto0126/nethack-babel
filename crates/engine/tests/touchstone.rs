@@ -4325,7 +4325,7 @@ fn touchstone_23_world_state_consistency() {
 /// Cross-module chain: status (luck) → turn (tick) → world.
 #[test]
 fn touchstone_23_luck_decay() {
-    use nethack_babel_engine::status::tick_luck;
+    use nethack_babel_engine::status::{LuckTickContext, tick_luck};
     use nethack_babel_engine::world::PlayerCombat;
 
     let (mut world, _) = create_test_world(42);
@@ -4342,11 +4342,16 @@ fn touchstone_23_luck_decay() {
     for turn in 1..=60u64 {
         let t = turn * 600; // Each tick at a multiple of 600.
         let _events = tick_luck(
-            &mut world, player, t, 0,     // base_luck
-            false, // no luckstone
-            false, // not cursed
-            false, // not blessed
-            false, // no amulet/angry god
+            &mut world,
+            player,
+            LuckTickContext {
+                turn: t,
+                base_luck: 0,
+                has_luckstone: false,
+                luckstone_cursed: false,
+                luckstone_blessed: false,
+                has_amulet_or_angry_god: false,
+            },
         );
         let current_luck = world
             .get_component::<PlayerCombat>(player)

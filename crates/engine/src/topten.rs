@@ -786,20 +786,20 @@ pub fn filter_scores<'a>(
         .iter()
         .enumerate()
         .filter(|(_, e)| {
-            if let Some(ref name) = filter.player_name {
-                if e.name != *name {
-                    return false;
-                }
+            if let Some(ref name) = filter.player_name
+                && e.name != *name
+            {
+                return false;
             }
-            if let Some(ref role) = filter.role_code {
-                if e.role != *role {
-                    return false;
-                }
+            if let Some(ref role) = filter.role_code
+                && e.role != *role
+            {
+                return false;
             }
-            if let Some(ref race) = filter.race_code {
-                if e.race != *race {
-                    return false;
-                }
+            if let Some(ref race) = filter.race_code
+                && e.race != *race
+            {
+                return false;
             }
             true
         })

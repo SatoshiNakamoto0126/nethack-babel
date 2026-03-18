@@ -245,35 +245,33 @@ pub fn dip_item<R: Rng>(
     // C mixtype(): UNICORN_HORN dipped into sickness/hallucination/
     // blindness/confusion potions produces fruit_juice or water.
     if let Some(item_tag) = world.get_component::<DipItemTag>(item).map(|t| t.0) {
-        if item_tag == DipItemKind::UnicornHorn {
-            if let Some(into_pt) = into_potion_type {
-                let result = match into_pt {
-                    PotionType::Sickness => Some(PotionType::FruitJuice),
-                    PotionType::Hallucination | PotionType::Blindness | PotionType::Confusion => {
-                        Some(PotionType::Water)
-                    }
-                    _ => None,
-                };
-                if let Some(result_type) = result {
-                    // Transform the target potion into the result.
-                    if let Some(mut pt) = world.get_component_mut::<DipPotionType>(into) {
-                        pt.0 = result_type;
-                    }
-                    events.push(EngineEvent::msg("dip-unicorn-horn-cure"));
-                    return events;
+        if item_tag == DipItemKind::UnicornHorn
+            && let Some(into_pt) = into_potion_type
+        {
+            let result = match into_pt {
+                PotionType::Sickness => Some(PotionType::FruitJuice),
+                PotionType::Hallucination | PotionType::Blindness | PotionType::Confusion => {
+                    Some(PotionType::Water)
                 }
+                _ => None,
+            };
+            if let Some(result_type) = result {
+                // Transform the target potion into the result.
+                if let Some(mut pt) = world.get_component_mut::<DipPotionType>(into) {
+                    pt.0 = result_type;
+                }
+                events.push(EngineEvent::msg("dip-unicorn-horn-cure"));
+                return events;
             }
         }
         // Amethyst dip: "a-methyst" == "not intoxicated"
         // C mixtype(): AMETHYST dipped into booze → fruit juice.
-        if item_tag == DipItemKind::Amethyst {
-            if into_potion_type == Some(PotionType::Booze) {
-                if let Some(mut pt) = world.get_component_mut::<DipPotionType>(into) {
-                    pt.0 = PotionType::FruitJuice;
-                }
-                events.push(EngineEvent::msg("dip-amethyst-cure"));
-                return events;
+        if item_tag == DipItemKind::Amethyst && into_potion_type == Some(PotionType::Booze) {
+            if let Some(mut pt) = world.get_component_mut::<DipPotionType>(into) {
+                pt.0 = PotionType::FruitJuice;
             }
+            events.push(EngineEvent::msg("dip-amethyst-cure"));
+            return events;
         }
     }
 

@@ -308,11 +308,11 @@ fn effect_enchant_weapon<R: Rng>(
     }
 
     // Blessed: also repair erosion (matches C NetHack behavior).
-    if buc.blessed {
-        if let Some(mut erosion) = world.get_component_mut::<Erosion>(weapon_entity) {
-            erosion.eroded = 0;
-            erosion.eroded2 = 0;
-        }
+    if buc.blessed
+        && let Some(mut erosion) = world.get_component_mut::<Erosion>(weapon_entity)
+    {
+        erosion.eroded = 0;
+        erosion.eroded2 = 0;
     }
 
     // Normal reading: enchant the weapon.
@@ -459,11 +459,11 @@ fn effect_enchant_armor<R: Rng>(
     }
 
     // Blessed: also repair erosion (matches C NetHack behavior).
-    if buc.blessed {
-        if let Some(mut erosion) = world.get_component_mut::<Erosion>(armor_entity) {
-            erosion.eroded = 0;
-            erosion.eroded2 = 0;
-        }
+    if buc.blessed
+        && let Some(mut erosion) = world.get_component_mut::<Erosion>(armor_entity)
+    {
+        erosion.eroded = 0;
+        erosion.eroded2 = 0;
     }
 
     // Calculate enchantment amount.

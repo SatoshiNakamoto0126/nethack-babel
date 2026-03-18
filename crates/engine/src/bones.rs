@@ -484,12 +484,12 @@ pub fn scatter_items(
                 let dx = rng.random_range(-scatter_radius..=scatter_radius);
                 let dy = rng.random_range(-scatter_radius..=scatter_radius);
                 let candidate = Position::new(orig.x + dx, orig.y + dy);
-                if let Some(cell) = level_map.get(candidate) {
-                    if cell.terrain.is_walkable() {
-                        best = candidate;
-                        found_open = true;
-                        break;
-                    }
+                if let Some(cell) = level_map.get(candidate)
+                    && cell.terrain.is_walkable()
+                {
+                    best = candidate;
+                    found_open = true;
+                    break;
                 }
             }
         }

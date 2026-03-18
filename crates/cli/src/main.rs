@@ -2508,17 +2508,29 @@ fn build_equipped_lines(world: &GameWorld, obj_defs: &[ObjectDef]) -> Vec<String
         .collect()
 }
 
+struct TuiRuntimeContext<'a> {
+    locale: &'a mut LocaleManager,
+    cfg: &'a mut config::Config,
+    config_path: &'a str,
+    legacy_info: Option<(&'a str, &'a str)>,
+    wizard_mode: bool,
+}
+
 fn run_tui_mode(
     world: &mut GameWorld,
     data: &GameData,
     rng: &mut Pcg64,
-    locale: &mut LocaleManager,
-    cfg: &mut config::Config,
-    config_path: &str,
-    legacy_info: Option<(&str, &str)>,
-    wizard_mode: bool,
+    runtime: TuiRuntimeContext<'_>,
 ) -> Result<()> {
     install_panic_hook();
+
+    let TuiRuntimeContext {
+        locale,
+        cfg,
+        config_path,
+        legacy_info,
+        wizard_mode,
+    } = runtime;
 
     // Auto-checkpoint config — saves every 100 turns in case of crash.
     let mut checkpoint_config =
@@ -3372,11 +3384,13 @@ fn main() -> Result<()> {
             &mut world,
             &data,
             &mut rng,
-            &mut locale,
-            &mut cfg,
-            &cli.config,
-            legacy_ref,
-            cli.debug,
+            TuiRuntimeContext {
+                locale: &mut locale,
+                cfg: &mut cfg,
+                config_path: &cli.config,
+                legacy_info: legacy_ref,
+                wizard_mode: cli.debug,
+            },
         )?;
     }
 

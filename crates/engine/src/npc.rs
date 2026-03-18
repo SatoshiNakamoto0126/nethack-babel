@@ -200,35 +200,40 @@ pub enum DonationResult {
     Cleansing,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct PriestDonationContext {
+    pub offer: i32,
+    pub player_gold: i32,
+    pub player_level: u8,
+    pub alignment_record: i32,
+    pub coaligned: bool,
+    pub current_protection: i32,
+    pub turns_since_cleansed: u32,
+}
+
 /// Resolve a priest donation interaction.
 ///
 /// Mirrors `priest_talk()` from `priest.c`.  The donation amount is
 /// provided by the caller (from a UI prompt).
-pub fn priest_donation<R: Rng>(
-    offer: i32,
-    player_gold: i32,
-    player_level: u8,
-    alignment_record: i32,
-    coaligned: bool,
-    current_protection: i32,
-    turns_since_cleansed: u32,
-    rng: &mut R,
-) -> DonationResult {
-    if offer == 0 {
+pub fn priest_donation<R: Rng>(context: PriestDonationContext, rng: &mut R) -> DonationResult {
+    if context.offer == 0 {
         return DonationResult::RefusedToDonate;
     }
 
-    let threshold = player_level as i32 * 200;
+    let threshold = context.player_level as i32 * 200;
 
-    if offer < threshold {
-        if player_gold > offer * 2 {
+    if context.offer < threshold {
+        if context.player_gold > context.offer * 2 {
             DonationResult::Cheapskate
         } else {
             DonationResult::SmallThanks
         }
-    } else if offer < threshold * 2 {
+    } else if context.offer < threshold * 2 {
         // Pious tier (200-399 * level).
-        if player_gold < offer * 2 && coaligned && alignment_record <= ALGN_SINNED {
+        if context.player_gold < context.offer * 2
+            && context.coaligned
+            && context.alignment_record <= ALGN_SINNED
+        {
             let turns = rng.random_range(500..1000);
             DonationResult::Blessing {
                 clairvoyance_turns: turns,
@@ -236,17 +241,18 @@ pub fn priest_donation<R: Rng>(
         } else {
             DonationResult::Pious
         }
-    } else if offer < threshold * 3
-        && (current_protection < 9
-            || (current_protection < 20 && rng.random_range(0..current_protection) == 0))
+    } else if context.offer < threshold * 3
+        && (context.current_protection < 9
+            || (context.current_protection < 20
+                && rng.random_range(0..context.current_protection) == 0))
     {
         DonationResult::ProtectionReward
     } else {
         // Selfless generosity tier.
-        if player_gold < offer * 2
-            && coaligned
-            && alignment_record < 0
-            && turns_since_cleansed > 5000
+        if context.player_gold < context.offer * 2
+            && context.coaligned
+            && context.alignment_record < 0
+            && context.turns_since_cleansed > 5000
         {
             DonationResult::Cleansing
         } else {
@@ -1211,7 +1217,18 @@ mod tests {
     #[test]
     fn test_priest_donation_refuse() {
         let mut rng = test_rng();
-        let result = priest_donation(0, 1000, 14, 5, true, 0, 0, &mut rng);
+        let result = priest_donation(
+            PriestDonationContext {
+                offer: 0,
+                player_gold: 1000,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 0,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DonationResult::RefusedToDonate);
     }
 
@@ -1219,7 +1236,18 @@ mod tests {
     fn test_priest_donation_cheapskate() {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 100 < 2800, gold 10000 > 200.
-        let result = priest_donation(100, 10000, 14, 5, true, 0, 0, &mut rng);
+        let result = priest_donation(
+            PriestDonationContext {
+                offer: 100,
+                player_gold: 10000,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 0,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DonationResult::Cheapskate);
     }
 
@@ -1227,7 +1255,18 @@ mod tests {
     fn test_priest_donation_small_thanks() {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 100 < 2800, gold 150 < 200.
-        let result = priest_donation(100, 150, 14, 5, true, 0, 0, &mut rng);
+        let result = priest_donation(
+            PriestDonationContext {
+                offer: 100,
+                player_gold: 150,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 0,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DonationResult::SmallThanks);
     }
 
@@ -1235,7 +1274,18 @@ mod tests {
     fn test_priest_donation_pious() {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 3000 (>= 2800, < 5600).
-        let result = priest_donation(3000, 10000, 14, 5, true, 0, 0, &mut rng);
+        let result = priest_donation(
+            PriestDonationContext {
+                offer: 3000,
+                player_gold: 10000,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 0,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DonationResult::Pious);
     }
 
@@ -1243,7 +1293,18 @@ mod tests {
     fn test_priest_donation_protection() {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 7000 (>= 5600, < 8400). Protection 0 < 9.
-        let result = priest_donation(7000, 20000, 14, 5, true, 0, 0, &mut rng);
+        let result = priest_donation(
+            PriestDonationContext {
+                offer: 7000,
+                player_gold: 20000,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 0,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DonationResult::ProtectionReward);
     }
 
@@ -1251,7 +1312,18 @@ mod tests {
     fn test_priest_donation_selfless() {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 10000 (>= 8400). Protection 20 (too high).
-        let result = priest_donation(10000, 50000, 14, 5, true, 20, 0, &mut rng);
+        let result = priest_donation(
+            PriestDonationContext {
+                offer: 10000,
+                player_gold: 50000,
+                player_level: 14,
+                alignment_record: 5,
+                coaligned: true,
+                current_protection: 20,
+                turns_since_cleansed: 0,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DonationResult::SelflessGenerosity);
     }
 
@@ -1260,7 +1332,18 @@ mod tests {
         let mut rng = test_rng();
         // Level 14, threshold = 2800. Offer 10000. Gold 15000 < 20000.
         // Coaligned, alignment_record < 0, turns since cleansed > 5000.
-        let result = priest_donation(10000, 15000, 14, -2, true, 20, 6000, &mut rng);
+        let result = priest_donation(
+            PriestDonationContext {
+                offer: 10000,
+                player_gold: 15000,
+                player_level: 14,
+                alignment_record: -2,
+                coaligned: true,
+                current_protection: 20,
+                turns_since_cleansed: 6000,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DonationResult::Cleansing);
     }
 

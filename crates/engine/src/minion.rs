@@ -204,6 +204,17 @@ pub enum DemonTalkResult {
     Unbribable,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct DemonTalkContext {
+    pub player_gold: i64,
+    pub offer: i64,
+    pub demand: i64,
+    pub charisma: i32,
+    pub wielding_excalibur_or_demonbane: bool,
+    pub player_is_demon: bool,
+    pub demon_has_amulet: bool,
+}
+
 /// Calculate the demon's gold demand.
 ///
 /// Mirrors C: `demand = (cash * (rnd(80) + 20*Athome)) / (100 * (1 + same_align))`.
@@ -223,35 +234,28 @@ pub fn demon_demand(
 }
 
 /// Resolve a demon talk encounter.
-pub fn demon_talk(
-    player_gold: i64,
-    offer: i64,
-    demand: i64,
-    charisma: i32,
-    wielding_excalibur_or_demonbane: bool,
-    player_is_demon: bool,
-    demon_has_amulet: bool,
-    rng: &mut impl Rng,
-) -> DemonTalkResult {
-    if wielding_excalibur_or_demonbane {
+pub fn demon_talk(context: DemonTalkContext, rng: &mut impl Rng) -> DemonTalkResult {
+    if context.wielding_excalibur_or_demonbane {
         return DemonTalkResult::Angry;
     }
-    if player_is_demon {
+    if context.player_is_demon {
         return DemonTalkResult::FellowDemon;
     }
-    if demon_has_amulet {
+    if context.demon_has_amulet {
         return DemonTalkResult::Unbribable;
     }
-    if player_gold <= 0 {
+    if context.player_gold <= 0 {
         return DemonTalkResult::Angry;
     }
-    if offer >= demand {
-        return DemonTalkResult::Bribed { amount: offer };
+    if context.offer >= context.demand {
+        return DemonTalkResult::Bribed {
+            amount: context.offer,
+        };
     }
     // Charisma check: `rnd(5 * CHA) > (demand - offer)`.
-    if offer > 0 {
-        let cha_roll = rng.random_range(1..=(5 * charisma).max(1));
-        if cha_roll as i64 > demand - offer {
+    if context.offer > 0 {
+        let cha_roll = rng.random_range(1..=(5 * context.charisma).max(1));
+        if cha_roll as i64 > context.demand - context.offer {
             return DemonTalkResult::ReluctantlyLeaves;
         }
     }
@@ -379,28 +383,72 @@ mod tests {
     #[test]
     fn test_demon_talk_angry_with_excalibur() {
         let mut rng = test_rng();
-        let result = demon_talk(1000, 0, 500, 10, true, false, false, &mut rng);
+        let result = demon_talk(
+            DemonTalkContext {
+                player_gold: 1000,
+                offer: 0,
+                demand: 500,
+                charisma: 10,
+                wielding_excalibur_or_demonbane: true,
+                player_is_demon: false,
+                demon_has_amulet: false,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DemonTalkResult::Angry);
     }
 
     #[test]
     fn test_demon_talk_fellow_demon() {
         let mut rng = test_rng();
-        let result = demon_talk(1000, 0, 500, 10, false, true, false, &mut rng);
+        let result = demon_talk(
+            DemonTalkContext {
+                player_gold: 1000,
+                offer: 0,
+                demand: 500,
+                charisma: 10,
+                wielding_excalibur_or_demonbane: false,
+                player_is_demon: true,
+                demon_has_amulet: false,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DemonTalkResult::FellowDemon);
     }
 
     #[test]
     fn test_demon_talk_bribed() {
         let mut rng = test_rng();
-        let result = demon_talk(1000, 500, 400, 10, false, false, false, &mut rng);
+        let result = demon_talk(
+            DemonTalkContext {
+                player_gold: 1000,
+                offer: 500,
+                demand: 400,
+                charisma: 10,
+                wielding_excalibur_or_demonbane: false,
+                player_is_demon: false,
+                demon_has_amulet: false,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DemonTalkResult::Bribed { amount: 500 });
     }
 
     #[test]
     fn test_demon_talk_unbribable_with_amulet() {
         let mut rng = test_rng();
-        let result = demon_talk(1000, 500, 400, 10, false, false, true, &mut rng);
+        let result = demon_talk(
+            DemonTalkContext {
+                player_gold: 1000,
+                offer: 500,
+                demand: 400,
+                charisma: 10,
+                wielding_excalibur_or_demonbane: false,
+                player_is_demon: false,
+                demon_has_amulet: true,
+            },
+            &mut rng,
+        );
         assert_eq!(result, DemonTalkResult::Unbribable);
     }
 }

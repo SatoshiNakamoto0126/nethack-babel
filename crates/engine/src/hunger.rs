@@ -697,10 +697,10 @@ pub fn eat_corpse_effects(
     effects.intrinsic = check_intrinsic_gain(corpse, rng);
 
     // Giant strength gain.
-    if corpse.is_giant {
-        if let Some(CorpseIntrinsic::Strength) = effects.intrinsic {
-            effects.strength_gain = 1;
-        }
+    if corpse.is_giant
+        && let Some(CorpseIntrinsic::Strength) = effects.intrinsic
+    {
+        effects.strength_gain = 1;
     }
 
     // Name-based post effects.

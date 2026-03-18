@@ -1705,16 +1705,16 @@ fn resolve_player_action(
             let (result, jump_events) =
                 crate::do_actions::do_jump(has_jumping, burden, distance, max_range);
             events.extend(jump_events);
-            if result == crate::do_actions::JumpResult::Jumped {
-                if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
-                    let from = pos.0;
-                    pos.0 = *position;
-                    events.push(EngineEvent::EntityMoved {
-                        entity: player,
-                        from,
-                        to: *position,
-                    });
-                }
+            if result == crate::do_actions::JumpResult::Jumped
+                && let Some(mut pos) = world.get_component_mut::<Positioned>(player)
+            {
+                let from = pos.0;
+                pos.0 = *position;
+                events.push(EngineEvent::EntityMoved {
+                    entity: player,
+                    from,
+                    to: *position,
+                });
             }
         }
         PlayerAction::Untrap { direction } => {
@@ -1796,11 +1796,10 @@ fn resolve_player_action(
                 })
                 .unwrap_or(false);
             let (result, wipe_events) = crate::do_actions::do_wipe(creamed, blind_towel);
-            if result == crate::do_actions::WipeResult::WipedCream {
-                if let Some(mut hc) = world.get_component_mut::<crate::status::HeroCounters>(player)
-                {
-                    hc.creamed = 0;
-                }
+            if result == crate::do_actions::WipeResult::WipedCream
+                && let Some(mut hc) = world.get_component_mut::<crate::status::HeroCounters>(player)
+            {
+                hc.creamed = 0;
             }
             events.extend(wipe_events);
         }
@@ -3817,23 +3816,23 @@ fn try_move_entity(
         return;
     }
 
-    if entity == world.player() {
-        if let Some(occupant) = monster_at(world, target_pos, entity) {
-            if world.get_component::<Tame>(occupant).is_some() && !force_attack_non_hostile {
-                swap_entities(world, entity, occupant, current_pos, target_pos, events);
-                finish_player_movement(world, entity, current_pos, target_pos, events, rng);
-                return;
-            }
-            if world.get_component::<Peaceful>(occupant).is_some() && !force_attack_non_hostile {
-                events.push(EngineEvent::msg_with(
-                    "peaceful-monster-blocks",
-                    vec![("monster", world.entity_name(occupant))],
-                ));
-                return;
-            }
-            crate::combat::resolve_melee_attack(world, entity, occupant, rng, events);
+    if entity == world.player()
+        && let Some(occupant) = monster_at(world, target_pos, entity)
+    {
+        if world.get_component::<Tame>(occupant).is_some() && !force_attack_non_hostile {
+            swap_entities(world, entity, occupant, current_pos, target_pos, events);
+            finish_player_movement(world, entity, current_pos, target_pos, events, rng);
             return;
         }
+        if world.get_component::<Peaceful>(occupant).is_some() && !force_attack_non_hostile {
+            events.push(EngineEvent::msg_with(
+                "peaceful-monster-blocks",
+                vec![("monster", world.entity_name(occupant))],
+            ));
+            return;
+        }
+        crate::combat::resolve_melee_attack(world, entity, occupant, rng, events);
+        return;
     }
 
     // Boulder pushing: check if there is a boulder at the target position.
@@ -5725,13 +5724,15 @@ fn resolve_priest_chat<R: Rng>(
 
     let donation_offer = player_gold_total as u32;
     let donation_result = crate::npc::priest_donation(
-        player_gold_total,
-        player_gold_total,
-        current_player_level(world, player),
-        religion_state.alignment_record,
-        true,
-        current_protection,
-        religion_state.turn,
+        crate::npc::PriestDonationContext {
+            offer: player_gold_total,
+            player_gold: player_gold_total,
+            player_level: current_player_level(world, player),
+            alignment_record: religion_state.alignment_record,
+            coaligned: true,
+            current_protection,
+            turns_since_cleansed: religion_state.turn,
+        },
         rng,
     );
 

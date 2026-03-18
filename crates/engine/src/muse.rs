@@ -93,10 +93,8 @@ pub fn monster_item_decision(
         .map(|s| s.confusion > 0 || s.stun > 0 || s.blindness > 0)
         .unwrap_or(false);
 
-    if has_status_ailment {
-        if let Some(horn) = find_unicorn_horn(world, monster) {
-            return MonsterItemAction::UseUnicornHorn { item: horn };
-        }
+    if has_status_ailment && let Some(horn) = find_unicorn_horn(world, monster) {
+        return MonsterItemAction::UseUnicornHorn { item: horn };
     }
 
     // Check HP ratio for healing/escape decisions.
@@ -111,17 +109,18 @@ pub fn monster_item_decision(
     };
 
     // Low HP: try healing first (priority: full > extra > regular).
-    if hp_ratio < 0.5 {
-        if let Some(item) = find_healing_item(world, monster) {
-            return MonsterItemAction::QuaffHealingPotion { item };
-        }
+    if hp_ratio < 0.5
+        && let Some(item) = find_healing_item(world, monster)
+    {
+        return MonsterItemAction::QuaffHealingPotion { item };
     }
 
     // Fleeing and hurt: try escape via teleport wand.
-    if is_fleeing && hp_ratio < 0.33 {
-        if let Some(item) = find_escape_item(world, monster) {
-            return MonsterItemAction::ZapTeleportWand { item };
-        }
+    if is_fleeing
+        && hp_ratio < 0.33
+        && let Some(item) = find_escape_item(world, monster)
+    {
+        return MonsterItemAction::ZapTeleportWand { item };
     }
 
     // Has target: try offensive items.
@@ -502,16 +501,16 @@ pub fn use_offensive_item(
             _ => 0,
         };
 
-        if damage > 0 {
-            if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
-                hp.current -= damage;
-                events.push(EngineEvent::HpChange {
-                    entity: player,
-                    amount: -damage,
-                    new_hp: hp.current,
-                    source: HpSource::Combat,
-                });
-            }
+        if damage > 0
+            && let Some(mut hp) = world.get_component_mut::<HitPoints>(player)
+        {
+            hp.current -= damage;
+            events.push(EngineEvent::HpChange {
+                entity: player,
+                amount: -damage,
+                new_hp: hp.current,
+                source: HpSource::Combat,
+            });
         }
 
         return events;
@@ -663,32 +662,32 @@ pub fn use_defensive_item(
     }
 
     // Check if it's a wand of teleportation (zap self).
-    if let Some(wtype) = wand_type {
-        if wtype == WandType::Teleportation {
-            let has_charges = world
-                .get_component::<WandCharges>(item)
-                .map(|c| c.spe > 0)
-                .unwrap_or(false);
-            if has_charges {
-                if let Some(mut charges) = world.get_component_mut::<WandCharges>(item) {
-                    charges.spe -= 1;
-                }
-                events.push(EngineEvent::msg_with(
-                    "monster-zaps-teleport-self",
-                    vec![("monster", mon_name.clone())],
-                ));
-                // Teleport effect: just emit event (actual position change
-                // handled by caller or monster_ai).
-                let from = world
-                    .get_component::<Positioned>(monster)
-                    .map(|p| p.0)
-                    .unwrap_or(crate::action::Position::new(0, 0));
-                events.push(EngineEvent::EntityTeleported {
-                    entity: monster,
-                    from,
-                    to: from, // placeholder — caller adjusts position
-                });
+    if let Some(wtype) = wand_type
+        && wtype == WandType::Teleportation
+    {
+        let has_charges = world
+            .get_component::<WandCharges>(item)
+            .map(|c| c.spe > 0)
+            .unwrap_or(false);
+        if has_charges {
+            if let Some(mut charges) = world.get_component_mut::<WandCharges>(item) {
+                charges.spe -= 1;
             }
+            events.push(EngineEvent::msg_with(
+                "monster-zaps-teleport-self",
+                vec![("monster", mon_name.clone())],
+            ));
+            // Teleport effect: just emit event (actual position change
+            // handled by caller or monster_ai).
+            let from = world
+                .get_component::<Positioned>(monster)
+                .map(|p| p.0)
+                .unwrap_or(crate::action::Position::new(0, 0));
+            events.push(EngineEvent::EntityTeleported {
+                entity: monster,
+                from,
+                to: from, // placeholder — caller adjusts position
+            });
         }
     }
 

@@ -583,12 +583,12 @@ pub fn apply_form_attribute_bonus(
 ) {
     let mlevel = monster_def.base_level as u8;
     // Grant extra strength if the form is particularly strong (level > 15).
-    if mlevel > 15 {
-        if let Some(mut attrs) = world.get_component_mut::<Attributes>(entity) {
-            attrs.strength = attrs.strength.saturating_add(((mlevel - 15) / 3).min(5));
-            if attrs.strength > 25 {
-                attrs.strength = 25;
-            }
+    if mlevel > 15
+        && let Some(mut attrs) = world.get_component_mut::<Attributes>(entity)
+    {
+        attrs.strength = attrs.strength.saturating_add(((mlevel - 15) / 3).min(5));
+        if attrs.strength > 25 {
+            attrs.strength = 25;
         }
     }
 }

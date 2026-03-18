@@ -292,17 +292,13 @@ pub fn check_layering(
     let equip = world.get_component::<EquipmentSlots>(player)?;
 
     match target_slot {
-        EquipSlot::Shirt => {
+        EquipSlot::Shirt if equip.body_armor.is_some() || equip.cloak.is_some() => {
             // Shirt is innermost: cannot put on if suit or cloak is worn.
-            if equip.body_armor.is_some() || equip.cloak.is_some() {
-                return Some(EquipError::SuitBlocksShirt);
-            }
+            return Some(EquipError::SuitBlocksShirt);
         }
-        EquipSlot::BodyArmor => {
+        EquipSlot::BodyArmor if equip.cloak.is_some() => {
             // Suit: cannot put on if cloak is worn.
-            if equip.cloak.is_some() {
-                return Some(EquipError::CloakBlocksSuit);
-            }
+            return Some(EquipError::CloakBlocksSuit);
         }
         _ => {}
     }
@@ -326,39 +322,39 @@ pub fn check_removal_layering(
     match target_slot {
         EquipSlot::BodyArmor => {
             // Suit removal: cloak must not be cursed.
-            if let Some(cloak) = equip.cloak {
-                if is_item_cursed(world, cloak) {
-                    return Some(EquipError::CursedCannotRemove);
-                }
+            if let Some(cloak) = equip.cloak
+                && is_item_cursed(world, cloak)
+            {
+                return Some(EquipError::CursedCannotRemove);
             }
         }
         EquipSlot::Shirt => {
             // Shirt removal: cloak and suit must not be cursed.
-            if let Some(cloak) = equip.cloak {
-                if is_item_cursed(world, cloak) {
-                    return Some(EquipError::CursedCannotRemove);
-                }
+            if let Some(cloak) = equip.cloak
+                && is_item_cursed(world, cloak)
+            {
+                return Some(EquipError::CursedCannotRemove);
             }
-            if let Some(suit) = equip.body_armor {
-                if is_item_cursed(world, suit) {
-                    return Some(EquipError::CursedCannotRemove);
-                }
+            if let Some(suit) = equip.body_armor
+                && is_item_cursed(world, suit)
+            {
+                return Some(EquipError::CursedCannotRemove);
             }
         }
         EquipSlot::Gloves => {
             // Gloves removal: weapon must not be welded.
-            if let Some(weapon) = equip.weapon {
-                if is_weapon_welded(world, weapon) {
-                    return Some(EquipError::WeldedWeapon);
-                }
+            if let Some(weapon) = equip.weapon
+                && is_weapon_welded(world, weapon)
+            {
+                return Some(EquipError::WeldedWeapon);
             }
         }
         EquipSlot::RingLeft | EquipSlot::RingRight => {
             // Ring removal: gloves must not be cursed.
-            if let Some(gloves) = equip.gloves {
-                if is_item_cursed(world, gloves) {
-                    return Some(EquipError::CursedGlovesBlockRing);
-                }
+            if let Some(gloves) = equip.gloves
+                && is_item_cursed(world, gloves)
+            {
+                return Some(EquipError::CursedGlovesBlockRing);
             }
         }
         _ => {}
@@ -453,10 +449,10 @@ pub fn equip_item(
     }
 
     // Check layering constraints for armor.
-    if matches!(slot, EquipSlot::Shirt | EquipSlot::BodyArmor) {
-        if let Some(err) = check_layering(world, player, slot) {
-            return Err(err);
-        }
+    if matches!(slot, EquipSlot::Shirt | EquipSlot::BodyArmor)
+        && let Some(err) = check_layering(world, player, slot)
+    {
+        return Err(err);
     }
 
     // Check for two-handed weapon / shield conflict.
@@ -726,21 +722,20 @@ pub fn calculate_ac(world: &GameWorld, player: Entity, obj_defs: &[ObjectDef]) -
     // Armor contributions via ARM_BONUS.
     for slot_item in armor_slots.iter().flatten() {
         let item = *slot_item;
-        if let Some(core) = world.get_component::<ObjectCore>(item) {
-            if let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
-                && let Some(ref armor_info) = def.armor
-            {
-                let a_ac = -(armor_info.ac_bonus as i32); // ac_bonus is negative in data
-                let spe = world
-                    .get_component::<Enchantment>(item)
-                    .map(|e| e.spe as i32)
-                    .unwrap_or(0);
-                let (eroded, eroded2) = world
-                    .get_component::<Erosion>(item)
-                    .map(|e| (e.eroded, e.eroded2))
-                    .unwrap_or((0, 0));
-                ac -= arm_bonus(a_ac, spe, eroded, eroded2);
-            }
+        if let Some(core) = world.get_component::<ObjectCore>(item)
+            && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
+            && let Some(ref armor_info) = def.armor
+        {
+            let a_ac = -(armor_info.ac_bonus as i32); // ac_bonus is negative in data
+            let spe = world
+                .get_component::<Enchantment>(item)
+                .map(|e| e.spe as i32)
+                .unwrap_or(0);
+            let (eroded, eroded2) = world
+                .get_component::<Erosion>(item)
+                .map(|e| (e.eroded, e.eroded2))
+                .unwrap_or((0, 0));
+            ac -= arm_bonus(a_ac, spe, eroded, eroded2);
         }
     }
 
@@ -760,13 +755,12 @@ pub fn calculate_ac(world: &GameWorld, player: Entity, obj_defs: &[ObjectDef]) -
     }
 
     // Amulet of guarding: flat -2 AC.
-    if let Some(amulet) = equip.amulet {
-        if let Some(core) = world.get_component::<ObjectCore>(amulet)
-            && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
-            && def.name == "amulet of guarding"
-        {
-            ac -= 2;
-        }
+    if let Some(amulet) = equip.amulet
+        && let Some(core) = world.get_component::<ObjectCore>(amulet)
+        && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
+        && def.name == "amulet of guarding"
+    {
+        ac -= 2;
     }
 
     // Clamp to [-99, 99].
@@ -809,10 +803,9 @@ pub fn magic_cancellation(world: &GameWorld, player: Entity, obj_defs: &[ObjectD
         if let Some(core) = world.get_component::<ObjectCore>(item)
             && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
             && let Some(ref armor_info) = def.armor
+            && armor_info.magic_cancel > mc
         {
-            if armor_info.magic_cancel > mc {
-                mc = armor_info.magic_cancel;
-            }
+            mc = armor_info.magic_cancel;
         }
     }
 

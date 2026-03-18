@@ -1086,18 +1086,27 @@ pub fn tick_status_effects(
 /// `luckstone_cursed`: true if the carried luckstone is cursed.
 /// `luckstone_blessed`: true if the carried luckstone is blessed.
 /// `has_amulet_or_angry_god`: shortens interval from 600 to 300.
+#[derive(Debug, Clone, Copy)]
+pub struct LuckTickContext {
+    pub turn: u64,
+    pub base_luck: i32,
+    pub has_luckstone: bool,
+    pub luckstone_cursed: bool,
+    pub luckstone_blessed: bool,
+    pub has_amulet_or_angry_god: bool,
+}
+
 pub fn tick_luck(
     world: &mut GameWorld,
     entity: Entity,
-    turn: u64,
-    base_luck: i32,
-    has_luckstone: bool,
-    luckstone_cursed: bool,
-    luckstone_blessed: bool,
-    has_amulet_or_angry_god: bool,
+    context: LuckTickContext,
 ) -> Vec<EngineEvent> {
-    let interval: u64 = if has_amulet_or_angry_god { 300 } else { 600 };
-    if !turn.is_multiple_of(interval) {
+    let interval: u64 = if context.has_amulet_or_angry_god {
+        300
+    } else {
+        600
+    };
+    if !context.turn.is_multiple_of(interval) {
         return vec![];
     }
 
@@ -1106,7 +1115,7 @@ pub fn tick_luck(
         None => return vec![],
     };
 
-    if pc.luck == base_luck {
+    if pc.luck == context.base_luck {
         return vec![];
     }
 
@@ -1115,18 +1124,18 @@ pub fn tick_luck(
     // Uncursed luckstone: no decay.
     // Blessed luckstone: negative luck recovers, positive doesn't decay.
     // Cursed luckstone: positive luck decays, negative doesn't recover.
-    let no_stone = !has_luckstone;
-    let time_luck_effect = if luckstone_blessed {
+    let no_stone = !context.has_luckstone;
+    let time_luck_effect = if context.luckstone_blessed {
         1i32
-    } else if luckstone_cursed {
+    } else if context.luckstone_cursed {
         -1i32
     } else {
         0i32
     };
 
-    if pc.luck > base_luck && (no_stone || time_luck_effect < 0) {
+    if pc.luck > context.base_luck && (no_stone || time_luck_effect < 0) {
         pc.luck -= 1;
-    } else if pc.luck < base_luck && (no_stone || time_luck_effect > 0) {
+    } else if pc.luck < context.base_luck && (no_stone || time_luck_effect > 0) {
         pc.luck += 1;
     }
 
@@ -2937,7 +2946,18 @@ mod tests {
             pc.luck = 5;
         }
         // At turn 600, no luckstone
-        tick_luck(&mut w, p, 600, 0, false, false, false, false);
+        tick_luck(
+            &mut w,
+            p,
+            LuckTickContext {
+                turn: 600,
+                base_luck: 0,
+                has_luckstone: false,
+                luckstone_cursed: false,
+                luckstone_blessed: false,
+                has_amulet_or_angry_god: false,
+            },
+        );
         assert_eq!(
             w.get_component::<crate::world::PlayerCombat>(p)
                 .unwrap()
@@ -2956,7 +2976,18 @@ mod tests {
                 .unwrap();
             pc.luck = 5;
         }
-        tick_luck(&mut w, p, 600, 0, true, false, false, false);
+        tick_luck(
+            &mut w,
+            p,
+            LuckTickContext {
+                turn: 600,
+                base_luck: 0,
+                has_luckstone: true,
+                luckstone_cursed: false,
+                luckstone_blessed: false,
+                has_amulet_or_angry_god: false,
+            },
+        );
         assert_eq!(
             w.get_component::<crate::world::PlayerCombat>(p)
                 .unwrap()
@@ -2976,7 +3007,18 @@ mod tests {
             pc.luck = 5;
         }
         // Cursed luckstone: positive luck decays, negative doesn't recover
-        tick_luck(&mut w, p, 600, 0, true, true, false, false);
+        tick_luck(
+            &mut w,
+            p,
+            LuckTickContext {
+                turn: 600,
+                base_luck: 0,
+                has_luckstone: true,
+                luckstone_cursed: true,
+                luckstone_blessed: false,
+                has_amulet_or_angry_god: false,
+            },
+        );
         assert_eq!(
             w.get_component::<crate::world::PlayerCombat>(p)
                 .unwrap()
@@ -2996,7 +3038,18 @@ mod tests {
             pc.luck = -3;
         }
         // Blessed luckstone: negative luck recovers
-        tick_luck(&mut w, p, 600, 0, true, false, true, false);
+        tick_luck(
+            &mut w,
+            p,
+            LuckTickContext {
+                turn: 600,
+                base_luck: 0,
+                has_luckstone: true,
+                luckstone_cursed: false,
+                luckstone_blessed: true,
+                has_amulet_or_angry_god: false,
+            },
+        );
         assert_eq!(
             w.get_component::<crate::world::PlayerCombat>(p)
                 .unwrap()
@@ -3015,7 +3068,18 @@ mod tests {
                 .unwrap();
             pc.luck = 5;
         }
-        tick_luck(&mut w, p, 601, 0, false, false, false, false);
+        tick_luck(
+            &mut w,
+            p,
+            LuckTickContext {
+                turn: 601,
+                base_luck: 0,
+                has_luckstone: false,
+                luckstone_cursed: false,
+                luckstone_blessed: false,
+                has_amulet_or_angry_god: false,
+            },
+        );
         assert_eq!(
             w.get_component::<crate::world::PlayerCombat>(p)
                 .unwrap()
@@ -3035,7 +3099,18 @@ mod tests {
             pc.luck = 5;
         }
         // With amulet/angry god, interval is 300 instead of 600
-        tick_luck(&mut w, p, 300, 0, false, false, false, true);
+        tick_luck(
+            &mut w,
+            p,
+            LuckTickContext {
+                turn: 300,
+                base_luck: 0,
+                has_luckstone: false,
+                luckstone_cursed: false,
+                luckstone_blessed: false,
+                has_amulet_or_angry_god: true,
+            },
+        );
         assert_eq!(
             w.get_component::<crate::world::PlayerCombat>(p)
                 .unwrap()

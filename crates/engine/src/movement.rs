@@ -609,15 +609,15 @@ pub fn try_pool_movement(
     }
 
     // Mounted on a swimming steed: safe passage through water.
-    if steed::is_mounted(world, entity) {
-        if let Some(steed_entity) = steed::get_steed(world, entity) {
-            let steed_can_swim = world
-                .get_component::<crate::monster_ai::MonsterSpeciesFlags>(steed_entity)
-                .is_some_and(|f| f.0.contains(nethack_babel_data::MonsterFlags::SWIM));
-            if steed_can_swim {
-                events.push(EngineEvent::msg("steed-swims"));
-                return (events, true);
-            }
+    if steed::is_mounted(world, entity)
+        && let Some(steed_entity) = steed::get_steed(world, entity)
+    {
+        let steed_can_swim = world
+            .get_component::<crate::monster_ai::MonsterSpeciesFlags>(steed_entity)
+            .is_some_and(|f| f.0.contains(nethack_babel_data::MonsterFlags::SWIM));
+        if steed_can_swim {
+            events.push(EngineEvent::msg("steed-swims"));
+            return (events, true);
         }
     }
 

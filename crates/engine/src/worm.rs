@@ -346,18 +346,18 @@ pub fn hit_worm_segment(worm: &mut WormBody, segment_pos: Position, damage: i32)
     }
 
     // Cut if damage >= 5 and we found the segment.
-    if damage >= 5 {
-        if let Some(idx) = idx {
-            let severed = worm.segments.len() - idx;
-            worm.segments.truncate(idx);
-            if worm.max_length > worm.segments.len() {
-                worm.max_length = worm.segments.len();
-            }
-            return WormHitResult::Severed {
-                segments_remaining: worm.segments.len(),
-                severed_count: severed,
-            };
+    if damage >= 5
+        && let Some(idx) = idx
+    {
+        let severed = worm.segments.len() - idx;
+        worm.segments.truncate(idx);
+        if worm.max_length > worm.segments.len() {
+            worm.max_length = worm.segments.len();
         }
+        return WormHitResult::Severed {
+            segments_remaining: worm.segments.len(),
+            severed_count: severed,
+        };
     }
 
     WormHitResult::Hit {
@@ -372,10 +372,10 @@ pub fn hit_worm_segment(worm: &mut WormBody, segment_pos: Position, damage: i32)
 /// Check if any part of a worm entity occupies the given position.
 pub fn worm_occupies(world: &GameWorld, worm: Entity, pos: Position) -> bool {
     // Check head.
-    if let Some(p) = world.get_component::<Positioned>(worm) {
-        if p.0 == pos {
-            return true;
-        }
+    if let Some(p) = world.get_component::<Positioned>(worm)
+        && p.0 == pos
+    {
+        return true;
     }
     // Check segments.
     if let Some(ws) = world.get_component::<WormSegments>(worm) {
@@ -397,11 +397,11 @@ pub fn worm_tail_pos(world: &GameWorld, worm: Entity) -> Option<Position> {
 /// Cut a worm entity at a specific segment index, removing segments
 /// at and beyond that index. Returns the positions of removed segments.
 pub fn cut_worm_at(world: &mut GameWorld, worm: Entity, segment_idx: usize) -> Vec<Position> {
-    if let Some(mut ws) = world.get_component_mut::<WormSegments>(worm) {
-        if segment_idx < ws.segments.len() {
-            let removed = ws.segments.split_off(segment_idx);
-            return removed;
-        }
+    if let Some(mut ws) = world.get_component_mut::<WormSegments>(worm)
+        && segment_idx < ws.segments.len()
+    {
+        let removed = ws.segments.split_off(segment_idx);
+        return removed;
     }
     Vec::new()
 }

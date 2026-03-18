@@ -259,10 +259,10 @@ pub fn display_name_with_appearance(
         return item_name.to_string();
     }
 
-    if let Some(called) = is_called {
-        if let Some(appearance) = appearance_table.unidentified_name(item_class, type_index) {
-            return format!("{} called {}", appearance, called);
-        }
+    if let Some(called) = is_called
+        && let Some(appearance) = appearance_table.unidentified_name(item_class, type_index)
+    {
+        return format!("{} called {}", appearance, called);
     }
 
     if let Some(appearance) = appearance_table.unidentified_name(item_class, type_index) {
