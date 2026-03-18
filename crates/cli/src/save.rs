@@ -1605,6 +1605,7 @@ mod tests {
         TempleCleansing,
         TempleWrath,
         TempleCalm,
+        UntendedTempleGhost,
         SanctumRevisit,
         WizardHarassment,
         WizardLevelTeleport,
@@ -1640,6 +1641,7 @@ mod tests {
                 SaveStoryTraversalScenario::TempleCleansing => "temple-cleansing",
                 SaveStoryTraversalScenario::TempleWrath => "temple-wrath",
                 SaveStoryTraversalScenario::TempleCalm => "temple-calm",
+                SaveStoryTraversalScenario::UntendedTempleGhost => "untended-temple-ghost",
                 SaveStoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 SaveStoryTraversalScenario::WizardHarassment => "wizard-harassment",
                 SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
@@ -2749,6 +2751,20 @@ mod tests {
                     save_and_reload_world("story-matrix-temple-calm", &world, [30u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(&mut loaded, PlayerAction::Pray, &mut rng);
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::UntendedTempleGhost => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                spawn_full_monster(&mut world, Position::new(7, 5), "ghost", 12);
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-untended-temple-ghost", &world, [62u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
                 (loaded, events)
             }
             SaveStoryTraversalScenario::SanctumRevisit => {
@@ -4756,6 +4772,33 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_preserves_untended_temple_ghost_on_current_level() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        spawn_full_monster(&mut world, Position::new(7, 5), "ghost", 12);
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("untended-temple-ghost-round-trip", &world, [61u8; 32]);
+
+        assert_eq!(
+            count_monsters_named(&loaded, "ghost"),
+            1,
+            "untended temple ghost should survive round-trip on the current level"
+        );
+        assert_eq!(
+            loaded
+                .dungeon()
+                .current_level
+                .get(Position::new(6, 5))
+                .map(|cell| cell.terrain),
+            Some(Terrain::Altar)
+        );
+    }
+
+    #[test]
     fn round_trip_loaded_floor_items_stay_on_original_level() {
         use nethack_babel_data::schema::{ObjectClass, ObjectTypeId};
 
@@ -4884,6 +4927,7 @@ mod tests {
             SaveStoryTraversalScenario::TempleCleansing,
             SaveStoryTraversalScenario::TempleWrath,
             SaveStoryTraversalScenario::TempleCalm,
+            SaveStoryTraversalScenario::UntendedTempleGhost,
             SaveStoryTraversalScenario::SanctumRevisit,
             SaveStoryTraversalScenario::WizardHarassment,
             SaveStoryTraversalScenario::WizardLevelTeleport,
@@ -5296,6 +5340,21 @@ mod tests {
                         event,
                         EngineEvent::Message { key, .. } if key == "priest-calmed"
                     )));
+                }
+                SaveStoryTraversalScenario::UntendedTempleGhost => {
+                    assert_eq!(
+                        count_monsters_named(&world, "ghost"),
+                        1,
+                        "untended temple ghost should survive the save/load matrix"
+                    );
+                    assert_eq!(
+                        world
+                            .dungeon()
+                            .current_level
+                            .get(Position::new(6, 5))
+                            .map(|cell| cell.terrain),
+                        Some(Terrain::Altar)
+                    );
                 }
                 SaveStoryTraversalScenario::SanctumRevisit => {
                     assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);

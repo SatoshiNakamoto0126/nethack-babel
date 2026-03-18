@@ -5992,8 +5992,24 @@ fn resolve_priest_chat<R: Rng>(
     donation_events
 }
 
+fn maybe_spawn_untended_temple_ghost(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    rng: &mut impl Rng,
+) -> Option<(hecs::Entity, Position)> {
+    let ghost_present = world.ecs().query::<&Monster>().iter().any(|(entity, _)| {
+        live_monster_entity(world, entity)
+            && quest_name_matches(&world.entity_name(entity), "ghost")
+    });
+    if ghost_present || rng.random_range(0..4) != 0 {
+        return None;
+    }
+
+    spawn_named_monster_near_entity(world, player, "ghost", rng)
+}
+
 fn maybe_emit_current_level_temple_entry(
-    world: &GameWorld,
+    world: &mut GameWorld,
     player: hecs::Entity,
     first_visit: bool,
     rng: &mut impl Rng,
@@ -6063,7 +6079,17 @@ fn maybe_emit_current_level_temple_entry(
         false,
         rng,
     ) {
-        events.extend(crate::npc::untended_temple_events(message_index, false));
+        let ghost_spawn = maybe_spawn_untended_temple_ghost(world, player, rng);
+        events.extend(crate::npc::untended_temple_events(
+            message_index,
+            ghost_spawn.is_some(),
+        ));
+        if let Some((ghost, pos)) = ghost_spawn {
+            events.push(EngineEvent::MonsterGenerated {
+                entity: ghost,
+                position: pos,
+            });
+        }
     }
 }
 
@@ -6834,6 +6860,7 @@ mod tests {
         TempleCleansing,
         TempleWrath,
         TempleCalm,
+        UntendedTempleGhost,
         SanctumRevisit,
         WizardHarassment,
         WizardLevelTeleport,
@@ -6869,6 +6896,7 @@ mod tests {
                 StoryTraversalScenario::TempleCleansing => "temple-cleansing",
                 StoryTraversalScenario::TempleWrath => "temple-wrath",
                 StoryTraversalScenario::TempleCalm => "temple-calm",
+                StoryTraversalScenario::UntendedTempleGhost => "untended-temple-ghost",
                 StoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 StoryTraversalScenario::WizardHarassment => "wizard-harassment",
                 StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
@@ -7945,6 +7973,43 @@ mod tests {
                 let mut rng = test_rng();
                 let pray_events = resolve_turn(&mut world, PlayerAction::Pray, &mut rng);
                 (world, pray_events)
+            }
+            StoryTraversalScenario::UntendedTempleGhost => {
+                for seed in 0_u64..256 {
+                    let mut world = make_test_world();
+                    install_test_catalogs(&mut world);
+                    let player = world.player();
+                    world
+                        .ecs_mut()
+                        .insert_one(player, monk_identity())
+                        .expect("player should accept monk identity");
+                    world
+                        .dungeon_mut()
+                        .current_level
+                        .set_terrain(Position::new(6, 5), Terrain::Altar);
+
+                    let mut rng = rand_pcg::Pcg64::seed_from_u64(seed);
+                    let mut events = Vec::new();
+                    maybe_emit_current_level_temple_entry(
+                        &mut world,
+                        player,
+                        true,
+                        &mut rng,
+                        &mut events,
+                    );
+                    if events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "temple-ghost-appears"
+                        )
+                    }) {
+                        return (world, events);
+                    }
+                }
+
+                panic!(
+                    "expected at least one deterministic seed to spawn an untended temple ghost"
+                );
             }
             StoryTraversalScenario::SanctumRevisit => {
                 let mut world = make_stair_world(Terrain::StairsDown, 19);
@@ -14139,7 +14204,7 @@ mod tests {
 
         let mut rng = test_rng();
         let mut events = Vec::new();
-        maybe_emit_current_level_temple_entry(&world, player, true, &mut rng, &mut events);
+        maybe_emit_current_level_temple_entry(&mut world, player, true, &mut rng, &mut events);
 
         assert!(events.iter().any(|event| matches!(
             event,
@@ -14162,13 +14227,54 @@ mod tests {
 
         let mut rng = test_rng();
         let mut events = Vec::new();
-        maybe_emit_current_level_temple_entry(&world, player, true, &mut rng, &mut events);
+        maybe_emit_current_level_temple_entry(&mut world, player, true, &mut rng, &mut events);
 
         assert!(events.iter().any(|event| matches!(
             event,
             EngineEvent::Message { key, .. }
                 if key == "temple-eerie" || key == "temple-watched" || key == "temple-shiver"
         )));
+    }
+
+    #[test]
+    fn test_first_visit_untended_temple_can_spawn_real_ghost() {
+        for seed in 0_u64..256 {
+            let mut world = make_test_world();
+            install_test_catalogs(&mut world);
+            let player = world.player();
+            world
+                .ecs_mut()
+                .insert_one(player, monk_identity())
+                .expect("player should accept identity");
+            world
+                .dungeon_mut()
+                .current_level
+                .set_terrain(Position::new(6, 5), Terrain::Altar);
+
+            let mut rng = rand_pcg::Pcg64::seed_from_u64(seed);
+            let mut events = Vec::new();
+            maybe_emit_current_level_temple_entry(&mut world, player, true, &mut rng, &mut events);
+
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "temple-ghost-appears"
+                )
+            }) {
+                assert!(
+                    events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
+                );
+                assert!(
+                    count_monsters_named(&world, "ghost") >= 1,
+                    "untended temple ghost entry should spawn a real ghost entity"
+                );
+                return;
+            }
+        }
+
+        panic!("expected at least one deterministic seed to spawn an untended temple ghost");
     }
 
     #[test]
@@ -15251,6 +15357,7 @@ mod tests {
             StoryTraversalScenario::TempleCleansing,
             StoryTraversalScenario::TempleWrath,
             StoryTraversalScenario::TempleCalm,
+            StoryTraversalScenario::UntendedTempleGhost,
             StoryTraversalScenario::SanctumRevisit,
             StoryTraversalScenario::WizardHarassment,
             StoryTraversalScenario::WizardLevelTeleport,
@@ -15734,6 +15841,22 @@ mod tests {
                         event,
                         EngineEvent::Message { key, .. } if key == "priest-calmed"
                     )));
+                }
+                StoryTraversalScenario::UntendedTempleGhost => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "temple-ghost-appears"
+                    )));
+                    assert!(
+                        final_events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
+                    );
+                    assert!(
+                        count_monsters_named(&world, "ghost") >= 1,
+                        "{} should spawn a real ghost on untended temple entry",
+                        scenario.label()
+                    );
                 }
                 StoryTraversalScenario::SanctumRevisit => {
                     assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
