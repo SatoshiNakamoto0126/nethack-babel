@@ -827,16 +827,28 @@ fn emit_ambient_dungeon_sound(
             .any(|shop| !shop_room_is_deserted(world, shop));
     let has_temple = current_level_has_temple_ambient(world);
     let has_oracle = current_level_has_oracle_ambient(world);
+    let vault_ambient = current_level_vault_ambient_kind(world);
     if let Some(key) = crate::music::ambient_sounds(
         world.dungeon().depth,
         ambient_branch_name(world.dungeon().branch),
         has_shop,
         has_temple,
         has_oracle,
+        vault_ambient,
         rng,
     ) {
         events.push(EngineEvent::msg(key));
     }
+}
+
+#[doc(hidden)]
+pub fn force_emit_ambient_dungeon_sound(
+    world: &GameWorld,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    let mut events = Vec::new();
+    emit_ambient_dungeon_sound(world, rng, &mut events);
+    events
 }
 
 fn ambient_branch_name(branch: DungeonBranch) -> &'static str {
@@ -874,6 +886,48 @@ fn current_level_has_temple_ambient(world: &GameWorld) -> bool {
 fn current_level_has_oracle_ambient(world: &GameWorld) -> bool {
     identify_special_level(world.dungeon().branch, world.dungeon().depth)
         == Some(crate::special_levels::SpecialLevelId::OracleLevel)
+}
+
+fn current_level_vault_ambient_kind(world: &GameWorld) -> Option<crate::music::VaultAmbientKind> {
+    let player_pos = world
+        .get_component::<Positioned>(world.player())
+        .map(|pos| pos.0)?;
+    let vault_rooms = &world.dungeon().vault_rooms;
+    if vault_rooms.is_empty() || crate::vault::player_in_vault(player_pos, vault_rooms).is_some() {
+        return None;
+    }
+
+    if world.dungeon().vault_guard_present {
+        return Some(crate::music::VaultAmbientKind::GuardFootsteps);
+    }
+
+    if current_level_vault_has_gold(world, vault_rooms) {
+        Some(crate::music::VaultAmbientKind::CountingGold)
+    } else {
+        Some(crate::music::VaultAmbientKind::Searching)
+    }
+}
+
+fn current_level_vault_has_gold(world: &GameWorld, vault_rooms: &[crate::vault::VaultRoom]) -> bool {
+    let branch = crate::dungeon::data_branch_id(world.dungeon().branch);
+    let depth = world.dungeon().depth as i16;
+    world
+        .ecs()
+        .query::<(&ObjectCore, &ObjectLocation)>()
+        .iter()
+        .any(|(_entity, (core, location))| {
+            core.object_class == ObjectClass::Coin
+                && matches!(
+                    location,
+                    ObjectLocation::Floor {
+                        x,
+                        y,
+                        level,
+                    } if level.branch == branch
+                        && level.depth == depth
+                        && vault_rooms.iter().any(|vault| vault.contains(Position::new(i32::from(*x), i32::from(*y))))
+                )
+        })
 }
 
 fn tick_monster_incapacitation(world: &mut GameWorld, events: &mut Vec<EngineEvent>) {
@@ -17049,6 +17103,103 @@ mod tests {
             found,
             "shop levels should eventually emit live ambient shop texture"
         );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_vault_counting_texture() {
+        let mut world = make_test_world();
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(crate::vault::VaultRoom {
+                top_left: Position::new(6, 5),
+                bottom_right: Position::new(7, 6),
+            });
+        spawn_floor_coin(&mut world, Position::new(6, 5));
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "ambient-vault-counting"
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "vault levels with floor gold should eventually emit vault-counting texture"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_vault_guard_texture() {
+        let mut world = make_test_world();
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(crate::vault::VaultRoom {
+                top_left: Position::new(6, 5),
+                bottom_right: Position::new(7, 6),
+            });
+        world.dungeon_mut().vault_guard_present = true;
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "ambient-vault-footsteps"
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "vault levels with an active guard should eventually emit guard-footstep texture"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_suppressed_inside_vault() {
+        let mut world = make_test_world();
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(crate::vault::VaultRoom {
+                top_left: Position::new(6, 5),
+                bottom_right: Position::new(7, 6),
+            });
+        spawn_floor_coin(&mut world, Position::new(6, 5));
+        set_player_position(&mut world, Position::new(6, 5));
+
+        let mut rng = test_rng();
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            assert!(
+                !events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-vault-")
+                )),
+                "vault ambient should not fire while the player is inside the vault"
+            );
+        }
     }
 
     #[test]

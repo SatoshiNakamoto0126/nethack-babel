@@ -3378,6 +3378,12 @@ ambient-oracle-ravings = You hear convulsive ravings.
 # TODO: translate
 ambient-oracle-snakes = You hear snoring snakes.
 # TODO: translate
+ambient-vault-counting = You hear someone counting money.
+# TODO: translate
+ambient-vault-searching = You hear someone searching.
+# TODO: translate
+ambient-vault-footsteps = You hear the footsteps of a guard on patrol.
+# TODO: translate
 ambient-deep-crunching = You hear a crunching sound.
 # TODO: translate
 ambient-deep-hollow = You hear a hollow sound.

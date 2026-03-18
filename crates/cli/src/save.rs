@@ -1343,6 +1343,30 @@ mod tests {
         }
     }
 
+    fn spawn_floor_coin(world: &mut GameWorld, pos: Position) -> hecs::Entity {
+        let creation_order = world.next_creation_order();
+        world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(1),
+                object_class: ObjectClass::Coin,
+                quantity: 100,
+                weight: 1,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: pos.x as i16,
+                y: pos.y as i16,
+                level: nethack_babel_data::schema::DungeonLevel {
+                    branch: nethack_babel_engine::dungeon::data_branch_id(world.dungeon().branch),
+                    depth: world.dungeon().depth as i16,
+                },
+            },
+            creation_order,
+        ))
+    }
+
     fn find_terrain(map: &LevelMap, terrain: Terrain) -> Option<Position> {
         for y in 0..map.height {
             for x in 0..map.width {
@@ -5235,6 +5259,40 @@ mod tests {
         }
 
         panic!("carried Amulet should eventually wake the sleeping Wizard after save/load");
+    }
+
+    #[test]
+    fn round_trip_loaded_vault_ambient_preserves_runtime_conditions() {
+        let mut world = make_stair_world(DungeonBranch::Main, 5, Terrain::Floor);
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(nethack_babel_engine::vault::VaultRoom {
+                top_left: Position::new(6, 5),
+                bottom_right: Position::new(7, 6),
+            });
+        spawn_floor_coin(&mut world, Position::new(6, 5));
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("vault-ambient-round-trip", &world, [66u8; 32]);
+        assert_eq!(loaded.dungeon().vault_rooms.len(), 1);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "ambient-vault-counting"
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("vault counting ambience should survive save/load round-trip");
     }
 
     #[test]
