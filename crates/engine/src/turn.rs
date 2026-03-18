@@ -5535,8 +5535,39 @@ fn apply_wizard_level_teleport(
     true
 }
 
-fn wake_sleeping_monsters_on_current_level(world: &mut GameWorld, events: &mut Vec<EngineEvent>) {
+fn aggravate_monsters_on_current_level(
+    world: &mut GameWorld,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) {
     wake_sleeping_monsters_near_position(world, Position::new(0, 0), i32::MAX, events);
+
+    let paralyzed_monsters: Vec<hecs::Entity> = world
+        .ecs()
+        .query::<(&Monster,)>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .filter(|entity| {
+            live_monster_entity(world, *entity)
+                && world
+                    .get_component::<crate::status::StatusEffects>(*entity)
+                    .is_some_and(|status| status.paralysis > 0)
+        })
+        .collect();
+
+    for entity in paralyzed_monsters {
+        if rng.random_ratio(1, 5)
+            && let Some(mut status) =
+                world.get_component_mut::<crate::status::StatusEffects>(entity)
+            && status.paralysis > 0
+        {
+            status.paralysis = 0;
+            events.push(EngineEvent::StatusRemoved {
+                entity,
+                status: crate::event::StatusEffect::Paralyzed,
+            });
+        }
+    }
 }
 
 fn wake_sleeping_monsters_near_position(
@@ -5699,7 +5730,7 @@ fn apply_wizard_harassment_action(
             curse_random_player_items(world, player, rng);
         }
         crate::npc::WizardAction::Aggravate => {
-            wake_sleeping_monsters_on_current_level(world, events);
+            aggravate_monsters_on_current_level(world, rng, events);
         }
         crate::npc::WizardAction::Resurrect => {
             if wizard_of_yendor_entities(world).is_empty()
@@ -13230,6 +13261,43 @@ mod tests {
             !crate::status::is_sleeping(&world, sleeper),
             "wizard aggravation should wake sleeping monsters on the level"
         );
+    }
+
+    #[test]
+    fn test_offscreen_wizard_aggravate_can_break_monster_paralysis() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let target = spawn_full_monster(&mut world, Position::new(7, 5), "goblin", 6);
+        let _ = crate::status::make_paralyzed(&mut world, target, 10);
+        let mut rng = rand_pcg::Pcg64::seed_from_u64(0xA661_A661);
+
+        for _ in 0..64 {
+            let mut events = crate::npc::wizard_harass_events(crate::npc::WizardAction::Aggravate);
+            apply_wizard_harassment_action(
+                &mut world,
+                None,
+                player,
+                crate::npc::WizardAction::Aggravate,
+                &mut rng,
+                &mut events,
+            );
+            if !world
+                .get_component::<crate::status::StatusEffects>(target)
+                .is_some_and(|status| status.paralysis > 0)
+            {
+                assert!(events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::StatusRemoved {
+                        entity,
+                        status: crate::event::StatusEffect::Paralyzed,
+                    } if *entity == target
+                )));
+                return;
+            }
+        }
+
+        panic!("wizard aggravation never broke monster paralysis across repeated attempts");
     }
 
     #[test]
