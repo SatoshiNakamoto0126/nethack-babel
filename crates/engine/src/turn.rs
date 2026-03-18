@@ -15,7 +15,9 @@ use nethack_babel_data::{
 
 use crate::action::{Direction, NameTarget, PlayerAction, Position};
 use crate::conduct::ConductState;
-use crate::dungeon::{CachedLevelRuntimeState, CachedMonster, DungeonBranch, Terrain};
+use crate::dungeon::{
+    CachedLevelRuntimeState, CachedMonster, DungeonBranch, Terrain, branch_max_depth,
+};
 use crate::event::{DeathCause, EngineEvent, HpSource, HungerLevel};
 use crate::makemon::{GoodPosFlags, MakeMonFlags, enexto, goodpos, makemon};
 use crate::map_gen::generate_level;
@@ -5220,9 +5222,78 @@ fn process_wizard_of_yendor_turn(
 
     let wizard = live_wizards[0];
     seed_wizard_runtime_state(world, wizard);
+    if should_wizard_level_teleport_player(world, player_has_amulet, rng)
+        && apply_wizard_level_teleport(world, rng, events)
+    {
+        return;
+    }
     let action = crate::npc::choose_wizard_action(world, wizard, player_has_amulet, rng);
     events.extend(crate::npc::wizard_harass_events(action));
     apply_wizard_harassment_action(world, wizard, player, action, rng, events);
+}
+
+fn should_wizard_level_teleport_player(
+    world: &GameWorld,
+    player_has_amulet: bool,
+    rng: &mut impl Rng,
+) -> bool {
+    if player_has_amulet {
+        return false;
+    }
+
+    let branch = world.dungeon().branch;
+    if branch == DungeonBranch::Endgame || branch_max_depth(branch) <= 1 {
+        return false;
+    }
+
+    let player_events = read_player_events(world, world.player());
+    if !(player_events.invoked || player_events.killed_wizard) {
+        return false;
+    }
+
+    rng.random_range(0..4) == 0
+}
+
+fn choose_wizard_level_teleport_depth(world: &GameWorld, rng: &mut impl Rng) -> Option<i32> {
+    let branch = world.dungeon().branch;
+    let max_depth = branch_max_depth(branch);
+    let current_depth = world.dungeon().depth.clamp(1, max_depth);
+    if max_depth <= 1 {
+        return None;
+    }
+
+    let mut depths: Vec<i32> = (1..=max_depth)
+        .filter(|depth| *depth != current_depth)
+        .collect();
+    if depths.is_empty() {
+        return None;
+    }
+
+    Some(depths.swap_remove(rng.random_range(0..depths.len())))
+}
+
+fn apply_wizard_level_teleport(
+    world: &mut GameWorld,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) -> bool {
+    let current_depth = world.dungeon().depth;
+    let Some(target_depth) = choose_wizard_level_teleport_depth(world, rng) else {
+        return false;
+    };
+
+    events.push(EngineEvent::msg_with(
+        "wizard-level-teleport",
+        vec![("depth", target_depth.to_string())],
+    ));
+    change_level(
+        world,
+        target_depth,
+        target_depth < current_depth,
+        rng,
+        events,
+    );
+    true
 }
 
 fn apply_wizard_harassment_action(
@@ -6765,6 +6836,7 @@ mod tests {
         TempleCalm,
         SanctumRevisit,
         WizardHarassment,
+        WizardLevelTeleport,
         EndgameAscension,
     }
 
@@ -6799,6 +6871,7 @@ mod tests {
                 StoryTraversalScenario::TempleCalm => "temple-calm",
                 StoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 StoryTraversalScenario::WizardHarassment => "wizard-harassment",
+                StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
         }
@@ -7943,6 +8016,35 @@ mod tests {
                             event,
                             EngineEvent::Message { key, .. }
                                 if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                        )
+                    }) {
+                        final_events = events;
+                        break;
+                    }
+                }
+                (world, final_events)
+            }
+            StoryTraversalScenario::WizardLevelTeleport => {
+                let mut world = make_stair_world(Terrain::Floor, 10);
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+                    hp.current = 20;
+                    hp.max = 40;
+                }
+                let mut player_events = read_player_events(&world, player);
+                player_events.invoked = true;
+                persist_player_events(&mut world, player, player_events);
+                let mut rng = test_rng();
+                let mut final_events = Vec::new();
+                for _ in 0..256 {
+                    let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+                    if events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-level-teleport"
                         )
                     }) {
                         final_events = events;
@@ -15151,6 +15253,7 @@ mod tests {
             StoryTraversalScenario::TempleCalm,
             StoryTraversalScenario::SanctumRevisit,
             StoryTraversalScenario::WizardHarassment,
+            StoryTraversalScenario::WizardLevelTeleport,
             StoryTraversalScenario::EndgameAscension,
         ] {
             let (world, final_events) = run_story_traversal_scenario(scenario);
@@ -15683,6 +15786,31 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.invoked),
                         "{} should preserve the invoked harassment trigger state",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::WizardLevelTeleport => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "wizard-level-teleport"
+                    )));
+                    assert!(
+                        final_events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                    );
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Main);
+                    assert_ne!(
+                        world.dungeon().depth,
+                        10,
+                        "{} should move the player to a different depth",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.invoked),
+                        "{} should preserve the invoked teleport trigger state",
                         scenario.label()
                     );
                 }

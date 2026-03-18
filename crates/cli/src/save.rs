@@ -1607,6 +1607,7 @@ mod tests {
         TempleCalm,
         SanctumRevisit,
         WizardHarassment,
+        WizardLevelTeleport,
         EndgameAscension,
     }
 
@@ -1641,6 +1642,7 @@ mod tests {
                 SaveStoryTraversalScenario::TempleCalm => "temple-calm",
                 SaveStoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 SaveStoryTraversalScenario::WizardHarassment => "wizard-harassment",
+                SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
         }
@@ -2823,6 +2825,37 @@ mod tests {
                             event,
                             EngineEvent::Message { key, .. }
                                 if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                        )
+                    }) {
+                        final_events = events;
+                        break;
+                    }
+                }
+                (loaded, final_events)
+            }
+            SaveStoryTraversalScenario::WizardLevelTeleport => {
+                let mut world = make_stair_world(DungeonBranch::Main, 10, Terrain::Floor);
+                let player = world.player();
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+                    hp.current = 20;
+                    hp.max = 40;
+                }
+                if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+                    player_events.invoked = true;
+                }
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-wizard-level-teleport", &world, [60u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let mut final_events = Vec::new();
+                for _ in 0..256 {
+                    let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
+                    if events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-level-teleport"
                         )
                     }) {
                         final_events = events;
@@ -4335,6 +4368,7 @@ mod tests {
         let mut saw_harassment = false;
         let mut saw_curse = false;
         let mut saw_summon = false;
+        let mut saw_level_teleport = false;
 
         for _ in 0..256 {
             let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
@@ -4342,7 +4376,9 @@ mod tests {
                 matches!(
                     event,
                     EngineEvent::Message { key, .. }
-                        if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                        if key == "wizard-curse-items"
+                            || key == "wizard-summon-nasties"
+                            || key == "wizard-level-teleport"
                 )
             }) {
                 saw_harassment = true;
@@ -4358,6 +4394,20 @@ mod tests {
                         EngineEvent::Message { key, .. } if key == "wizard-summon-nasties"
                     )
                 });
+                saw_level_teleport = events.iter().any(|event| {
+                    matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "wizard-level-teleport"
+                    )
+                });
+                if saw_level_teleport {
+                    assert!(
+                        events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                        "wizard level teleport after reload should really move the player"
+                    );
+                }
                 break;
             }
         }
@@ -4378,6 +4428,13 @@ mod tests {
             assert!(
                 count_monsters_named(&loaded, "Wizard of Yendor") >= 1,
                 "summon harassment after reload should keep the wizard present"
+            );
+        }
+        if saw_level_teleport {
+            assert_ne!(
+                loaded.dungeon().depth,
+                1,
+                "wizard level teleport after reload should change the current depth"
             );
         }
     }
@@ -4829,6 +4886,7 @@ mod tests {
             SaveStoryTraversalScenario::TempleCalm,
             SaveStoryTraversalScenario::SanctumRevisit,
             SaveStoryTraversalScenario::WizardHarassment,
+            SaveStoryTraversalScenario::WizardLevelTeleport,
             SaveStoryTraversalScenario::EndgameAscension,
         ] {
             let (world, final_events) = run_round_trip_story_traversal_scenario(scenario);
@@ -5281,6 +5339,25 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.invoked),
                         "save/load wizard matrix should preserve the invoked harassment trigger"
+                    );
+                }
+                SaveStoryTraversalScenario::WizardLevelTeleport => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "wizard-level-teleport"
+                    )));
+                    assert!(
+                        final_events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                    );
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Main);
+                    assert_ne!(world.dungeon().depth, 10);
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.invoked),
+                        "save/load wizard matrix should preserve the invoked teleport trigger"
                     );
                 }
                 SaveStoryTraversalScenario::EndgameAscension => {
