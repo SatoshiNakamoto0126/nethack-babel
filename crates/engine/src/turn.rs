@@ -1900,6 +1900,19 @@ fn resolve_player_action(
                 {
                     let is_peaceful = world.get_component::<Peaceful>(monster_entity).is_some();
                     let is_tame = world.get_component::<Tame>(monster_entity).is_some();
+                    let tameness = world
+                        .get_component::<crate::pets::PetState>(monster_entity)
+                        .map(|pet| pet.tameness);
+                    let hungry = world
+                        .get_component::<crate::pets::PetState>(monster_entity)
+                        .is_some_and(|pet| pet.is_hungry(world.turn()));
+                    let satiated = world
+                        .get_component::<crate::pets::PetState>(monster_entity)
+                        .is_some_and(|pet| pet.hungrytime > world.turn().saturating_add(1000));
+                    let confused = crate::status::is_confused(world, monster_entity);
+                    let fleeing = world
+                        .get_component::<crate::monster_ai::FleeTimer>(monster_entity)
+                        .is_some_and(|timer| timer.0 > 0);
                     let monster_name = world
                         .get_component::<Name>(monster_entity)
                         .map(|name| name.0.clone())
@@ -1934,8 +1947,15 @@ fn resolve_player_action(
                     if let Some(sound_event) = crate::npc::voiced_monster_chat(
                         &monster_name,
                         monster_def.sound,
-                        is_peaceful,
-                        is_tame,
+                        crate::npc::MonsterChatState {
+                            is_peaceful,
+                            is_tame,
+                            tameness,
+                            confused,
+                            fleeing,
+                            hungry,
+                            satiated,
+                        },
                     ) {
                         events.push(sound_event);
                         return;
@@ -7927,6 +7947,49 @@ mod tests {
             .find(|def| def.sound == sound)
             .map(|def| def.names.male.clone())
             .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
+    }
+
+    fn monster_name_with_sound_excluding(
+        world: &GameWorld,
+        sound: MonsterSound,
+        excluded: &[&str],
+    ) -> String {
+        world
+            .monster_catalog()
+            .iter()
+            .find(|def| {
+                def.sound == sound
+                    && !excluded
+                        .iter()
+                        .any(|name| def.names.male.eq_ignore_ascii_case(name))
+            })
+            .map(|def| def.names.male.clone())
+            .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
+    }
+
+    fn make_tame_pet_state(
+        world: &mut GameWorld,
+        monster: hecs::Entity,
+        tameness: u8,
+        hungrytime: u32,
+    ) {
+        world
+            .ecs_mut()
+            .insert_one(monster, Tame)
+            .expect("monster should accept tame marker");
+        let mut pet_state = crate::pets::PetState::new(10, world.turn());
+        pet_state.tameness = tameness;
+        pet_state.hungrytime = hungrytime;
+        world
+            .ecs_mut()
+            .insert_one(monster, pet_state)
+            .expect("monster should accept pet state");
+    }
+
+    fn advance_world_turns(world: &mut GameWorld, turns: u32) {
+        for _ in 0..turns {
+            world.advance_turn();
+        }
     }
 
     #[derive(Clone, Copy)]
@@ -16361,10 +16424,8 @@ mod tests {
         install_test_catalogs(&mut world);
         let neigh_name = monster_name_with_sound(&world, MonsterSound::Neigh);
         let monster = spawn_full_monster(&mut world, Position::new(6, 5), &neigh_name, 10);
-        world
-            .ecs_mut()
-            .insert_one(monster, Tame)
-            .expect("neighing monster should accept tame marker");
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, monster, 4, current_turn.saturating_add(10));
 
         let events = resolve_turn(
             &mut world,
@@ -16376,6 +16437,74 @@ mod tests {
 
         assert!(events.iter().any(|event| {
             matches!(event, EngineEvent::Message { key, .. } if key == "npc-neigh-neighs")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_hungry_tame_barker_whines() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let bark_name = monster_name_with_sound_excluding(&world, MonsterSound::Bark, &["dingo"]);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &bark_name, 10);
+        advance_world_turns(&mut world, 400);
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, monster, 10, current_turn.saturating_sub(400));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-bark-whines")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_satiated_tame_cat_purrs() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let mew_name = monster_name_with_sound(&world, MonsterSound::Mew);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &mew_name, 10);
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, monster, 10, current_turn.saturating_add(1500));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-mew-purrs")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_hungry_tame_horse_whinnies() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let neigh_name = monster_name_with_sound(&world, MonsterSound::Neigh);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &neigh_name, 10);
+        advance_world_turns(&mut world, 400);
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, monster, 10, current_turn.saturating_sub(400));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-neigh-whinnies")
         }));
     }
 

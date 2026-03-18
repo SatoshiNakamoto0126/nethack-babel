@@ -3402,7 +3402,22 @@ npc-shriek = { $monster } shrieks.
 npc-bark-barks = { $monster } barks.
 
 # TODO: translate
+npc-bark-whines = { $monster } whines.
+
+# TODO: translate
+npc-bark-yips = { $monster } yips.
+
+# TODO: translate
 npc-mew-mews = { $monster } mews.
+
+# TODO: translate
+npc-mew-yowls = { $monster } yowls.
+
+# TODO: translate
+npc-mew-meows = { $monster } meows.
+
+# TODO: translate
+npc-mew-purrs = { $monster } purrs.
 
 # TODO: translate
 npc-growl-growls = { $monster } growls!
@@ -3445,6 +3460,9 @@ npc-neigh-neighs = { $monster } neighs.
 
 # TODO: translate
 npc-neigh-whinnies = { $monster } whinnies.
+
+# TODO: translate
+npc-neigh-whickers = { $monster } whickers.
 
 # TODO: translate
 npc-moo-moos = { $monster } moos.

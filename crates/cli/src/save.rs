@@ -15,6 +15,7 @@ use nethack_babel_engine::dungeon::DungeonState;
 use nethack_babel_engine::equipment::EquipmentSlots;
 use nethack_babel_engine::inventory::Inventory;
 use nethack_babel_engine::o_init::AppearanceTable;
+use nethack_babel_engine::pets::PetState;
 use nethack_babel_engine::quest::{QuestNpcRole, QuestState};
 use nethack_babel_engine::religion::ReligionState;
 use nethack_babel_engine::spells::SpellBook;
@@ -199,6 +200,8 @@ pub struct SerializableMonster {
     pub shopkeeper: Option<Shopkeeper>,
     #[serde(default)]
     pub quest_npc_role: Option<QuestNpcRole>,
+    #[serde(default)]
+    pub pet_state: Option<PetState>,
     #[serde(default)]
     pub status_effects: StatusEffects,
 }
@@ -556,6 +559,9 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
         let quest_npc_role = world
             .get_component::<QuestNpcRole>(entity)
             .map(|role| *role);
+        let pet_state = world
+            .get_component::<PetState>(entity)
+            .map(|pet_state| (*pet_state).clone());
         let status_effects = world
             .get_component::<StatusEffects>(entity)
             .map(|status| (*status).clone())
@@ -574,6 +580,7 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             priest,
             shopkeeper,
             quest_npc_role,
+            pet_state,
             status_effects,
         });
     }
@@ -800,6 +807,9 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
         }
         if let Some(role) = m.quest_npc_role {
             let _ = world.ecs_mut().insert_one(entity, role);
+        }
+        if let Some(pet_state) = &m.pet_state {
+            let _ = world.ecs_mut().insert_one(entity, pet_state.clone());
         }
         let _ = world.ecs_mut().insert_one(entity, m.status_effects.clone());
     }
@@ -1243,6 +1253,7 @@ mod tests {
         artifacts::find_artifact_by_name,
         dungeon::{DungeonBranch, LevelMap, PortalLink, Terrain},
         event::{DeathCause, EngineEvent},
+        pets::PetState,
         role::Role,
         teleport::handle_magic_portal,
         turn::resolve_turn,
@@ -1312,6 +1323,25 @@ mod tests {
             .find(|def| def.sound == sound)
             .map(|def| def.names.male.clone())
             .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
+    }
+
+    fn make_tame_pet_state(
+        world: &mut GameWorld,
+        monster: hecs::Entity,
+        tameness: u8,
+        hungrytime: u32,
+    ) {
+        world
+            .ecs_mut()
+            .insert_one(monster, Tame)
+            .expect("monster should accept tame marker");
+        let mut pet_state = PetState::new(10, world.turn());
+        pet_state.tameness = tameness;
+        pet_state.hungrytime = hungrytime;
+        world
+            .ecs_mut()
+            .insert_one(monster, pet_state)
+            .expect("monster should accept pet state");
     }
 
     fn wizard_identity() -> PlayerIdentity {
@@ -5837,6 +5867,31 @@ mod tests {
 
         assert!(events.iter().any(|event| {
             matches!(event, EngineEvent::Message { key, .. } if key == "npc-buzz-drones")
+        }));
+    }
+
+    #[test]
+    fn round_trip_loaded_chatting_with_satiated_tame_cat_keeps_purr_line() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let mew_name = monster_name_with_sound(&world, MonsterSound::Mew);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &mew_name, 8);
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, monster, 10, current_turn.saturating_add(1500));
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("mew-chat-round-trip", &world, [82u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-mew-purrs")
         }));
     }
 

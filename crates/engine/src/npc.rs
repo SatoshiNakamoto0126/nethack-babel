@@ -632,17 +632,55 @@ pub fn shrieking_monster_chat(monster_name: &str) -> EngineEvent {
     EngineEvent::msg_with("npc-shriek", vec![("monster", monster_name.to_string())])
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MonsterChatState {
+    pub is_peaceful: bool,
+    pub is_tame: bool,
+    pub tameness: Option<u8>,
+    pub confused: bool,
+    pub fleeing: bool,
+    pub hungry: bool,
+    pub satiated: bool,
+}
+
 pub fn voiced_monster_chat(
     monster_name: &str,
     sound: MonsterSound,
-    is_peaceful: bool,
-    is_tame: bool,
+    state: MonsterChatState,
 ) -> Option<EngineEvent> {
+    let tame_level = state.tameness.unwrap_or(if state.is_tame { 10 } else { 0 });
     let key = match sound {
-        MonsterSound::Bark => "npc-bark-barks",
-        MonsterSound::Mew => "npc-mew-mews",
+        MonsterSound::Bark => {
+            if state.is_tame && (state.confused || state.fleeing || tame_level < 5 || state.hungry)
+            {
+                "npc-bark-whines"
+            } else if state.is_tame && state.satiated {
+                "npc-bark-yips"
+            } else if state.is_peaceful {
+                "npc-bark-barks"
+            } else {
+                "npc-growl-growls"
+            }
+        }
+        MonsterSound::Mew => {
+            if state.is_tame {
+                if state.confused || state.fleeing || tame_level < 5 {
+                    "npc-mew-yowls"
+                } else if state.hungry {
+                    "npc-mew-meows"
+                } else if state.satiated {
+                    "npc-mew-purrs"
+                } else {
+                    "npc-mew-mews"
+                }
+            } else if state.is_peaceful {
+                "npc-growl-snarls"
+            } else {
+                "npc-growl-growls"
+            }
+        }
         MonsterSound::Roar => {
-            if is_peaceful {
+            if state.is_peaceful {
                 "npc-growl-snarls"
             } else {
                 "npc-roar-roars"
@@ -650,7 +688,7 @@ pub fn voiced_monster_chat(
         }
         MonsterSound::Bellow => "npc-bellow-bellows",
         MonsterSound::Growl => {
-            if is_peaceful {
+            if state.is_peaceful {
                 "npc-growl-snarls"
             } else {
                 "npc-growl-growls"
@@ -658,7 +696,7 @@ pub fn voiced_monster_chat(
         }
         MonsterSound::Sqeek => "npc-squeak-squeaks",
         MonsterSound::Sqawk => {
-            if !is_peaceful && monster_name.eq_ignore_ascii_case("raven") {
+            if !state.is_peaceful && monster_name.eq_ignore_ascii_case("raven") {
                 "npc-squawk-nevermore"
             } else {
                 "npc-squawk-squawks"
@@ -666,13 +704,13 @@ pub fn voiced_monster_chat(
         }
         MonsterSound::Chirp => "npc-chirp-chirps",
         MonsterSound::Hiss => {
-            if is_peaceful {
+            if state.is_peaceful {
                 return None;
             }
             "npc-hiss-hisses"
         }
         MonsterSound::Buzz => {
-            if is_peaceful {
+            if state.is_peaceful {
                 "npc-buzz-drones"
             } else {
                 "npc-buzz-angry"
@@ -680,10 +718,12 @@ pub fn voiced_monster_chat(
         }
         MonsterSound::Grunt | MonsterSound::Orc => "npc-grunt-grunts",
         MonsterSound::Neigh => {
-            if is_peaceful || is_tame {
+            if tame_level < 5 {
                 "npc-neigh-neighs"
-            } else {
+            } else if state.hungry {
                 "npc-neigh-whinnies"
+            } else {
+                "npc-neigh-whickers"
             }
         }
         MonsterSound::Moo => "npc-moo-moos",
@@ -2168,26 +2208,68 @@ mod tests {
 
     #[test]
     fn test_voiced_monster_chat_hiss_is_silent_when_peaceful() {
-        assert!(voiced_monster_chat("cobra", MonsterSound::Hiss, true, false).is_none());
+        assert!(
+            voiced_monster_chat(
+                "cobra",
+                MonsterSound::Hiss,
+                MonsterChatState {
+                    is_peaceful: true,
+                    ..MonsterChatState::default()
+                },
+            )
+            .is_none()
+        );
     }
 
     #[test]
     fn test_voiced_monster_chat_buzz_uses_peaceful_variant() {
-        let evt = voiced_monster_chat("killer bee", MonsterSound::Buzz, true, false)
-            .expect("buzzing monsters should emit a chat line");
+        let evt = voiced_monster_chat(
+            "killer bee",
+            MonsterSound::Buzz,
+            MonsterChatState {
+                is_peaceful: true,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("buzzing monsters should emit a chat line");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-buzz-drones"));
     }
 
     #[test]
-    fn test_voiced_monster_chat_neigh_uses_tame_variant() {
-        let evt = voiced_monster_chat("horse", MonsterSound::Neigh, false, true)
-            .expect("neighing monsters should emit a chat line");
-        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-neigh-neighs"));
+    fn test_voiced_monster_chat_neigh_whinnies_when_hungry_pet() {
+        let evt = voiced_monster_chat(
+            "horse",
+            MonsterSound::Neigh,
+            MonsterChatState {
+                is_tame: true,
+                tameness: Some(10),
+                hungry: true,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("neighing monsters should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-neigh-whinnies"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_tame_cat_purrs_when_satiated() {
+        let evt = voiced_monster_chat(
+            "kitten",
+            MonsterSound::Mew,
+            MonsterChatState {
+                is_tame: true,
+                tameness: Some(10),
+                satiated: true,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("satiated tame cats should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-mew-purrs"));
     }
 
     #[test]
     fn test_voiced_monster_chat_hostile_raven_uses_nevermore() {
-        let evt = voiced_monster_chat("raven", MonsterSound::Sqawk, false, false)
+        let evt = voiced_monster_chat("raven", MonsterSound::Sqawk, MonsterChatState::default())
             .expect("hostile raven should emit a chat line");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-squawk-nevermore"));
     }
