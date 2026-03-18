@@ -204,9 +204,9 @@ pub fn boh_content_weight(content_weight: u32, buc: &BucStatus) -> u32 {
     if buc.cursed {
         content_weight.saturating_mul(2)
     } else if buc.blessed {
-        (content_weight + 3) / 4
+        content_weight.div_ceil(4)
     } else {
-        (content_weight + 1) / 2
+        content_weight.div_ceil(2)
     }
 }
 

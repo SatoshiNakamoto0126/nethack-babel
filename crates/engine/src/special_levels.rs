@@ -4278,7 +4278,7 @@ fn generate_valkyrie_start(rng: &mut impl Rng) -> SpecialLevel {
     let river_y = 15;
     for x in 1..map.width - 1 {
         let dy = if rng.random_bool(0.3) { 1 } else { 0 };
-        let y = (river_y as i32 + dy).min(map.height as i32 - 2);
+        let y = (river_y + dy).min(map.height as i32 - 2);
         map.set_terrain(Position::new(x as i32, y), Terrain::Ice);
     }
 

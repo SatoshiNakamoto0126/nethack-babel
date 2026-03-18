@@ -540,7 +540,7 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 
 1. Push temple/shop parity past the current `temple-entry / sanctum-entry / shop-entry / follow / payoff / pray / calm-down / repair / drop-credit / live-sell / robbery / restitution / protection-spend / donation-tiers / ale-gift` runtime closure and finish the remaining richer deity/shop feedback and economy aftermath.
 2. Expand Wizard of Yendor harassment parity beyond the current respawn/theft/curse/scaled nasty-summon runtime and repeated regression coverage.
-3. Grow traversal and save/load matrices beyond the current quest/endgame/shop/temple/sanctum/wizard coverage into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
+3. Grow traversal and save/load matrices beyond the current quest/endgame/shop/temple/sanctum/wizard plus `Medusa`/`Orcus`/invocation-portal coverage into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
 4. Continue hardening level-local runtime caches and save compatibility rules as serialized world state evolves.
 5. Keep contributor tooling, data docs, and Guidebook/README parity aligned with live implementation.
 
@@ -548,7 +548,7 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 
 - [ ] Extend temple/shop parity beyond the current temple-entry/sanctum-entry/shop-entry/payoff/follow/pray/calm/repair/drop-credit/live-sell/robbery/restitution/protection-spend/donation-tiers/ale-gift path: remaining richer deity/shop feedback and more original economy aftermath.
 - [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, theft, cursing, scaled nasty summon, and repeated reload coverage.
-- [ ] Expand traversal/save-load matrices into stronger drift-detection coverage for economy, religion, and branch-state regressions beyond the current quest/endgame/shop/temple/sanctum/wizard matrix.
+- [ ] Expand traversal/save-load matrices into stronger drift-detection coverage for economy, religion, and branch-state regressions beyond the current quest/endgame/shop/temple/sanctum/wizard/Medusa/Orcus/invocation-portal matrix.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and serialization gaps.
 - [ ] Keep CI strictness healthy as workflow/toolchain requirements evolve.
 

@@ -604,7 +604,8 @@ impl Leaderboard {
     /// Add a new entry and keep only the top 100.
     pub fn add_entry(&mut self, entry: LeaderboardEntry) {
         self.entries.push(entry);
-        self.entries.sort_by(|a, b| b.score.cmp(&a.score));
+        self.entries
+            .sort_by_key(|entry| std::cmp::Reverse(entry.score));
         self.entries.truncate(100);
         for (i, e) in self.entries.iter_mut().enumerate() {
             e.rank = (i + 1) as u32;

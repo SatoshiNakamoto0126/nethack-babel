@@ -284,7 +284,7 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 2. **Wizard harassment parity**  
    Broaden Wizard of Yendor harassment beyond the current respawn/theft/curse/nasty-summon runtime, with richer nasty pools, stronger cadence, and more long-tail original-NetHack behavior.
 3. **Story drift detection**  
-   Expand the current quest/endgame/shop/temple/sanctum/wizard traversal matrices into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
+   Expand the current quest/endgame/shop/temple/sanctum/wizard plus `Medusa`/`Orcus`/invocation-portal traversal matrices into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
 4. **Runtime cache and save hardening**  
    Continue auditing level-local runtime state and keep save-format rules explicit whenever serialized world semantics change.
 5. **Contributor and content tooling**  
@@ -294,7 +294,7 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 
 - [ ] Extend temple/shop parity beyond the current temple-entry/sanctum-entry/shop-entry/payoff/follow/pray/calm/repair/drop-credit/live-sell/robbery/restitution/protection-spend/donation-tiers/ale-gift path: remaining richer deity/shop feedback and more original economy aftermath.
 - [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, theft, cursing, scaled nasty summon, and repeated reload coverage.
-- [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state beyond the current quest/endgame/shop/temple/sanctum/wizard scenarios.
+- [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state beyond the current quest/endgame/shop/temple/sanctum/wizard/Medusa/Orcus/invocation-portal scenarios.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and save/load omissions.
 - [ ] Keep CI strictness healthy as workflow/toolchain requirements evolve.
 

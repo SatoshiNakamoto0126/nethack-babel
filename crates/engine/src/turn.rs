@@ -6600,6 +6600,9 @@ mod tests {
     enum StoryTraversalScenario {
         QuestClosure,
         QuestLeaderAnger,
+        MedusaRevisit,
+        OrcusRevisit,
+        InvocationPortalRevisit,
         ShopEntry,
         ShopEntryWelcomeBack,
         ShopEntryRobbed,
@@ -6625,6 +6628,9 @@ mod tests {
             match self {
                 StoryTraversalScenario::QuestClosure => "quest-closure",
                 StoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
+                StoryTraversalScenario::MedusaRevisit => "medusa-revisit",
+                StoryTraversalScenario::OrcusRevisit => "orcus-revisit",
+                StoryTraversalScenario::InvocationPortalRevisit => "invocation-portal-revisit",
                 StoryTraversalScenario::ShopEntry => "shop-entry",
                 StoryTraversalScenario::ShopEntryWelcomeBack => "shop-entry-welcome-back",
                 StoryTraversalScenario::ShopEntryRobbed => "shop-entry-robbed",
@@ -6783,6 +6789,113 @@ mod tests {
 
                 let blocked_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
                 (world, blocked_events)
+            }
+            StoryTraversalScenario::MedusaRevisit => {
+                let mut world = make_stair_world(Terrain::StairsDown, 23);
+                install_test_catalogs(&mut world);
+                world.dungeon_mut().branch = DungeonBranch::Main;
+
+                let mut rng = test_rng();
+                let enter_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should enter Medusa level",
+                    scenario.label()
+                );
+                assert_eq!(count_monsters_named(&world, "medusa"), 1);
+
+                let medusa_down = find_terrain(&world.dungeon().current_level, Terrain::StairsDown)
+                    .expect("Medusa level should preserve stairs down");
+                set_player_position(&mut world, medusa_down);
+                let descend_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    descend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should leave Medusa for Castle",
+                    scenario.label()
+                );
+
+                let castle_up = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
+                    .expect("Castle should preserve stairs up");
+                set_player_position(&mut world, castle_up);
+                let revisit_events = resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+                (world, revisit_events)
+            }
+            StoryTraversalScenario::OrcusRevisit => {
+                let mut world = make_stair_world(Terrain::StairsDown, 11);
+                install_test_catalogs(&mut world);
+                world.dungeon_mut().branch = DungeonBranch::Gehennom;
+
+                let mut rng = test_rng();
+                let enter_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should enter Orcus level",
+                    scenario.label()
+                );
+                assert_eq!(count_monsters_named(&world, "orcus"), 1);
+
+                let orcus_up = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
+                    .expect("Orcus level should preserve stairs up");
+                set_player_position(&mut world, orcus_up);
+                let ascend_events = resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+                assert!(
+                    ascend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should leave Orcus level",
+                    scenario.label()
+                );
+
+                let gehennom_down =
+                    find_terrain(&world.dungeon().current_level, Terrain::StairsDown)
+                        .expect("Gehennom entry level should preserve stairs down");
+                set_player_position(&mut world, gehennom_down);
+                let revisit_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                (world, revisit_events)
+            }
+            StoryTraversalScenario::InvocationPortalRevisit => {
+                let mut world = make_stair_world(Terrain::StairsDown, 20);
+                install_test_catalogs(&mut world);
+                world.dungeon_mut().branch = DungeonBranch::Gehennom;
+
+                let mut rng = test_rng();
+                let enter_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should enter Gehennom 21",
+                    scenario.label()
+                );
+                let player = world.player();
+                if let Some(mut flags) = world.get_component_mut::<PlayerEvents>(player) {
+                    flags.invoked = true;
+                    flags.found_vibrating_square = true;
+                }
+
+                let current_up = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
+                    .expect("Gehennom 21 should preserve stairs up");
+                set_player_position(&mut world, current_up);
+                let ascend_events = resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+                assert!(
+                    ascend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should leave Gehennom 21",
+                    scenario.label()
+                );
+
+                let cached_down = find_terrain(&world.dungeon().current_level, Terrain::StairsDown)
+                    .expect("cached Gehennom 20 should preserve stairs down");
+                set_player_position(&mut world, cached_down);
+                let revisit_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                (world, revisit_events)
             }
             StoryTraversalScenario::ShopEntry => {
                 let mut world = make_test_world();
@@ -14551,6 +14664,9 @@ mod tests {
         for scenario in [
             StoryTraversalScenario::QuestClosure,
             StoryTraversalScenario::QuestLeaderAnger,
+            StoryTraversalScenario::MedusaRevisit,
+            StoryTraversalScenario::OrcusRevisit,
+            StoryTraversalScenario::InvocationPortalRevisit,
             StoryTraversalScenario::ShopEntry,
             StoryTraversalScenario::ShopEntryWelcomeBack,
             StoryTraversalScenario::ShopEntryRobbed,
@@ -14610,6 +14726,26 @@ mod tests {
                     );
                     assert_eq!(world.dungeon().branch, DungeonBranch::Quest);
                     assert_eq!(world.dungeon().depth, 1);
+                }
+                StoryTraversalScenario::MedusaRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Main);
+                    assert_eq!(world.dungeon().depth, 24);
+                    assert_eq!(count_monsters_named(&world, "medusa"), 1);
+                }
+                StoryTraversalScenario::OrcusRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
+                    assert_eq!(world.dungeon().depth, 12);
+                    assert_eq!(count_monsters_named(&world, "orcus"), 1);
+                }
+                StoryTraversalScenario::InvocationPortalRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
+                    assert_eq!(world.dungeon().depth, 21);
+                    assert!(
+                        find_terrain(&world.dungeon().current_level, Terrain::MagicPortal)
+                            .is_some(),
+                        "{} should reopen the endgame portal on revisit",
+                        scenario.label()
+                    );
                 }
                 StoryTraversalScenario::ShopEntry => {
                     assert!(final_events.iter().any(|event| matches!(

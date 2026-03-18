@@ -1152,7 +1152,7 @@ pub fn pet_shop_steal_check(
         .iter()
         .filter_map(|(_, (core, loc))| match loc {
             ObjectLocation::MonsterInventory { carrier_id: cid } if *cid == carrier_id => {
-                Some(core.quantity as i32)
+                Some(core.quantity)
             }
             _ => None,
         })

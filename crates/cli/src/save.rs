@@ -1533,6 +1533,9 @@ mod tests {
     enum SaveStoryTraversalScenario {
         QuestClosure,
         QuestLeaderAnger,
+        MedusaRevisit,
+        OrcusRevisit,
+        InvocationPortalRevisit,
         ShopEntry,
         ShopEntryWelcomeBack,
         ShopEntryRobbed,
@@ -1558,6 +1561,9 @@ mod tests {
             match self {
                 SaveStoryTraversalScenario::QuestClosure => "quest-closure",
                 SaveStoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
+                SaveStoryTraversalScenario::MedusaRevisit => "medusa-revisit",
+                SaveStoryTraversalScenario::OrcusRevisit => "orcus-revisit",
+                SaveStoryTraversalScenario::InvocationPortalRevisit => "invocation-portal-revisit",
                 SaveStoryTraversalScenario::ShopEntry => "shop-entry",
                 SaveStoryTraversalScenario::ShopEntryWelcomeBack => "shop-entry-welcome-back",
                 SaveStoryTraversalScenario::ShopEntryRobbed => "shop-entry-robbed",
@@ -1737,6 +1743,113 @@ mod tests {
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let blocked_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
                 (loaded, blocked_events)
+            }
+            SaveStoryTraversalScenario::MedusaRevisit => {
+                let mut world = make_stair_world(DungeonBranch::Main, 23, Terrain::StairsDown);
+                let mut rng = Pcg64::seed_from_u64(7107);
+
+                let enter_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+                assert_eq!(count_monsters_named(&world, "medusa"), 1);
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-medusa-revisit", &world, [56u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+
+                let medusa_down =
+                    find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+                        .expect("Medusa level should preserve stairs down after save/load");
+                set_player_position(&mut loaded, medusa_down);
+                let descend_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    descend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+
+                let castle_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+                    .expect("Castle should preserve stairs up after save/load");
+                set_player_position(&mut loaded, castle_up);
+                let revisit_events = resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+                (loaded, revisit_events)
+            }
+            SaveStoryTraversalScenario::OrcusRevisit => {
+                let mut world = make_stair_world(DungeonBranch::Gehennom, 11, Terrain::StairsDown);
+                let mut rng = Pcg64::seed_from_u64(7108);
+
+                let enter_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+                assert_eq!(count_monsters_named(&world, "orcus"), 1);
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-orcus-revisit", &world, [57u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+
+                let orcus_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+                    .expect("Orcus level should preserve stairs up after save/load");
+                set_player_position(&mut loaded, orcus_up);
+                let ascend_events = resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+                assert!(
+                    ascend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+
+                let gehennom_down =
+                    find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+                        .expect("cached Gehennom level should preserve stairs down");
+                set_player_position(&mut loaded, gehennom_down);
+                let revisit_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+                (loaded, revisit_events)
+            }
+            SaveStoryTraversalScenario::InvocationPortalRevisit => {
+                let mut world = make_stair_world(DungeonBranch::Gehennom, 20, Terrain::StairsDown);
+                let mut rng = Pcg64::seed_from_u64(7109);
+
+                let enter_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+
+                let player = world.player();
+                if let Some(mut flags) = world.get_component_mut::<PlayerEvents>(player) {
+                    flags.invoked = true;
+                    flags.found_vibrating_square = true;
+                }
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-invocation-portal-revisit",
+                    &world,
+                    [58u8; 32],
+                );
+                let mut rng = Pcg64::from_seed(loaded_rng);
+
+                let current_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+                    .expect("Gehennom 21 should preserve stairs up after save/load");
+                set_player_position(&mut loaded, current_up);
+                let ascend_events = resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+                assert!(
+                    ascend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+
+                let cached_down =
+                    find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+                        .expect("Gehennom 20 should preserve stairs down after save/load");
+                set_player_position(&mut loaded, cached_down);
+                let revisit_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+                (loaded, revisit_events)
             }
             SaveStoryTraversalScenario::ShopEntry => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
@@ -4314,6 +4427,9 @@ mod tests {
         for scenario in [
             SaveStoryTraversalScenario::QuestClosure,
             SaveStoryTraversalScenario::QuestLeaderAnger,
+            SaveStoryTraversalScenario::MedusaRevisit,
+            SaveStoryTraversalScenario::OrcusRevisit,
+            SaveStoryTraversalScenario::InvocationPortalRevisit,
             SaveStoryTraversalScenario::ShopEntry,
             SaveStoryTraversalScenario::ShopEntryWelcomeBack,
             SaveStoryTraversalScenario::ShopEntryRobbed,
@@ -4372,6 +4488,25 @@ mod tests {
                         world
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.quest_expelled)
+                    );
+                }
+                SaveStoryTraversalScenario::MedusaRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Main);
+                    assert_eq!(world.dungeon().depth, 24);
+                    assert_eq!(count_monsters_named(&world, "medusa"), 1);
+                }
+                SaveStoryTraversalScenario::OrcusRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
+                    assert_eq!(world.dungeon().depth, 12);
+                    assert_eq!(count_monsters_named(&world, "orcus"), 1);
+                }
+                SaveStoryTraversalScenario::InvocationPortalRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
+                    assert_eq!(world.dungeon().depth, 21);
+                    assert!(
+                        find_terrain(&world.dungeon().current_level, Terrain::MagicPortal)
+                            .is_some(),
+                        "invoked Gehennom revisit should reopen the endgame portal after save/load"
                     );
                 }
                 SaveStoryTraversalScenario::ShopEntry => {

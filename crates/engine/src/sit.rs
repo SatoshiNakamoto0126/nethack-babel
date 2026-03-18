@@ -110,7 +110,7 @@ pub fn roll_throne_effect<R: Rng>(
         4 => ThroneEffect::FullHeal,
         5 => ThroneEffect::LoseGold,
         6 => {
-            let roll = luck + rng.random_range(0..5) as i32;
+            let roll = luck + rng.random_range(0..5);
             ThroneEffect::WishOrLuck { is_wish: roll >= 0 }
         }
         7 => {

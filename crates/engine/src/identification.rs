@@ -1549,8 +1549,7 @@ pub fn doname(
     // If prefix starts with "a ", adjust to "a " or "an " based on the
     // next word after "a ".
     let result = format!("{}{}", prefix, base_name);
-    if result.starts_with("a ") {
-        let rest = &result[2..];
+    if let Some(rest) = result.strip_prefix("a ") {
         let article = just_an(rest);
         format!("{}{}", article, rest)
     } else {

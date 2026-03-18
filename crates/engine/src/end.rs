@@ -791,7 +791,7 @@ pub fn format_disclosure(category: &DisclosureCategory) -> Vec<String> {
             let total: u32 = kills.iter().map(|(_, c)| c).sum();
             let mut lines = vec![format!("Vanquished creatures ({} total):", total)];
             let mut sorted = kills.clone();
-            sorted.sort_by(|a, b| b.1.cmp(&a.1));
+            sorted.sort_by_key(|entry| std::cmp::Reverse(entry.1));
             for (name, count) in &sorted {
                 if *count == 1 {
                     lines.push(format!("  {}", name));
