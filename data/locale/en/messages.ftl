@@ -2643,9 +2643,19 @@ wizard-detect-traps = You feel warned about nearby traps.
 wizard-double-trouble = "Double Trouble..."
 wizard-identify-all = You feel self-knowledgeable...
 wizard-map-revealed = An image of your surroundings forms in your mind!
+wizard-vague-nervous = You feel vaguely nervous.
+wizard-black-glow = You notice a black glow surrounding you.
 wizard-respawned = The Wizard of Yendor rises again!
 wizard-steal-amulet = The Wizard of Yendor steals the Amulet!
 wizard-summon-nasties = New nasties appear from thin air!
+wizard-taunt-laughs = {$wizard} laughs fiendishly.
+wizard-taunt-relinquish = Relinquish the Amulet, {$insult}!
+wizard-taunt-panic = Even now thy life force ebbs, {$insult}!
+wizard-taunt-return = I shall return.
+wizard-taunt-general = {$malediction}, {$insult}!
+amulet-feels-hot = The Amulet feels hot!
+amulet-feels-very-warm = The Amulet feels very warm.
+amulet-feels-warm = The Amulet feels warm.
 
 ## ============================================================================
 ## Worm

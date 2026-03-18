@@ -654,9 +654,32 @@ pub enum WizardAction {
     SummonNasties,
     /// Curse random items in the player's inventory.
     CurseItems,
+    /// Distant post-Wizard harassment: the player feels watched.
+    VagueNervous,
+    /// Distant post-Wizard harassment: black glow plus inventory curse.
+    BlackGlowCurse,
     /// Clone self ("Double Trouble") when at full HP.
     DoubleTrouble,
 }
+
+const WIZARD_INSULTS: &[&str] = &[
+    "blackguard",
+    "cretin",
+    "dolt",
+    "fool",
+    "imbecile",
+    "miscreant",
+    "varlet",
+    "wretch",
+];
+
+const WIZARD_MALEDICTIONS: &[&str] = &[
+    "Prepare to die",
+    "Resistance is useless",
+    "There shall be no mercy",
+    "Thou art doomed",
+    "Thy fate is sealed",
+];
 
 /// Convert a Wizard harassment action into user-facing message events.
 pub fn wizard_harass_events(action: WizardAction) -> Vec<EngineEvent> {
@@ -665,6 +688,18 @@ pub fn wizard_harass_events(action: WizardAction) -> Vec<EngineEvent> {
         WizardAction::DoubleTrouble => vec![EngineEvent::msg("wizard-double-trouble")],
         WizardAction::SummonNasties => vec![EngineEvent::msg("wizard-summon-nasties")],
         WizardAction::CurseItems => vec![EngineEvent::msg("wizard-curse-items")],
+        WizardAction::VagueNervous => vec![EngineEvent::msg("wizard-vague-nervous")],
+        WizardAction::BlackGlowCurse => vec![EngineEvent::msg("wizard-black-glow")],
+    }
+}
+
+/// Determine which off-screen intervention the Wizard uses after death or
+/// invocation pressure when no live Wizard body is currently present.
+pub fn choose_wizard_intervene_action(rng: &mut impl Rng) -> WizardAction {
+    match rng.random_range(0..5) {
+        0 | 1 | 3 => WizardAction::VagueNervous,
+        2 => WizardAction::BlackGlowCurse,
+        _ => WizardAction::SummonNasties,
     }
 }
 
@@ -689,6 +724,67 @@ pub fn choose_wizard_action(
     } else {
         WizardAction::CurseItems
     }
+}
+
+pub fn maybe_wizard_taunt(
+    world: &GameWorld,
+    wizard: Entity,
+    player: Entity,
+    player_has_amulet: bool,
+    rng: &mut impl Rng,
+) -> Option<EngineEvent> {
+    if rng.random_range(0..5) == 0 {
+        return Some(EngineEvent::msg_with(
+            "wizard-taunt-laughs",
+            vec![("wizard", world.entity_name(wizard))],
+        ));
+    }
+
+    if player_has_amulet && rng.random_range(0..WIZARD_INSULTS.len()) == 0 {
+        return Some(EngineEvent::msg_with(
+            "wizard-taunt-relinquish",
+            vec![(
+                "insult",
+                WIZARD_INSULTS[rng.random_range(0..WIZARD_INSULTS.len())].to_string(),
+            )],
+        ));
+    }
+
+    let player_hp = world
+        .get_component::<HitPoints>(player)
+        .map(|hp| hp.current)
+        .unwrap_or(100);
+    if player_hp < 5 && rng.random_range(0..2) == 0 {
+        return Some(EngineEvent::msg_with(
+            "wizard-taunt-panic",
+            vec![(
+                "insult",
+                WIZARD_INSULTS[rng.random_range(0..WIZARD_INSULTS.len())].to_string(),
+            )],
+        ));
+    }
+
+    let wizard_hp = world
+        .get_component::<HitPoints>(wizard)
+        .map(|hp| hp.current)
+        .unwrap_or(100);
+    if wizard_hp < 5 && rng.random_range(0..2) == 0 {
+        return Some(EngineEvent::msg("wizard-taunt-return"));
+    }
+
+    Some(EngineEvent::msg_with(
+        "wizard-taunt-general",
+        vec![
+            (
+                "malediction",
+                WIZARD_MALEDICTIONS[rng.random_range(0..WIZARD_MALEDICTIONS.len())].to_string(),
+            ),
+            (
+                "insult",
+                WIZARD_INSULTS[rng.random_range(0..WIZARD_INSULTS.len())].to_string(),
+            ),
+        ],
+    ))
 }
 
 /// Resolve a Wizard of Yendor harassment action.
@@ -1086,6 +1182,46 @@ mod tests {
             summon_or_curse,
             "wizard at low HP without amulet should summon nasties or curse items"
         );
+    }
+
+    #[test]
+    fn test_wizard_intervene_action_distribution_stays_within_supported_set() {
+        let mut rng = test_rng();
+        for _ in 0..32 {
+            let action = choose_wizard_intervene_action(&mut rng);
+            assert!(matches!(
+                action,
+                WizardAction::VagueNervous
+                    | WizardAction::BlackGlowCurse
+                    | WizardAction::SummonNasties
+            ));
+        }
+    }
+
+    #[test]
+    fn test_wizard_taunt_distribution_stays_within_supported_set() {
+        let mut world = make_test_world();
+        let player = world.player();
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+            hp.current = 10;
+            hp.max = 10;
+        }
+        let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 20);
+
+        let mut rng = test_rng();
+        for _ in 0..64 {
+            let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng)
+                .expect("wizard taunt should always produce a message");
+            assert!(matches!(
+                event,
+                EngineEvent::Message { ref key, .. }
+                    if key == "wizard-taunt-laughs"
+                        || key == "wizard-taunt-relinquish"
+                        || key == "wizard-taunt-panic"
+                        || key == "wizard-taunt-return"
+                        || key == "wizard-taunt-general"
+            ));
+        }
     }
 
     // ── Stealing tests ───────────────────────────────────────────

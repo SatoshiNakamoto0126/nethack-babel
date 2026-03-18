@@ -745,6 +745,7 @@ fn process_new_turn(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<
         });
     }
 
+    process_amulet_portal_sense(world, rng, events);
     process_wizard_of_yendor_turn(world, rng, events);
     process_shop_repairs(world, events);
 
@@ -5241,19 +5242,31 @@ fn process_wizard_of_yendor_turn(
             last_killed_turn: player_events.wizard_last_killed_turn,
             times_killed: wizard_times_killed,
         };
-        if !crate::npc::wizard_should_respawn(&wizard_state, world.turn(), rng) {
+        if crate::npc::wizard_should_respawn(&wizard_state, world.turn(), rng) {
+            if let Some((wizard, pos)) =
+                spawn_named_monster_near_entity(world, player, "Wizard of Yendor", rng)
+            {
+                seed_wizard_runtime_state(world, wizard);
+                events.push(EngineEvent::MonsterGenerated {
+                    entity: wizard,
+                    position: pos,
+                });
+                events.push(EngineEvent::msg("wizard-respawned"));
+            }
             return;
         }
 
-        if let Some((wizard, pos)) =
-            spawn_named_monster_near_entity(world, player, "Wizard of Yendor", rng)
-        {
-            seed_wizard_runtime_state(world, wizard);
-            events.push(EngineEvent::MonsterGenerated {
-                entity: wizard,
-                position: pos,
-            });
-            events.push(EngineEvent::msg("wizard-respawned"));
+        let intervention_period = if player_has_amulet {
+            6
+        } else if player_events.invoked {
+            7
+        } else {
+            8
+        };
+        if rng.random_range(0..intervention_period) == 0 {
+            let action = crate::npc::choose_wizard_intervene_action(rng);
+            events.extend(crate::npc::wizard_harass_events(action));
+            apply_wizard_harassment_action(world, None, player, action, rng, events);
         }
         return;
     }
@@ -5266,6 +5279,17 @@ fn process_wizard_of_yendor_turn(
         6
     };
     if rng.random_range(0..harassment_period) != 0 {
+        if rng.random_range(0..3) == 0
+            && let Some(taunt) = crate::npc::maybe_wizard_taunt(
+                world,
+                live_wizards[0],
+                player,
+                player_has_amulet,
+                rng,
+            )
+        {
+            events.push(taunt);
+        }
         return;
     }
 
@@ -5278,7 +5302,7 @@ fn process_wizard_of_yendor_turn(
     }
     let action = crate::npc::choose_wizard_action(world, wizard, player_has_amulet, rng);
     events.extend(crate::npc::wizard_harass_events(action));
-    apply_wizard_harassment_action(world, wizard, player, action, rng, events);
+    apply_wizard_harassment_action(world, Some(wizard), player, action, rng, events);
 }
 
 fn should_wizard_level_teleport_player(
@@ -5347,7 +5371,7 @@ fn apply_wizard_level_teleport(
 
 fn apply_wizard_harassment_action(
     world: &mut GameWorld,
-    wizard: hecs::Entity,
+    wizard: Option<hecs::Entity>,
     player: hecs::Entity,
     action: crate::npc::WizardAction,
     rng: &mut impl Rng,
@@ -5355,11 +5379,16 @@ fn apply_wizard_harassment_action(
 ) {
     match action {
         crate::npc::WizardAction::StealAmulet => {
-            if let Some(amulet) = find_player_named_item(world, player, "Amulet of Yendor") {
+            if let Some(wizard) = wizard
+                && let Some(amulet) = find_player_named_item(world, player, "Amulet of Yendor")
+            {
                 wizard_steal_amulet(world, wizard, player, amulet);
             }
         }
         crate::npc::WizardAction::DoubleTrouble => {
+            let Some(wizard) = wizard else {
+                return;
+            };
             if wizard_of_yendor_entities(world).len() >= 2 {
                 return;
             }
@@ -5388,7 +5417,44 @@ fn apply_wizard_harassment_action(
         crate::npc::WizardAction::CurseItems => {
             curse_random_player_items(world, player, rng);
         }
+        crate::npc::WizardAction::VagueNervous => {}
+        crate::npc::WizardAction::BlackGlowCurse => {
+            curse_random_player_items(world, player, rng);
+        }
     }
+}
+
+fn process_amulet_portal_sense(
+    world: &GameWorld,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) {
+    let player = world.player();
+    if !player_has_named_item(world, player, "Amulet of Yendor") || rng.random_range(0..15) != 0 {
+        return;
+    }
+
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return;
+    };
+    let Some(portal_pos) = find_terrain(&world.dungeon().current_level, Terrain::MagicPortal)
+    else {
+        return;
+    };
+
+    let dx = player_pos.x - portal_pos.x;
+    let dy = player_pos.y - portal_pos.y;
+    let dist2 = dx * dx + dy * dy;
+    let key = if dist2 <= 9 {
+        "amulet-feels-hot"
+    } else if dist2 <= 64 {
+        "amulet-feels-very-warm"
+    } else if dist2 <= 144 {
+        "amulet-feels-warm"
+    } else {
+        return;
+    };
+    events.push(EngineEvent::msg(key));
 }
 
 fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Vec<String> {
@@ -6926,6 +6992,7 @@ mod tests {
         UntendedTempleGhost,
         SanctumRevisit,
         WizardHarassment,
+        WizardIntervention,
         WizardLevelTeleport,
         EndgameAscension,
     }
@@ -6968,6 +7035,7 @@ mod tests {
                 StoryTraversalScenario::UntendedTempleGhost => "untended-temple-ghost",
                 StoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 StoryTraversalScenario::WizardHarassment => "wizard-harassment",
+                StoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -8400,6 +8468,46 @@ mod tests {
                             event,
                             EngineEvent::Message { key, .. }
                                 if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                        )
+                    }) {
+                        final_events = events;
+                        break;
+                    }
+                }
+                (world, final_events)
+            }
+            StoryTraversalScenario::WizardIntervention => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                let sword = spawn_inventory_object_by_name(&mut world, "long sword", 'b');
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        sword,
+                        BucStatus {
+                            cursed: false,
+                            blessed: false,
+                            bknown: false,
+                        },
+                    )
+                    .expect("inventory item should accept a BUC component");
+                let mut player_events = read_player_events(&world, player);
+                player_events.killed_wizard = true;
+                player_events.wizard_times_killed = 1;
+                player_events.wizard_last_killed_turn = world.turn();
+                persist_player_events(&mut world, player, player_events);
+                let mut rng = test_rng();
+                let mut final_events = Vec::new();
+                for _ in 0..40 {
+                    let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+                    if events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. }
+                                if key == "wizard-vague-nervous"
+                                    || key == "wizard-black-glow"
+                                    || key == "wizard-summon-nasties"
                         )
                     }) {
                         final_events = events;
@@ -12237,7 +12345,7 @@ mod tests {
 
         apply_wizard_harassment_action(
             &mut world,
-            wizard,
+            Some(wizard),
             player,
             crate::npc::WizardAction::StealAmulet,
             &mut rng,
@@ -12275,7 +12383,7 @@ mod tests {
 
         apply_wizard_harassment_action(
             &mut world,
-            wizard,
+            Some(wizard),
             player,
             crate::npc::WizardAction::DoubleTrouble,
             &mut rng,
@@ -12313,7 +12421,7 @@ mod tests {
 
         apply_wizard_harassment_action(
             &mut world,
-            wizard,
+            Some(wizard),
             player,
             crate::npc::WizardAction::CurseItems,
             &mut rng,
@@ -12326,6 +12434,143 @@ mod tests {
         assert!(
             buc.cursed,
             "wizard curse should actually curse inventory items"
+        );
+    }
+
+    #[test]
+    fn test_offscreen_wizard_black_glow_curses_inventory() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let item = spawn_inventory_object_by_name(&mut world, "long sword", 'a');
+        world
+            .ecs_mut()
+            .insert_one(
+                item,
+                BucStatus {
+                    cursed: false,
+                    blessed: false,
+                    bknown: false,
+                },
+            )
+            .expect("inventory item should accept a BUC component");
+        let mut rng = test_rng();
+        let mut events = crate::npc::wizard_harass_events(crate::npc::WizardAction::BlackGlowCurse);
+
+        apply_wizard_harassment_action(
+            &mut world,
+            None,
+            player,
+            crate::npc::WizardAction::BlackGlowCurse,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "wizard-black-glow"
+        )));
+        let buc = world
+            .get_component::<BucStatus>(item)
+            .expect("inventory item should keep BUC state");
+        assert!(
+            buc.cursed,
+            "off-screen black glow should really curse carried inventory"
+        );
+    }
+
+    #[test]
+    fn test_wizard_intervention_can_fire_without_live_wizard() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let item = spawn_inventory_object_by_name(&mut world, "long sword", 'a');
+        world
+            .ecs_mut()
+            .insert_one(
+                item,
+                BucStatus {
+                    cursed: false,
+                    blessed: false,
+                    bknown: false,
+                },
+            )
+            .expect("inventory item should accept a BUC component");
+        let current_turn = world.turn();
+        if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+            player_events.killed_wizard = true;
+            player_events.wizard_times_killed = 1;
+            player_events.wizard_last_killed_turn = current_turn;
+        }
+        let mut rng = test_rng();
+        let mut final_events = Vec::new();
+
+        for _ in 0..40 {
+            let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. }
+                        if key == "wizard-vague-nervous"
+                            || key == "wizard-black-glow"
+                            || key == "wizard-summon-nasties"
+                )
+            }) {
+                final_events = events;
+                break;
+            }
+        }
+
+        assert!(
+            final_events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. }
+                    if key == "wizard-vague-nervous"
+                        || key == "wizard-black-glow"
+                        || key == "wizard-summon-nasties"
+            )),
+            "post-Wizard intervention should still pressure the player before respawn"
+        );
+        assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 0);
+    }
+
+    #[test]
+    fn test_live_wizard_can_emit_taunt_messages() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let _wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+            hp.current = 4;
+            hp.max = 20;
+        }
+        let mut player_events = read_player_events(&world, player);
+        player_events.invoked = true;
+        persist_player_events(&mut world, player, player_events);
+
+        let mut rng = test_rng();
+        let mut taunt_seen = false;
+        for _ in 0..128 {
+            let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. }
+                        if key == "wizard-taunt-laughs"
+                            || key == "wizard-taunt-relinquish"
+                            || key == "wizard-taunt-panic"
+                            || key == "wizard-taunt-return"
+                            || key == "wizard-taunt-general"
+                )
+            }) {
+                taunt_seen = true;
+                break;
+            }
+        }
+
+        assert!(
+            taunt_seen,
+            "a live wizard should eventually taunt the player during repeated pressure turns"
         );
     }
 
@@ -12346,7 +12591,7 @@ mod tests {
 
         apply_wizard_harassment_action(
             &mut world,
-            wizard,
+            Some(wizard),
             player,
             crate::npc::WizardAction::SummonNasties,
             &mut rng,
@@ -12421,7 +12666,7 @@ mod tests {
 
         apply_wizard_harassment_action(
             &mut world,
-            wizard,
+            Some(wizard),
             player,
             crate::npc::WizardAction::SummonNasties,
             &mut rng,
@@ -12433,6 +12678,30 @@ mod tests {
             .filter(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
             .count();
         assert_eq!(generated, 4);
+    }
+
+    #[test]
+    fn test_amulet_portal_sense_emits_heat_message_near_magic_portal() {
+        let mut world = make_portal_world(DungeonBranch::Gehennom, 21, Position::new(7, 5));
+        install_test_catalogs(&mut world);
+        let _amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        set_player_position(&mut world, Position::new(6, 5));
+        let mut rng = test_rng();
+
+        for _ in 0..64 {
+            let mut events = Vec::new();
+            process_amulet_portal_sense(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "amulet-feels-hot"
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("expected deterministic amulet portal sense to emit a heat message");
     }
 
     #[test]
@@ -12477,7 +12746,7 @@ mod tests {
         let mut followup_events = Vec::new();
         apply_wizard_harassment_action(
             &mut world,
-            wizard,
+            Some(wizard),
             player,
             crate::npc::WizardAction::CurseItems,
             &mut rng,
@@ -16100,6 +16369,7 @@ mod tests {
             StoryTraversalScenario::UntendedTempleGhost,
             StoryTraversalScenario::SanctumRevisit,
             StoryTraversalScenario::WizardHarassment,
+            StoryTraversalScenario::WizardIntervention,
             StoryTraversalScenario::WizardLevelTeleport,
             StoryTraversalScenario::EndgameAscension,
         ] {
@@ -16788,6 +17058,53 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.invoked),
                         "{} should preserve the invoked harassment trigger state",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::WizardIntervention => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if key == "wizard-vague-nervous"
+                                || key == "wizard-black-glow"
+                                || key == "wizard-summon-nasties"
+                    )));
+                    let sword = find_player_named_item(&world, player, "long sword")
+                        .expect("off-screen wizard intervention should keep the tracked item");
+                    let cursed = world
+                        .get_component::<BucStatus>(sword)
+                        .is_some_and(|status| status.cursed);
+                    let summoned = final_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }));
+                    let black_glow = final_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-black-glow"
+                        )
+                    });
+                    let summon_msg = final_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-summon-nasties"
+                        )
+                    });
+                    if black_glow {
+                        assert!(cursed, "{} should really curse inventory", scenario.label());
+                    }
+                    if summon_msg {
+                        assert!(
+                            summoned,
+                            "{} should really generate summoned monsters",
+                            scenario.label()
+                        );
+                    }
+                    assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 0);
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.killed_wizard),
+                        "{} should preserve the intervention trigger state",
                         scenario.label()
                     );
                 }

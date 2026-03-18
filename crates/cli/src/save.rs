@@ -1614,6 +1614,7 @@ mod tests {
         UntendedTempleGhost,
         SanctumRevisit,
         WizardHarassment,
+        WizardIntervention,
         WizardLevelTeleport,
         EndgameAscension,
     }
@@ -1658,6 +1659,7 @@ mod tests {
                 SaveStoryTraversalScenario::UntendedTempleGhost => "untended-temple-ghost",
                 SaveStoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 SaveStoryTraversalScenario::WizardHarassment => "wizard-harassment",
+                SaveStoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -3124,6 +3126,49 @@ mod tests {
                             event,
                             EngineEvent::Message { key, .. }
                                 if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                        )
+                    }) {
+                        final_events = events;
+                        break;
+                    }
+                }
+                (loaded, final_events)
+            }
+            SaveStoryTraversalScenario::WizardIntervention => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let sword = spawn_inventory_object_by_name(&mut world, "long sword", 'b');
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        sword,
+                        BucStatus {
+                            cursed: false,
+                            blessed: false,
+                            bknown: false,
+                        },
+                    )
+                    .expect("inventory item should accept BUC state");
+                let current_turn = world.turn();
+                if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+                    player_events.killed_wizard = true;
+                    player_events.wizard_times_killed = 1;
+                    player_events.wizard_last_killed_turn = current_turn;
+                }
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-wizard-intervention", &world, [61u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let mut final_events = Vec::new();
+                for _ in 0..40 {
+                    let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
+                    if events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. }
+                                if key == "wizard-vague-nervous"
+                                    || key == "wizard-black-glow"
+                                    || key == "wizard-summon-nasties"
                         )
                     }) {
                         final_events = events;
@@ -5289,6 +5334,7 @@ mod tests {
             SaveStoryTraversalScenario::UntendedTempleGhost,
             SaveStoryTraversalScenario::SanctumRevisit,
             SaveStoryTraversalScenario::WizardHarassment,
+            SaveStoryTraversalScenario::WizardIntervention,
             SaveStoryTraversalScenario::WizardLevelTeleport,
             SaveStoryTraversalScenario::EndgameAscension,
         ] {
@@ -5899,6 +5945,53 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.invoked),
                         "save/load wizard matrix should preserve the invoked harassment trigger"
+                    );
+                }
+                SaveStoryTraversalScenario::WizardIntervention => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if key == "wizard-vague-nervous"
+                                || key == "wizard-black-glow"
+                                || key == "wizard-summon-nasties"
+                    )));
+                    let cursed = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items.iter().any(|item| {
+                                world
+                                    .get_component::<BucStatus>(*item)
+                                    .is_some_and(|status| status.cursed)
+                            })
+                        })
+                        .unwrap_or(false);
+                    let summoned = final_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }));
+                    let black_glow = final_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-black-glow"
+                        )
+                    });
+                    let summon_msg = final_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-summon-nasties"
+                        )
+                    });
+                    if black_glow {
+                        assert!(cursed);
+                    }
+                    if summon_msg {
+                        assert!(summoned);
+                    }
+                    assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 0);
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.killed_wizard),
+                        "save/load wizard matrix should preserve the off-screen intervention trigger"
                     );
                 }
                 SaveStoryTraversalScenario::WizardLevelTeleport => {

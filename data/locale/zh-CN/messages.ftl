@@ -3190,6 +3190,12 @@ wizard-kill-none = There are no monsters here to wipe out.
 wizard-map-revealed = An image of your surroundings forms in your mind!
 
 # TODO: translate
+wizard-vague-nervous = You feel vaguely nervous.
+
+# TODO: translate
+wizard-black-glow = You notice a black glow surrounding you.
+
+# TODO: translate
 wizard-respawned = The Wizard of Yendor rises again!
 
 # TODO: translate
@@ -3197,6 +3203,30 @@ wizard-steal-amulet = The Wizard of Yendor steals the Amulet!
 
 # TODO: translate
 wizard-summon-nasties = New nasties appear from thin air!
+
+# TODO: translate
+wizard-taunt-laughs = {$wizard} laughs fiendishly.
+
+# TODO: translate
+wizard-taunt-relinquish = Relinquish the Amulet, {$insult}!
+
+# TODO: translate
+wizard-taunt-panic = Even now thy life force ebbs, {$insult}!
+
+# TODO: translate
+wizard-taunt-return = I shall return.
+
+# TODO: translate
+wizard-taunt-general = {$malediction}, {$insult}!
+
+# TODO: translate
+amulet-feels-hot = The Amulet feels hot!
+
+# TODO: translate
+amulet-feels-very-warm = The Amulet feels very warm.
+
+# TODO: translate
+amulet-feels-warm = The Amulet feels warm.
 
 # TODO: translate
 wizard-where-current = You are on { $location } (absolute depth { $absolute }) at { $x },{ $y }.
