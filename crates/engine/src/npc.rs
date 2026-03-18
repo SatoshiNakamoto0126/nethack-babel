@@ -13,7 +13,7 @@ use hecs::Entity;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use nethack_babel_data::Alignment;
+use nethack_babel_data::{Alignment, schema::MonsterSound};
 
 use crate::action::Position;
 use crate::event::EngineEvent;
@@ -626,6 +626,73 @@ pub fn bones_monster_chat(monster_name: &str) -> EngineEvent {
         "npc-bones-rattle",
         vec![("monster", monster_name.to_string())],
     )
+}
+
+pub fn shrieking_monster_chat(monster_name: &str) -> EngineEvent {
+    EngineEvent::msg_with("npc-shriek", vec![("monster", monster_name.to_string())])
+}
+
+pub fn voiced_monster_chat(
+    monster_name: &str,
+    sound: MonsterSound,
+    is_peaceful: bool,
+    is_tame: bool,
+) -> Option<EngineEvent> {
+    let key = match sound {
+        MonsterSound::Bark => "npc-bark-barks",
+        MonsterSound::Mew => "npc-mew-mews",
+        MonsterSound::Roar => {
+            if is_peaceful {
+                "npc-growl-snarls"
+            } else {
+                "npc-roar-roars"
+            }
+        }
+        MonsterSound::Bellow => "npc-bellow-bellows",
+        MonsterSound::Growl => {
+            if is_peaceful {
+                "npc-growl-snarls"
+            } else {
+                "npc-growl-growls"
+            }
+        }
+        MonsterSound::Sqeek => "npc-squeak-squeaks",
+        MonsterSound::Sqawk => "npc-squawk-squawks",
+        MonsterSound::Chirp => "npc-chirp-chirps",
+        MonsterSound::Hiss => {
+            if is_peaceful {
+                return None;
+            }
+            "npc-hiss-hisses"
+        }
+        MonsterSound::Buzz => {
+            if is_peaceful {
+                "npc-buzz-drones"
+            } else {
+                "npc-buzz-angry"
+            }
+        }
+        MonsterSound::Grunt | MonsterSound::Orc => "npc-grunt-grunts",
+        MonsterSound::Neigh => {
+            if is_peaceful || is_tame {
+                "npc-neigh-neighs"
+            } else {
+                "npc-neigh-whinnies"
+            }
+        }
+        MonsterSound::Moo => "npc-moo-moos",
+        MonsterSound::Wail => "npc-wail-wails",
+        MonsterSound::Gurgle => "npc-gurgle-gurgles",
+        MonsterSound::Burble => "npc-burble-burbles",
+        MonsterSound::Trumpet => "npc-trumpet-trumpets",
+        MonsterSound::Groan => "npc-groan-groans",
+        _ => return None,
+    };
+
+    Some(EngineEvent::msg_with(
+        key,
+        vec![("monster", monster_name.to_string())],
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -2076,13 +2143,40 @@ mod tests {
     #[test]
     fn test_mumbling_monster_chat_event() {
         let evt = mumbling_monster_chat("lich");
-        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-mumble-incomprehensible"));
+        assert!(
+            matches!(evt, EngineEvent::Message { key, .. } if key == "npc-mumble-incomprehensible")
+        );
     }
 
     #[test]
     fn test_bones_monster_chat_event() {
         let evt = bones_monster_chat("skeleton");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-bones-rattle"));
+    }
+
+    #[test]
+    fn test_shrieking_monster_chat_event() {
+        let evt = shrieking_monster_chat("shrieker");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-shriek"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_hiss_is_silent_when_peaceful() {
+        assert!(voiced_monster_chat("cobra", MonsterSound::Hiss, true, false).is_none());
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_buzz_uses_peaceful_variant() {
+        let evt = voiced_monster_chat("killer bee", MonsterSound::Buzz, true, false)
+            .expect("buzzing monsters should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-buzz-drones"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_neigh_uses_tame_variant() {
+        let evt = voiced_monster_chat("horse", MonsterSound::Neigh, false, true)
+            .expect("neighing monsters should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-neigh-neighs"));
     }
 
     // ── Guard patrol tests ───────────────────────────────────────

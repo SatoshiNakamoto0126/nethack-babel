@@ -588,17 +588,19 @@ pub fn ambient_sounds(ctx: AmbientSoundContext<'_>, rng: &mut impl Rng) -> Optio
                     (true, _) => "ambient-swamp-donald-duck",
                 })
             } else if let Some(vault_ambient) = ctx.vault_ambient {
-                Some(match (ctx.hallucinating, vault_ambient, rng.random_range(0..2u32)) {
-                    (true, VaultAmbientKind::CountingGold, 0) => "ambient-vault-quarterback",
-                    (true, VaultAmbientKind::CountingGold, _) => "ambient-vault-scrooge",
-                    (true, VaultAmbientKind::Searching, 0) => "ambient-vault-searching",
-                    (true, VaultAmbientKind::Searching, _) => "ambient-vault-scrooge",
-                    (true, VaultAmbientKind::GuardFootsteps, 0) => "ambient-vault-footsteps",
-                    (true, VaultAmbientKind::GuardFootsteps, _) => "ambient-vault-scrooge",
-                    (false, VaultAmbientKind::CountingGold, _) => "ambient-vault-counting",
-                    (false, VaultAmbientKind::Searching, _) => "ambient-vault-searching",
-                    (false, VaultAmbientKind::GuardFootsteps, _) => "ambient-vault-footsteps",
-                })
+                Some(
+                    match (ctx.hallucinating, vault_ambient, rng.random_range(0..2u32)) {
+                        (true, VaultAmbientKind::CountingGold, 0) => "ambient-vault-quarterback",
+                        (true, VaultAmbientKind::CountingGold, _) => "ambient-vault-scrooge",
+                        (true, VaultAmbientKind::Searching, 0) => "ambient-vault-searching",
+                        (true, VaultAmbientKind::Searching, _) => "ambient-vault-scrooge",
+                        (true, VaultAmbientKind::GuardFootsteps, 0) => "ambient-vault-footsteps",
+                        (true, VaultAmbientKind::GuardFootsteps, _) => "ambient-vault-scrooge",
+                        (false, VaultAmbientKind::CountingGold, _) => "ambient-vault-counting",
+                        (false, VaultAmbientKind::Searching, _) => "ambient-vault-searching",
+                        (false, VaultAmbientKind::GuardFootsteps, _) => "ambient-vault-footsteps",
+                    },
+                )
             } else if ctx.has_beehive {
                 Some(match (ctx.hallucinating, rng.random_range(0..2u32)) {
                     (false, 0) => "ambient-beehive-buzzing",

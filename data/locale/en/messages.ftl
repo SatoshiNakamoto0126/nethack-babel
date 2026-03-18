@@ -1793,6 +1793,28 @@ npc-laugh-laughs = { $monster } laughs.
 npc-gecko-geico-pitch = { $monster } says: "Fifteen minutes could save you fifteen zorkmids."
 npc-mumble-incomprehensible = { $monster } mumbles incomprehensibly.
 npc-bones-rattle = { $monster } rattles noisily.
+npc-shriek = { $monster } shrieks.
+npc-bark-barks = { $monster } barks.
+npc-mew-mews = { $monster } mews.
+npc-growl-growls = { $monster } growls!
+npc-growl-snarls = { $monster } snarls.
+npc-roar-roars = { $monster } roars!
+npc-bellow-bellows = { $monster } bellows!
+npc-squeak-squeaks = { $monster } squeaks.
+npc-squawk-squawks = { $monster } squawks.
+npc-chirp-chirps = { $monster } chirps.
+npc-hiss-hisses = { $monster } hisses!
+npc-buzz-drones = { $monster } drones.
+npc-buzz-angry = { $monster } buzzes angrily.
+npc-grunt-grunts = { $monster } grunts.
+npc-neigh-neighs = { $monster } neighs.
+npc-neigh-whinnies = { $monster } whinnies.
+npc-moo-moos = { $monster } moos.
+npc-wail-wails = { $monster } wails.
+npc-gurgle-gurgles = { $monster } gurgles.
+npc-burble-burbles = { $monster } burbles.
+npc-trumpet-trumpets = { $monster } trumpets.
+npc-groan-groans = { $monster } groans.
 
 ## ============================================================================
 ## Content delivery (rumors, oracles)

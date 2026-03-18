@@ -895,8 +895,7 @@ fn current_level_has_oracle_ambient(world: &GameWorld) -> bool {
         .dungeon()
         .check_topology_special(&world.dungeon().branch, world.dungeon().depth)
         .or_else(|| identify_special_level(world.dungeon().branch, world.dungeon().depth));
-    if special_level != Some(crate::special_levels::SpecialLevelId::OracleLevel)
-    {
+    if special_level != Some(crate::special_levels::SpecialLevelId::OracleLevel) {
         return false;
     }
 
@@ -928,9 +927,15 @@ fn current_level_has_oracle_ambient(world: &GameWorld) -> bool {
         })
 }
 
-fn current_level_monster_def_by_name<'a>(world: &'a GameWorld, name: &str) -> Option<&'a MonsterDef> {
+fn current_level_monster_def_by_name<'a>(
+    world: &'a GameWorld,
+    name: &str,
+) -> Option<&'a MonsterDef> {
     let monster_id = resolve_monster_id_by_spec(world.monster_catalog(), name)?;
-    world.monster_catalog().iter().find(|def| def.id == monster_id)
+    world
+        .monster_catalog()
+        .iter()
+        .find(|def| def.id == monster_id)
 }
 
 fn current_level_monster_def_for_entity(
@@ -968,17 +973,18 @@ fn current_level_has_court_ambient(world: &GameWorld) -> bool {
 }
 
 fn current_level_has_swamp_ambient(world: &GameWorld) -> bool {
-    let has_swamp_lair_monster = world
-        .ecs()
-        .query::<(&Monster, &Name)>()
-        .iter()
-        .any(|(entity, (_, name))| {
-            if !live_monster_entity(world, entity) {
-                return false;
-            }
-            let lower = name.0.to_ascii_lowercase();
-            lower.contains("eel") || lower.contains("fungus") || lower.contains("mold")
-        });
+    let has_swamp_lair_monster =
+        world
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .any(|(entity, (_, name))| {
+                if !live_monster_entity(world, entity) {
+                    return false;
+                }
+                let lower = name.0.to_ascii_lowercase();
+                lower.contains("eel") || lower.contains("fungus") || lower.contains("mold")
+            });
     has_swamp_lair_monster && current_level_terrain_count(world, Terrain::Pool) >= 12
 }
 
@@ -1892,6 +1898,8 @@ fn resolve_player_action(
                     && let Some(monster_def) =
                         current_level_monster_def_for_entity(world, monster_entity)
                 {
+                    let is_peaceful = world.get_component::<Peaceful>(monster_entity).is_some();
+                    let is_tame = world.get_component::<Tame>(monster_entity).is_some();
                     let monster_name = world
                         .get_component::<Name>(monster_entity)
                         .map(|name| name.0.clone())
@@ -1916,6 +1924,20 @@ fn resolve_player_action(
                     if monster_def.sound == nethack_babel_data::schema::MonsterSound::Bones {
                         events.push(crate::npc::bones_monster_chat(&monster_name));
                         events.extend(crate::status::make_paralyzed(world, player, 2));
+                        return;
+                    }
+                    if monster_def.sound == nethack_babel_data::schema::MonsterSound::Shriek {
+                        events.push(crate::npc::shrieking_monster_chat(&monster_name));
+                        aggravate_monsters_on_current_level(world, rng, events);
+                        return;
+                    }
+                    if let Some(sound_event) = crate::npc::voiced_monster_chat(
+                        &monster_name,
+                        monster_def.sound,
+                        is_peaceful,
+                        is_tame,
+                    ) {
+                        events.push(sound_event);
                         return;
                     }
                 }
@@ -7667,11 +7689,12 @@ mod tests {
     use crate::conduct::ConductState;
     use crate::dungeon::Terrain;
     use crate::inventory::Inventory;
-    use crate::world::{Name, Peaceful};
+    use crate::world::{Name, Peaceful, Tame};
     use nethack_babel_data::{
         Alignment, ArtifactId, BucStatus, GameData, Gender, Handedness, MonsterFlags, ObjectClass,
         ObjectCore, ObjectLocation, ObjectTypeId, PlayerEvents, PlayerIdentity, PlayerQuestItems,
         PlayerSkills, RaceId, RoleId, SkillState, WeaponSkill, load_game_data,
+        schema::MonsterSound,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
@@ -7717,7 +7740,9 @@ mod tests {
     fn oracle_depth_for_world(world: &GameWorld) -> i32 {
         (1..=29)
             .find(|depth| {
-                world.dungeon().check_topology_special(&DungeonBranch::Main, *depth)
+                world
+                    .dungeon()
+                    .check_topology_special(&DungeonBranch::Main, *depth)
                     == Some(crate::special_levels::SpecialLevelId::OracleLevel)
             })
             .expect("test dungeon topology should place the Oracle somewhere in Main")
@@ -7893,6 +7918,15 @@ mod tests {
                 .expect("magic portal should have an adjacent walkable entry tile");
         set_player_position(world, entry_pos);
         resolve_turn(world, PlayerAction::Move { direction }, rng)
+    }
+
+    fn monster_name_with_sound(world: &GameWorld, sound: MonsterSound) -> String {
+        world
+            .monster_catalog()
+            .iter()
+            .find(|def| def.sound == sound)
+            .map(|def| def.names.male.clone())
+            .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
     }
 
     #[derive(Clone, Copy)]
@@ -16074,10 +16108,12 @@ mod tests {
                 },
                 &mut rng,
             );
-            if events.iter().any(|event| matches!(
-                event,
-                EngineEvent::Message { key, .. } if key == "shk-geico-pitch"
-            )) {
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "shk-geico-pitch"
+                )
+            }) {
                 return;
             }
         }
@@ -16216,6 +16252,131 @@ mod tests {
                 .is_some_and(|status| status.paralysis > 0),
             "chatting with a skeleton should briefly paralyze the player"
         );
+    }
+
+    #[test]
+    fn test_chatting_with_shrieker_wakes_sleeping_monsters() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shrieker = spawn_full_monster(&mut world, Position::new(6, 5), "shrieker", 8);
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+        let _ = crate::status::make_sleeping(&mut world, sleeper, 20);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-shriek")
+        }));
+        assert!(
+            world
+                .get_component::<crate::status::StatusEffects>(sleeper)
+                .is_none_or(|status| status.sleeping == 0),
+            "chatting with a shrieker should wake sleeping monsters on the level"
+        );
+        assert!(
+            world
+                .get_component::<crate::status::StatusEffects>(shrieker)
+                .is_none_or(|status| status.sleeping == 0),
+            "the shrieker itself should not remain asleep after speaking"
+        );
+    }
+
+    #[test]
+    fn test_chatting_with_hostile_hissing_monster_hisses() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let hiss_name = monster_name_with_sound(&world, MonsterSound::Hiss);
+        spawn_full_monster(&mut world, Position::new(6, 5), &hiss_name, 10);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-hiss-hisses")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_hissing_monster_gets_no_response() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let hiss_name = monster_name_with_sound(&world, MonsterSound::Hiss);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &hiss_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(monster, Peaceful)
+            .expect("hissing monster should accept peaceful marker");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-chat-no-response")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_buzzing_monster_drones() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let buzz_name = monster_name_with_sound(&world, MonsterSound::Buzz);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &buzz_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(monster, Peaceful)
+            .expect("buzzing monster should accept peaceful marker");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-buzz-drones")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_tame_neighing_monster_neighs() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let neigh_name = monster_name_with_sound(&world, MonsterSound::Neigh);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &neigh_name, 10);
+        world
+            .ecs_mut()
+            .insert_one(monster, Tame)
+            .expect("neighing monster should accept tame marker");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-neigh-neighs")
+        }));
     }
 
     #[test]
@@ -17855,7 +18016,10 @@ mod tests {
             }
         }
 
-        assert!(found, "levels with court royalty should eventually emit court ambience");
+        assert!(
+            found,
+            "levels with court royalty should eventually emit court ambience"
+        );
     }
 
     #[test]
@@ -17928,7 +18092,10 @@ mod tests {
             }
         }
 
-        assert!(found, "levels with beehive monsters should eventually emit beehive ambience");
+        assert!(
+            found,
+            "levels with beehive monsters should eventually emit beehive ambience"
+        );
     }
 
     #[test]
@@ -17954,7 +18121,10 @@ mod tests {
             }
         }
 
-        assert!(found, "levels with undead should eventually emit morgue ambience");
+        assert!(
+            found,
+            "levels with undead should eventually emit morgue ambience"
+        );
     }
 
     #[test]
@@ -18042,7 +18212,10 @@ mod tests {
             }
         }
 
-        assert!(found, "levels with zoo animals should eventually emit zoo ambience");
+        assert!(
+            found,
+            "levels with zoo animals should eventually emit zoo ambience"
+        );
     }
 
     #[test]

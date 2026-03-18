@@ -1236,7 +1236,7 @@ mod tests {
     use nethack_babel_data::{
         Alignment, GameData, Gender, Handedness, RaceId,
         loader::load_game_data,
-        schema::{ObjectClass, ObjectTypeId},
+        schema::{MonsterSound, ObjectClass, ObjectTypeId},
     };
     use nethack_babel_engine::{
         action::{Direction, PlayerAction},
@@ -1246,6 +1246,7 @@ mod tests {
         role::Role,
         teleport::handle_magic_portal,
         turn::resolve_turn,
+        world::Peaceful,
     };
     use rand::SeedableRng;
     use rand_pcg::Pcg64;
@@ -1302,6 +1303,15 @@ mod tests {
             .current_level
             .set_terrain(Position::new(5, 5), player_terrain);
         world
+    }
+
+    fn monster_name_with_sound(world: &GameWorld, sound: MonsterSound) -> String {
+        world
+            .monster_catalog()
+            .iter()
+            .find(|def| def.sound == sound)
+            .map(|def| def.names.male.clone())
+            .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
     }
 
     fn wizard_identity() -> PlayerIdentity {
@@ -5705,7 +5715,9 @@ mod tests {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         let player = world.player();
         spawn_full_monster(&mut world, Position::new(6, 5), "gecko", 8);
-        if let Some(mut status) = world.get_component_mut::<nethack_babel_engine::status::StatusEffects>(player) {
+        if let Some(mut status) =
+            world.get_component_mut::<nethack_babel_engine::status::StatusEffects>(player)
+        {
             status.hallucination = 200;
         }
 
@@ -5759,6 +5771,73 @@ mod tests {
                 .is_some_and(|status| status.paralysis > 0),
             "skeleton chat paralysis should survive the round-trip setup and apply after load"
         );
+    }
+
+    #[test]
+    fn round_trip_loaded_chatting_with_shrieker_keeps_wake_effect() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        spawn_full_monster(&mut world, Position::new(6, 5), "shrieker", 8);
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+        let _ = nethack_babel_engine::status::make_sleeping(&mut world, sleeper, 20);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("shrieker-chat-round-trip", &world, [80u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-shriek")
+        }));
+        let woken = loaded
+            .ecs()
+            .query::<(
+                &nethack_babel_engine::world::Monster,
+                &nethack_babel_engine::world::Name,
+            )>()
+            .iter()
+            .find_map(|(entity, (_, name))| (name.0 == "kobold").then_some(entity))
+            .and_then(|entity| {
+                loaded.get_component::<nethack_babel_engine::status::StatusEffects>(entity)
+            })
+            .is_none_or(|status| status.sleeping == 0);
+        assert!(
+            woken,
+            "shrieker chat should still wake sleeping monsters after load"
+        );
+    }
+
+    #[test]
+    fn round_trip_loaded_chatting_with_peaceful_buzzing_monster_keeps_drone_line() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let buzz_name = monster_name_with_sound(&world, MonsterSound::Buzz);
+        let monster = spawn_full_monster(&mut world, Position::new(6, 5), &buzz_name, 8);
+        world
+            .ecs_mut()
+            .insert_one(monster, Peaceful)
+            .expect("buzzing monster should accept peaceful marker");
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("buzz-chat-round-trip", &world, [81u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-buzz-drones")
+        }));
     }
 
     #[test]

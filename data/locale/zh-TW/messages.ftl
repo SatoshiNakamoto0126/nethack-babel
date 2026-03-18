@@ -3396,6 +3396,72 @@ npc-mumble-incomprehensible = { $monster } mumbles incomprehensibly.
 npc-bones-rattle = { $monster } rattles noisily.
 
 # TODO: translate
+npc-shriek = { $monster } shrieks.
+
+# TODO: translate
+npc-bark-barks = { $monster } barks.
+
+# TODO: translate
+npc-mew-mews = { $monster } mews.
+
+# TODO: translate
+npc-growl-growls = { $monster } growls!
+
+# TODO: translate
+npc-growl-snarls = { $monster } snarls.
+
+# TODO: translate
+npc-roar-roars = { $monster } roars!
+
+# TODO: translate
+npc-bellow-bellows = { $monster } bellows!
+
+# TODO: translate
+npc-squeak-squeaks = { $monster } squeaks.
+
+# TODO: translate
+npc-squawk-squawks = { $monster } squawks.
+
+# TODO: translate
+npc-chirp-chirps = { $monster } chirps.
+
+# TODO: translate
+npc-hiss-hisses = { $monster } hisses!
+
+# TODO: translate
+npc-buzz-drones = { $monster } drones.
+
+# TODO: translate
+npc-buzz-angry = { $monster } buzzes angrily.
+
+# TODO: translate
+npc-grunt-grunts = { $monster } grunts.
+
+# TODO: translate
+npc-neigh-neighs = { $monster } neighs.
+
+# TODO: translate
+npc-neigh-whinnies = { $monster } whinnies.
+
+# TODO: translate
+npc-moo-moos = { $monster } moos.
+
+# TODO: translate
+npc-wail-wails = { $monster } wails.
+
+# TODO: translate
+npc-gurgle-gurgles = { $monster } gurgles.
+
+# TODO: translate
+npc-burble-burbles = { $monster } burbles.
+
+# TODO: translate
+npc-trumpet-trumpets = { $monster } trumpets.
+
+# TODO: translate
+npc-groan-groans = { $monster } groans.
+
+# TODO: translate
 god-roars-suffer = A booming voice roars: "Suffer for thy blasphemy!"
 
 # TODO: translate
