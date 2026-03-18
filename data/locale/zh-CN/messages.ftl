@@ -3196,6 +3196,9 @@ wizard-vague-nervous = You feel vaguely nervous.
 wizard-black-glow = You notice a black glow surrounding you.
 
 # TODO: translate
+wizard-aggravate = Distant noises echo as the dungeon suddenly awakens.
+
+# TODO: translate
 wizard-respawned = The Wizard of Yendor rises again!
 
 # TODO: translate

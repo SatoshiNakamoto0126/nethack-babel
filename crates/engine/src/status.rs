@@ -72,6 +72,8 @@ pub struct StatusEffects {
     pub acid_resistance: u32,
     pub stone_resistance: u32,
     pub paralysis: u32,
+    #[serde(default)]
+    pub sleeping: u32,
     /// Fumbling timer (self-cycling: on expiry, hero trips and timer resets).
     pub fumbling: u32,
     /// Sleepy timer (self-cycling: on expiry, hero falls asleep and timer resets).
@@ -237,6 +239,12 @@ pub fn is_paralyzed(world: &GameWorld, entity: Entity) -> bool {
         .is_some_and(|s| s.paralysis > 0)
 }
 
+pub fn is_sleeping(world: &GameWorld, entity: Entity) -> bool {
+    world
+        .get_component::<StatusEffects>(entity)
+        .is_some_and(|s| s.sleeping > 0)
+}
+
 pub fn is_fumbling(world: &GameWorld, entity: Entity) -> bool {
     world
         .get_component::<StatusEffects>(entity)
@@ -318,6 +326,12 @@ fn apply_field(
     set: fn(&mut StatusEffects, u32),
     duration: u32,
 ) -> Option<(bool, bool)> {
+    if world.get_component::<StatusEffects>(entity).is_none() {
+        world
+            .ecs_mut()
+            .insert_one(entity, StatusEffects::default())
+            .ok()?;
+    }
     let mut s = world.get_component_mut::<StatusEffects>(entity)?;
     let was = get(&s) > 0;
     set(&mut s, StatusEffects::clamp_timeout(duration));
@@ -590,6 +604,42 @@ pub fn make_paralyzed(w: &mut GameWorld, e: Entity, dur: u32) -> Vec<EngineEvent
         }
     }
     ev
+}
+
+pub fn make_sleeping(w: &mut GameWorld, e: Entity, dur: u32) -> Vec<EngineEvent> {
+    let mut ev = Vec::new();
+    if let Some((was, is)) = apply_field(w, e, |s| s.sleeping, |s, v| s.sleeping = v, dur) {
+        if !was && is {
+            ev.push(EngineEvent::StatusApplied {
+                entity: e,
+                status: StatusEffect::Sleeping,
+                duration: Some(dur),
+                source: None,
+            });
+        } else if was && !is {
+            ev.push(EngineEvent::msg("sleep-end"));
+            ev.push(EngineEvent::StatusRemoved {
+                entity: e,
+                status: StatusEffect::Sleeping,
+            });
+        }
+    }
+    ev
+}
+
+pub fn wake_from_sleeping(world: &mut GameWorld, entity: Entity) -> Vec<EngineEvent> {
+    let mut events = Vec::new();
+    let Some(mut status) = world.get_component_mut::<StatusEffects>(entity) else {
+        return events;
+    };
+    if status.sleeping > 0 {
+        status.sleeping = 0;
+        events.push(EngineEvent::StatusRemoved {
+            entity,
+            status: StatusEffect::Sleeping,
+        });
+    }
+    events
 }
 
 pub fn make_fumbling(w: &mut GameWorld, e: Entity, dur: u32) -> Vec<EngineEvent> {
@@ -1017,6 +1067,7 @@ pub fn tick_status_effects(
     }
     dec_silent!(vomiting);
     dec!(paralysis, "status-paralysis-end", StatusEffect::Paralyzed);
+    dec!(sleeping, "sleep-end", StatusEffect::Sleeping);
     dec_silent!(passes_walls);
     dec_silent!(magical_breathing);
 

@@ -57,6 +57,8 @@ pub struct CachedMonster {
     pub shopkeeper: Option<crate::npc::Shopkeeper>,
     #[serde(default)]
     pub quest_npc_role: Option<crate::quest::QuestNpcRole>,
+    #[serde(default)]
+    pub status_effects: crate::status::StatusEffects,
 }
 
 /// What occupies a single map cell.
@@ -1215,6 +1217,7 @@ mod tests {
             priest: None,
             shopkeeper: None,
             quest_npc_role: None,
+            status_effects: crate::status::StatusEffects::default(),
         }];
         ds.cache_current_level(monsters);
 

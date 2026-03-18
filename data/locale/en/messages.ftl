@@ -2645,6 +2645,7 @@ wizard-identify-all = You feel self-knowledgeable...
 wizard-map-revealed = An image of your surroundings forms in your mind!
 wizard-vague-nervous = You feel vaguely nervous.
 wizard-black-glow = You notice a black glow surrounding you.
+wizard-aggravate = Distant noises echo as the dungeon suddenly awakens.
 wizard-respawned = The Wizard of Yendor rises again!
 wizard-steal-amulet = The Wizard of Yendor steals the Amulet!
 wizard-summon-nasties = New nasties appear from thin air!

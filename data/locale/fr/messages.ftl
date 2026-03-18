@@ -392,6 +392,7 @@ wizard-identify-all = Vous connaissez soudain tout votre équipement.
 wizard-map-revealed = Une image de votre environnement se forme dans votre esprit !
 wizard-vague-nervous = Vous vous sentez vaguement nerveux.
 wizard-black-glow = Vous remarquez une lueur noire autour de vous.
+wizard-aggravate = Des bruits lointains résonnent tandis que le donjon s’éveille brusquement.
 wizard-respawned = Le Magicien de Yendor revient à la vie !
 wizard-steal-amulet = Le Magicien de Yendor vole l'Amulette !
 wizard-summon-nasties = De nouvelles horreurs apparaissent de nulle part !

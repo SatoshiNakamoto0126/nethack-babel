@@ -658,6 +658,8 @@ pub enum WizardAction {
     VagueNervous,
     /// Distant post-Wizard harassment: black glow plus inventory curse.
     BlackGlowCurse,
+    /// Distant post-Wizard intervention: wake sleeping monsters on the level.
+    Aggravate,
     /// Distant post-Wizard intervention: immediate Wizard resurrection.
     Resurrect,
     /// Clone self ("Double Trouble") when at full HP.
@@ -692,6 +694,7 @@ pub fn wizard_harass_events(action: WizardAction) -> Vec<EngineEvent> {
         WizardAction::CurseItems => vec![EngineEvent::msg("wizard-curse-items")],
         WizardAction::VagueNervous => vec![EngineEvent::msg("wizard-vague-nervous")],
         WizardAction::BlackGlowCurse => vec![EngineEvent::msg("wizard-black-glow")],
+        WizardAction::Aggravate => vec![EngineEvent::msg("wizard-aggravate")],
         WizardAction::Resurrect => vec![EngineEvent::msg("wizard-respawned")],
     }
 }
@@ -706,13 +709,15 @@ pub fn choose_wizard_intervene_action(
         match rng.random_range(0..6) {
             0 | 1 => WizardAction::VagueNervous,
             2 => WizardAction::BlackGlowCurse,
-            3 | 4 => WizardAction::SummonNasties,
+            3 => WizardAction::Aggravate,
+            4 => WizardAction::SummonNasties,
             _ => WizardAction::Resurrect,
         }
     } else {
-        match rng.random_range(0..5) {
-            0 | 1 | 3 => WizardAction::VagueNervous,
-            2 => WizardAction::BlackGlowCurse,
+        match rng.random_range(0..4) {
+            0 => WizardAction::VagueNervous,
+            1 => WizardAction::BlackGlowCurse,
+            2 => WizardAction::Aggravate,
             _ => WizardAction::SummonNasties,
         }
     }
@@ -1212,6 +1217,7 @@ mod tests {
                 action,
                 WizardAction::VagueNervous
                     | WizardAction::BlackGlowCurse
+                    | WizardAction::Aggravate
                     | WizardAction::SummonNasties
                     | WizardAction::Resurrect
             ));
@@ -1227,6 +1233,7 @@ mod tests {
                 action,
                 WizardAction::VagueNervous
                     | WizardAction::BlackGlowCurse
+                    | WizardAction::Aggravate
                     | WizardAction::SummonNasties
             ));
         }

@@ -479,6 +479,7 @@ wizard-identify-all = Du weißt plötzlich alles über deine Ausrüstung.
 wizard-map-revealed = Ein Bild deiner Umgebung formt sich in deinem Geist!
 wizard-vague-nervous = Dir wird plötzlich ganz mulmig.
 wizard-black-glow = Du bemerkst einen schwarzen Schimmer um dich herum.
+wizard-aggravate = Aus der Ferne hallen Geräusche wider, als der Dungeon plötzlich erwacht.
 wizard-respawned = Der Zauberer von Yendor erhebt sich erneut!
 wizard-steal-amulet = Der Zauberer von Yendor stiehlt das Amulett!
 wizard-summon-nasties = Neue Scheusale erscheinen aus dem Nichts!

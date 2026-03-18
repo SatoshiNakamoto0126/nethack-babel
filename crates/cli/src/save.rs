@@ -199,6 +199,8 @@ pub struct SerializableMonster {
     pub shopkeeper: Option<Shopkeeper>,
     #[serde(default)]
     pub quest_npc_role: Option<QuestNpcRole>,
+    #[serde(default)]
+    pub status_effects: StatusEffects,
 }
 
 /// Flattened item state with full component data.
@@ -554,6 +556,10 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
         let quest_npc_role = world
             .get_component::<QuestNpcRole>(entity)
             .map(|role| *role);
+        let status_effects = world
+            .get_component::<StatusEffects>(entity)
+            .map(|status| (*status).clone())
+            .unwrap_or_default();
 
         monsters.push(SerializableMonster {
             position,
@@ -568,6 +574,7 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             priest,
             shopkeeper,
             quest_npc_role,
+            status_effects,
         });
     }
     monsters
@@ -794,6 +801,9 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
         if let Some(role) = m.quest_npc_role {
             let _ = world.ecs_mut().insert_one(entity, role);
         }
+        let _ = world
+            .ecs_mut()
+            .insert_one(entity, m.status_effects.clone());
     }
 
     sync_current_level_npc_state(&mut world);
@@ -3179,6 +3189,8 @@ mod tests {
             SaveStoryTraversalScenario::WizardIntervention => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
                 let player = world.player();
+                let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "goblin", 6);
+                let _ = nethack_babel_engine::status::make_sleeping(&mut world, sleeper, 10);
                 let sword = spawn_inventory_object_by_name(&mut world, "long sword", 'b');
                 world
                     .ecs_mut()
@@ -3210,7 +3222,9 @@ mod tests {
                             EngineEvent::Message { key, .. }
                                 if key == "wizard-vague-nervous"
                                     || key == "wizard-black-glow"
+                                    || key == "wizard-aggravate"
                                     || key == "wizard-summon-nasties"
+                                    || key == "wizard-respawned"
                         )
                     }) {
                         final_events = events;
@@ -4915,6 +4929,36 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_preserves_sleeping_monsters_on_current_level() {
+        let mut world = make_stair_world(DungeonBranch::Main, 3, Terrain::Floor);
+        let sleeper = world.spawn((
+            Monster,
+            Positioned(Position::new(6, 5)),
+            Name("Goblin".to_string()),
+            HitPoints { current: 8, max: 8 },
+            Speed(12),
+            MovementPoints(12),
+        ));
+        let _ = nethack_babel_engine::status::make_sleeping(&mut world, sleeper, 7);
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("sleeping-current-level", &world, [23u8; 32]);
+        let restored = loaded
+            .ecs()
+            .query::<(&Monster, &Name)>()
+            .iter()
+            .find_map(|(entity, (_monster, name))| {
+                name.0.eq_ignore_ascii_case("Goblin").then_some(entity)
+            })
+            .expect("sleeping goblin should survive round-trip");
+
+        assert!(
+            nethack_babel_engine::status::is_sleeping(&loaded, restored),
+            "live sleeping monsters should keep their sleep timer across save/load"
+        );
+    }
+
+    #[test]
     fn round_trip_loaded_revisit_restores_cached_runtime_state() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::StairsDown);
         let shopkeeper = world.spawn((
@@ -6014,6 +6058,7 @@ mod tests {
                         EngineEvent::Message { key, .. }
                             if key == "wizard-vague-nervous"
                                 || key == "wizard-black-glow"
+                                || key == "wizard-aggravate"
                                 || key == "wizard-summon-nasties"
                                 || key == "wizard-respawned"
                     )));
@@ -6042,6 +6087,12 @@ mod tests {
                             EngineEvent::Message { key, .. } if key == "wizard-summon-nasties"
                         )
                     });
+                    let aggravate = final_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-aggravate"
+                        )
+                    });
                     let respawned = final_events.iter().any(|event| {
                         matches!(
                             event,
@@ -6053,6 +6104,15 @@ mod tests {
                     }
                     if summon_msg {
                         assert!(summoned);
+                    }
+                    if aggravate {
+                        let sleeper = world
+                            .ecs()
+                            .query::<(&Monster, &Name)>()
+                            .iter()
+                            .find_map(|(entity, (_, name))| (name.0 == "goblin").then_some(entity))
+                            .expect("wizard save/load intervention should keep the sleeping goblin");
+                        assert!(!nethack_babel_engine::status::is_sleeping(&world, sleeper));
                     }
                     if respawned {
                         assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 1);

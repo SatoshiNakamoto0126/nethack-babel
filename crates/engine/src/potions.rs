@@ -699,12 +699,11 @@ fn effect_sleeping<R: Rng>(
     let bc = bcsign(buc);
     let duration = rn1(rng, 10, 25 - 12 * bc);
 
-    events.push(EngineEvent::StatusApplied {
-        entity: drinker,
-        status: StatusEffect::Sleeping,
-        duration: Some(duration.max(0) as u32),
-        source: None,
-    });
+    events.extend(crate::status::make_sleeping(
+        world,
+        drinker,
+        duration.max(0) as u32,
+    ));
 
     events.push(EngineEvent::msg("potion-sleeping"));
 
@@ -1107,12 +1106,7 @@ fn effect_booze<R: Rng>(
     if buc.cursed {
         // Cursed: pass out.
         let duration = rnd(rng, 15);
-        events.push(EngineEvent::StatusApplied {
-            entity: drinker,
-            status: StatusEffect::Sleeping,
-            duration: Some(duration),
-            source: None,
-        });
+        events.extend(crate::status::make_sleeping(world, drinker, duration));
         events.push(EngineEvent::msg("potion-booze-passout"));
     } else {
         events.push(EngineEvent::msg("potion-booze"));
@@ -1346,12 +1340,7 @@ pub fn throw_potion<R: Rng>(
             }
             PotionType::Sleeping if !has_free_action(world, *target) => {
                 let duration = rn1(rng, 10, 25).max(0) as u32;
-                events.push(EngineEvent::StatusApplied {
-                    entity: *target,
-                    status: StatusEffect::Sleeping,
-                    duration: Some(duration),
-                    source: Some(thrower),
-                });
+                events.extend(crate::status::make_sleeping(world, *target, duration));
             }
             PotionType::Paralysis if !has_free_action(world, *target) => {
                 let duration = d(rng, 4, 6);

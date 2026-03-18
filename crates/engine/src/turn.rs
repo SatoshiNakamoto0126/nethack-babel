@@ -213,7 +213,9 @@ pub fn resolve_turn(
     }
 
     // ── Step 2: execute the player's action ──────────────────────
+    let player_event_start = events.len();
     resolve_player_action(world, &action, rng, &mut events);
+    sync_incapacitation_from_events(world, &events[player_event_start..]);
     apply_domain_hostility_side_effects_from_player_events(world, &mut events, rng);
     anger_peaceful_monsters_from_player_events(world, &events);
     sync_shopkeeper_deaths_from_events(world, &mut events);
@@ -234,7 +236,9 @@ pub fn resolve_turn(
     let monsters_can_move = any_monster_can_move(world);
 
     if player_mp < NORMAL_SPEED as i32 && !monsters_can_move {
+        let new_turn_event_start = events.len();
         process_new_turn(world, rng, &mut events);
+        sync_incapacitation_from_events(world, &events[new_turn_event_start..]);
         sync_shopkeeper_deaths_from_events(world, &mut events);
     }
 
@@ -298,6 +302,7 @@ pub fn turn_events<'a, R: Rng>(
     }
     let mut player_events = Vec::with_capacity(4);
     resolve_player_action(world, &action, rng, &mut player_events);
+    sync_incapacitation_from_events(world, &player_events);
     apply_domain_hostility_side_effects_from_player_events(world, &mut player_events, rng);
     anger_peaceful_monsters_from_player_events(world, &player_events);
     sync_shopkeeper_deaths_from_events(world, &mut player_events);
@@ -317,6 +322,7 @@ pub fn turn_events<'a, R: Rng>(
     let monsters_can_move = any_monster_can_move(world);
     if player_mp < NORMAL_SPEED as i32 && !monsters_can_move {
         process_new_turn(world, rng, &mut new_turn_events);
+        sync_incapacitation_from_events(world, &new_turn_events);
         sync_shopkeeper_deaths_from_events(world, &mut new_turn_events);
     }
 
@@ -407,6 +413,7 @@ pub fn turn_events_gen<'a, R: Rng>(
         // Phase 2: resolve player action.
         let mut player_events = Vec::with_capacity(4);
         resolve_player_action(world, &action, rng, &mut player_events);
+        sync_incapacitation_from_events(world, &player_events);
         apply_domain_hostility_side_effects_from_player_events(world, &mut player_events, rng);
         anger_peaceful_monsters_from_player_events(world, &player_events);
         sync_shopkeeper_deaths_from_events(world, &mut player_events);
@@ -434,6 +441,7 @@ pub fn turn_events_gen<'a, R: Rng>(
         if player_mp < NORMAL_SPEED as i32 && !monsters_can_move {
             let mut new_turn_events = Vec::new();
             process_new_turn(world, rng, &mut new_turn_events);
+            sync_incapacitation_from_events(world, &new_turn_events);
             sync_shopkeeper_deaths_from_events(world, &mut new_turn_events);
             for event in new_turn_events {
                 story_events.push(event.clone());
@@ -508,6 +516,44 @@ fn anger_peaceful_monsters_from_player_events(world: &mut GameWorld, events: &[E
             continue;
         }
         let _ = world.ecs_mut().remove_one::<Peaceful>(entity);
+    }
+}
+
+fn sync_incapacitation_from_events(world: &mut GameWorld, events: &[EngineEvent]) {
+    for event in events {
+        match event {
+            EngineEvent::StatusApplied {
+                entity,
+                status: crate::event::StatusEffect::Paralyzed,
+                duration: Some(duration),
+                ..
+            } => {
+                let _ = crate::status::make_paralyzed(world, *entity, *duration);
+            }
+            EngineEvent::StatusRemoved {
+                entity,
+                status: crate::event::StatusEffect::Paralyzed,
+            } => {
+                if let Some(mut status) = world.get_component_mut::<crate::status::StatusEffects>(*entity) {
+                    status.paralysis = 0;
+                }
+            }
+            EngineEvent::StatusApplied {
+                entity,
+                status: crate::event::StatusEffect::Sleeping,
+                duration: Some(duration),
+                ..
+            } => {
+                let _ = crate::status::make_sleeping(world, *entity, *duration);
+            }
+            EngineEvent::StatusRemoved {
+                entity,
+                status: crate::event::StatusEffect::Sleeping,
+            } => {
+                let _ = crate::status::wake_from_sleeping(world, *entity);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -663,6 +709,9 @@ fn process_new_turn(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<
         events.append(&mut hc_events);
     }
 
+    // 4d5. Tick monster incapacitation timers that affect whether they can act.
+    tick_monster_incapacitation(world, events);
+
     // 4e. Regenerate HP.
     regen_hp(world, events);
 
@@ -754,6 +803,43 @@ fn process_new_turn(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<
     });
 }
 
+fn tick_monster_incapacitation(world: &mut GameWorld, events: &mut Vec<EngineEvent>) {
+    let monsters: Vec<hecs::Entity> = world
+        .ecs()
+        .query::<(&Monster,)>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .filter(|entity| live_monster_entity(world, *entity))
+        .collect();
+
+    for entity in monsters {
+        let Some(mut status) = world.get_component_mut::<crate::status::StatusEffects>(entity)
+        else {
+            continue;
+        };
+
+        if status.paralysis > 0 {
+            status.paralysis -= 1;
+            if status.paralysis == 0 {
+                events.push(EngineEvent::StatusRemoved {
+                    entity,
+                    status: crate::event::StatusEffect::Paralyzed,
+                });
+            }
+        }
+
+        if status.sleeping > 0 {
+            status.sleeping -= 1;
+            if status.sleeping == 0 {
+                events.push(EngineEvent::StatusRemoved {
+                    entity,
+                    status: crate::event::StatusEffect::Sleeping,
+                });
+            }
+        }
+    }
+}
+
 /// Grant new movement points to all monster entities.
 fn grant_monster_movement(world: &mut GameWorld, rng: &mut impl Rng) {
     // Collect entity ids and their calculated movement additions first
@@ -817,9 +903,9 @@ fn resolve_player_action(
     rng: &mut impl Rng,
     events: &mut Vec<EngineEvent>,
 ) {
-    // ── Paralysis check: if paralyzed, skip the entire action ──
+    // ── Incapacitation check: if paralyzed or asleep, skip the action ──
     let player = world.player();
-    if crate::status::is_paralyzed(world, player) {
+    if crate::status::is_paralyzed(world, player) || crate::status::is_sleeping(world, player) {
         events.push(EngineEvent::msg("status-paralyzed-cant-move"));
         return;
     }
@@ -2766,6 +2852,9 @@ fn respawn_cached_monsters(world: &mut GameWorld, cached_mons: &[CachedMonster])
             MovementPoints(NORMAL_SPEED as i32),
             CreationOrder(cm.creation_order),
         ));
+        let _ = world
+            .ecs_mut()
+            .insert_one(entity, cm.status_effects.clone());
         if cm.is_tame {
             let _ = world.ecs_mut().insert_one(entity, Tame);
         }
@@ -3055,6 +3144,10 @@ pub(crate) fn change_level_to_branch(
             quest_npc_role: world
                 .get_component::<crate::quest::QuestNpcRole>(entity)
                 .map(|role| *role),
+            status_effects: world
+                .get_component::<crate::status::StatusEffects>(entity)
+                .map(|status| (*status).clone())
+                .unwrap_or_default(),
         });
     }
 
@@ -3215,6 +3308,10 @@ fn change_level(
             quest_npc_role: world
                 .get_component::<crate::quest::QuestNpcRole>(entity)
                 .map(|role| *role),
+            status_effects: world
+                .get_component::<crate::status::StatusEffects>(entity)
+                .map(|status| (*status).clone())
+                .unwrap_or_default(),
         });
     }
 
@@ -4190,8 +4287,15 @@ fn resolve_monster_turns(world: &mut GameWorld, rng: &mut impl Rng, events: &mut
             mp.0 -= NORMAL_SPEED as i32;
         }
 
+        if crate::status::is_paralyzed(world, *entity)
+            || crate::status::is_sleeping(world, *entity)
+        {
+            continue;
+        }
+
         // Run the monster AI decision tree.
         let monster_events = crate::monster_ai::resolve_monster_turn(world, *entity, rng);
+        sync_incapacitation_from_events(world, &monster_events);
         events.extend(monster_events);
     }
 }
@@ -5370,6 +5474,22 @@ fn apply_wizard_level_teleport(
     true
 }
 
+fn wake_sleeping_monsters_on_current_level(world: &mut GameWorld, events: &mut Vec<EngineEvent>) {
+    let sleepers: Vec<hecs::Entity> = world
+        .ecs()
+        .query::<(&Monster,)>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .filter(|entity| {
+            live_monster_entity(world, *entity) && crate::status::is_sleeping(world, *entity)
+        })
+        .collect();
+
+    for entity in sleepers {
+        events.extend(crate::status::wake_from_sleeping(world, entity));
+    }
+}
+
 fn apply_wizard_harassment_action(
     world: &mut GameWorld,
     wizard: Option<hecs::Entity>,
@@ -5421,6 +5541,9 @@ fn apply_wizard_harassment_action(
         crate::npc::WizardAction::VagueNervous => {}
         crate::npc::WizardAction::BlackGlowCurse => {
             curse_random_player_items(world, player, rng);
+        }
+        crate::npc::WizardAction::Aggravate => {
+            wake_sleeping_monsters_on_current_level(world, events);
         }
         crate::npc::WizardAction::Resurrect => {
             if wizard_of_yendor_entities(world).is_empty()
@@ -8550,6 +8673,9 @@ mod tests {
                 player_events.wizard_times_killed = 1;
                 player_events.wizard_last_killed_turn = world.turn();
                 persist_player_events(&mut world, player, player_events);
+                let sleeper =
+                    spawn_full_monster(&mut world, Position::new(7, 5), "goblin", 6);
+                let _ = crate::status::make_sleeping(&mut world, sleeper, 10);
                 let mut rng = test_rng();
                 let mut final_events = Vec::new();
                 for _ in 0..40 {
@@ -8560,7 +8686,9 @@ mod tests {
                             EngineEvent::Message { key, .. }
                                 if key == "wizard-vague-nervous"
                                     || key == "wizard-black-glow"
+                                    || key == "wizard-aggravate"
                                     || key == "wizard-summon-nasties"
+                                    || key == "wizard-respawned"
                         )
                     }) {
                         final_events = events;
@@ -11903,6 +12031,75 @@ mod tests {
     }
 
     #[test]
+    fn test_sleeping_skips_turn() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let _ = crate::status::make_sleeping(&mut world, player, 5);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        let pos = world.get_component::<Positioned>(world.player()).unwrap();
+        assert_eq!(pos.0, Position::new(5, 5), "sleeping player should not move");
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::Message { key, .. } if key == "status-paralyzed-cant-move")),
+            "sleeping player should still be blocked from acting"
+        );
+    }
+
+    #[test]
+    fn test_sleeping_monster_skips_turn_until_waking() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        let sleeper = spawn_monster(&mut world, Position::new(6, 5), 12);
+        let _ = crate::status::make_sleeping(&mut world, sleeper, 2);
+
+        let first_turn = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+        assert!(
+            !first_turn.iter().any(|event| matches!(
+                event,
+                EngineEvent::MeleeHit { attacker, .. } if *attacker == sleeper
+            )),
+            "sleeping monster should not act while asleep"
+        );
+        assert!(
+            crate::status::is_sleeping(&world, sleeper),
+            "sleep timer should still be active after the first skipped turn"
+        );
+
+        let second_turn = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+        assert!(
+            !second_turn.iter().any(|event| matches!(
+                event,
+                EngineEvent::MeleeHit { attacker, .. } if *attacker == sleeper
+            )),
+            "sleeping monster should keep skipping turns until the timer expires"
+        );
+        assert!(
+            !crate::status::is_sleeping(&world, sleeper),
+            "sleep timer should expire after enough full turns"
+        );
+
+        let third_turn = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+        assert!(
+            third_turn.iter().any(|event| matches!(
+                event,
+                EngineEvent::MeleeHit { attacker, .. } if *attacker == sleeper
+            )),
+            "monster should resume acting once sleep expires"
+        );
+    }
+
+    #[test]
     fn test_confused_may_change_direction() {
         let mut world = make_test_world();
         let player = world.player();
@@ -12537,6 +12734,8 @@ mod tests {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         let player = world.player();
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "goblin", 6);
+        let _ = crate::status::make_sleeping(&mut world, sleeper, 10);
         let item = spawn_inventory_object_by_name(&mut world, "long sword", 'a');
         world
             .ecs_mut()
@@ -12566,6 +12765,7 @@ mod tests {
                     EngineEvent::Message { key, .. }
                         if key == "wizard-vague-nervous"
                             || key == "wizard-black-glow"
+                            || key == "wizard-aggravate"
                             || key == "wizard-summon-nasties"
                             || key == "wizard-respawned"
                 )
@@ -12581,20 +12781,62 @@ mod tests {
                 EngineEvent::Message { key, .. }
                     if key == "wizard-vague-nervous"
                         || key == "wizard-black-glow"
+                        || key == "wizard-aggravate"
                         || key == "wizard-summon-nasties"
                         || key == "wizard-respawned"
             )),
             "post-Wizard intervention should still pressure the player before respawn"
         );
+        let aggravated = final_events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "wizard-aggravate"
+            )
+        });
         let respawned = final_events.iter().any(|event| {
             matches!(
                 event,
                 EngineEvent::Message { key, .. } if key == "wizard-respawned"
             )
         });
+        if aggravated {
+            assert!(
+                !crate::status::is_sleeping(&world, sleeper),
+                "aggravation should really wake sleeping monsters"
+            );
+        }
         assert_eq!(
             count_monsters_named(&world, "Wizard of Yendor"),
             if respawned { 1 } else { 0 }
+        );
+    }
+
+    #[test]
+    fn test_offscreen_wizard_aggravate_wakes_sleeping_monsters() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "goblin", 6);
+        let _ = crate::status::make_sleeping(&mut world, sleeper, 10);
+        let mut events = crate::npc::wizard_harass_events(crate::npc::WizardAction::Aggravate);
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            None,
+            player,
+            crate::npc::WizardAction::Aggravate,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "wizard-aggravate"
+        )));
+        assert!(
+            !crate::status::is_sleeping(&world, sleeper),
+            "wizard aggravation should wake sleeping monsters on the level"
         );
     }
 
@@ -17215,6 +17457,7 @@ mod tests {
                         EngineEvent::Message { key, .. }
                             if key == "wizard-vague-nervous"
                                 || key == "wizard-black-glow"
+                                || key == "wizard-aggravate"
                                 || key == "wizard-summon-nasties"
                                 || key == "wizard-respawned"
                     )));
@@ -17238,6 +17481,12 @@ mod tests {
                             EngineEvent::Message { key, .. } if key == "wizard-summon-nasties"
                         )
                     });
+                    let aggravate = final_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-aggravate"
+                        )
+                    });
                     let respawned = final_events.iter().any(|event| {
                         matches!(
                             event,
@@ -17251,6 +17500,19 @@ mod tests {
                         assert!(
                             summoned,
                             "{} should really generate summoned monsters",
+                            scenario.label()
+                        );
+                    }
+                    if aggravate {
+                        let sleeper = world
+                            .ecs()
+                            .query::<(&Monster, &Name)>()
+                            .iter()
+                            .find_map(|(entity, (_, name))| (name.0 == "goblin").then_some(entity))
+                            .expect("wizard intervention scenario should keep the sleeping goblin");
+                        assert!(
+                            !crate::status::is_sleeping(&world, sleeper),
+                            "{} should really wake sleeping monsters",
                             scenario.label()
                         );
                     }
