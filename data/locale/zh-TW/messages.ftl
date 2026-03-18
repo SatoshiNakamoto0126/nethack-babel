@@ -3399,6 +3399,10 @@ npc-vampire-hostile-hunt = { $monster } says: "I vill come after you without reg
 # TODO: translate
 npc-imitate-imitates = { $monster } imitates you.
 # TODO: translate
+npc-rider-sandman = { $monster } is busy reading a copy of Sandman #8.
+# TODO: translate
+npc-rider-war = { $monster } says: "Who do you think you are, War?"
+# TODO: translate
 npc-seduce-hello-sailor = { $monster } says: "Hello, sailor."
 # TODO: translate
 npc-seduce-comes-on = { $monster } comes on to you.

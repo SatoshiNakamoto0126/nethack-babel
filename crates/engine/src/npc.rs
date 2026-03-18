@@ -857,6 +857,16 @@ pub fn contextual_monster_chat(
             Some(chat_outcome(key, monster_name))
         }
         MonsterSound::Imitate => Some(chat_outcome("npc-imitate-imitates", monster_name)),
+        MonsterSound::Rider => {
+            let key = if monster_name.eq_ignore_ascii_case("Death")
+                && state.chat_roll.is_multiple_of(10)
+            {
+                "npc-rider-sandman"
+            } else {
+                "npc-rider-war"
+            };
+            Some(chat_outcome(key, monster_name))
+        }
         _ => None,
     }
 }
@@ -2857,6 +2867,42 @@ mod tests {
                 .expect("imitators should speak");
         assert!(
             matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-imitate-imitates")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_death_can_reference_sandman() {
+        let monster = fake_monster(MonsterSound::Rider, "Death", '&', MonsterFlags::empty());
+        let outcome = contextual_monster_chat(
+            &monster,
+            "Death",
+            MonsterChatState {
+                chat_roll: 0,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("Death should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-rider-sandman")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_rider_uses_war_line_by_default() {
+        let monster = fake_monster(MonsterSound::Rider, "Famine", '&', MonsterFlags::empty());
+        let outcome = contextual_monster_chat(
+            &monster,
+            "Famine",
+            MonsterChatState {
+                chat_roll: 1,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("Riders should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-rider-war")
         );
     }
 

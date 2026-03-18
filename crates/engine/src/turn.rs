@@ -17125,6 +17125,29 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_death_uses_rider_line() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        spawn_full_monster(&mut world, Position::new(6, 5), "Death", 20);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. }
+                    if key == "npc-rider-war" || key == "npc-rider-sandman"
+            )
+        }));
+    }
+
+    #[test]
     fn test_chatting_with_hostile_raven_says_nevermore() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);

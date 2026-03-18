@@ -6117,6 +6117,32 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_chatting_with_death_keeps_rider_line() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        spawn_full_monster(&mut world, Position::new(6, 5), "Death", 20);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("death-chat-round-trip", &world, [88u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. }
+                    if key == "npc-rider-war" || key == "npc-rider-sandman"
+            )
+        }));
+    }
+
+    #[test]
     fn round_trip_loaded_chatting_with_satiated_tame_cat_keeps_purr_line() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         let mew_name = monster_name_with_sound(&world, MonsterSound::Mew);
