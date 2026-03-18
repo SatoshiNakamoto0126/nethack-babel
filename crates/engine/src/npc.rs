@@ -658,6 +658,8 @@ pub enum WizardAction {
     VagueNervous,
     /// Distant post-Wizard harassment: black glow plus inventory curse.
     BlackGlowCurse,
+    /// Distant post-Wizard intervention: immediate Wizard resurrection.
+    Resurrect,
     /// Clone self ("Double Trouble") when at full HP.
     DoubleTrouble,
 }
@@ -690,16 +692,29 @@ pub fn wizard_harass_events(action: WizardAction) -> Vec<EngineEvent> {
         WizardAction::CurseItems => vec![EngineEvent::msg("wizard-curse-items")],
         WizardAction::VagueNervous => vec![EngineEvent::msg("wizard-vague-nervous")],
         WizardAction::BlackGlowCurse => vec![EngineEvent::msg("wizard-black-glow")],
+        WizardAction::Resurrect => vec![EngineEvent::msg("wizard-respawned")],
     }
 }
 
 /// Determine which off-screen intervention the Wizard uses after death or
 /// invocation pressure when no live Wizard body is currently present.
-pub fn choose_wizard_intervene_action(rng: &mut impl Rng) -> WizardAction {
-    match rng.random_range(0..5) {
-        0 | 1 | 3 => WizardAction::VagueNervous,
-        2 => WizardAction::BlackGlowCurse,
-        _ => WizardAction::SummonNasties,
+pub fn choose_wizard_intervene_action(
+    allow_resurrection: bool,
+    rng: &mut impl Rng,
+) -> WizardAction {
+    if allow_resurrection {
+        match rng.random_range(0..6) {
+            0 | 1 => WizardAction::VagueNervous,
+            2 => WizardAction::BlackGlowCurse,
+            3 | 4 => WizardAction::SummonNasties,
+            _ => WizardAction::Resurrect,
+        }
+    } else {
+        match rng.random_range(0..5) {
+            0 | 1 | 3 => WizardAction::VagueNervous,
+            2 => WizardAction::BlackGlowCurse,
+            _ => WizardAction::SummonNasties,
+        }
     }
 }
 
@@ -1192,7 +1207,22 @@ mod tests {
     fn test_wizard_intervene_action_distribution_stays_within_supported_set() {
         let mut rng = test_rng();
         for _ in 0..32 {
-            let action = choose_wizard_intervene_action(&mut rng);
+            let action = choose_wizard_intervene_action(true, &mut rng);
+            assert!(matches!(
+                action,
+                WizardAction::VagueNervous
+                    | WizardAction::BlackGlowCurse
+                    | WizardAction::SummonNasties
+                    | WizardAction::Resurrect
+            ));
+        }
+    }
+
+    #[test]
+    fn test_astral_wizard_intervention_never_resurrects_immediately() {
+        let mut rng = test_rng();
+        for _ in 0..64 {
+            let action = choose_wizard_intervene_action(false, &mut rng);
             assert!(matches!(
                 action,
                 WizardAction::VagueNervous

@@ -6015,6 +6015,7 @@ mod tests {
                             if key == "wizard-vague-nervous"
                                 || key == "wizard-black-glow"
                                 || key == "wizard-summon-nasties"
+                                || key == "wizard-respawned"
                     )));
                     let cursed = world
                         .get_component::<Inventory>(player)
@@ -6041,13 +6042,28 @@ mod tests {
                             EngineEvent::Message { key, .. } if key == "wizard-summon-nasties"
                         )
                     });
+                    let respawned = final_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-respawned"
+                        )
+                    });
                     if black_glow {
                         assert!(cursed);
                     }
                     if summon_msg {
                         assert!(summoned);
                     }
-                    assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 0);
+                    if respawned {
+                        assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 1);
+                        assert!(
+                            final_events
+                                .iter()
+                                .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
+                        );
+                    } else {
+                        assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 0);
+                    }
                     assert!(
                         world
                             .get_component::<PlayerEvents>(player)

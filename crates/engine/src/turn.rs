@@ -5264,7 +5264,8 @@ fn process_wizard_of_yendor_turn(
             8
         };
         if rng.random_range(0..intervention_period) == 0 {
-            let action = crate::npc::choose_wizard_intervene_action(rng);
+            let allow_resurrection = world.dungeon().branch != DungeonBranch::Endgame;
+            let action = crate::npc::choose_wizard_intervene_action(allow_resurrection, rng);
             events.extend(crate::npc::wizard_harass_events(action));
             apply_wizard_harassment_action(world, None, player, action, rng, events);
         }
@@ -5420,6 +5421,18 @@ fn apply_wizard_harassment_action(
         crate::npc::WizardAction::VagueNervous => {}
         crate::npc::WizardAction::BlackGlowCurse => {
             curse_random_player_items(world, player, rng);
+        }
+        crate::npc::WizardAction::Resurrect => {
+            if wizard_of_yendor_entities(world).is_empty()
+                && let Some((wizard, pos)) =
+                    spawn_named_monster_near_entity(world, player, "Wizard of Yendor", rng)
+            {
+                seed_wizard_runtime_state(world, wizard);
+                events.push(EngineEvent::MonsterGenerated {
+                    entity: wizard,
+                    position: pos,
+                });
+            }
         }
     }
 }
@@ -12554,6 +12567,7 @@ mod tests {
                         if key == "wizard-vague-nervous"
                             || key == "wizard-black-glow"
                             || key == "wizard-summon-nasties"
+                            || key == "wizard-respawned"
                 )
             }) {
                 final_events = events;
@@ -12568,10 +12582,49 @@ mod tests {
                     if key == "wizard-vague-nervous"
                         || key == "wizard-black-glow"
                         || key == "wizard-summon-nasties"
+                        || key == "wizard-respawned"
             )),
             "post-Wizard intervention should still pressure the player before respawn"
         );
-        assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 0);
+        let respawned = final_events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "wizard-respawned"
+            )
+        });
+        assert_eq!(
+            count_monsters_named(&world, "Wizard of Yendor"),
+            if respawned { 1 } else { 0 }
+        );
+    }
+
+    #[test]
+    fn test_offscreen_wizard_resurrect_action_spawns_new_wizard() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let mut events = crate::npc::wizard_harass_events(crate::npc::WizardAction::Resurrect);
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            None,
+            player,
+            crate::npc::WizardAction::Resurrect,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "wizard-respawned"
+        )));
+        assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 1);
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
+        );
     }
 
     #[test]
@@ -12625,7 +12678,7 @@ mod tests {
             hp.max = 20;
         }
         if let Some(mut status) = world.get_component_mut::<crate::status::StatusEffects>(player) {
-            status.deaf = 50;
+            status.deaf = 500;
         }
         let mut player_events = read_player_events(&world, player);
         player_events.invoked = true;
@@ -17163,6 +17216,7 @@ mod tests {
                             if key == "wizard-vague-nervous"
                                 || key == "wizard-black-glow"
                                 || key == "wizard-summon-nasties"
+                                || key == "wizard-respawned"
                     )));
                     let sword = find_player_named_item(&world, player, "long sword")
                         .expect("off-screen wizard intervention should keep the tracked item");
@@ -17184,6 +17238,12 @@ mod tests {
                             EngineEvent::Message { key, .. } if key == "wizard-summon-nasties"
                         )
                     });
+                    let respawned = final_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-respawned"
+                        )
+                    });
                     if black_glow {
                         assert!(cursed, "{} should really curse inventory", scenario.label());
                     }
@@ -17194,7 +17254,18 @@ mod tests {
                             scenario.label()
                         );
                     }
-                    assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 0);
+                    if respawned {
+                        assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 1);
+                        assert!(
+                            final_events
+                                .iter()
+                                .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. })),
+                            "{} should generate a live Wizard on immediate resurrection",
+                            scenario.label()
+                        );
+                    } else {
+                        assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 0);
+                    }
                     assert!(
                         world
                             .get_component::<PlayerEvents>(player)
