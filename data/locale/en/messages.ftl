@@ -814,6 +814,7 @@ shop-price = "For you, { $item } only { $price } gold piece{ $price ->
    *[other] s
     }."
 shop-stolen = You have unpaid merchandise!
+shop-leave-warning = { $shopkeeper } shouts "Please pay before leaving!"
 shop-damage = { $shopkeeper } says "You'll pay for the damage!"
 shop-repair = { $shopkeeper } repairs the damage.
 shop-keeper-dead = { $shopkeeper } is dead. The shop is abandoned.

@@ -3045,7 +3045,13 @@ mod tests {
             StatusEffects::default(),
         ));
 
-        let events = apply_spell_effect(&mut world, player, SpellType::Sleep, Some(Direction::East), &mut rng);
+        let events = apply_spell_effect(
+            &mut world,
+            player,
+            SpellType::Sleep,
+            Some(Direction::East),
+            &mut rng,
+        );
 
         assert!(
             events.iter().any(|event| matches!(
@@ -3061,7 +3067,10 @@ mod tests {
         let status = world
             .get_component::<StatusEffects>(mon)
             .expect("sleep target should keep status effects");
-        assert!(status.sleeping > 0, "sleep spell should really set sleeping");
+        assert!(
+            status.sleeping > 0,
+            "sleep spell should really set sleeping"
+        );
         assert_eq!(
             status.paralysis, 0,
             "sleep spell should not silently map onto paralysis"

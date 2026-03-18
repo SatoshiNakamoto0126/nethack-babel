@@ -284,6 +284,9 @@ pub struct ShopRoom {
     pub shopkeeper_gold: i32,
     /// Door position (shopkeeper blocks here when player has unpaid items).
     pub door_pos: Option<Position>,
+    /// Whether the hero has already been warned about leaving unpaid.
+    #[serde(default)]
+    pub exit_warning_issued: bool,
     /// Damage records for shop fixtures that need repair.
     #[serde(default)]
     pub damage_list: Vec<ShopDamage>,
@@ -312,6 +315,7 @@ impl ShopRoom {
             surcharge: false,
             shopkeeper_gold: 0,
             door_pos: None,
+            exit_warning_issued: false,
             damage_list: Vec::new(),
         }
     }
@@ -340,6 +344,7 @@ impl ShopRoom {
             surcharge: false,
             shopkeeper_gold: shopkeeper_initial_gold(rng),
             door_pos,
+            exit_warning_issued: false,
             damage_list: Vec::new(),
         }
     }
@@ -1102,6 +1107,7 @@ pub fn rob_shop<R: Rng>(
         shop.credit -= total;
         shop.bill.clear();
         shop.debit = 0;
+        shop.exit_warning_issued = false;
         events.push(EngineEvent::msg("shop-credit-covers"));
         return events;
     }
@@ -1111,6 +1117,7 @@ pub fn rob_shop<R: Rng>(
     shop.credit = 0;
     shop.bill.clear();
     shop.debit = 0;
+    shop.exit_warning_issued = false;
     shop.robbed += stolen;
 
     events.push(EngineEvent::msg_with(
@@ -1140,6 +1147,7 @@ pub fn setpaid(shop: &mut ShopRoom) {
     shop.bill.clear();
     shop.credit = 0;
     shop.debit = 0;
+    shop.exit_warning_issued = false;
 }
 
 /// Handle shopkeeper death: clear the bill, remove residency.
@@ -1189,6 +1197,7 @@ pub fn rile_shop(shop: &mut ShopRoom) {
 /// Corresponds to `pacify_shk()` in C.
 pub fn pacify_shop(shop: &mut ShopRoom) {
     shop.angry = false;
+    shop.exit_warning_issued = false;
     if shop.surcharge {
         shop.surcharge = false;
         for entry in shop.bill.entries.iter_mut() {

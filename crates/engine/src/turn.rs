@@ -4106,6 +4106,10 @@ fn try_move_entity(
         // Fall through to move the player into the boulder's old cell.
     }
 
+    if maybe_trigger_shop_exit_robbery(world, entity, current_pos, target_pos, events, rng) {
+        return;
+    }
+
     // Update position component.
     if let Some(mut pos) = world.get_component_mut::<Positioned>(entity) {
         pos.0 = target_pos;
@@ -4116,9 +4120,6 @@ fn try_move_entity(
         from: current_pos,
         to: target_pos,
     });
-
-    maybe_trigger_shop_exit_robbery(world, entity, current_pos, target_pos, events, rng);
-
     finish_player_movement(world, entity, current_pos, target_pos, events, rng);
 }
 
@@ -5667,9 +5668,10 @@ fn apply_wizard_harassment_action(
             }
         }
         crate::npc::WizardAction::SummonNasties => {
+            let summon_anchor = wizard.unwrap_or(player);
             for spec in choose_wizard_nasty_summon_specs(world, rng) {
                 if let Some((monster, pos)) =
-                    spawn_named_monster_near_entity(world, player, spec.as_str(), rng)
+                    spawn_named_monster_near_entity(world, summon_anchor, spec.as_str(), rng)
                 {
                     events.push(EngineEvent::MonsterGenerated {
                         entity: monster,
@@ -6727,33 +6729,36 @@ fn maybe_trigger_shop_exit_robbery(
     to_pos: Position,
     events: &mut Vec<EngineEvent>,
     rng: &mut impl Rng,
-) {
+) -> bool {
     let Some(shop_idx) = find_shop_index_containing_position(world, from_pos) else {
-        return;
+        return false;
     };
-    if world
-        .dungeon()
-        .shop_rooms
-        .get(shop_idx)
-        .is_none_or(|shop| shop.contains(to_pos))
-    {
-        return;
-    }
-
-    let needs_robbery = world
-        .dungeon()
-        .shop_rooms
-        .get(shop_idx)
-        .is_some_and(|shop| !shop.bill.is_empty() || shop.debit > shop.credit);
-    if !needs_robbery {
-        return;
-    }
-
     let mut shop = world.dungeon().shop_rooms[shop_idx].clone();
+    let needs_robbery = !shop.bill.is_empty() || shop.debit > shop.credit;
+    if shop.contains(to_pos) || !needs_robbery {
+        if shop.exit_warning_issued {
+            shop.exit_warning_issued = false;
+            world.dungeon_mut().shop_rooms[shop_idx] = shop;
+        }
+        return false;
+    }
+
+    if !shop.exit_warning_issued {
+        let shopkeeper_name = shop.shopkeeper_name.clone();
+        shop.exit_warning_issued = true;
+        world.dungeon_mut().shop_rooms[shop_idx] = shop;
+        events.push(EngineEvent::msg_with(
+            "shop-leave-warning",
+            vec![("shopkeeper", shopkeeper_name)],
+        ));
+        return true;
+    }
+
     let mut robbery_events = crate::shop::rob_shop(world, player, &mut shop, rng);
     world.dungeon_mut().shop_rooms[shop_idx] = shop;
     sync_current_level_npc_state(world);
     events.append(&mut robbery_events);
+    false
 }
 
 fn current_depth_string(world: &GameWorld) -> String {
@@ -7905,6 +7910,17 @@ mod tests {
                 );
 
                 let mut rng = test_rng();
+                let warning_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Move {
+                        direction: Direction::West,
+                    },
+                    &mut rng,
+                );
+                assert!(warning_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "shop-leave-warning"
+                )));
                 let move_events = resolve_turn(
                     &mut world,
                     PlayerAction::Move {
@@ -8316,6 +8332,17 @@ mod tests {
                 );
 
                 let mut rng = test_rng();
+                let warning_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Move {
+                        direction: Direction::West,
+                    },
+                    &mut rng,
+                );
+                assert!(warning_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "shop-leave-warning"
+                )));
                 let robbery_events = resolve_turn(
                     &mut world,
                     PlayerAction::Move {
@@ -13506,6 +13533,64 @@ mod tests {
     }
 
     #[test]
+    fn test_live_wizard_summon_nasties_spawn_near_wizard_anchor() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        for x in 3..=11 {
+            for y in 3..=7 {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(x, y), Terrain::Floor);
+            }
+        }
+        let player = world.player();
+        let wizard_pos = Position::new(9, 5);
+        let wizard = spawn_full_monster(&mut world, wizard_pos, "Wizard of Yendor", 12);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+            hp.current = 20;
+            hp.max = 40;
+        }
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .map(|pos| pos.0)
+            .expect("player should have a position");
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::SummonNasties,
+            &mut rng,
+            &mut events,
+        );
+
+        let generated_positions: Vec<Position> = events
+            .iter()
+            .filter_map(|event| match event {
+                EngineEvent::MonsterGenerated { position, .. } => Some(*position),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !generated_positions.is_empty(),
+            "live Wizard summon should generate at least one monster"
+        );
+        assert!(
+            generated_positions
+                .iter()
+                .all(|pos| { crate::ball::chebyshev_distance(*pos, wizard_pos) <= 1 })
+        );
+        assert!(
+            generated_positions
+                .iter()
+                .all(|pos| { crate::ball::chebyshev_distance(*pos, player_pos) >= 3 })
+        );
+    }
+
+    #[test]
     fn test_gehennom_wizard_nasties_can_include_demons() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -15188,8 +15273,9 @@ mod tests {
     }
 
     #[test]
-    fn test_peaceful_shopkeeper_with_unpaid_bill_follows_player_outside_shop() {
+    fn test_first_shop_exit_with_unpaid_bill_warns_and_blocks_movement() {
         let mut world = make_test_world();
+        let player = world.player();
         let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
         world
             .ecs_mut()
@@ -15236,6 +15322,89 @@ mod tests {
             },
             &mut rng,
         );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-leave-warning"
+        )));
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "shop-shoplift"
+            )),
+            "first exit attempt should warn instead of robbing immediately"
+        );
+        assert_eq!(
+            world.get_component::<Positioned>(player).map(|pos| pos.0),
+            Some(Position::new(5, 5)),
+            "warning should block the player from leaving the shop"
+        );
+        let shop = &world.dungeon().shop_rooms[0];
+        assert!(shop.exit_warning_issued);
+        assert_eq!(shop.bill.total(), 100);
+    }
+
+    #[test]
+    fn test_peaceful_shopkeeper_with_unpaid_bill_follows_player_outside_shop() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let unpaid_item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('u'),
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: 6,
+                y: 5,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
+        ));
+        assert!(
+            world.dungeon_mut().shop_rooms[0]
+                .bill
+                .add(unpaid_item, 100, 1),
+            "shop bill should accept an unpaid item"
+        );
+
+        let mut rng = test_rng();
+        let warning_events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::West,
+            },
+            &mut rng,
+        );
+        assert!(warning_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-leave-warning"
+        )));
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::West,
+            },
+            &mut rng,
+        );
         assert!(events.iter().any(|event| matches!(
             event,
             EngineEvent::EntityMoved { entity, .. } if *entity == shopkeeper
@@ -15250,14 +15419,87 @@ mod tests {
             .map(|state| (*state).clone())
             .expect("shopkeeper should have explicit runtime state");
         assert!(shopkeeper_state.following);
+        assert_eq!(
+            world.get_component::<Positioned>(player).map(|pos| pos.0),
+            Some(Position::new(4, 5)),
+            "second exit attempt should let the player actually leave"
+        );
         let final_pos = world
             .get_component::<Positioned>(shopkeeper)
             .map(|pos| pos.0)
             .expect("shopkeeper should still have a position after moving");
         assert!(
-            final_pos.x <= 5,
-            "shopkeeper follow movement should advance toward the player, got {:?}",
+            final_pos != shopkeeper_home_pos(&world.dungeon().shop_rooms[0]),
+            "shopkeeper follow movement should leave the home tile once pursuit begins, got {:?}",
             final_pos
+        );
+    }
+
+    #[test]
+    fn test_paying_clears_shop_exit_warning_state() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let _gold = spawn_inventory_gold(&mut world, 150, 'g');
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let unpaid_item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('u'),
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: 6,
+                y: 5,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
+        ));
+        assert!(
+            world.dungeon_mut().shop_rooms[0]
+                .bill
+                .add(unpaid_item, 100, 1),
+            "shop bill should accept a payable entry"
+        );
+
+        let mut rng = test_rng();
+        let warning_events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::West,
+            },
+            &mut rng,
+        );
+        assert!(warning_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-leave-warning"
+        )));
+        assert!(world.dungeon().shop_rooms[0].exit_warning_issued);
+
+        let pay_events = resolve_turn(&mut world, PlayerAction::Pay, &mut rng);
+        assert!(pay_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-pay-success"
+        )));
+        assert!(
+            !world.dungeon().shop_rooms[0].exit_warning_issued,
+            "full payment should clear the leave-warning state"
         );
     }
 
@@ -17537,12 +17779,13 @@ mod tests {
                         "{} should mark the shopkeeper as following after the hero leaves with unpaid goods",
                         scenario.label()
                     );
-                    assert_eq!(
-                        world
-                            .get_component::<Positioned>(shopkeeper)
-                            .map(|pos| pos.0.x),
-                        Some(5),
-                        "{} should move the peaceful shopkeeper toward the player",
+                    let final_pos = world
+                        .get_component::<Positioned>(shopkeeper)
+                        .map(|pos| pos.0)
+                        .expect("shopkeeper should still have a position");
+                    assert!(
+                        final_pos != shopkeeper_home_pos(&world.dungeon().shop_rooms[0]),
+                        "{} should move the peaceful shopkeeper off the home tile once pursuit starts",
                         scenario.label()
                     );
                 }

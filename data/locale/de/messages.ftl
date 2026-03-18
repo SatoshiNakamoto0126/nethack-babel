@@ -574,6 +574,7 @@ shk-welcome = { $shopkeeper } sagt: „Willkommen in meinem Laden, { $honorific 
 shk-angry-greeting = { $shopkeeper } starrt Euch wütend an.
 shk-robbed-greeting = { $shopkeeper } sagt: „Den Raub habe ich nicht vergessen, { $honorific }.“
 shk-surcharge-greeting = { $shopkeeper } sagt: „Für Euch sind die Preise jetzt höher, { $honorific }.“
+shop-leave-warning = { $shopkeeper } ruft: „Bezahlt, bevor Ihr geht!“
 shop-repair = { $shopkeeper } repariert den Schaden.
 shop-keeper-dead = { $shopkeeper } ist tot. Der Laden ist verlassen.
 shop-restock = { $shopkeeper } scheint für die Wiedergutmachung dankbar zu sein.

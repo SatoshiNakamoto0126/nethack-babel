@@ -793,6 +793,7 @@ shop-enter = 你进入了{ $shopkeeper }的{ $shoptype }。
 shop-leave = { $shopkeeper }说"欢迎再来！"
 shop-price = "给你，{ $item }只要{ $price }枚金币。"
 shop-stolen = 你有未付款的商品！
+shop-leave-warning = { $shopkeeper }喊道："请先付款再离开！"
 shop-damage = { $shopkeeper }说"你得赔偿损失！"
 shop-repair = { $shopkeeper }开始修理店里的损坏。
 shop-keeper-dead = { $shopkeeper }死了，这家店已经废弃。

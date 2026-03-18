@@ -2189,18 +2189,28 @@ mod tests {
                 );
 
                 let mut rng = Pcg64::seed_from_u64(7104);
-                let _leave_events = resolve_turn(
+                let warning_events = resolve_turn(
                     &mut world,
                     PlayerAction::Move {
                         direction: Direction::West,
                     },
                     &mut rng,
                 );
+                assert!(warning_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "shop-leave-warning"
+                )));
 
                 let (mut loaded, loaded_rng) =
                     save_and_reload_world("story-matrix-shopkeeper-follow", &world, [27u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
-                let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Move {
+                        direction: Direction::West,
+                    },
+                    &mut rng,
+                );
                 (loaded, events)
             }
             SaveStoryTraversalScenario::ShopkeeperPayoff => {
@@ -2613,6 +2623,19 @@ mod tests {
                         .add(unpaid_item, 100, 1),
                     "shop bill should accept an unpaid entry"
                 );
+
+                let mut rng = Pcg64::seed_from_u64(7105);
+                let warning_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Move {
+                        direction: Direction::West,
+                    },
+                    &mut rng,
+                );
+                assert!(warning_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "shop-leave-warning"
+                )));
 
                 let (mut loaded, loaded_rng) =
                     save_and_reload_world("story-matrix-shop-robbery", &world, [31u8; 32]);
