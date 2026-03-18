@@ -14,6 +14,7 @@ use nethack_babel_data::{Enchantment, ObjectClass, ObjectCore, ObjectDef};
 
 use crate::action::Position;
 use crate::event::EngineEvent;
+use crate::steed::MountedOn;
 use crate::world::{Attributes, GameWorld, Name, Positioned};
 
 // ---------------------------------------------------------------------------
@@ -787,7 +788,41 @@ pub fn enter_shop(world: &GameWorld, player: Entity, shop: &ShopRoom) -> Vec<Eng
             ("shoptype", shop.shop_type.display_name().to_string()),
         ],
     ));
+    if player_has_digging_tool(world, player) {
+        events.push(EngineEvent::msg("shop-enter-digging-tool"));
+    }
+    if let Some(steed_name) = mounted_steed_name(world, player) {
+        events.push(EngineEvent::msg_with(
+            "shop-enter-steed",
+            vec![("steed", steed_name)],
+        ));
+    }
     events
+}
+
+fn player_has_digging_tool(world: &GameWorld, player: Entity) -> bool {
+    world
+        .get_component::<crate::inventory::Inventory>(player)
+        .is_some_and(|inventory| {
+            inventory.items.iter().any(|item| {
+                world
+                    .get_component::<Name>(*item)
+                    .map(|name| {
+                        let name = name.0.to_ascii_lowercase();
+                        name.contains("pick-axe")
+                            || name.contains("pickaxe")
+                            || name.contains("mattock")
+                    })
+                    .unwrap_or(false)
+            })
+        })
+}
+
+fn mounted_steed_name(world: &GameWorld, player: Entity) -> Option<String> {
+    let steed = world
+        .get_component::<MountedOn>(player)
+        .map(|mounted| mounted.0)?;
+    Some(world.entity_name(steed))
 }
 
 /// Handle picking up an item inside a shop: add it to the bill.

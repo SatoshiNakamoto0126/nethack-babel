@@ -15687,6 +15687,85 @@ mod tests {
     }
 
     #[test]
+    fn test_entering_shop_with_digging_tool_emits_warning_message() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let _tool = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-enter-digging-tool"
+        )));
+    }
+
+    #[test]
+    fn test_entering_shop_while_mounted_emits_steed_warning_message() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(7, 4),
+                Position::new(8, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let _steed = spawn_tame_steed(&mut world, Position::new(6, 5), "pony");
+        let mut rng = test_rng();
+        let mount_events = resolve_turn(&mut world, PlayerAction::Ride, &mut rng);
+        assert!(mount_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "mount-steed"
+        )));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(crate::steed::is_mounted(&world, player));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, args }
+                if key == "shop-enter-steed"
+                    && args.iter().any(|(name, value)| name == "steed" && value == "pony")
+        )));
+    }
+
+    #[test]
     fn test_entering_robbed_shop_emits_stolen_entry_message() {
         let mut world = make_test_world();
         let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);

@@ -814,6 +814,8 @@ shop-price = "For you, { $item } only { $price } gold piece{ $price ->
    *[other] s
     }."
 shop-stolen = You have unpaid merchandise!
+shop-enter-digging-tool = A voice from the shop warns you to leave your digging tool outside.
+shop-enter-steed = A voice from the shop insists that you leave { $steed } outside.
 shop-leave-warning = { $shopkeeper } shouts "Please pay before leaving!"
 shop-damage = { $shopkeeper } says "You'll pay for the damage!"
 shop-repair = { $shopkeeper } repairs the damage.
