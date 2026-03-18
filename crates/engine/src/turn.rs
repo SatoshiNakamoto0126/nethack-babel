@@ -1557,7 +1557,25 @@ fn resolve_player_action(
 
                 events.push(EngineEvent::msg("npc-chat-no-response"));
             } else {
-                events.push(EngineEvent::msg("chat-nobody-there"));
+                if let Some(shop_idx) = find_shop_index_containing_position(world, player_pos) {
+                    let shop = world.dungeon().shop_rooms[shop_idx].clone();
+                    let floor_items = crate::inventory::items_at_position(world, player_pos);
+                    if let Some(item) = floor_items.first().copied()
+                        && let Some(quote) = crate::shop::quote_item_in_shop(
+                            world,
+                            player,
+                            item,
+                            &shop,
+                            world.object_catalog(),
+                        )
+                    {
+                        events.push(quote);
+                    } else {
+                        events.push(EngineEvent::msg("chat-nobody-there"));
+                    }
+                } else {
+                    events.push(EngineEvent::msg("chat-nobody-there"));
+                }
             }
         }
         PlayerAction::Ride => {
@@ -5370,7 +5388,7 @@ fn process_wizard_of_yendor_turn(
         if rng.random_range(0..intervention_period) == 0 {
             let allow_resurrection = world.dungeon().branch != DungeonBranch::Endgame;
             let action = crate::npc::choose_wizard_intervene_action(allow_resurrection, rng);
-            events.extend(crate::npc::wizard_harass_events(action));
+            events.extend(wizard_harassment_messages(world, player, action));
             apply_wizard_harassment_action(world, None, player, action, rng, events);
         }
         return;
@@ -5406,8 +5424,22 @@ fn process_wizard_of_yendor_turn(
         return;
     }
     let action = crate::npc::choose_wizard_action(world, wizard, player_has_amulet, rng);
-    events.extend(crate::npc::wizard_harass_events(action));
+    events.extend(wizard_harassment_messages(world, player, action));
     apply_wizard_harassment_action(world, Some(wizard), player, action, rng, events);
+}
+
+fn wizard_harassment_messages(
+    world: &GameWorld,
+    player: hecs::Entity,
+    action: crate::npc::WizardAction,
+) -> Vec<EngineEvent> {
+    if matches!(action, crate::npc::WizardAction::BlackGlowCurse)
+        && crate::status::is_blind(world, player)
+    {
+        Vec::new()
+    } else {
+        crate::npc::wizard_harass_events(action)
+    }
 }
 
 fn should_wizard_level_teleport_player(
@@ -5593,17 +5625,53 @@ fn process_amulet_portal_sense(
     events.push(EngineEvent::msg(key));
 }
 
+fn wizard_nasty_weight(
+    monster: &MonsterDef,
+    branch: DungeonBranch,
+    desired_difficulty: u8,
+) -> usize {
+    let mut weight = 1usize;
+    if monster.flags.contains(MonsterFlags::NASTY) {
+        weight += 2;
+    }
+    if monster.difficulty >= desired_difficulty {
+        weight += 2;
+    }
+    if monster
+        .attacks
+        .iter()
+        .any(|attack| attack.method == nethack_babel_data::AttackMethod::MagicMissile)
+    {
+        weight += 1;
+    }
+    if branch == DungeonBranch::Gehennom && monster.flags.contains(MonsterFlags::DEMON) {
+        weight += 3;
+        if monster
+            .flags
+            .intersects(MonsterFlags::LORD | MonsterFlags::PRINCE)
+        {
+            weight += 4;
+        }
+    }
+    weight
+}
+
 fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Vec<String> {
     let branch = world.dungeon().branch;
     let depth = world.dungeon().depth.max(1) as u8;
+    let player = world.player();
+    let player_level = world
+        .get_component::<ExperienceLevel>(player)
+        .map(|xl| xl.0.max(1))
+        .unwrap_or(1);
     let player_events = read_player_events(world, world.player());
-    let desired_count = if branch == DungeonBranch::Endgame || player_events.invoked {
-        4usize
+    let roll_cap = usize::from((player_level / 3).max(1)).min(10);
+    let mut desired_count = rng.random_range(1..=roll_cap);
+    if branch == DungeonBranch::Endgame || player_events.invoked {
+        desired_count = desired_count.max(4);
     } else if branch == DungeonBranch::Gehennom {
-        3usize
-    } else {
-        2usize
-    };
+        desired_count = desired_count.max(3);
+    }
     let desired_difficulty = if branch == DungeonBranch::Endgame || player_events.invoked {
         depth.saturating_add(12).max(20)
     } else if branch == DungeonBranch::Gehennom {
@@ -5639,24 +5707,62 @@ fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Ve
     }
 
     let mut picks = Vec::new();
-    let mut fallback_pool = candidates
-        .iter()
-        .filter(|monster| monster.difficulty >= desired_difficulty.saturating_sub(4))
-        .copied()
-        .collect::<Vec<_>>();
-    if fallback_pool.is_empty() {
-        fallback_pool = candidates.clone();
+    if branch == DungeonBranch::Gehennom && rng.random_range(0..10) == 0 {
+        let demon_surge_pool = candidates
+            .iter()
+            .filter(|monster| monster.flags.contains(MonsterFlags::DEMON))
+            .copied()
+            .collect::<Vec<_>>();
+        if !demon_surge_pool.is_empty() {
+            let mut weighted_demon_pool = Vec::new();
+            for monster in demon_surge_pool {
+                let copies = if monster
+                    .flags
+                    .intersects(MonsterFlags::LORD | MonsterFlags::PRINCE)
+                {
+                    3
+                } else {
+                    1
+                };
+                for _ in 0..copies {
+                    weighted_demon_pool.push(monster);
+                }
+            }
+            let idx = rng.random_range(0..weighted_demon_pool.len());
+            picks.push(weighted_demon_pool[idx].names.male.clone());
+        }
     }
 
-    while picks.len() < desired_count && !fallback_pool.is_empty() {
-        let idx = rng.random_range(0..fallback_pool.len());
-        let monster = fallback_pool.swap_remove(idx);
-        if !picks
-            .iter()
-            .any(|name: &String| quest_name_matches(name, &monster.names.male))
-        {
-            picks.push(monster.names.male.clone());
+    let mut weighted_pool = Vec::new();
+    for monster in &candidates {
+        for _ in 0..wizard_nasty_weight(monster, branch, desired_difficulty) {
+            weighted_pool.push(*monster);
         }
+    }
+    if weighted_pool.is_empty() {
+        weighted_pool.extend(candidates.iter().copied());
+    }
+
+    let unique_cap = desired_count.min(candidates.len());
+    let mut attempts = 0usize;
+    let max_attempts = desired_count.saturating_mul(24).max(24);
+    while picks.len() < desired_count && !weighted_pool.is_empty() && attempts < max_attempts {
+        let idx = rng.random_range(0..weighted_pool.len());
+        let monster = weighted_pool[idx];
+        let already_picked = picks
+            .iter()
+            .any(|name: &String| quest_name_matches(name, &monster.names.male));
+        if already_picked && picks.len() < unique_cap {
+            attempts += 1;
+            continue;
+        }
+        picks.push(monster.names.male.clone());
+        attempts += 1;
+    }
+
+    while picks.len() < desired_count {
+        let idx = rng.random_range(0..candidates.len());
+        picks.push(candidates[idx].names.male.clone());
     }
 
     if picks.is_empty() {
@@ -12730,6 +12836,53 @@ mod tests {
     }
 
     #[test]
+    fn test_offscreen_wizard_black_glow_is_silent_when_player_is_blind() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let item = spawn_inventory_object_by_name(&mut world, "long sword", 'a');
+        world
+            .ecs_mut()
+            .insert_one(
+                item,
+                BucStatus {
+                    cursed: false,
+                    blessed: false,
+                    bknown: false,
+                },
+            )
+            .expect("inventory item should accept a BUC component");
+        let _ = crate::status::make_blinded(&mut world, player, 20);
+        let mut rng = test_rng();
+        let mut events =
+            wizard_harassment_messages(&world, player, crate::npc::WizardAction::BlackGlowCurse);
+
+        apply_wizard_harassment_action(
+            &mut world,
+            None,
+            player,
+            crate::npc::WizardAction::BlackGlowCurse,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "wizard-black-glow"
+            )),
+            "blind player should not get the black glow visual message"
+        );
+        let buc = world
+            .get_component::<BucStatus>(item)
+            .expect("inventory item should keep BUC state");
+        assert!(
+            buc.cursed,
+            "blind player should still suffer the black-glow curse side-effect"
+        );
+    }
+
+    #[test]
     fn test_wizard_intervention_can_fire_without_live_wizard() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -13048,6 +13201,52 @@ mod tests {
             .filter(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
             .count();
         assert_eq!(generated, 4);
+    }
+
+    #[test]
+    fn test_gehennom_wizard_nasties_can_include_demons() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 20;
+
+        for seed in 0..512u64 {
+            let mut rng = Pcg64::seed_from_u64(seed);
+            let picks = choose_wizard_nasty_summon_specs(&world, &mut rng);
+            let saw_demon = picks.iter().any(|name| {
+                resolve_monster_id_by_spec(&test_game_data().monsters, name)
+                    .and_then(|id| test_game_data().monsters.iter().find(|monster| monster.id == id))
+                    .is_some_and(|monster| {
+                        monster.flags.contains(MonsterFlags::DEMON)
+                    })
+            });
+            if saw_demon {
+                return;
+            }
+        }
+
+        panic!("Gehennom nasty summons should occasionally include demons");
+    }
+
+    #[test]
+    fn test_high_level_wizard_nasties_can_scale_above_gehennom_floor() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 25;
+        if let Some(mut xl) = world.get_component_mut::<ExperienceLevel>(world.player()) {
+            xl.0 = 30;
+        }
+
+        for seed in 0..512u64 {
+            let mut rng = Pcg64::seed_from_u64(seed);
+            let picks = choose_wizard_nasty_summon_specs(&world, &mut rng);
+            if picks.len() > 3 {
+                return;
+            }
+        }
+
+        panic!("high-level players should eventually trigger larger nasty swarms");
     }
 
     #[test]
@@ -14406,6 +14605,55 @@ mod tests {
         assert!(angry_events.iter().any(|event| matches!(
             event,
             EngineEvent::Message { key, .. } if key == "shk-angry-greeting"
+        )));
+    }
+
+    #[test]
+    fn test_chatting_on_shop_item_quotes_price() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.retain(|entry| *entry != item);
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+            *loc = ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: current_level,
+            };
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-price"
         )));
     }
 

@@ -14,7 +14,7 @@ use nethack_babel_data::{Enchantment, ObjectClass, ObjectCore, ObjectDef};
 
 use crate::action::Position;
 use crate::event::EngineEvent;
-use crate::world::{Attributes, GameWorld, Positioned};
+use crate::world::{Attributes, GameWorld, Name, Positioned};
 
 // ---------------------------------------------------------------------------
 // Shop type
@@ -799,16 +799,48 @@ pub fn pickup_in_shop(
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
-    let (item_otyp, quantity, item_class) = {
-        let core = match world.get_component::<ObjectCore>(item) {
-            Some(c) => c,
+    let (item_name, unit_price, quantity) =
+        match quoted_buy_details(world, _player, item, shop, obj_defs) {
+            Some(details) => details,
             None => return events,
         };
+
+    // Try to add to bill.
+    if shop.bill.add(item, unit_price, quantity) {
+        events.push(EngineEvent::msg_with(
+            "shop-price",
+            vec![
+                ("shopkeeper", shop.shopkeeper_name.clone()),
+                ("item", item_name),
+                ("price", (unit_price * quantity).to_string()),
+            ],
+        ));
+    } else {
+        // Bill is full — item is free.
+        events.push(EngineEvent::msg("shop-free"));
+    }
+
+    events
+}
+
+fn quoted_buy_details(
+    world: &GameWorld,
+    player: Entity,
+    item: Entity,
+    shop: &ShopRoom,
+    obj_defs: &[ObjectDef],
+) -> Option<(String, i32, i32)> {
+    let (item_otyp, quantity, item_class) = {
+        let core = world.get_component::<ObjectCore>(item)?;
         (core.otyp, core.quantity, core.object_class)
     };
 
     // Find the definition to get the base cost.
     let obj_def = obj_defs.iter().find(|d| d.id == item_otyp);
+    let item_name = obj_def
+        .map(|def| def.name.clone())
+        .or_else(|| world.get_component::<Name>(item).map(|name| name.0.clone()))
+        .unwrap_or_else(|| "item".to_string());
     let base_cost = obj_def.map(|d| d.cost as i32).unwrap_or(0);
 
     // Get enchantment if present.
@@ -825,7 +857,7 @@ pub fn pickup_in_shop(
 
     // Get player charisma from the world.
     let charisma = world
-        .get_component::<Attributes>(_player)
+        .get_component::<Attributes>(player)
         .map(|a| a.charisma)
         .unwrap_or(10);
 
@@ -855,22 +887,25 @@ pub fn pickup_in_shop(
         unit_price
     };
 
-    // Try to add to bill.
-    if shop.bill.add(item, unit_price, quantity) {
-        events.push(EngineEvent::msg_with(
-            "shop-price",
-            vec![
-                ("shopkeeper", shop.shopkeeper_name.clone()),
-                ("item", "item".to_string()),
-                ("price", (unit_price * quantity).to_string()),
-            ],
-        ));
-    } else {
-        // Bill is full — item is free.
-        events.push(EngineEvent::msg("shop-free"));
-    }
+    Some((item_name, unit_price, quantity))
+}
 
-    events
+pub fn quote_item_in_shop(
+    world: &GameWorld,
+    player: Entity,
+    item: Entity,
+    shop: &ShopRoom,
+    obj_defs: &[ObjectDef],
+) -> Option<EngineEvent> {
+    let (item_name, unit_price, quantity) = quoted_buy_details(world, player, item, shop, obj_defs)?;
+    Some(EngineEvent::msg_with(
+        "shop-price",
+        vec![
+            ("shopkeeper", shop.shopkeeper_name.clone()),
+            ("item", item_name),
+            ("price", (unit_price * quantity).to_string()),
+        ],
+    ))
 }
 
 /// Handle dropping an item inside a shop: sell it for credit or gold.

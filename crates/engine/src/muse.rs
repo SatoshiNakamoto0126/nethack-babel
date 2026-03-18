@@ -480,6 +480,7 @@ pub fn use_offensive_item(
             WandType::Death => 999i32,
             WandType::Sleep => {
                 let dur = rng.random_range(1u32..=25);
+                let _ = crate::status::make_sleeping(world, player, dur);
                 events.push(EngineEvent::StatusApplied {
                     entity: player,
                     status: StatusEffect::Sleeping,
@@ -1159,6 +1160,7 @@ mod tests {
         let mut rng = test_rng();
         let monster = spawn_monster(&mut world, Position::new(12, 8), 20, 20);
         let wand = give_wand(&mut world, monster, WandType::Sleep, 3);
+        let player = world.player();
 
         let events = use_offensive_item(&mut world, monster, wand, &mut rng);
         assert!(events.iter().any(|e| matches!(
@@ -1168,6 +1170,10 @@ mod tests {
                 ..
             }
         )));
+        assert!(
+            crate::status::is_sleeping(&world, player),
+            "sleep wand should really set the player sleeping"
+        );
     }
 
     #[test]

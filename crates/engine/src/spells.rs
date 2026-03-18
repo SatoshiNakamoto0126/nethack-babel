@@ -1059,15 +1059,7 @@ fn apply_sleep(
 
         if let Some(target) = target {
             let duration = roll_dice(6, 25, rng);
-            if let Some(mut se) = world.get_component_mut::<StatusEffects>(target) {
-                StatusEffects::incr_timeout(&mut se.paralysis, duration);
-            }
-            events.push(EngineEvent::StatusApplied {
-                entity: target,
-                status: StatusEffect::Sleeping,
-                duration: Some(duration),
-                source: Some(caster),
-            });
+            events.extend(crate::status::make_sleeping(world, target, duration));
             events.push(EngineEvent::msg("spell-sleep-hit"));
             return events;
         }
@@ -3036,6 +3028,43 @@ mod tests {
         assert!(
             has_poly,
             "polymorph should apply Polymorphed status to target"
+        );
+    }
+
+    #[test]
+    fn test_sleep_spell_sets_sleeping_not_paralysis() {
+        let (mut world, player, mut rng) = setup();
+
+        let mon = world.ecs_mut().spawn((
+            Positioned(Position::new(41, 10)),
+            Monster,
+            HitPoints {
+                current: 20,
+                max: 20,
+            },
+            StatusEffects::default(),
+        ));
+
+        let events = apply_spell_effect(&mut world, player, SpellType::Sleep, Some(Direction::East), &mut rng);
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::StatusApplied {
+                    entity,
+                    status: StatusEffect::Sleeping,
+                    ..
+                } if *entity == mon
+            )),
+            "sleep spell should emit a Sleeping status event"
+        );
+        let status = world
+            .get_component::<StatusEffects>(mon)
+            .expect("sleep target should keep status effects");
+        assert!(status.sleeping > 0, "sleep spell should really set sleeping");
+        assert_eq!(
+            status.paralysis, 0,
+            "sleep spell should not silently map onto paralysis"
         );
     }
 

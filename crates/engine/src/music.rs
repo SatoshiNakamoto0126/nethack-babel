@@ -252,6 +252,7 @@ fn play_magic_flute(
 
     for target in targets {
         let duration = d(rng, 5, 25);
+        let _ = crate::status::make_sleeping(world, target, duration);
         events.push(EngineEvent::StatusApplied {
             entity: target,
             status: StatusEffect::Sleeping,
@@ -318,14 +319,13 @@ fn play_bugle(world: &mut GameWorld, _player_pos: Position) -> (Vec<EngineEvent>
     // Collect all sleeping monsters and wake them.
     let mut to_wake = Vec::new();
     for (entity, _) in world.query::<Monster>().iter() {
-        to_wake.push(entity);
+        if crate::status::is_sleeping(world, entity) {
+            to_wake.push(entity);
+        }
     }
 
     for entity in to_wake {
-        events.push(EngineEvent::StatusRemoved {
-            entity,
-            status: StatusEffect::Sleeping,
-        });
+        events.extend(crate::status::wake_from_sleeping(world, entity));
     }
 
     (events, false)
@@ -663,7 +663,7 @@ mod tests {
         let mut rng = test_rng();
 
         let adj = spawn_monster(&mut world, "goblin", Position::new(11, 10));
-        let _far = spawn_monster(&mut world, "orc", Position::new(15, 10));
+        let far = spawn_monster(&mut world, "orc", Position::new(15, 10));
 
         let (events, charge_used) = play_instrument(
             &mut world,
@@ -679,6 +679,14 @@ mod tests {
             EngineEvent::StatusApplied { entity, status: StatusEffect::Sleeping, .. }
             if *entity == adj)),
             "adjacent monster should be put to sleep"
+        );
+        assert!(
+            crate::status::is_sleeping(&world, adj),
+            "magic flute should really set the adjacent monster sleeping"
+        );
+        assert!(
+            !crate::status::is_sleeping(&world, far),
+            "distant monsters should stay awake"
         );
     }
 
@@ -713,8 +721,11 @@ mod tests {
         let player = world.player();
         let mut rng = test_rng();
 
-        let _m1 = spawn_monster(&mut world, "goblin", Position::new(5, 5));
-        let _m2 = spawn_monster(&mut world, "orc", Position::new(15, 15));
+        let m1 = spawn_monster(&mut world, "goblin", Position::new(5, 5));
+        let m2 = spawn_monster(&mut world, "orc", Position::new(15, 15));
+        let awake = spawn_monster(&mut world, "kobold", Position::new(10, 10));
+        let _ = crate::status::make_sleeping(&mut world, m1, 10);
+        let _ = crate::status::make_sleeping(&mut world, m2, 10);
 
         let (events, charge_used) =
             play_instrument(&mut world, player, InstrumentType::Bugle, None, &mut rng);
@@ -734,6 +745,20 @@ mod tests {
             })
             .count();
         assert_eq!(wake_count, 2, "bugle should wake both monsters");
+        assert!(
+            !crate::status::is_sleeping(&world, m1) && !crate::status::is_sleeping(&world, m2),
+            "bugle should really clear sleeping on sleeping monsters"
+        );
+        assert!(
+            !events.iter().any(|e| matches!(
+                e,
+                EngineEvent::StatusRemoved {
+                    entity,
+                    status: StatusEffect::Sleeping,
+                } if *entity == awake
+            )),
+            "bugle should not emit wake events for already-awake monsters"
+        );
     }
 
     // -----------------------------------------------------------------------
