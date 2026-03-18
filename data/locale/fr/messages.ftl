@@ -514,6 +514,7 @@ npc-roar-roars = { $monster } roars!
 npc-bellow-bellows = { $monster } bellows!
 npc-squeak-squeaks = { $monster } squeaks.
 npc-squawk-squawks = { $monster } squawks.
+npc-squawk-nevermore = { $monster } says: "Nevermore!"
 npc-chirp-chirps = { $monster } chirps.
 npc-hiss-hisses = { $monster } hisses!
 npc-buzz-drones = { $monster } drones.

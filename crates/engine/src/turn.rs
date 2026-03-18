@@ -16380,6 +16380,25 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_hostile_raven_says_nevermore() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        spawn_full_monster(&mut world, Position::new(6, 5), "raven", 10);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-squawk-nevermore")
+        }));
+    }
+
+    #[test]
     fn test_chatting_with_sleeping_shopkeeper_gets_no_response() {
         let mut world = make_test_world();
         let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);

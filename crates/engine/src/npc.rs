@@ -657,7 +657,13 @@ pub fn voiced_monster_chat(
             }
         }
         MonsterSound::Sqeek => "npc-squeak-squeaks",
-        MonsterSound::Sqawk => "npc-squawk-squawks",
+        MonsterSound::Sqawk => {
+            if !is_peaceful && monster_name.eq_ignore_ascii_case("raven") {
+                "npc-squawk-nevermore"
+            } else {
+                "npc-squawk-squawks"
+            }
+        }
         MonsterSound::Chirp => "npc-chirp-chirps",
         MonsterSound::Hiss => {
             if is_peaceful {
@@ -2177,6 +2183,13 @@ mod tests {
         let evt = voiced_monster_chat("horse", MonsterSound::Neigh, false, true)
             .expect("neighing monsters should emit a chat line");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-neigh-neighs"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_hostile_raven_uses_nevermore() {
+        let evt = voiced_monster_chat("raven", MonsterSound::Sqawk, false, false)
+            .expect("hostile raven should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-squawk-nevermore"));
     }
 
     // ── Guard patrol tests ───────────────────────────────────────

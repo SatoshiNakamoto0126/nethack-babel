@@ -3423,6 +3423,9 @@ npc-squeak-squeaks = { $monster } squeaks.
 npc-squawk-squawks = { $monster } squawks.
 
 # TODO: translate
+npc-squawk-nevermore = { $monster } says: "Nevermore!"
+
+# TODO: translate
 npc-chirp-chirps = { $monster } chirps.
 
 # TODO: translate
