@@ -1161,22 +1161,48 @@ pub enum WizardAction {
 }
 
 const WIZARD_INSULTS: &[&str] = &[
+    "antic",
     "blackguard",
+    "caitiff",
+    "chucklehead",
+    "coistrel",
+    "craven",
     "cretin",
+    "cur",
+    "dastard",
+    "demon fodder",
+    "dimwit",
     "dolt",
     "fool",
+    "footpad",
     "imbecile",
+    "knave",
+    "maledict",
     "miscreant",
+    "niddering",
+    "poltroon",
+    "rattlepate",
+    "reprobate",
+    "scapegrace",
     "varlet",
+    "villein",
+    "wittol",
+    "worm",
     "wretch",
 ];
 
 const WIZARD_MALEDICTIONS: &[&str] = &[
-    "Prepare to die",
+    "Hell shall soon claim thy remains",
+    "I chortle at thee, thou pathetic",
+    "Prepare to die, thou",
     "Resistance is useless",
-    "There shall be no mercy",
+    "Surrender or die, thou",
+    "There shall be no mercy, thou",
+    "Thou shalt repent of thy cunning",
+    "Thou art as a flea to me",
     "Thou art doomed",
     "Thy fate is sealed",
+    "Verily, thou shalt be one dead",
 ];
 
 const ANGEL_CUSS_KEYS: &[&str] = &[
@@ -1303,13 +1329,23 @@ pub fn maybe_wizard_taunt(
         .map(|hp| hp.current)
         .unwrap_or(100);
     if player_hp < 5 && rng.random_range(0..2) == 0 {
-        return Some(EngineEvent::msg_with(
-            "wizard-taunt-panic",
-            vec![(
-                "insult",
-                WIZARD_INSULTS[rng.random_range(0..WIZARD_INSULTS.len())].to_string(),
-            )],
-        ));
+        return Some(if rng.random_range(0..2) == 0 {
+            EngineEvent::msg_with(
+                "wizard-taunt-panic",
+                vec![(
+                    "insult",
+                    WIZARD_INSULTS[rng.random_range(0..WIZARD_INSULTS.len())].to_string(),
+                )],
+            )
+        } else {
+            EngineEvent::msg_with(
+                "wizard-taunt-last-breath",
+                vec![(
+                    "insult",
+                    WIZARD_INSULTS[rng.random_range(0..WIZARD_INSULTS.len())].to_string(),
+                )],
+            )
+        });
     }
 
     let wizard_hp = world
@@ -1317,7 +1353,11 @@ pub fn maybe_wizard_taunt(
         .map(|hp| hp.current)
         .unwrap_or(100);
     if wizard_hp < 5 && rng.random_range(0..2) == 0 {
-        return Some(EngineEvent::msg("wizard-taunt-return"));
+        return Some(EngineEvent::msg(if rng.random_range(0..2) == 0 {
+            "wizard-taunt-return"
+        } else {
+            "wizard-taunt-back"
+        }));
     }
 
     Some(EngineEvent::msg_with(
@@ -1850,11 +1890,7 @@ mod tests {
             assert!(matches!(
                 event,
                 EngineEvent::Message { ref key, .. }
-                    if key == "wizard-taunt-laughs"
-                        || key == "wizard-taunt-relinquish"
-                        || key == "wizard-taunt-panic"
-                        || key == "wizard-taunt-return"
-                        || key == "wizard-taunt-general"
+                    if key.starts_with("wizard-taunt-")
             ));
         }
     }

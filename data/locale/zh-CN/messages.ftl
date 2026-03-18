@@ -3264,7 +3264,13 @@ wizard-taunt-relinquish = Relinquish the Amulet, {$insult}!
 wizard-taunt-panic = Even now thy life force ebbs, {$insult}!
 
 # TODO: translate
+wizard-taunt-last-breath = Savor thy breath, {$insult}, it be thy last!
+
+# TODO: translate
 wizard-taunt-return = I shall return.
+
+# TODO: translate
+wizard-taunt-back = I'll be back.
 
 # TODO: translate
 wizard-taunt-general = {$malediction}, {$insult}!

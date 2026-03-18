@@ -9757,11 +9757,7 @@ mod tests {
                         matches!(
                             event,
                             EngineEvent::Message { key, .. }
-                                if key == "wizard-taunt-laughs"
-                                    || key == "wizard-taunt-relinquish"
-                                    || key == "wizard-taunt-panic"
-                                    || key == "wizard-taunt-return"
-                                    || key == "wizard-taunt-general"
+                                if key.starts_with("wizard-taunt-")
                         )
                     }) {
                         final_events = events;
@@ -14457,11 +14453,7 @@ mod tests {
                 matches!(
                     event,
                     EngineEvent::Message { key, .. }
-                        if key == "wizard-taunt-laughs"
-                            || key == "wizard-taunt-relinquish"
-                            || key == "wizard-taunt-panic"
-                            || key == "wizard-taunt-return"
-                            || key == "wizard-taunt-general"
+                        if key.starts_with("wizard-taunt-")
                 )
             }) {
                 taunt_seen = true;
@@ -14532,11 +14524,7 @@ mod tests {
                 matches!(
                     event,
                     EngineEvent::Message { key, .. }
-                        if key == "wizard-taunt-laughs"
-                            || key == "wizard-taunt-relinquish"
-                            || key == "wizard-taunt-panic"
-                            || key == "wizard-taunt-return"
-                            || key == "wizard-taunt-general"
+                        if key.starts_with("wizard-taunt-")
                 )
             }) {
                 assert!(
@@ -14574,11 +14562,7 @@ mod tests {
                 !events.iter().any(|event| matches!(
                     event,
                     EngineEvent::Message { key, .. }
-                        if key == "wizard-taunt-laughs"
-                            || key == "wizard-taunt-relinquish"
-                            || key == "wizard-taunt-panic"
-                            || key == "wizard-taunt-return"
-                            || key == "wizard-taunt-general"
+                        if key.starts_with("wizard-taunt-")
                 )),
                 "deaf players should not hear Wizard taunts"
             );
@@ -21746,11 +21730,7 @@ mod tests {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
                         EngineEvent::Message { key, .. }
-                            if key == "wizard-taunt-laughs"
-                                || key == "wizard-taunt-relinquish"
-                                || key == "wizard-taunt-panic"
-                                || key == "wizard-taunt-return"
-                                || key == "wizard-taunt-general"
+                            if key.starts_with("wizard-taunt-")
                     )));
                     assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 1);
                     assert!(
