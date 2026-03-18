@@ -1097,7 +1097,7 @@ pub fn tick_luck(
     has_amulet_or_angry_god: bool,
 ) -> Vec<EngineEvent> {
     let interval: u64 = if has_amulet_or_angry_god { 300 } else { 600 };
-    if turn % interval != 0 {
+    if !turn.is_multiple_of(interval) {
         return vec![];
     }
 
@@ -1238,7 +1238,7 @@ enum StoningSideEffect {
 /// Messages only on odd t values. Side effects on i = t/2.
 fn slime_dialogue(r: u32) -> (Vec<EngineEvent>, SlimingSideEffect) {
     let i = r / 2;
-    let msg = if r % 2 != 0 {
+    let msg = if !r.is_multiple_of(2) {
         match i {
             4 => vec![EngineEvent::msg("sliming-turning-green")],
             3 => vec![EngineEvent::msg("sliming-limbs-oozy")],
@@ -1372,7 +1372,7 @@ fn levitation_dialogue(r: u32) -> Vec<EngineEvent> {
         return vec![];
     }
     let i = (r.saturating_sub(1)) / 2;
-    if r % 2 == 0 {
+    if r.is_multiple_of(2) {
         return vec![];
     }
     match i {
@@ -1397,7 +1397,7 @@ fn phaze_dialogue(r: u32) -> Vec<EngineEvent> {
         return vec![];
     }
     let i = r / 2;
-    if r % 2 == 0 {
+    if r.is_multiple_of(2) {
         return vec![];
     }
     match i {

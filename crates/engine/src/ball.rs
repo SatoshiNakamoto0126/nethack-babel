@@ -337,7 +337,7 @@ pub fn kick_ball(
     is_passable: impl Fn(i32, i32) -> bool,
     rng: &mut impl rand::Rng,
 ) -> KickBallResult {
-    let max_dist = strength.min(3).max(1);
+    let max_dist = strength.clamp(1, 3);
     let distance = rng.random_range(1..=max_dist as u32) as i32;
     let mut pos = ball_pos;
     for _ in 0..distance {

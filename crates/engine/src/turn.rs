@@ -6601,7 +6601,10 @@ mod tests {
         QuestClosure,
         QuestLeaderAnger,
         MedusaRevisit,
+        CastleRevisit,
         OrcusRevisit,
+        FortLudiosRevisit,
+        VladTopRevisit,
         InvocationPortalRevisit,
         ShopEntry,
         ShopEntryWelcomeBack,
@@ -6629,7 +6632,10 @@ mod tests {
                 StoryTraversalScenario::QuestClosure => "quest-closure",
                 StoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
                 StoryTraversalScenario::MedusaRevisit => "medusa-revisit",
+                StoryTraversalScenario::CastleRevisit => "castle-revisit",
                 StoryTraversalScenario::OrcusRevisit => "orcus-revisit",
+                StoryTraversalScenario::FortLudiosRevisit => "fort-ludios-revisit",
+                StoryTraversalScenario::VladTopRevisit => "vlad-top-revisit",
                 StoryTraversalScenario::InvocationPortalRevisit => "invocation-portal-revisit",
                 StoryTraversalScenario::ShopEntry => "shop-entry",
                 StoryTraversalScenario::ShopEntryWelcomeBack => "shop-entry-welcome-back",
@@ -6824,6 +6830,43 @@ mod tests {
                 let revisit_events = resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
                 (world, revisit_events)
             }
+            StoryTraversalScenario::CastleRevisit => {
+                let mut world = make_stair_world(Terrain::StairsDown, 24);
+                install_test_catalogs(&mut world);
+                world.dungeon_mut().branch = DungeonBranch::Main;
+                let wand_otyp =
+                    resolve_object_type_by_spec(&test_game_data().objects, "wand of wishing")
+                        .expect("wand of wishing should resolve against the catalog");
+
+                let mut rng = test_rng();
+                let enter_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should enter Castle",
+                    scenario.label()
+                );
+                assert_eq!(count_objects_with_type(&world, wand_otyp), 1);
+
+                let castle_up = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
+                    .expect("Castle should preserve stairs up");
+                set_player_position(&mut world, castle_up);
+                let ascend_events = resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+                assert!(
+                    ascend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should leave Castle for Medusa",
+                    scenario.label()
+                );
+
+                let medusa_down = find_terrain(&world.dungeon().current_level, Terrain::StairsDown)
+                    .expect("Medusa should preserve stairs down");
+                set_player_position(&mut world, medusa_down);
+                let revisit_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                (world, revisit_events)
+            }
             StoryTraversalScenario::OrcusRevisit => {
                 let mut world = make_stair_world(Terrain::StairsDown, 11);
                 install_test_catalogs(&mut world);
@@ -6857,6 +6900,95 @@ mod tests {
                         .expect("Gehennom entry level should preserve stairs down");
                 set_player_position(&mut world, gehennom_down);
                 let revisit_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                (world, revisit_events)
+            }
+            StoryTraversalScenario::FortLudiosRevisit => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let mut rng = test_rng();
+                let mut enter_events = Vec::new();
+                change_level_to_branch(
+                    &mut world,
+                    DungeonBranch::FortLudios,
+                    1,
+                    false,
+                    None,
+                    &mut rng,
+                    &mut enter_events,
+                );
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should enter Fort Ludios",
+                    scenario.label()
+                );
+
+                let mut return_events = Vec::new();
+                change_level_to_branch(
+                    &mut world,
+                    DungeonBranch::Main,
+                    1,
+                    true,
+                    None,
+                    &mut rng,
+                    &mut return_events,
+                );
+                assert!(
+                    return_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should leave Fort Ludios",
+                    scenario.label()
+                );
+
+                let mut revisit_events = Vec::new();
+                change_level_to_branch(
+                    &mut world,
+                    DungeonBranch::FortLudios,
+                    1,
+                    false,
+                    None,
+                    &mut rng,
+                    &mut revisit_events,
+                );
+                (world, revisit_events)
+            }
+            StoryTraversalScenario::VladTopRevisit => {
+                let mut world = make_stair_world(Terrain::StairsDown, 2);
+                install_test_catalogs(&mut world);
+                world.dungeon_mut().branch = DungeonBranch::VladsTower;
+                let candelabrum_otyp = resolve_object_type_by_spec(
+                    &test_game_data().objects,
+                    "Candelabrum of Invocation",
+                )
+                .expect("Candelabrum should resolve against the catalog");
+
+                let mut rng = test_rng();
+                let mut enter_events = Vec::new();
+                change_level(&mut world, 3, false, &mut rng, &mut enter_events);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should enter Vlad level 3",
+                    scenario.label()
+                );
+                assert_eq!(count_monsters_named(&world, "Vlad the Impaler"), 1);
+                assert_eq!(count_objects_with_type(&world, candelabrum_otyp), 1);
+
+                let mut ascend_events = Vec::new();
+                change_level(&mut world, 2, true, &mut rng, &mut ascend_events);
+                assert!(
+                    ascend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should leave Vlad level 3",
+                    scenario.label()
+                );
+
+                let mut revisit_events = Vec::new();
+                change_level(&mut world, 3, false, &mut rng, &mut revisit_events);
                 (world, revisit_events)
             }
             StoryTraversalScenario::InvocationPortalRevisit => {
@@ -14665,7 +14797,10 @@ mod tests {
             StoryTraversalScenario::QuestClosure,
             StoryTraversalScenario::QuestLeaderAnger,
             StoryTraversalScenario::MedusaRevisit,
+            StoryTraversalScenario::CastleRevisit,
             StoryTraversalScenario::OrcusRevisit,
+            StoryTraversalScenario::FortLudiosRevisit,
+            StoryTraversalScenario::VladTopRevisit,
             StoryTraversalScenario::InvocationPortalRevisit,
             StoryTraversalScenario::ShopEntry,
             StoryTraversalScenario::ShopEntryWelcomeBack,
@@ -14732,10 +14867,36 @@ mod tests {
                     assert_eq!(world.dungeon().depth, 24);
                     assert_eq!(count_monsters_named(&world, "medusa"), 1);
                 }
+                StoryTraversalScenario::CastleRevisit => {
+                    let wand_otyp =
+                        resolve_object_type_by_spec(&test_game_data().objects, "wand of wishing")
+                            .expect("wand of wishing should resolve against the catalog");
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Main);
+                    assert_eq!(world.dungeon().depth, 25);
+                    assert_eq!(count_objects_with_type(&world, wand_otyp), 1);
+                }
                 StoryTraversalScenario::OrcusRevisit => {
                     assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
                     assert_eq!(world.dungeon().depth, 12);
                     assert_eq!(count_monsters_named(&world, "orcus"), 1);
+                }
+                StoryTraversalScenario::FortLudiosRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::FortLudios);
+                    assert_eq!(world.dungeon().depth, 1);
+                    assert_eq!(count_monsters_named(&world, "soldier"), 2);
+                    assert_eq!(count_monsters_named(&world, "lieutenant"), 1);
+                    assert_eq!(count_monsters_named(&world, "captain"), 1);
+                }
+                StoryTraversalScenario::VladTopRevisit => {
+                    let candelabrum_otyp = resolve_object_type_by_spec(
+                        &test_game_data().objects,
+                        "Candelabrum of Invocation",
+                    )
+                    .expect("Candelabrum should resolve against the catalog");
+                    assert_eq!(world.dungeon().branch, DungeonBranch::VladsTower);
+                    assert_eq!(world.dungeon().depth, 3);
+                    assert_eq!(count_monsters_named(&world, "Vlad the Impaler"), 1);
+                    assert_eq!(count_objects_with_type(&world, candelabrum_otyp), 1);
                 }
                 StoryTraversalScenario::InvocationPortalRevisit => {
                     assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);

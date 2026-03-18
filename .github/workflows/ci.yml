@@ -17,9 +17,6 @@ jobs:
       - run: cargo test --workspace
       - run: >-
           cargo clippy --workspace -- -D warnings
-          -A clippy::manual-clamp
           -A clippy::collapsible-if
-          -A clippy::vec-init-then-push
           -A clippy::collapsible-match
-          -A clippy::manual-is-multiple-of
           -A clippy::too-many-arguments

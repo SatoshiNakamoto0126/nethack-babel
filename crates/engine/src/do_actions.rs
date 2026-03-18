@@ -556,12 +556,10 @@ pub fn do_call_type(class: char, name: &str) -> Vec<EngineEvent> {
 ///
 /// `description` is the pre-computed text describing the tile contents.
 pub fn do_glance(description: &str) -> Vec<EngineEvent> {
-    let mut events = Vec::new();
-    events.push(EngineEvent::msg_with(
+    vec![EngineEvent::msg_with(
         "glance",
         vec![("description", description.to_string())],
-    ));
-    events
+    )]
 }
 
 // ---------------------------------------------------------------------------

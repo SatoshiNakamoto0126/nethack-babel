@@ -816,7 +816,7 @@ pub fn magic_cancellation(world: &GameWorld, player: Entity, obj_defs: &[ObjectD
         }
     }
 
-    mc.max(0).min(3) as u8
+    mc.clamp(0, 3) as u8
 }
 
 /// Probability that a magic attack is negated by the given MC level.

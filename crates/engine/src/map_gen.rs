@@ -1620,8 +1620,8 @@ fn apply_theme(map: &mut LevelMap, room: &Room, theme: ThemeRoom, rng: &mut impl
             // Place stone pillars every 2 tiles.
             for y in room.y..=room.bottom() {
                 for x in room.x..=room.right() {
-                    if (x - room.x) % 2 == 0
-                        && (y - room.y) % 2 == 0
+                    if (x - room.x).is_multiple_of(2)
+                        && (y - room.y).is_multiple_of(2)
                         && x != room.x
                         && y != room.y
                         && x != room.right()

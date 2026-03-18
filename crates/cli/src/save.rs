@@ -1356,6 +1356,35 @@ mod tests {
             .count()
     }
 
+    fn resolve_object_type_by_spec(world: &GameWorld, spec: &str) -> Option<ObjectTypeId> {
+        let normalized = spec.trim().to_ascii_lowercase();
+        world.object_catalog().iter().find_map(|def| {
+            let canonical = def.name.to_ascii_lowercase();
+            let prefixed = match def.class {
+                ObjectClass::Wand => format!("wand of {canonical}"),
+                ObjectClass::Scroll => format!("scroll of {canonical}"),
+                ObjectClass::Potion => format!("potion of {canonical}"),
+                ObjectClass::Ring => format!("ring of {canonical}"),
+                ObjectClass::Spellbook => format!("spellbook of {canonical}"),
+                ObjectClass::Amulet => format!("amulet of {canonical}"),
+                _ => canonical.clone(),
+            };
+            (normalized == canonical || normalized == prefixed).then_some(def.id)
+        })
+    }
+
+    fn count_objects_named(world: &GameWorld, name: &str) -> usize {
+        let Some(object_type) = resolve_object_type_by_spec(world, name) else {
+            return 0;
+        };
+        world
+            .ecs()
+            .query::<&ObjectCore>()
+            .iter()
+            .filter(|(_, core)| core.otyp == object_type)
+            .count()
+    }
+
     fn spawn_inventory_object_by_name(
         world: &mut GameWorld,
         name: &str,
@@ -1534,6 +1563,7 @@ mod tests {
         QuestClosure,
         QuestLeaderAnger,
         MedusaRevisit,
+        CastleRevisit,
         OrcusRevisit,
         InvocationPortalRevisit,
         ShopEntry,
@@ -1562,6 +1592,7 @@ mod tests {
                 SaveStoryTraversalScenario::QuestClosure => "quest-closure",
                 SaveStoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
                 SaveStoryTraversalScenario::MedusaRevisit => "medusa-revisit",
+                SaveStoryTraversalScenario::CastleRevisit => "castle-revisit",
                 SaveStoryTraversalScenario::OrcusRevisit => "orcus-revisit",
                 SaveStoryTraversalScenario::InvocationPortalRevisit => "invocation-portal-revisit",
                 SaveStoryTraversalScenario::ShopEntry => "shop-entry",
@@ -1775,6 +1806,39 @@ mod tests {
                     .expect("Castle should preserve stairs up after save/load");
                 set_player_position(&mut loaded, castle_up);
                 let revisit_events = resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+                (loaded, revisit_events)
+            }
+            SaveStoryTraversalScenario::CastleRevisit => {
+                let mut world = make_stair_world(DungeonBranch::Main, 24, Terrain::StairsDown);
+                let mut rng = Pcg64::seed_from_u64(7154);
+
+                let enter_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    enter_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+                assert_eq!(count_objects_named(&world, "wand of wishing"), 1);
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-castle-revisit", &world, [59u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+
+                let castle_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+                    .expect("Castle should preserve stairs up after save/load");
+                set_player_position(&mut loaded, castle_up);
+                let ascend_events = resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+                assert!(
+                    ascend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. }))
+                );
+
+                let medusa_down =
+                    find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+                        .expect("Medusa should preserve stairs down after save/load");
+                set_player_position(&mut loaded, medusa_down);
+                let revisit_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
                 (loaded, revisit_events)
             }
             SaveStoryTraversalScenario::OrcusRevisit => {
@@ -4428,6 +4492,7 @@ mod tests {
             SaveStoryTraversalScenario::QuestClosure,
             SaveStoryTraversalScenario::QuestLeaderAnger,
             SaveStoryTraversalScenario::MedusaRevisit,
+            SaveStoryTraversalScenario::CastleRevisit,
             SaveStoryTraversalScenario::OrcusRevisit,
             SaveStoryTraversalScenario::InvocationPortalRevisit,
             SaveStoryTraversalScenario::ShopEntry,
@@ -4494,6 +4559,11 @@ mod tests {
                     assert_eq!(world.dungeon().branch, DungeonBranch::Main);
                     assert_eq!(world.dungeon().depth, 24);
                     assert_eq!(count_monsters_named(&world, "medusa"), 1);
+                }
+                SaveStoryTraversalScenario::CastleRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Main);
+                    assert_eq!(world.dungeon().depth, 25);
+                    assert_eq!(count_objects_named(&world, "wand of wishing"), 1);
                 }
                 SaveStoryTraversalScenario::OrcusRevisit => {
                     assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);

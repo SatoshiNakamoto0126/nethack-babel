@@ -409,16 +409,12 @@ pub fn handle_teleport_trap(
     rng: &mut impl Rng,
 ) -> Vec<EngineEvent> {
     if tele_restrict(world) {
-        let mut events = Vec::new();
-        events.push(EngineEvent::msg("teleport-trap-restricted"));
-        return events;
+        return vec![EngineEvent::msg("teleport-trap-restricted")];
     }
 
     if teleport_control_check(world, entity) {
         // Signal the caller that the player should pick a destination.
-        let mut events = Vec::new();
-        events.push(EngineEvent::msg("teleport-trap-controlled"));
-        return events;
+        return vec![EngineEvent::msg("teleport-trap-controlled")];
     }
 
     random_teleport(world, entity, rng)
@@ -433,9 +429,7 @@ pub fn handle_level_teleport_trap(
     rng: &mut impl Rng,
 ) -> Vec<EngineEvent> {
     if tele_restrict(world) {
-        let mut events = Vec::new();
-        events.push(EngineEvent::msg("teleport-trap-restricted"));
-        return events;
+        return vec![EngineEvent::msg("teleport-trap-restricted")];
     }
 
     let max_depth = world.dungeon().max_depth().max(1);
