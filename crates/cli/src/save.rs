@@ -1595,6 +1595,7 @@ mod tests {
         ShopkeeperCredit,
         ShopkeeperSell,
         ShopRepair,
+        ShopkeeperDeath,
         ShopRobbery,
         ShopRestitution,
         TempleAleGift,
@@ -1628,6 +1629,7 @@ mod tests {
                 SaveStoryTraversalScenario::ShopkeeperCredit => "shopkeeper-credit",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopRepair => "shop-repair",
+                SaveStoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
                 SaveStoryTraversalScenario::ShopRobbery => "shop-robbery",
                 SaveStoryTraversalScenario::ShopRestitution => "shop-restitution",
                 SaveStoryTraversalScenario::TempleAleGift => "temple-ale-gift",
@@ -2312,6 +2314,92 @@ mod tests {
                     save_and_reload_world("story-matrix-shop-repair", &world, [37u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopkeeperDeath => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let unpaid_item = world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Tool,
+                        quantity: 1,
+                        weight: 10,
+                        age: 0,
+                        inv_letter: Some('u'),
+                        artifact: None,
+                    },
+                    ObjectLocation::Floor {
+                        x: 6,
+                        y: 5,
+                        level: world.dungeon().current_data_dungeon_level(),
+                    },
+                ));
+                assert!(
+                    world.dungeon_mut().shop_rooms[0]
+                        .bill
+                        .add(unpaid_item, 100, 1),
+                    "shop bill should accept an unpaid entry"
+                );
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(shopkeeper) {
+                    hp.current = 1;
+                    hp.max = 1;
+                }
+                if let Some(mut mp) = world.get_component_mut::<MovementPoints>(shopkeeper) {
+                    mp.0 = 0;
+                }
+
+                let mut rng = Pcg64::seed_from_u64(7133);
+                let mut death_events = Vec::new();
+                for _ in 0..8 {
+                    if let Some(mut mp) = world.get_component_mut::<MovementPoints>(shopkeeper) {
+                        mp.0 = 0;
+                    }
+                    death_events.extend(resolve_turn(
+                        &mut world,
+                        PlayerAction::FightDirection {
+                            direction: Direction::East,
+                        },
+                        &mut rng,
+                    ));
+                    if death_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "shop-keeper-dead"
+                        )
+                    }) {
+                        break;
+                    }
+                }
+                assert!(death_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "shop-keeper-dead"
+                )));
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shopkeeper-death", &world, [61u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Move {
+                        direction: Direction::West,
+                    },
+                    &mut rng,
+                );
                 (loaded, events)
             }
             SaveStoryTraversalScenario::ShopRobbery => {
@@ -4729,6 +4817,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopkeeperCredit,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopRepair,
+            SaveStoryTraversalScenario::ShopkeeperDeath,
             SaveStoryTraversalScenario::ShopRobbery,
             SaveStoryTraversalScenario::ShopRestitution,
             SaveStoryTraversalScenario::TempleAleGift,
@@ -4950,6 +5039,25 @@ mod tests {
                             .get(Position::new(5, 5))
                             .map(|cell| cell.terrain),
                         Some(Terrain::DoorClosed)
+                    );
+                }
+                SaveStoryTraversalScenario::ShopkeeperDeath => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(
+                        !final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "shop-shoplift"
+                        )),
+                        "deserted shops should not keep charging robbery after save/load"
+                    );
+                    assert!(shop.bill.is_empty());
+                    assert_eq!(shop.debit, 0);
+                    assert_eq!(shop.credit, 0);
+                    assert!(!shop.angry);
+                    assert!(!shop.surcharge);
+                    assert!(
+                        world.get_component::<Shopkeeper>(shop.shopkeeper).is_none(),
+                        "dead shopkeepers should not regain explicit runtime state after save/load"
                     );
                 }
                 SaveStoryTraversalScenario::ShopRobbery => {

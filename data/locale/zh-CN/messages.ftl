@@ -795,6 +795,7 @@ shop-price = "给你，{ $item }只要{ $price }枚金币。"
 shop-stolen = 你有未付款的商品！
 shop-damage = { $shopkeeper }说"你得赔偿损失！"
 shop-repair = { $shopkeeper }开始修理店里的损坏。
+shop-keeper-dead = { $shopkeeper }死了，这家店已经废弃。
 shop-shoplift = { $shopkeeper }尖叫道："站住，小偷！"
 temple-enter = 你进入了{ $god }的神殿。
 temple-forbidding = 你感到一股令人敬畏又排斥的神圣气息。

@@ -175,6 +175,16 @@ fn pw_regen_period(xlevel: u8, wisdom: u8) -> u32 {
     (35u32.saturating_sub(bonus)).max(1)
 }
 
+fn entity_has_positive_hp(world: &GameWorld, entity: hecs::Entity) -> bool {
+    world
+        .get_component::<HitPoints>(entity)
+        .is_some_and(|hp| hp.current > 0)
+}
+
+fn live_monster_entity(world: &GameWorld, entity: hecs::Entity) -> bool {
+    world.get_component::<Monster>(entity).is_some() && entity_has_positive_hp(world, entity)
+}
+
 // ── Main turn resolution ─────────────────────────────────────────────
 
 /// Resolve one player input through the full moveloop_core sequence.
@@ -204,11 +214,13 @@ pub fn resolve_turn(
     resolve_player_action(world, &action, rng, &mut events);
     apply_domain_hostility_side_effects_from_player_events(world, &mut events, rng);
     anger_peaceful_monsters_from_player_events(world, &events);
+    sync_shopkeeper_deaths_from_events(world, &mut events);
     sync_current_level_shopkeeper_state(world);
 
     // ── Step 3: monster loop ─────────────────────────────────────
     // Each monster with movement >= NORMAL_SPEED gets to act.
     resolve_monster_turns(world, rng, &mut events);
+    sync_shopkeeper_deaths_from_events(world, &mut events);
 
     // ── Step 4: check whether a new game turn boundary is reached ─
     // Both sides exhausted => new turn.
@@ -221,6 +233,7 @@ pub fn resolve_turn(
 
     if player_mp < NORMAL_SPEED as i32 && !monsters_can_move {
         process_new_turn(world, rng, &mut events);
+        sync_shopkeeper_deaths_from_events(world, &mut events);
     }
 
     sync_wizard_of_yendor_from_events(world, &known_wizards, &events);
@@ -285,11 +298,13 @@ pub fn turn_events<'a, R: Rng>(
     resolve_player_action(world, &action, rng, &mut player_events);
     apply_domain_hostility_side_effects_from_player_events(world, &mut player_events, rng);
     anger_peaceful_monsters_from_player_events(world, &player_events);
+    sync_shopkeeper_deaths_from_events(world, &mut player_events);
     sync_current_level_shopkeeper_state(world);
 
     // Phase 2: monster turns.
     let mut monster_events = Vec::new();
     resolve_monster_turns(world, rng, &mut monster_events);
+    sync_shopkeeper_deaths_from_events(world, &mut monster_events);
 
     // Phase 3: new-turn processing (conditional).
     let mut new_turn_events = Vec::new();
@@ -300,6 +315,7 @@ pub fn turn_events<'a, R: Rng>(
     let monsters_can_move = any_monster_can_move(world);
     if player_mp < NORMAL_SPEED as i32 && !monsters_can_move {
         process_new_turn(world, rng, &mut new_turn_events);
+        sync_shopkeeper_deaths_from_events(world, &mut new_turn_events);
     }
 
     let mut story_events =
@@ -391,6 +407,7 @@ pub fn turn_events_gen<'a, R: Rng>(
         resolve_player_action(world, &action, rng, &mut player_events);
         apply_domain_hostility_side_effects_from_player_events(world, &mut player_events, rng);
         anger_peaceful_monsters_from_player_events(world, &player_events);
+        sync_shopkeeper_deaths_from_events(world, &mut player_events);
         sync_current_level_shopkeeper_state(world);
         for event in player_events {
             story_events.push(event.clone());
@@ -400,6 +417,7 @@ pub fn turn_events_gen<'a, R: Rng>(
         // Phase 3: monster turns.
         let mut monster_events = Vec::new();
         resolve_monster_turns(world, rng, &mut monster_events);
+        sync_shopkeeper_deaths_from_events(world, &mut monster_events);
         for event in monster_events {
             story_events.push(event.clone());
             yield event;
@@ -414,6 +432,7 @@ pub fn turn_events_gen<'a, R: Rng>(
         if player_mp < NORMAL_SPEED as i32 && !monsters_can_move {
             let mut new_turn_events = Vec::new();
             process_new_turn(world, rng, &mut new_turn_events);
+            sync_shopkeeper_deaths_from_events(world, &mut new_turn_events);
             for event in new_turn_events {
                 story_events.push(event.clone());
                 yield event;
@@ -546,7 +565,7 @@ fn status_is_hostile_toward_monster(status: crate::event::StatusEffect) -> bool 
 fn any_monster_can_move(world: &GameWorld) -> bool {
     let player = world.player();
     for (entity, mp) in world.ecs().query::<&MovementPoints>().iter() {
-        if entity != player && mp.0 >= NORMAL_SPEED as i32 {
+        if entity != player && live_monster_entity(world, entity) && mp.0 >= NORMAL_SPEED as i32 {
             return true;
         }
     }
@@ -2715,14 +2734,23 @@ fn respawn_cached_monsters(world: &mut GameWorld, cached_mons: &[CachedMonster])
 
 fn rebind_shopkeepers(world: &GameWorld, runtime_state: &mut CachedLevelRuntimeState) {
     for shop in &mut runtime_state.shop_rooms {
-        if world.ecs().contains(shop.shopkeeper) {
+        let current_name_matches = world
+            .get_component::<Name>(shop.shopkeeper)
+            .is_some_and(|name| name.0 == shop.shopkeeper_name);
+        if shopkeeper_is_alive(world, shop.shopkeeper) && current_name_matches {
             continue;
         }
-        if let Some((entity, _)) = world
-            .ecs()
-            .query::<(&Monster, &Name)>()
-            .iter()
-            .find(|(_, (_, name))| name.0 == shop.shopkeeper_name)
+        if world.get_component::<Monster>(shop.shopkeeper).is_some() && current_name_matches {
+            continue;
+        }
+        if let Some((entity, _)) =
+            world
+                .ecs()
+                .query::<(&Monster, &Name)>()
+                .iter()
+                .find(|(entity, (_, name))| {
+                    live_monster_entity(world, *entity) && name.0 == shop.shopkeeper_name
+                })
         {
             shop.shopkeeper = entity;
         }
@@ -2802,27 +2830,46 @@ fn quest_npc_role_for_entity(
 
 pub fn sync_current_level_npc_state(world: &mut GameWorld) {
     let shops = world.dungeon().shop_rooms.clone();
-    for shop in &shops {
-        if world.ecs().contains(shop.shopkeeper) {
+    for (idx, shop) in shops.iter().enumerate() {
+        if shopkeeper_is_alive(world, shop.shopkeeper) {
             upsert_shopkeeper_component(world, shop.shopkeeper, shop);
             continue;
         }
 
-        let rebound_entity = world
-            .ecs()
-            .query::<(&Monster, &Name)>()
-            .iter()
-            .find_map(|(entity, (_, name))| (name.0 == shop.shopkeeper_name).then_some(entity));
-        if let Some(entity) = rebound_entity {
-            if let Some(live_shop) = world
-                .dungeon_mut()
-                .shop_rooms
-                .iter_mut()
-                .find(|live_shop| live_shop.shopkeeper_name == shop.shopkeeper_name)
-            {
+        let _ = world
+            .ecs_mut()
+            .remove_one::<crate::npc::Shopkeeper>(shop.shopkeeper);
+
+        if let Some((entity, inherited_name)) = find_inheriting_shopkeeper(world, idx) {
+            if let Some(live_shop) = world.dungeon_mut().shop_rooms.get_mut(idx) {
                 live_shop.shopkeeper = entity;
+                live_shop.shopkeeper_name = inherited_name;
             }
-            upsert_shopkeeper_component(world, entity, shop);
+            let inherited_shop = world.dungeon().shop_rooms[idx].clone();
+            upsert_shopkeeper_component(world, entity, &inherited_shop);
+            continue;
+        }
+
+        let current_name_matches = world
+            .get_component::<Name>(shop.shopkeeper)
+            .is_some_and(|name| name.0 == shop.shopkeeper_name);
+        if world.get_component::<Monster>(shop.shopkeeper).is_none() || !current_name_matches {
+            let rebound_entity =
+                world
+                    .ecs()
+                    .query::<(&Monster, &Name)>()
+                    .iter()
+                    .find_map(|(entity, (_, name))| {
+                        (live_monster_entity(world, entity) && name.0 == shop.shopkeeper_name)
+                            .then_some(entity)
+                    });
+            if let Some(entity) = rebound_entity {
+                if let Some(live_shop) = world.dungeon_mut().shop_rooms.get_mut(idx) {
+                    live_shop.shopkeeper = entity;
+                }
+                let rebound_shop = world.dungeon().shop_rooms[idx].clone();
+                upsert_shopkeeper_component(world, entity, &rebound_shop);
+            }
         }
     }
 
@@ -2832,6 +2879,7 @@ pub fn sync_current_level_npc_state(world: &mut GameWorld) {
         .query::<(&Monster,)>()
         .iter()
         .map(|(entity, _)| entity)
+        .filter(|entity| entity_has_positive_hp(world, *entity))
         .collect();
     for entity in monster_entities {
         if let Some(priest) = infer_priest_runtime(world, entity) {
@@ -2865,7 +2913,8 @@ fn sync_current_level_shopkeeper_state(world: &mut GameWorld) {
     let shops = world.dungeon().shop_rooms.clone();
     for shop in &shops {
         let entity = shop.shopkeeper;
-        if !world.ecs().contains(entity) {
+        if !shopkeeper_is_alive(world, entity) {
+            let _ = world.ecs_mut().remove_one::<crate::npc::Shopkeeper>(entity);
             continue;
         }
         let home_pos = shopkeeper_home_pos(shop);
@@ -3667,6 +3716,7 @@ fn find_monster_entity_at(world: &GameWorld, pos: Position) -> Option<hecs::Enti
     for (entity, _) in world.ecs().query::<&Monster>().iter() {
         if let Some(mon_pos) = world.get_component::<Positioned>(entity)
             && mon_pos.0 == pos
+            && entity_has_positive_hp(world, entity)
         {
             return Some(entity);
         }
@@ -3909,7 +3959,8 @@ fn monster_at(world: &GameWorld, pos: Position, exclude: hecs::Entity) -> Option
         .query::<(&Monster, &Positioned)>()
         .iter()
         .find_map(|(entity, (_, positioned))| {
-            (entity != exclude && positioned.0 == pos).then_some(entity)
+            (entity != exclude && positioned.0 == pos && entity_has_positive_hp(world, entity))
+                .then_some(entity)
         })
 }
 
@@ -4063,7 +4114,7 @@ fn resolve_monster_turns(world: &mut GameWorld, rng: &mut impl Rng, events: &mut
         .query::<(&Speed, &MovementPoints, &Monster)>()
         .iter()
     {
-        if entity != player && mp.0 >= NORMAL_SPEED as i32 {
+        if entity != player && live_monster_entity(world, entity) && mp.0 >= NORMAL_SPEED as i32 {
             let creation = world
                 .get_component::<CreationOrder>(entity)
                 .map(|c| c.0)
@@ -4078,7 +4129,7 @@ fn resolve_monster_turns(world: &mut GameWorld, rng: &mut impl Rng, events: &mut
     for (entity, _speed, _creation) in &monsters {
         // Skip dead monsters (may have been killed by a preceding
         // monster's action this same pass).
-        if world.get_component::<HitPoints>(*entity).is_none() {
+        if !live_monster_entity(world, *entity) {
             continue;
         }
 
@@ -4863,6 +4914,86 @@ fn find_shop_room_index_by_shopkeeper(world: &GameWorld, entity: hecs::Entity) -
         .position(|shop| shop.shopkeeper == entity)
 }
 
+fn shopkeeper_is_alive(world: &GameWorld, entity: hecs::Entity) -> bool {
+    live_monster_entity(world, entity)
+}
+
+fn shop_room_is_deserted(world: &GameWorld, shop: &crate::shop::ShopRoom) -> bool {
+    crate::shop::is_shop_deserted(shopkeeper_is_alive(world, shop.shopkeeper))
+}
+
+fn shop_rooms_are_adjacent(lhs: &crate::shop::ShopRoom, rhs: &crate::shop::ShopRoom) -> bool {
+    lhs.top_left.x - 1 <= rhs.bottom_right.x
+        && lhs.bottom_right.x + 1 >= rhs.top_left.x
+        && lhs.top_left.y - 1 <= rhs.bottom_right.y
+        && lhs.bottom_right.y + 1 >= rhs.top_left.y
+}
+
+fn find_inheriting_shopkeeper(
+    world: &GameWorld,
+    dead_shop_idx: usize,
+) -> Option<(hecs::Entity, String)> {
+    let dead_shop = world.dungeon().shop_rooms.get(dead_shop_idx)?;
+    world
+        .dungeon()
+        .shop_rooms
+        .iter()
+        .enumerate()
+        .find_map(|(idx, candidate)| {
+            if idx == dead_shop_idx || !shopkeeper_is_alive(world, candidate.shopkeeper) {
+                return None;
+            }
+            crate::shop::check_shop_inheritance(
+                dead_shop.angry,
+                shop_rooms_are_adjacent(dead_shop, candidate),
+                candidate.angry,
+            )
+            .then(|| (candidate.shopkeeper, candidate.shopkeeper_name.clone()))
+        })
+}
+
+fn sync_shopkeeper_deaths_from_events(world: &mut GameWorld, events: &mut Vec<EngineEvent>) {
+    let mut dead_shop_indices = Vec::new();
+    for event in events.iter() {
+        if let EngineEvent::EntityDied { entity, .. } = event
+            && let Some(idx) = find_shop_room_index_by_shopkeeper(world, *entity)
+        {
+            dead_shop_indices.push(idx);
+        }
+    }
+    dead_shop_indices.sort_unstable();
+    dead_shop_indices.dedup();
+
+    let mut extra_events = Vec::new();
+    for idx in dead_shop_indices {
+        let Some(dead_shop) = world.dungeon().shop_rooms.get(idx).cloned() else {
+            continue;
+        };
+        let _ = world
+            .ecs_mut()
+            .remove_one::<crate::npc::Shopkeeper>(dead_shop.shopkeeper);
+
+        if let Some((inheritor, inheritor_name)) = find_inheriting_shopkeeper(world, idx) {
+            let shop = &mut world.dungeon_mut().shop_rooms[idx];
+            shop.shopkeeper = inheritor;
+            shop.shopkeeper_name = inheritor_name;
+            extra_events.push(EngineEvent::msg_with(
+                "shop-keeper-dead",
+                vec![("shopkeeper", dead_shop.shopkeeper_name)],
+            ));
+            continue;
+        }
+
+        let mut death_events = {
+            let shop = &mut world.dungeon_mut().shop_rooms[idx];
+            crate::shop::shopkeeper_died(shop)
+        };
+        extra_events.append(&mut death_events);
+    }
+
+    events.extend(extra_events);
+}
+
 fn rile_attacked_shopkeepers(
     world: &mut GameWorld,
     targets: &std::collections::HashSet<hecs::Entity>,
@@ -5556,6 +5687,9 @@ fn find_payable_shop_index(world: &GameWorld, player: hecs::Entity) -> Option<us
         .iter()
         .enumerate()
         .find_map(|(idx, shop)| {
+            if shop_room_is_deserted(world, shop) {
+                return None;
+            }
             let near_door = shop
                 .door_pos
                 .is_some_and(|door| crate::ball::chebyshev_distance(player_pos, door) <= 1);
@@ -5572,7 +5706,7 @@ fn find_shop_index_containing_position(world: &GameWorld, pos: Position) -> Opti
         .dungeon()
         .shop_rooms
         .iter()
-        .position(|shop| shop.contains(pos))
+        .position(|shop| shop.contains(pos) && !shop_room_is_deserted(world, shop))
 }
 
 fn pacify_shop_if_settled(world: &mut GameWorld, shop_idx: usize) {
@@ -6619,6 +6753,7 @@ mod tests {
         ShopkeeperCredit,
         ShopkeeperSell,
         ShopRepair,
+        ShopkeeperDeath,
         ShopRobbery,
         ShopRestitution,
         TempleAleGift,
@@ -6652,6 +6787,7 @@ mod tests {
                 StoryTraversalScenario::ShopkeeperCredit => "shopkeeper-credit",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopRepair => "shop-repair",
+                StoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
                 StoryTraversalScenario::ShopRobbery => "shop-robbery",
                 StoryTraversalScenario::ShopRestitution => "shop-restitution",
                 StoryTraversalScenario::TempleAleGift => "temple-ale-gift",
@@ -7320,6 +7456,86 @@ mod tests {
                 let repair_events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
                 (world, repair_events)
             }
+            StoryTraversalScenario::ShopkeeperDeath => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let unpaid_item = world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Tool,
+                        quantity: 1,
+                        weight: 10,
+                        age: 0,
+                        inv_letter: Some('u'),
+                        artifact: None,
+                    },
+                    ObjectLocation::Floor {
+                        x: 6,
+                        y: 5,
+                        level: world.dungeon().current_data_dungeon_level(),
+                    },
+                ));
+                assert!(
+                    world.dungeon_mut().shop_rooms[0]
+                        .bill
+                        .add(unpaid_item, 100, 1),
+                    "shop bill should accept an unpaid entry"
+                );
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(shopkeeper) {
+                    hp.current = 1;
+                    hp.max = 1;
+                }
+                if let Some(mut mp) = world.get_component_mut::<MovementPoints>(shopkeeper) {
+                    mp.0 = 0;
+                }
+
+                let mut rng = test_rng();
+                let mut death_events = Vec::new();
+                for _ in 0..8 {
+                    if let Some(mut mp) = world.get_component_mut::<MovementPoints>(shopkeeper) {
+                        mp.0 = 0;
+                    }
+                    death_events.extend(resolve_turn(
+                        &mut world,
+                        PlayerAction::FightDirection {
+                            direction: Direction::East,
+                        },
+                        &mut rng,
+                    ));
+                    if death_events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "shop-keeper-dead"
+                        )
+                    }) {
+                        break;
+                    }
+                }
+                let exit_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Move {
+                        direction: Direction::West,
+                    },
+                    &mut rng,
+                );
+                death_events.extend(exit_events);
+                (world, death_events)
+            }
             StoryTraversalScenario::ShopRobbery => {
                 let mut world = make_test_world();
                 install_test_catalogs(&mut world);
@@ -7861,6 +8077,10 @@ mod tests {
         world.spawn((
             Monster,
             Positioned(pos),
+            HitPoints {
+                current: 12,
+                max: 12,
+            },
             Speed(speed),
             MovementPoints(NORMAL_SPEED as i32),
             Name(format!("monster(spd={})", speed)),
@@ -7880,6 +8100,10 @@ mod tests {
         world.spawn((
             Monster,
             Positioned(pos),
+            HitPoints {
+                current: 12,
+                max: 12,
+            },
             Speed(speed),
             MovementPoints(NORMAL_SPEED as i32),
             MonsterSpeedMod(speed_mod),
@@ -14915,6 +15139,7 @@ mod tests {
             StoryTraversalScenario::ShopkeeperCredit,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopRepair,
+            StoryTraversalScenario::ShopkeeperDeath,
             StoryTraversalScenario::ShopRobbery,
             StoryTraversalScenario::ShopRestitution,
             StoryTraversalScenario::TempleAleGift,
@@ -15152,6 +15377,46 @@ mod tests {
                             .map(|cell| cell.terrain),
                         Some(Terrain::DoorClosed),
                         "{} should restore the damaged door terrain",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopkeeperDeath => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-keeper-dead"
+                    )));
+                    assert!(
+                        !final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "shop-shoplift"
+                        )),
+                        "{} should not rob a deserted shop on exit",
+                        scenario.label()
+                    );
+                    assert!(
+                        shop.bill.is_empty(),
+                        "{} should clear the bill",
+                        scenario.label()
+                    );
+                    assert_eq!(shop.debit, 0, "{} should clear debit", scenario.label());
+                    assert_eq!(shop.credit, 0, "{} should clear credit", scenario.label());
+                    assert!(!shop.angry, "{} should clear anger", scenario.label());
+                    assert!(
+                        !shop.surcharge,
+                        "{} should clear surcharge",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::npc::Shopkeeper>(shop.shopkeeper)
+                            .is_none(),
+                        "{} should remove explicit shopkeeper runtime state",
+                        scenario.label()
+                    );
+                    assert!(
+                        find_shop_index_containing_position(&world, Position::new(6, 5)).is_none(),
+                        "{} should treat the dead keeper's room as deserted for commerce",
                         scenario.label()
                     );
                 }

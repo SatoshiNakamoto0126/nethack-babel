@@ -475,6 +475,7 @@ shk-angry-greeting = { $shopkeeper } vous lance un regard furieux.
 shk-robbed-greeting = { $shopkeeper } dit : « Je n'ai pas oublié ce vol, { $honorific }. »
 shk-surcharge-greeting = { $shopkeeper } dit : « Les prix sont plus élevés pour vous maintenant, { $honorific }. »
 shop-repair = { $shopkeeper } répare les dégâts.
+shop-keeper-dead = { $shopkeeper } est mort. La boutique est abandonnée.
 shop-restock = { $shopkeeper } semble reconnaissant pour ce réassort.
 god-roars-suffer = Une voix tonitruante rugit : « Souffrez pour votre blasphème ! »
 god-how-dare-harm-servant = Une voix tonitruante rugit : « Comment osez-vous nuire à mon serviteur ? »

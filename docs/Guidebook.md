@@ -538,7 +538,7 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 
 ### Roadmap (2026)
 
-1. Push temple/shop parity past the current `temple-entry / sanctum-entry / shop-entry / follow / payoff / pray / calm-down / cranky-priest-chat / repair / drop-credit / live-sell / robbery / restitution / protection-spend / donation-tiers / ale-gift / blessing-clairvoyance / cleansing` runtime closure and finish the remaining richer deity/shop feedback and economy aftermath.
+1. Push temple/shop parity past the current `temple-entry / sanctum-entry / shop-entry / follow / payoff / pray / calm-down / cranky-priest-chat / repair / drop-credit / live-sell / robbery / restitution / shopkeeper-death / deserted-shop / protection-spend / donation-tiers / ale-gift / blessing-clairvoyance / cleansing` runtime closure and finish the remaining richer deity/shop feedback and economy aftermath.
 2. Expand Wizard of Yendor harassment parity beyond the current respawn/theft/curse/scaled nasty-summon runtime and repeated regression coverage.
 3. Grow traversal and save/load matrices beyond the current quest/endgame/shop/temple/sanctum/wizard plus `Medusa`/`Castle`/`Orcus`/`Fort Ludios`/`Vlad`/invocation-portal coverage into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
 4. Continue hardening level-local runtime caches and save compatibility rules as serialized world state evolves.
@@ -546,7 +546,7 @@ The core campaign flow in both original NetHack and NetHack Babel is:
 
 ### Active TODO
 
-- [ ] Extend temple/shop parity beyond the current temple-entry/sanctum-entry/shop-entry/payoff/follow/pray/calm/cranky-priest-chat/repair/drop-credit/live-sell/robbery/restitution/protection-spend/donation-tiers/ale-gift/blessing-clairvoyance/cleansing path: remaining richer deity/shop feedback and more original economy aftermath.
+- [ ] Extend temple/shop parity beyond the current temple-entry/sanctum-entry/shop-entry/payoff/follow/pray/calm/cranky-priest-chat/repair/drop-credit/live-sell/robbery/restitution/shopkeeper-death/deserted-shop/protection-spend/donation-tiers/ale-gift/blessing-clairvoyance/cleansing path: remaining richer deity/shop feedback and more original economy aftermath.
 - [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, theft, cursing, scaled nasty summon, and repeated reload coverage.
 - [ ] Expand traversal/save-load matrices into stronger drift-detection coverage for economy, religion, and branch-state regressions beyond the current quest/endgame/shop/temple/sanctum/wizard/Medusa/Castle/Orcus/Fort-Ludios/Vlad/invocation-portal matrix.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and serialization gaps.

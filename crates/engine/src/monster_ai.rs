@@ -106,6 +106,9 @@ pub fn resolve_monster_turn(
         Some(hp) => (hp.current, hp.max),
         None => (1, 1),
     };
+    if current_hp <= 0 {
+        return events;
+    }
 
     // Read intelligence tier (default: Humanoid for backward compat).
     let intelligence = world

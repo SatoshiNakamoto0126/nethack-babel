@@ -816,6 +816,7 @@ shop-price = "For you, { $item } only { $price } gold piece{ $price ->
 shop-stolen = You have unpaid merchandise!
 shop-damage = { $shopkeeper } says "You'll pay for the damage!"
 shop-repair = { $shopkeeper } repairs the damage.
+shop-keeper-dead = { $shopkeeper } is dead. The shop is abandoned.
 shop-shoplift = "Stop, thief!" shrieks { $shopkeeper }.
 temple-enter = You enter a temple of { $god }.
 temple-donate = { $priest } accepts your donation.
