@@ -1418,6 +1418,13 @@ fn resolve_player_action(
                         )
                     });
                     if granted_protection {
+                        let cost = crate::npc::priest_protection_cost(current_protection);
+                        let _ = spend_player_gold(world, player, cost as u32);
+                        record_player_exercise_action(
+                            world,
+                            player,
+                            crate::attributes::ExerciseAction::DonatedToTemple,
+                        );
                         if let Some(mut protection) =
                             world.get_component_mut::<crate::status::SpellProtection>(player)
                         {
@@ -1467,6 +1474,11 @@ fn resolve_player_action(
                 let paid_amount = starting_gold.saturating_sub(gold_after);
                 if paid_amount > 0 {
                     let _ = spend_player_gold(world, player, paid_amount as u32);
+                    record_player_exercise_action(
+                        world,
+                        player,
+                        crate::attributes::ExerciseAction::ShopTransaction,
+                    );
                 }
                 if world
                     .dungeon()
@@ -3935,6 +3947,8 @@ fn try_move_entity(
         to: target_pos,
     });
 
+    maybe_trigger_shop_exit_robbery(world, entity, current_pos, target_pos, events, rng);
+
     finish_player_movement(world, entity, target_pos, events, rng);
 }
 
@@ -5626,6 +5640,18 @@ fn add_player_gold(world: &mut GameWorld, player: hecs::Entity, amount: u32) {
     }
 }
 
+fn record_player_exercise_action(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    action: crate::attributes::ExerciseAction,
+) {
+    if let Some(mut exercise) =
+        world.get_component_mut::<crate::attributes::AttributeExercise>(player)
+    {
+        crate::attributes::exercise_action(&mut exercise, action);
+    }
+}
+
 fn handle_player_drop(
     world: &mut GameWorld,
     player: hecs::Entity,
@@ -5669,6 +5695,13 @@ fn handle_player_drop(
                 vec![("amount", credit_added.to_string())],
             ));
         }
+        if paid_amount > 0 || credit_added > 0 {
+            record_player_exercise_action(
+                world,
+                player,
+                crate::attributes::ExerciseAction::ShopTransaction,
+            );
+        }
         let _ = world.despawn(item);
         pacify_shop_if_settled(world, shop_idx);
         sync_current_level_shopkeeper_state(world);
@@ -5686,6 +5719,11 @@ fn handle_player_drop(
         .max(0);
     if gold_paid > 0 {
         add_player_gold(world, player, gold_paid as u32);
+        record_player_exercise_action(
+            world,
+            player,
+            crate::attributes::ExerciseAction::ShopTransaction,
+        );
     }
     world.dungeon_mut().shop_rooms[shop_idx] = live_shop;
     pacify_shop_if_settled(world, shop_idx);
@@ -5761,6 +5799,42 @@ fn try_calm_temple_priest_after_prayer(
     temple.is_sanctum = priest.is_high_priest;
     temple.priest_angry = true;
     events.extend(crate::priest::calm_priest(&mut temple));
+}
+
+fn maybe_trigger_shop_exit_robbery(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    from_pos: Position,
+    to_pos: Position,
+    events: &mut Vec<EngineEvent>,
+    rng: &mut impl Rng,
+) {
+    let Some(shop_idx) = find_shop_index_containing_position(world, from_pos) else {
+        return;
+    };
+    if world
+        .dungeon()
+        .shop_rooms
+        .get(shop_idx)
+        .is_none_or(|shop| shop.contains(to_pos))
+    {
+        return;
+    }
+
+    let needs_robbery = world
+        .dungeon()
+        .shop_rooms
+        .get(shop_idx)
+        .is_some_and(|shop| !shop.bill.is_empty() || shop.debit > shop.credit);
+    if !needs_robbery {
+        return;
+    }
+
+    let mut shop = world.dungeon().shop_rooms[shop_idx].clone();
+    let mut robbery_events = crate::shop::rob_shop(world, player, &mut shop, rng);
+    world.dungeon_mut().shop_rooms[shop_idx] = shop;
+    sync_current_level_npc_state(world);
+    events.append(&mut robbery_events);
 }
 
 fn current_depth_string(world: &GameWorld) -> String {
@@ -6326,6 +6400,8 @@ mod tests {
         ShopkeeperCredit,
         ShopkeeperSell,
         ShopRepair,
+        ShopRobbery,
+        TempleDonation,
         TempleWrath,
         TempleCalm,
         WizardHarassment,
@@ -6342,6 +6418,8 @@ mod tests {
                 StoryTraversalScenario::ShopkeeperCredit => "shopkeeper-credit",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopRepair => "shop-repair",
+                StoryTraversalScenario::ShopRobbery => "shop-robbery",
+                StoryTraversalScenario::TempleDonation => "temple-donation",
                 StoryTraversalScenario::TempleWrath => "temple-wrath",
                 StoryTraversalScenario::TempleCalm => "temple-calm",
                 StoryTraversalScenario::WizardHarassment => "wizard-harassment",
@@ -6679,6 +6757,86 @@ mod tests {
                 let mut rng = test_rng();
                 let repair_events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
                 (world, repair_events)
+            }
+            StoryTraversalScenario::ShopRobbery => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let unpaid_item = world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Tool,
+                        quantity: 1,
+                        weight: 10,
+                        age: 0,
+                        inv_letter: Some('u'),
+                        artifact: None,
+                    },
+                    ObjectLocation::Floor {
+                        x: 6,
+                        y: 5,
+                        level: world.dungeon().current_data_dungeon_level(),
+                    },
+                ));
+                assert!(
+                    world.dungeon_mut().shop_rooms[0]
+                        .bill
+                        .add(unpaid_item, 100, 1),
+                    "shop bill should accept an unpaid entry"
+                );
+
+                let mut rng = test_rng();
+                let robbery_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Move {
+                        direction: Direction::West,
+                    },
+                    &mut rng,
+                );
+                (world, robbery_events)
+            }
+            StoryTraversalScenario::TempleDonation => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 1_000, 'g');
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let mut rng = test_rng();
+                let chat_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, chat_events)
             }
             StoryTraversalScenario::TempleWrath => {
                 let mut world = make_test_world();
@@ -12163,6 +12321,11 @@ mod tests {
             event,
             EngineEvent::EntityMoved { entity, .. } if *entity == shopkeeper
         )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-shoplift"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].robbed, 100);
         let shopkeeper_state = world
             .get_component::<crate::npc::Shopkeeper>(shopkeeper)
             .map(|state| (*state).clone())
@@ -12473,6 +12636,7 @@ mod tests {
             event,
             EngineEvent::Message { key, .. } if key == "priest-protection-granted"
         )));
+        assert_eq!(player_gold(&world, player), 600);
         assert!(
             world
                 .get_component::<crate::status::SpellProtection>(player)
@@ -12585,6 +12749,7 @@ mod tests {
             event,
             EngineEvent::Message { key, .. } if key == "priest-protection-granted"
         )));
+        assert_eq!(player_gold(&world, player), 600);
     }
 
     #[test]
@@ -13648,6 +13813,8 @@ mod tests {
             StoryTraversalScenario::ShopkeeperCredit,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopRepair,
+            StoryTraversalScenario::ShopRobbery,
+            StoryTraversalScenario::TempleDonation,
             StoryTraversalScenario::TempleWrath,
             StoryTraversalScenario::TempleCalm,
             StoryTraversalScenario::WizardHarassment,
@@ -13813,6 +13980,63 @@ mod tests {
                             .map(|cell| cell.terrain),
                         Some(Terrain::DoorClosed),
                         "{} should restore the damaged door terrain",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopRobbery => {
+                    let shopkeeper =
+                        find_monster_named(&world, "Izchak").expect("shopkeeper should exist");
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-shoplift"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-stolen-amount"
+                    )));
+                    assert_eq!(
+                        shop.robbed,
+                        100,
+                        "{} should track robbed value",
+                        scenario.label()
+                    );
+                    assert!(
+                        shop.bill.is_empty(),
+                        "{} should clear the live bill",
+                        scenario.label()
+                    );
+                    assert!(
+                        shop.angry,
+                        "{} should anger the shopkeeper",
+                        scenario.label()
+                    );
+                    let shopkeeper_state = world
+                        .get_component::<crate::npc::Shopkeeper>(shopkeeper)
+                        .map(|state| (*state).clone())
+                        .expect("shopkeeper should keep explicit runtime state");
+                    assert!(
+                        shopkeeper_state.following,
+                        "{} should make the robbed shopkeeper pursue the hero",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::TempleDonation => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-protection-granted"
+                    )));
+                    assert_eq!(
+                        player_gold(&world, player),
+                        600,
+                        "{} should deduct the protection donation from player gold",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::status::SpellProtection>(player)
+                            .is_some_and(|protection| protection.layers == 1),
+                        "{} should still grant one protection layer",
                         scenario.label()
                     );
                 }

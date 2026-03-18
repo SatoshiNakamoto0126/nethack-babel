@@ -1538,6 +1538,8 @@ mod tests {
         ShopkeeperCredit,
         ShopkeeperSell,
         ShopRepair,
+        ShopRobbery,
+        TempleDonation,
         TempleWrath,
         TempleCalm,
         WizardHarassment,
@@ -1554,6 +1556,8 @@ mod tests {
                 SaveStoryTraversalScenario::ShopkeeperCredit => "shopkeeper-credit",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopRepair => "shop-repair",
+                SaveStoryTraversalScenario::ShopRobbery => "shop-robbery",
+                SaveStoryTraversalScenario::TempleDonation => "temple-donation",
                 SaveStoryTraversalScenario::TempleWrath => "temple-wrath",
                 SaveStoryTraversalScenario::TempleCalm => "temple-calm",
                 SaveStoryTraversalScenario::WizardHarassment => "wizard-harassment",
@@ -1920,6 +1924,88 @@ mod tests {
                     save_and_reload_world("story-matrix-shop-repair", &world, [37u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopRobbery => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let unpaid_item = world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Tool,
+                        quantity: 1,
+                        weight: 10,
+                        age: 0,
+                        inv_letter: Some('u'),
+                        artifact: None,
+                    },
+                    ObjectLocation::Floor {
+                        x: 6,
+                        y: 5,
+                        level: world.dungeon().current_data_dungeon_level(),
+                    },
+                ));
+                assert!(
+                    world.dungeon_mut().shop_rooms[0]
+                        .bill
+                        .add(unpaid_item, 100, 1),
+                    "shop bill should accept an unpaid entry"
+                );
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-robbery", &world, [31u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Move {
+                        direction: Direction::West,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::TempleDonation => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 1_000, 'g');
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, nethack_babel_engine::world::Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-temple-donation", &world, [32u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
                 (loaded, events)
             }
             SaveStoryTraversalScenario::TempleWrath => {
@@ -3991,6 +4077,8 @@ mod tests {
             SaveStoryTraversalScenario::ShopkeeperCredit,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopRepair,
+            SaveStoryTraversalScenario::ShopRobbery,
+            SaveStoryTraversalScenario::TempleDonation,
             SaveStoryTraversalScenario::TempleWrath,
             SaveStoryTraversalScenario::TempleCalm,
             SaveStoryTraversalScenario::WizardHarassment,
@@ -4149,6 +4237,43 @@ mod tests {
                             .get(Position::new(5, 5))
                             .map(|cell| cell.terrain),
                         Some(Terrain::DoorClosed)
+                    );
+                }
+                SaveStoryTraversalScenario::ShopRobbery => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-shoplift"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-stolen-amount"
+                    )));
+                    assert_eq!(shop.robbed, 100);
+                    assert!(shop.bill.is_empty());
+                    assert!(shop.angry);
+                }
+                SaveStoryTraversalScenario::TempleDonation => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-protection-granted"
+                    )));
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 600);
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::status::SpellProtection>(player)
+                            .is_some_and(|protection| protection.layers == 1)
                     );
                 }
                 SaveStoryTraversalScenario::TempleWrath => {

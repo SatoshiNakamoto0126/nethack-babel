@@ -1072,7 +1072,10 @@ pub fn rob_shop<R: Rng>(
     shop.debit = 0;
     shop.robbed += stolen;
 
-    events.push(EngineEvent::msg("shop-shoplift"));
+    events.push(EngineEvent::msg_with(
+        "shop-shoplift",
+        vec![("shopkeeper", shop.shopkeeper_name.clone())],
+    ));
     events.push(EngineEvent::msg_with(
         "shop-stolen-amount",
         vec![("amount", stolen.to_string())],
