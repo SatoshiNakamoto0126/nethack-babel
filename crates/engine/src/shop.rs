@@ -897,7 +897,13 @@ pub fn quote_item_in_shop(
     shop: &ShopRoom,
     obj_defs: &[ObjectDef],
 ) -> Option<EngineEvent> {
-    let (item_name, unit_price, quantity) = quoted_buy_details(world, player, item, shop, obj_defs)?;
+    if shop.angry || crate::status::is_blind(world, player) || crate::status::is_deaf(world, player)
+    {
+        return None;
+    }
+
+    let (item_name, unit_price, quantity) =
+        quoted_buy_details(world, player, item, shop, obj_defs)?;
     Some(EngineEvent::msg_with(
         "shop-price",
         vec![

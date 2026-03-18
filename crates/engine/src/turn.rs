@@ -534,7 +534,9 @@ fn sync_incapacitation_from_events(world: &mut GameWorld, events: &[EngineEvent]
                 entity,
                 status: crate::event::StatusEffect::Paralyzed,
             } => {
-                if let Some(mut status) = world.get_component_mut::<crate::status::StatusEffects>(*entity) {
+                if let Some(mut status) =
+                    world.get_component_mut::<crate::status::StatusEffects>(*entity)
+                {
                     status.paralysis = 0;
                 }
             }
@@ -4305,8 +4307,7 @@ fn resolve_monster_turns(world: &mut GameWorld, rng: &mut impl Rng, events: &mut
             mp.0 -= NORMAL_SPEED as i32;
         }
 
-        if crate::status::is_paralyzed(world, *entity)
-            || crate::status::is_sleeping(world, *entity)
+        if crate::status::is_paralyzed(world, *entity) || crate::status::is_sleeping(world, *entity)
         {
             continue;
         }
@@ -5412,6 +5413,9 @@ fn process_wizard_of_yendor_turn(
             )
         {
             events.push(taunt);
+            if let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) {
+                wake_sleeping_monsters_near_position(world, player_pos, 5, events);
+            }
         }
         return;
     }
@@ -5440,6 +5444,19 @@ fn wizard_harassment_messages(
     } else {
         crate::npc::wizard_harass_events(action)
     }
+}
+
+#[doc(hidden)]
+pub fn force_wizard_harassment_action(
+    world: &mut GameWorld,
+    wizard: Option<hecs::Entity>,
+    player: hecs::Entity,
+    action: crate::npc::WizardAction,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    let mut events = wizard_harassment_messages(world, player, action);
+    apply_wizard_harassment_action(world, wizard, player, action, rng, &mut events);
+    events
 }
 
 fn should_wizard_level_teleport_player(
@@ -5507,19 +5524,113 @@ fn apply_wizard_level_teleport(
 }
 
 fn wake_sleeping_monsters_on_current_level(world: &mut GameWorld, events: &mut Vec<EngineEvent>) {
+    wake_sleeping_monsters_near_position(world, Position::new(0, 0), i32::MAX, events);
+}
+
+fn wake_sleeping_monsters_near_position(
+    world: &mut GameWorld,
+    center: Position,
+    radius: i32,
+    events: &mut Vec<EngineEvent>,
+) {
     let sleepers: Vec<hecs::Entity> = world
         .ecs()
         .query::<(&Monster,)>()
         .iter()
         .map(|(entity, _)| entity)
         .filter(|entity| {
-            live_monster_entity(world, *entity) && crate::status::is_sleeping(world, *entity)
+            live_monster_entity(world, *entity)
+                && crate::status::is_sleeping(world, *entity)
+                && (radius == i32::MAX
+                    || world
+                        .get_component::<Positioned>(*entity)
+                        .is_some_and(|pos| {
+                            crate::ball::chebyshev_distance(center, pos.0) <= radius
+                        }))
         })
         .collect();
 
     for entity in sleepers {
         events.extend(crate::status::wake_from_sleeping(world, entity));
     }
+}
+
+fn try_respawn_cached_wizard_near_player(
+    world: &mut GameWorld,
+    rng: &mut impl Rng,
+) -> Option<(hecs::Entity, Position)> {
+    let player = world.player();
+    let player_pos = world.get_component::<Positioned>(player).map(|pos| pos.0)?;
+    let source_key = world
+        .dungeon()
+        .monster_cache
+        .iter()
+        .find_map(|(key, monsters)| {
+            monsters
+                .iter()
+                .any(|monster| quest_name_matches(&monster.name, "Wizard of Yendor"))
+                .then_some(*key)
+        })?;
+
+    let cached_wizard = {
+        let cache = world.dungeon_mut().monster_cache.get_mut(&source_key)?;
+        let wizard_idx = cache
+            .iter()
+            .position(|monster| quest_name_matches(&monster.name, "Wizard of Yendor"))?;
+        cache.remove(wizard_idx)
+    };
+    if world
+        .dungeon()
+        .monster_cache
+        .get(&source_key)
+        .is_some_and(|cache| cache.is_empty())
+    {
+        world.dungeon_mut().monster_cache.remove(&source_key);
+    }
+
+    let monster_id =
+        resolve_monster_id_by_spec(world.monster_catalog(), cached_wizard.name.as_str())?;
+    let monster_defs = world.monster_catalog().to_vec();
+    let monster_def = monster_defs.iter().find(|def| def.id == monster_id)?;
+    let spawn_pos = enexto(world, player_pos, monster_def)?;
+    let entity = makemon(
+        world,
+        &monster_defs,
+        Some(monster_id),
+        spawn_pos,
+        MakeMonFlags::NO_GROUP,
+        rng,
+    )?;
+
+    if let Some(mut hp) = world.get_component_mut::<HitPoints>(entity) {
+        hp.current = cached_wizard.hp_current;
+        hp.max = cached_wizard.hp_max;
+    }
+    let _ = world
+        .ecs_mut()
+        .insert_one(entity, cached_wizard.status_effects.clone());
+    if cached_wizard.is_peaceful {
+        let _ = world.ecs_mut().insert_one(entity, Peaceful);
+    }
+    if cached_wizard.is_tame {
+        let _ = world.ecs_mut().insert_one(entity, Tame);
+    }
+    if let Some(priest) = cached_wizard.priest {
+        let _ = world.ecs_mut().insert_one(entity, priest);
+    }
+    if let Some(shopkeeper) = cached_wizard.shopkeeper {
+        let _ = world.ecs_mut().insert_one(entity, shopkeeper);
+    }
+    if let Some(role) = cached_wizard.quest_npc_role {
+        let _ = world.ecs_mut().insert_one(entity, role);
+    }
+    if cached_wizard.creation_order > 0 {
+        let _ = world
+            .ecs_mut()
+            .insert_one(entity, CreationOrder(cached_wizard.creation_order));
+    }
+
+    Some((entity, spawn_pos))
 }
 
 fn apply_wizard_harassment_action(
@@ -5579,8 +5690,10 @@ fn apply_wizard_harassment_action(
         }
         crate::npc::WizardAction::Resurrect => {
             if wizard_of_yendor_entities(world).is_empty()
-                && let Some((wizard, pos)) =
-                    spawn_named_monster_near_entity(world, player, "Wizard of Yendor", rng)
+                && let Some((wizard, pos)) = try_respawn_cached_wizard_near_player(world, rng)
+                    .or_else(|| {
+                        spawn_named_monster_near_entity(world, player, "Wizard of Yendor", rng)
+                    })
             {
                 seed_wizard_runtime_state(world, wizard);
                 events.push(EngineEvent::MonsterGenerated {
@@ -6978,6 +7091,7 @@ mod tests {
     use crate::action::Position;
     use crate::conduct::ConductState;
     use crate::dungeon::Terrain;
+    use crate::inventory::Inventory;
     use crate::world::{Name, Peaceful};
     use nethack_babel_data::{
         Alignment, ArtifactId, BucStatus, GameData, Gender, Handedness, MonsterFlags, ObjectClass,
@@ -7216,6 +7330,7 @@ mod tests {
         ShopCreditCovers,
         ShopNoMoney,
         ShopkeeperSell,
+        ShopChatPriceQuote,
         ShopRepair,
         ShopkeeperDeath,
         ShopRobbery,
@@ -7236,6 +7351,7 @@ mod tests {
         WizardHarassment,
         WizardTaunt,
         WizardIntervention,
+        WizardBlackGlowBlind,
         WizardLevelTeleport,
         EndgameAscension,
     }
@@ -7260,6 +7376,7 @@ mod tests {
                 StoryTraversalScenario::ShopCreditCovers => "shop-credit-covers",
                 StoryTraversalScenario::ShopNoMoney => "shop-no-money",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
+                StoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 StoryTraversalScenario::ShopRepair => "shop-repair",
                 StoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
                 StoryTraversalScenario::ShopRobbery => "shop-robbery",
@@ -7280,6 +7397,7 @@ mod tests {
                 StoryTraversalScenario::WizardHarassment => "wizard-harassment",
                 StoryTraversalScenario::WizardTaunt => "wizard-taunt",
                 StoryTraversalScenario::WizardIntervention => "wizard-intervention",
+                StoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -7995,6 +8113,51 @@ mod tests {
                 let mut rng = test_rng();
                 let drop_events = resolve_turn(&mut world, PlayerAction::Drop { item }, &mut rng);
                 (world, drop_events)
+            }
+            StoryTraversalScenario::ShopChatPriceQuote => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+
+                let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+                if let Some(mut inv) =
+                    world.get_component_mut::<crate::inventory::Inventory>(player)
+                {
+                    inv.items.retain(|entry| *entry != item);
+                }
+                let current_level = world.dungeon().current_data_dungeon_level();
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+                    *loc = ObjectLocation::Floor {
+                        x: 5,
+                        y: 5,
+                        level: current_level,
+                    };
+                }
+
+                let mut rng = test_rng();
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::North,
+                    },
+                    &mut rng,
+                );
+                (world, events)
             }
             StoryTraversalScenario::ShopRepair => {
                 let mut world = make_test_world();
@@ -8779,8 +8942,7 @@ mod tests {
                 player_events.wizard_times_killed = 1;
                 player_events.wizard_last_killed_turn = world.turn();
                 persist_player_events(&mut world, player, player_events);
-                let sleeper =
-                    spawn_full_monster(&mut world, Position::new(7, 5), "goblin", 6);
+                let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "goblin", 6);
                 let _ = crate::status::make_sleeping(&mut world, sleeper, 10);
                 let mut rng = test_rng();
                 let mut final_events = Vec::new();
@@ -8802,6 +8964,41 @@ mod tests {
                     }
                 }
                 (world, final_events)
+            }
+            StoryTraversalScenario::WizardBlackGlowBlind => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                let item = spawn_inventory_object_by_name(&mut world, "long sword", 'a');
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        item,
+                        BucStatus {
+                            cursed: false,
+                            blessed: false,
+                            bknown: false,
+                        },
+                    )
+                    .expect("inventory item should accept a BUC component");
+                let _ = crate::status::make_blinded(&mut world, player, 20);
+                let mut rng = test_rng();
+                let mut events = wizard_harassment_messages(
+                    &world,
+                    player,
+                    crate::npc::WizardAction::BlackGlowCurse,
+                );
+
+                apply_wizard_harassment_action(
+                    &mut world,
+                    None,
+                    player,
+                    crate::npc::WizardAction::BlackGlowCurse,
+                    &mut rng,
+                    &mut events,
+                );
+
+                (world, events)
             }
             StoryTraversalScenario::WizardLevelTeleport => {
                 let mut world = make_stair_world(Terrain::Floor, 10);
@@ -12153,7 +12350,11 @@ mod tests {
         );
 
         let pos = world.get_component::<Positioned>(world.player()).unwrap();
-        assert_eq!(pos.0, Position::new(5, 5), "sleeping player should not move");
+        assert_eq!(
+            pos.0,
+            Position::new(5, 5),
+            "sleeping player should not move"
+        );
         assert!(
             events
                 .iter()
@@ -13023,6 +13224,65 @@ mod tests {
     }
 
     #[test]
+    fn test_offscreen_wizard_resurrect_prefers_cached_wizard() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world.dungeon_mut().monster_cache.insert(
+            (DungeonBranch::Main, 2),
+            vec![CachedMonster {
+                position: Position::new(3, 3),
+                name: "Wizard of Yendor".to_string(),
+                hp_current: 7,
+                hp_max: 33,
+                speed: NORMAL_SPEED,
+                symbol: '@',
+                color: nethack_babel_data::Color::BrightMagenta,
+                is_tame: false,
+                is_peaceful: false,
+                creation_order: 77,
+                priest: None,
+                shopkeeper: None,
+                quest_npc_role: None,
+                status_effects: crate::status::StatusEffects {
+                    blindness: 9,
+                    ..Default::default()
+                },
+            }],
+        );
+        let mut events = crate::npc::wizard_harass_events(crate::npc::WizardAction::Resurrect);
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            None,
+            player,
+            crate::npc::WizardAction::Resurrect,
+            &mut rng,
+            &mut events,
+        );
+
+        let wizard = find_monster_named(&world, "Wizard of Yendor")
+            .expect("cached wizard should be respawned onto the current level");
+        let hp = world
+            .get_component::<HitPoints>(wizard)
+            .expect("respawned cached wizard should have hp");
+        assert_eq!(hp.current, 7);
+        assert_eq!(hp.max, 33);
+        let status = world
+            .get_component::<crate::status::StatusEffects>(wizard)
+            .expect("respawned cached wizard should keep status effects");
+        assert_eq!(status.blindness, 9);
+        assert!(
+            !world
+                .dungeon()
+                .monster_cache
+                .contains_key(&(DungeonBranch::Main, 2)),
+            "cached wizard entry should be consumed when resurrected"
+        );
+    }
+
+    #[test]
     fn test_live_wizard_can_emit_taunt_messages() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -13060,6 +13320,48 @@ mod tests {
             taunt_seen,
             "a live wizard should eventually taunt the player during repeated pressure turns"
         );
+    }
+
+    #[test]
+    fn test_live_wizard_taunt_wakes_nearby_sleepers() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let _wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "goblin", 6);
+        let _far_sleeper = spawn_full_monster(&mut world, Position::new(20, 20), "orc", 6);
+        let _ = crate::status::make_sleeping(&mut world, sleeper, 10);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+            hp.current = 4;
+            hp.max = 20;
+        }
+        let mut player_events = read_player_events(&world, player);
+        player_events.invoked = true;
+        persist_player_events(&mut world, player, player_events);
+
+        let mut rng = test_rng();
+        for _ in 0..128 {
+            let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. }
+                        if key == "wizard-taunt-laughs"
+                            || key == "wizard-taunt-relinquish"
+                            || key == "wizard-taunt-panic"
+                            || key == "wizard-taunt-return"
+                            || key == "wizard-taunt-general"
+                )
+            }) {
+                assert!(
+                    !crate::status::is_sleeping(&world, sleeper),
+                    "wizard taunts should wake nearby sleeping monsters like original cuss/wake_nearto"
+                );
+                return;
+            }
+        }
+
+        panic!("expected live wizard to taunt during repeated pressure turns");
     }
 
     #[test]
@@ -13215,10 +13517,13 @@ mod tests {
             let picks = choose_wizard_nasty_summon_specs(&world, &mut rng);
             let saw_demon = picks.iter().any(|name| {
                 resolve_monster_id_by_spec(&test_game_data().monsters, name)
-                    .and_then(|id| test_game_data().monsters.iter().find(|monster| monster.id == id))
-                    .is_some_and(|monster| {
-                        monster.flags.contains(MonsterFlags::DEMON)
+                    .and_then(|id| {
+                        test_game_data()
+                            .monsters
+                            .iter()
+                            .find(|monster| monster.id == id)
                     })
+                    .is_some_and(|monster| monster.flags.contains(MonsterFlags::DEMON))
             });
             if saw_demon {
                 return;
@@ -14654,6 +14959,127 @@ mod tests {
         assert!(events.iter().any(|event| matches!(
             event,
             EngineEvent::Message { key, .. } if key == "shop-price"
+        )));
+    }
+
+    #[test]
+    fn test_blind_player_chatting_on_shop_item_does_not_get_price_quote() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.retain(|entry| *entry != item);
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+            *loc = ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: current_level,
+            };
+        }
+        let _ = crate::status::make_blinded(&mut world, player, 20);
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-price"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "chat-nobody-there"
+        )));
+    }
+
+    #[test]
+    fn test_deaf_player_chatting_on_shop_item_does_not_get_price_quote() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.retain(|entry| *entry != item);
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+            *loc = ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: current_level,
+            };
+        }
+        if let Some(mut status) = world.get_component_mut::<crate::status::StatusEffects>(player) {
+            status.deaf = 20;
+        } else {
+            world
+                .ecs_mut()
+                .insert_one(
+                    player,
+                    crate::status::StatusEffects {
+                        deaf: 20,
+                        ..Default::default()
+                    },
+                )
+                .expect("player should accept deaf status");
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-price"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "chat-nobody-there"
         )));
     }
 
@@ -16969,6 +17395,7 @@ mod tests {
             StoryTraversalScenario::ShopCreditCovers,
             StoryTraversalScenario::ShopNoMoney,
             StoryTraversalScenario::ShopkeeperSell,
+            StoryTraversalScenario::ShopChatPriceQuote,
             StoryTraversalScenario::ShopRepair,
             StoryTraversalScenario::ShopkeeperDeath,
             StoryTraversalScenario::ShopRobbery,
@@ -16989,6 +17416,7 @@ mod tests {
             StoryTraversalScenario::WizardHarassment,
             StoryTraversalScenario::WizardTaunt,
             StoryTraversalScenario::WizardIntervention,
+            StoryTraversalScenario::WizardBlackGlowBlind,
             StoryTraversalScenario::WizardLevelTeleport,
             StoryTraversalScenario::EndgameAscension,
         ] {
@@ -17240,6 +17668,12 @@ mod tests {
                         "{} should debit live shopkeeper gold",
                         scenario.label()
                     );
+                }
+                StoryTraversalScenario::ShopChatPriceQuote => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-price"
+                    )));
                 }
                 StoryTraversalScenario::ShopRepair => {
                     let shop = &world.dungeon().shop_rooms[0];
@@ -17781,6 +18215,31 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.killed_wizard),
                         "{} should preserve the intervention trigger state",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::WizardBlackGlowBlind => {
+                    assert!(
+                        !final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-black-glow"
+                        )),
+                        "{} should suppress the black-glow message while blind",
+                        scenario.label()
+                    );
+                    let cursed = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items.iter().any(|item| {
+                                world
+                                    .get_component::<BucStatus>(*item)
+                                    .is_some_and(|status| status.cursed)
+                            })
+                        })
+                        .unwrap_or(false);
+                    assert!(
+                        cursed,
+                        "{} should still curse inventory despite suppressing the message",
                         scenario.label()
                     );
                 }

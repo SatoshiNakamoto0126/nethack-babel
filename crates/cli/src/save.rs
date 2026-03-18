@@ -801,9 +801,7 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
         if let Some(role) = m.quest_npc_role {
             let _ = world.ecs_mut().insert_one(entity, role);
         }
-        let _ = world
-            .ecs_mut()
-            .insert_one(entity, m.status_effects.clone());
+        let _ = world.ecs_mut().insert_one(entity, m.status_effects.clone());
     }
 
     sync_current_level_npc_state(&mut world);
@@ -1606,6 +1604,7 @@ mod tests {
         ShopCreditCovers,
         ShopNoMoney,
         ShopkeeperSell,
+        ShopChatPriceQuote,
         ShopRepair,
         ShopkeeperDeath,
         ShopRobbery,
@@ -1626,6 +1625,7 @@ mod tests {
         WizardHarassment,
         WizardTaunt,
         WizardIntervention,
+        WizardBlackGlowBlind,
         WizardLevelTeleport,
         EndgameAscension,
     }
@@ -1650,6 +1650,7 @@ mod tests {
                 SaveStoryTraversalScenario::ShopCreditCovers => "shop-credit-covers",
                 SaveStoryTraversalScenario::ShopNoMoney => "shop-no-money",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
+                SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 SaveStoryTraversalScenario::ShopRepair => "shop-repair",
                 SaveStoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
                 SaveStoryTraversalScenario::ShopRobbery => "shop-robbery",
@@ -1672,6 +1673,7 @@ mod tests {
                 SaveStoryTraversalScenario::WizardHarassment => "wizard-harassment",
                 SaveStoryTraversalScenario::WizardTaunt => "wizard-taunt",
                 SaveStoryTraversalScenario::WizardIntervention => "wizard-intervention",
+                SaveStoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -2403,6 +2405,49 @@ mod tests {
                 let events = resolve_turn(
                     &mut loaded,
                     PlayerAction::Drop { item: loaded_item },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopChatPriceQuote => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+                if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+                    inv.items.retain(|entry| *entry != item);
+                }
+                let current_level = world.dungeon().current_data_dungeon_level();
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+                    *loc = ObjectLocation::Floor {
+                        x: 5,
+                        y: 5,
+                        level: current_level,
+                    };
+                }
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-chat-price-quote", &world, [64u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::North,
+                    },
                     &mut rng,
                 );
                 (loaded, events)
@@ -3232,6 +3277,44 @@ mod tests {
                     }
                 }
                 (loaded, final_events)
+            }
+            SaveStoryTraversalScenario::WizardBlackGlowBlind => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let sword = spawn_inventory_object_by_name(&mut world, "long sword", 'b');
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        sword,
+                        BucStatus {
+                            cursed: false,
+                            blessed: false,
+                            bknown: false,
+                        },
+                    )
+                    .expect("inventory item should accept BUC state");
+                let _ = nethack_babel_engine::status::make_blinded(&mut world, player, 20);
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-wizard-black-glow-blind",
+                    &world,
+                    [65u8; 32],
+                );
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = nethack_babel_engine::turn::force_wizard_harassment_action(
+                    &mut loaded,
+                    None,
+                    player,
+                    nethack_babel_engine::npc::WizardAction::BlackGlowCurse,
+                    &mut rng,
+                );
+                assert!(
+                    loaded
+                        .get_component::<BucStatus>(sword)
+                        .is_some_and(|status| status.cursed),
+                    "deterministic black-glow harness should still curse the tracked item"
+                );
+                (loaded, events)
             }
             SaveStoryTraversalScenario::WizardLevelTeleport => {
                 let mut world = make_stair_world(DungeonBranch::Main, 10, Terrain::Floor);
@@ -5402,6 +5485,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopCreditCovers,
             SaveStoryTraversalScenario::ShopNoMoney,
             SaveStoryTraversalScenario::ShopkeeperSell,
+            SaveStoryTraversalScenario::ShopChatPriceQuote,
             SaveStoryTraversalScenario::ShopRepair,
             SaveStoryTraversalScenario::ShopkeeperDeath,
             SaveStoryTraversalScenario::ShopRobbery,
@@ -5422,6 +5506,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardHarassment,
             SaveStoryTraversalScenario::WizardTaunt,
             SaveStoryTraversalScenario::WizardIntervention,
+            SaveStoryTraversalScenario::WizardBlackGlowBlind,
             SaveStoryTraversalScenario::WizardLevelTeleport,
             SaveStoryTraversalScenario::EndgameAscension,
         ] {
@@ -5649,6 +5734,12 @@ mod tests {
                         .unwrap_or(0);
                     assert_eq!(gold_total, 5);
                     assert_eq!(shop.shopkeeper_gold, 75);
+                }
+                SaveStoryTraversalScenario::ShopChatPriceQuote => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-price"
+                    )));
                 }
                 SaveStoryTraversalScenario::ShopRepair => {
                     let shop = &world.dungeon().shop_rooms[0];
@@ -6111,7 +6202,9 @@ mod tests {
                             .query::<(&Monster, &Name)>()
                             .iter()
                             .find_map(|(entity, (_, name))| (name.0 == "goblin").then_some(entity))
-                            .expect("wizard save/load intervention should keep the sleeping goblin");
+                            .expect(
+                                "wizard save/load intervention should keep the sleeping goblin",
+                            );
                         assert!(!nethack_babel_engine::status::is_sleeping(&world, sleeper));
                     }
                     if respawned {
@@ -6129,6 +6222,35 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.killed_wizard),
                         "save/load wizard matrix should preserve the off-screen intervention trigger"
+                    );
+                }
+                SaveStoryTraversalScenario::WizardBlackGlowBlind => {
+                    assert!(
+                        !final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-black-glow"
+                        )),
+                        "blind hero should not see the black glow after save/load"
+                    );
+                    let cursed = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items.iter().any(|item| {
+                                world
+                                    .get_component::<BucStatus>(*item)
+                                    .is_some_and(|status| status.cursed)
+                            })
+                        })
+                        .unwrap_or(false);
+                    assert!(
+                        cursed,
+                        "blind hero should still suffer the black-glow curse after save/load"
+                    );
+                    assert!(
+                        world
+                            .get_component::<StatusEffects>(player)
+                            .is_some_and(|status| status.blindness > 0),
+                        "black-glow blind scenario should preserve blindness through round-trip"
                     );
                 }
                 SaveStoryTraversalScenario::WizardLevelTeleport => {
