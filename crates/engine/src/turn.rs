@@ -5671,7 +5671,7 @@ fn resolve_priest_chat<R: Rng>(
     rng: &mut R,
 ) -> Vec<EngineEvent> {
     if priest_data.angry || world.get_component::<Peaceful>(priest_entity).is_none() {
-        return vec![EngineEvent::msg("npc-chat-no-response")];
+        return vec![EngineEvent::msg(crate::npc::cranky_priest_message(rng))];
     }
 
     let current_protection = current_spell_protection_layers(world, player);
@@ -13543,6 +13543,14 @@ mod tests {
             },
             &mut rng,
         );
+        assert!(chat_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. }
+                if matches!(
+                    key.as_str(),
+                    "priest-cranky-1" | "priest-cranky-2" | "priest-cranky-3"
+                )
+        )));
         assert!(
             !chat_events.iter().any(|event| matches!(
                 event,
@@ -15179,6 +15187,14 @@ mod tests {
                         "{} should remove peaceful status from an angered priest",
                         scenario.label()
                     );
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if matches!(
+                                key.as_str(),
+                                "priest-cranky-1" | "priest-cranky-2" | "priest-cranky-3"
+                            )
+                    )));
                     assert!(
                         !final_events.iter().any(|event| matches!(
                             event,

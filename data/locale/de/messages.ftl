@@ -511,6 +511,9 @@ shop-theft-warning = { $shopkeeper } ruft: „Dieb! Bezahlt sofort!"
 priest-welcome = Der Priester spricht einen Segen über Euch.
 priest-protection-offer = Der Priester bietet göttlichen Schutz für { $cost } Goldstücke an.
 priest-donation-thanks = Der Priester dankt Euch für Eure großzügige Spende.
+priest-cranky-1 = Der Priester faucht: „Ihr wollt Worte? Ich gebe Euch Worte!“
+priest-cranky-2 = Der Priester schnaubt: „Reden? Das hier habe ich zu sagen!“
+priest-cranky-3 = Der Priester sagt: „Pilger, ich spreche nicht länger mit Euch.“
 
 ## ============================================================================
 ## Inhalte (Gerüchte, Orakel)

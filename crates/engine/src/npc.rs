@@ -555,9 +555,9 @@ pub fn guard_spot_player(guard: &mut Guard, player_in_restricted: bool) -> Vec<E
 /// Messages from a priest who is not in their temple or is hostile.
 pub fn cranky_priest_message(rng: &mut impl Rng) -> &'static str {
     match rng.random_range(0..3) {
-        0 => "Thou wouldst have words, eh?  I'll give thee a word or two!",
-        1 => "Talk?  Here is what I have to say!",
-        _ => "Pilgrim, I would speak no longer with thee.",
+        0 => "priest-cranky-1",
+        1 => "priest-cranky-2",
+        _ => "priest-cranky-3",
     }
 }
 
@@ -1619,6 +1619,9 @@ mod tests {
     fn test_cranky_priest_messages() {
         let mut rng = test_rng();
         let msg = cranky_priest_message(&mut rng);
-        assert!(!msg.is_empty());
+        assert!(matches!(
+            msg,
+            "priest-cranky-1" | "priest-cranky-2" | "priest-cranky-3"
+        ));
     }
 }

@@ -4907,6 +4907,14 @@ mod tests {
                             .is_none(),
                         "angered priest should stay hostile after save/load"
                     );
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if matches!(
+                                key.as_str(),
+                                "priest-cranky-1" | "priest-cranky-2" | "priest-cranky-3"
+                            )
+                    )));
                     assert!(
                         !final_events.iter().any(|event| matches!(
                             event,
