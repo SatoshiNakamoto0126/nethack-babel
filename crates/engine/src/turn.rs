@@ -17255,6 +17255,53 @@ mod tests {
     }
 
     #[test]
+    fn test_emit_ambient_dungeon_sound_hallucinating_shop_uses_hallu_texture() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let player = world.player();
+        crate::status::make_hallucinated(&mut world, player, 20);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. }
+                        if key == "ambient-shop-neiman-marcus"
+                            || key == "ambient-shop-register"
+                            || key == "ambient-shop-prices"
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "hallucinating shop levels should eventually emit hallucinatory shop ambience"
+        );
+    }
+
+    #[test]
     fn test_emit_ambient_dungeon_sound_can_emit_vault_counting_texture() {
         let mut world = make_test_world();
         world
@@ -17321,6 +17368,43 @@ mod tests {
         assert!(
             found,
             "vault levels with an active guard should eventually emit guard-footstep texture"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_hallucinating_vault_can_emit_scrooge() {
+        let mut world = make_test_world();
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(crate::vault::VaultRoom {
+                top_left: Position::new(6, 5),
+                bottom_right: Position::new(7, 6),
+            });
+        world.dungeon_mut().vault_guard_present = true;
+        let player = world.player();
+        crate::status::make_hallucinated(&mut world, player, 20);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..4096 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "ambient-vault-scrooge"
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "hallucinating vault levels should eventually emit the Scrooge texture"
         );
     }
 

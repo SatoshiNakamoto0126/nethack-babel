@@ -2745,6 +2745,14 @@ ambient-zoo-seal = You hear a sound reminiscent of a seal barking.
 # TODO: translate
 ambient-zoo-dolittle = You hear Doctor Dolittle!
 # TODO: translate
+ambient-oracle-woodchucks = You hear someone say, "No more woodchucks!"
+# TODO: translate
+ambient-oracle-zot = You hear a loud ZOT!
+# TODO: translate
+ambient-vault-scrooge = You hear Ebenezer Scrooge!
+# TODO: translate
+ambient-shop-neiman-marcus = You hear Neiman and Marcus arguing!
+# TODO: translate
 spell-polymorph-miss = You miss { $target }.
 
 # TODO: translate

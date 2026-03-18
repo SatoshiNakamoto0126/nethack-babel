@@ -5325,6 +5325,44 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_hallucinating_vault_can_emit_scrooge() {
+        let mut world = make_stair_world(DungeonBranch::Main, 5, Terrain::Floor);
+        world
+            .dungeon_mut()
+            .vault_rooms
+            .push(nethack_babel_engine::vault::VaultRoom {
+                top_left: Position::new(6, 5),
+                bottom_right: Position::new(7, 6),
+            });
+        world.dungeon_mut().vault_guard_present = true;
+        if let Some(mut status) =
+            world.get_component_mut::<nethack_babel_engine::status::StatusEffects>(world.player())
+        {
+            status.hallucination = 20;
+        }
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("vault-scrooge-round-trip", &world, [74u8; 32]);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "ambient-vault-scrooge"
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("hallucinating vault ambience should survive save/load round-trip");
+    }
+
+    #[test]
     fn round_trip_loaded_fountain_ambient_preserves_runtime_conditions() {
         let mut world = make_stair_world(DungeonBranch::Main, 5, Terrain::Floor);
         world
@@ -5499,6 +5537,51 @@ mod tests {
         }
 
         panic!("barracks ambience should survive save/load round-trip");
+    }
+
+    #[test]
+    fn round_trip_loaded_hallucinating_shop_can_emit_neiman_marcus() {
+        let mut world = make_stair_world(DungeonBranch::Main, 5, Terrain::Floor);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(nethack_babel_engine::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                nethack_babel_engine::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        if let Some(mut status) =
+            world.get_component_mut::<nethack_babel_engine::status::StatusEffects>(world.player())
+        {
+            status.hallucination = 20;
+        }
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("shop-neiman-round-trip", &world, [75u8; 32]);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "ambient-shop-neiman-marcus"
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("hallucinating shop ambience should survive save/load round-trip");
     }
 
     #[test]

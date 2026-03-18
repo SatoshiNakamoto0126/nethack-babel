@@ -588,10 +588,11 @@ pub fn ambient_sounds(ctx: AmbientSoundContext<'_>, rng: &mut impl Rng) -> Optio
                     (true, _) => "ambient-swamp-donald-duck",
                 })
             } else if let Some(vault_ambient) = ctx.vault_ambient {
-                Some(match vault_ambient {
-                    VaultAmbientKind::CountingGold => "ambient-vault-counting",
-                    VaultAmbientKind::Searching => "ambient-vault-searching",
-                    VaultAmbientKind::GuardFootsteps => "ambient-vault-footsteps",
+                Some(match (ctx.hallucinating, vault_ambient, rng.random_range(0..2u32)) {
+                    (true, _, 0) => "ambient-vault-scrooge",
+                    (_, VaultAmbientKind::CountingGold, _) => "ambient-vault-counting",
+                    (_, VaultAmbientKind::Searching, _) => "ambient-vault-searching",
+                    (_, VaultAmbientKind::GuardFootsteps, _) => "ambient-vault-footsteps",
                 })
             } else if ctx.has_beehive {
                 Some(match (ctx.hallucinating, rng.random_range(0..2u32)) {
@@ -624,10 +625,13 @@ pub fn ambient_sounds(ctx: AmbientSoundContext<'_>, rng: &mut impl Rng) -> Optio
                     (true, _) => "ambient-zoo-dolittle",
                 })
             } else if ctx.has_shop {
-                Some(match rng.random_range(0..3u32) {
-                    0 => "ambient-shop-shoplifters",
-                    1 => "ambient-shop-register",
-                    _ => "ambient-shop-prices",
+                Some(match (ctx.hallucinating, rng.random_range(0..3u32)) {
+                    (false, 0) => "ambient-shop-shoplifters",
+                    (false, 1) => "ambient-shop-register",
+                    (false, _) => "ambient-shop-prices",
+                    (true, 0) => "ambient-shop-register",
+                    (true, 1) => "ambient-shop-prices",
+                    (true, _) => "ambient-shop-neiman-marcus",
                 })
             } else if ctx.has_temple {
                 Some(match rng.random_range(0..4u32) {
@@ -637,10 +641,13 @@ pub fn ambient_sounds(ctx: AmbientSoundContext<'_>, rng: &mut impl Rng) -> Optio
                     _ => "ambient-temple-donations",
                 })
             } else if ctx.has_oracle {
-                Some(match rng.random_range(0..3u32) {
-                    0 => "ambient-oracle-wind",
-                    1 => "ambient-oracle-ravings",
-                    _ => "ambient-oracle-snakes",
+                Some(match (ctx.hallucinating, rng.random_range(0..3u32)) {
+                    (false, 0) => "ambient-oracle-wind",
+                    (false, 1) => "ambient-oracle-ravings",
+                    (false, _) => "ambient-oracle-snakes",
+                    (true, 0) => "ambient-oracle-snakes",
+                    (true, 1) => "ambient-oracle-woodchucks",
+                    (true, _) => "ambient-oracle-zot",
                 })
             } else if ctx.has_fountain {
                 Some(match (ctx.hallucinating, rng.random_range(0..3u32)) {
@@ -1282,6 +1289,39 @@ mod tests {
     }
 
     #[test]
+    fn ambient_sounds_hallucinating_oracle() {
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    has_oracle: true,
+                    hallucinating: true,
+                    ..AmbientSoundContext::new(5, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert!(
+                    matches!(
+                        msg,
+                        "ambient-oracle-snakes"
+                            | "ambient-oracle-woodchucks"
+                            | "ambient-oracle-zot"
+                    ),
+                    "hallucinating oracle sound should be thematic: {}",
+                    msg
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(
+            found,
+            "should eventually get a hallucinating oracle ambient sound"
+        );
+    }
+
+    #[test]
     fn ambient_sounds_court() {
         let mut found = false;
         for seed in 0..200u64 {
@@ -1346,6 +1386,34 @@ mod tests {
             }
         }
         assert!(found, "should eventually get a vault guard ambient sound");
+    }
+
+    #[test]
+    fn ambient_sounds_hallucinating_vault() {
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    vault_ambient: Some(VaultAmbientKind::GuardFootsteps),
+                    hallucinating: true,
+                    ..AmbientSoundContext::new(5, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert!(
+                    matches!(msg, "ambient-vault-footsteps" | "ambient-vault-scrooge"),
+                    "hallucinating vault sound should be thematic: {}",
+                    msg
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(
+            found,
+            "should eventually get a hallucinating vault ambient sound"
+        );
     }
 
     #[test]
@@ -1523,6 +1591,39 @@ mod tests {
             }
         }
         assert!(found, "should eventually get a zoo ambient sound");
+    }
+
+    #[test]
+    fn ambient_sounds_hallucinating_shop() {
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    has_shop: true,
+                    hallucinating: true,
+                    ..AmbientSoundContext::new(5, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert!(
+                    matches!(
+                        msg,
+                        "ambient-shop-register"
+                            | "ambient-shop-prices"
+                            | "ambient-shop-neiman-marcus"
+                    ),
+                    "hallucinating shop sound should be thematic: {}",
+                    msg
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(
+            found,
+            "should eventually get a hallucinating shop ambient sound"
+        );
     }
 
     // -----------------------------------------------------------------------

@@ -563,3 +563,7 @@ ambient-morgue-head-hair = The hair on your head seems to stand up.
 ambient-zoo-elephant = You hear a sound reminiscent of an elephant stepping on a peanut.
 ambient-zoo-seal = You hear a sound reminiscent of a seal barking.
 ambient-zoo-dolittle = You hear Doctor Dolittle!
+ambient-oracle-woodchucks = You hear someone say, "No more woodchucks!"
+ambient-oracle-zot = You hear a loud ZOT!
+ambient-vault-scrooge = You hear Ebenezer Scrooge!
+ambient-shop-neiman-marcus = You hear Neiman and Marcus arguing!
