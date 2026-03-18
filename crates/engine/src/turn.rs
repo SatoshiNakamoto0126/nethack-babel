@@ -1964,6 +1964,31 @@ fn resolve_player_action(
                         aggravate_monsters_on_current_level(world, rng, events);
                         return;
                     }
+                    if monster_def.sound == nethack_babel_data::schema::MonsterSound::Oracle {
+                        let consultation_index = world
+                            .get_component::<PlayerEvents>(player)
+                            .map(|flags| if flags.minor_oracle { 1 } else { 0 })
+                            .unwrap_or(0);
+                        if let Some(text) = world
+                            .game_content()
+                            .oracle_consultation(consultation_index)
+                            .map(str::to_string)
+                        {
+                            if let Some(mut flags) = world.get_component_mut::<PlayerEvents>(player)
+                            {
+                                if !flags.minor_oracle {
+                                    flags.minor_oracle = true;
+                                } else {
+                                    flags.major_oracle = true;
+                                }
+                            }
+                            events.push(EngineEvent::msg_with(
+                                "oracle-consultation",
+                                vec![("text", text)],
+                            ));
+                            return;
+                        }
+                    }
                     let player_equipment = world
                         .get_component::<crate::equipment::EquipmentSlots>(player)
                         .map(|slots| (*slots).clone())
@@ -17140,11 +17165,84 @@ mod tests {
 
         assert!(events.iter().any(|event| {
             matches!(
-                event,
-                EngineEvent::Message { key, .. }
-                    if key == "npc-rider-war" || key == "npc-rider-sandman"
+            event,
+            EngineEvent::Message { key, .. }
+                if key == "npc-rider-war" || key == "npc-rider-sandman"
             )
         }));
+    }
+
+    #[test]
+    fn test_chatting_with_oracle_uses_minor_consultation_and_sets_flag() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.set_game_content(crate::rumors::GameContent {
+            oracles: vec![
+                "The first consultation.".to_string(),
+                "The second consultation.".to_string(),
+            ],
+            ..crate::rumors::GameContent::default()
+        });
+        spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, args }
+                if key == "oracle-consultation"
+                    && args.iter().any(|(k, v)| k == "text" && v == "The first consultation.")
+        )));
+        assert!(
+            world
+                .get_component::<PlayerEvents>(world.player())
+                .is_some_and(|flags| flags.minor_oracle),
+            "first oracle consultation should set the minor_oracle flag"
+        );
+    }
+
+    #[test]
+    fn test_chatting_with_oracle_after_minor_consultation_uses_second_text() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.set_game_content(crate::rumors::GameContent {
+            oracles: vec![
+                "The first consultation.".to_string(),
+                "The second consultation.".to_string(),
+            ],
+            ..crate::rumors::GameContent::default()
+        });
+        spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        if let Some(mut flags) = world.get_component_mut::<PlayerEvents>(world.player()) {
+            flags.minor_oracle = true;
+        }
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, args }
+                if key == "oracle-consultation"
+                    && args.iter().any(|(k, v)| k == "text" && v == "The second consultation.")
+        )));
+        assert!(
+            world
+                .get_component::<PlayerEvents>(world.player())
+                .is_some_and(|flags| flags.major_oracle),
+            "second oracle consultation should set the major_oracle flag"
+        );
     }
 
     #[test]

@@ -220,6 +220,8 @@ pub struct GameWorld {
     /// Static object catalog used by systems that need `ObjectDef` lookup
     /// during runtime world transitions (e.g. special-level population).
     object_catalog: Vec<ObjectDef>,
+    /// Loaded non-schema game text content (rumors, oracle consultations).
+    game_content: crate::rumors::GameContent,
 }
 
 impl GameWorld {
@@ -283,6 +285,7 @@ impl GameWorld {
             appearance_table,
             monster_catalog: Vec::new(),
             object_catalog: Vec::new(),
+            game_content: crate::rumors::GameContent::default(),
         }
     }
 
@@ -364,6 +367,17 @@ impl GameWorld {
     #[inline]
     pub fn object_catalog(&self) -> &[ObjectDef] {
         &self.object_catalog
+    }
+
+    /// Install loaded game text content used by runtime interactions.
+    pub fn set_game_content(&mut self, content: crate::rumors::GameContent) {
+        self.game_content = content;
+    }
+
+    /// Read-only access to loaded game text content.
+    #[inline]
+    pub fn game_content(&self) -> &crate::rumors::GameContent {
+        &self.game_content
     }
 
     /// Look up the display name for an entity.

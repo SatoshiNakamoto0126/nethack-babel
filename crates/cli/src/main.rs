@@ -3346,6 +3346,7 @@ fn main() -> Result<()> {
         let setup = create_world(&data, &mut rng, Some(&character_choice.name));
         let mut new_world = setup.world;
         new_world.set_spawn_catalogs(data.monsters.clone(), data.objects.clone());
+        new_world.set_game_content(nethack_babel_engine::rumors::GameContent::load(&data_dir));
 
         // Apply role/race stats and name to the player.
         game_start::apply_character_choice(&mut new_world, &character_choice);

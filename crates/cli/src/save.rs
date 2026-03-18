@@ -850,6 +850,9 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
 
 fn restore_runtime_catalogs(world: &mut GameWorld, data: &GameData) {
     world.set_spawn_catalogs(data.monsters.clone(), data.objects.clone());
+    if let Ok(data_dir) = resolved_runtime_data_dir() {
+        world.set_game_content(nethack_babel_engine::rumors::GameContent::load(&data_dir));
+    }
 }
 
 #[allow(dead_code)]
@@ -6140,6 +6143,45 @@ mod tests {
                     if key == "npc-rider-war" || key == "npc-rider-sandman"
             )
         }));
+    }
+
+    #[test]
+    fn round_trip_loaded_chatting_with_oracle_keeps_consultation_text() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        world.set_game_content(nethack_babel_engine::rumors::GameContent {
+            oracles: vec![
+                "The first consultation.".to_string(),
+                "The second consultation.".to_string(),
+            ],
+            ..nethack_babel_engine::rumors::GameContent::default()
+        });
+        spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("oracle-chat-round-trip", &world, [89u8; 32]);
+        loaded.set_game_content(world.game_content().clone());
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, args }
+                if key == "oracle-consultation"
+                    && args.iter().any(|(k, v)| k == "text" && v == "The first consultation.")
+        )));
+        assert!(
+            loaded
+                .get_component::<nethack_babel_data::components::PlayerEvents>(loaded.player())
+                .is_some_and(|flags| flags.minor_oracle),
+            "oracle consultation after load should still set the minor_oracle flag"
+        );
     }
 
     #[test]
