@@ -614,6 +614,20 @@ pub fn gecko_hallucination_pitch(monster_name: &str) -> EngineEvent {
     )
 }
 
+pub fn mumbling_monster_chat(monster_name: &str) -> EngineEvent {
+    EngineEvent::msg_with(
+        "npc-mumble-incomprehensible",
+        vec![("monster", monster_name.to_string())],
+    )
+}
+
+pub fn bones_monster_chat(monster_name: &str) -> EngineEvent {
+    EngineEvent::msg_with(
+        "npc-bones-rattle",
+        vec![("monster", monster_name.to_string())],
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Guard patrol
 // ---------------------------------------------------------------------------
@@ -2057,6 +2071,18 @@ mod tests {
     fn test_gecko_hallucination_pitch_event() {
         let evt = gecko_hallucination_pitch("gecko");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-gecko-geico-pitch"));
+    }
+
+    #[test]
+    fn test_mumbling_monster_chat_event() {
+        let evt = mumbling_monster_chat("lich");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-mumble-incomprehensible"));
+    }
+
+    #[test]
+    fn test_bones_monster_chat_event() {
+        let evt = bones_monster_chat("skeleton");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-bones-rattle"));
     }
 
     // ── Guard patrol tests ───────────────────────────────────────

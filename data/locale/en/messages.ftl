@@ -1791,6 +1791,8 @@ npc-laugh-chuckles = { $monster } chuckles.
 npc-laugh-snickers = { $monster } snickers.
 npc-laugh-laughs = { $monster } laughs.
 npc-gecko-geico-pitch = { $monster } says: "Fifteen minutes could save you fifteen zorkmids."
+npc-mumble-incomprehensible = { $monster } mumbles incomprehensibly.
+npc-bones-rattle = { $monster } rattles noisily.
 
 ## ============================================================================
 ## Content delivery (rumors, oracles)

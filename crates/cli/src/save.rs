@@ -5730,6 +5730,38 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_chatting_with_skeleton_keeps_rattle_and_paralysis() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let player = world.player();
+        spawn_full_monster(&mut world, Position::new(6, 5), "skeleton", 12);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("skeleton-chat-round-trip", &world, [79u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-bones-rattle"
+            )
+        }));
+        assert!(
+            loaded
+                .get_component::<nethack_babel_engine::status::StatusEffects>(player)
+                .is_some_and(|status| status.paralysis > 0),
+            "skeleton chat paralysis should survive the round-trip setup and apply after load"
+        );
+    }
+
+    #[test]
     fn round_trip_loaded_zoo_ambient_preserves_runtime_conditions() {
         let mut world = make_stair_world(DungeonBranch::Main, 12, Terrain::Floor);
         spawn_monster_with_symbol(&mut world, Position::new(7, 7), "jackal", 8, 'd', 20);

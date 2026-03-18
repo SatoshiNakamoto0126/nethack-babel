@@ -1903,11 +1903,20 @@ fn resolve_player_action(
                         return;
                     }
                     if monster_def.sound == nethack_babel_data::schema::MonsterSound::Laugh {
-                    events.push(crate::npc::laughing_monster_chat(
-                        &monster_name,
-                        rng.random_range(0..4),
-                    ));
-                    return;
+                        events.push(crate::npc::laughing_monster_chat(
+                            &monster_name,
+                            rng.random_range(0..4),
+                        ));
+                        return;
+                    }
+                    if monster_def.sound == nethack_babel_data::schema::MonsterSound::Mumble {
+                        events.push(crate::npc::mumbling_monster_chat(&monster_name));
+                        return;
+                    }
+                    if monster_def.sound == nethack_babel_data::schema::MonsterSound::Bones {
+                        events.push(crate::npc::bones_monster_chat(&monster_name));
+                        events.extend(crate::status::make_paralyzed(world, player, 2));
+                        return;
                     }
                 }
 
@@ -16156,6 +16165,57 @@ mod tests {
                 EngineEvent::Message { key, .. } if key == "npc-gecko-geico-pitch"
             )
         }));
+    }
+
+    #[test]
+    fn test_chatting_with_mumbling_monster_emits_mumble_line() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        spawn_full_monster(&mut world, Position::new(6, 5), "lich", 16);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-mumble-incomprehensible"
+            )
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_skeleton_rattles_and_paralyzes_player() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        spawn_full_monster(&mut world, Position::new(6, 5), "skeleton", 12);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-bones-rattle"
+            )
+        }));
+        assert!(
+            world
+                .get_component::<crate::status::StatusEffects>(player)
+                .is_some_and(|status| status.paralysis > 0),
+            "chatting with a skeleton should briefly paralyze the player"
+        );
     }
 
     #[test]
