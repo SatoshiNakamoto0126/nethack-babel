@@ -177,6 +177,12 @@ pub fn is_hallucinating(world: &GameWorld, entity: Entity) -> bool {
         .is_some_and(|s| s.hallucination > 0)
 }
 
+pub fn is_deaf(world: &GameWorld, entity: Entity) -> bool {
+    world
+        .get_component::<StatusEffects>(entity)
+        .is_some_and(|s| s.deaf > 0)
+}
+
 pub fn is_clairvoyant(world: &GameWorld, entity: Entity) -> bool {
     world
         .get_component::<StatusEffects>(entity)

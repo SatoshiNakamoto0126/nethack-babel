@@ -6992,6 +6992,7 @@ mod tests {
         UntendedTempleGhost,
         SanctumRevisit,
         WizardHarassment,
+        WizardTaunt,
         WizardIntervention,
         WizardLevelTeleport,
         EndgameAscension,
@@ -7035,6 +7036,7 @@ mod tests {
                 StoryTraversalScenario::UntendedTempleGhost => "untended-temple-ghost",
                 StoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 StoryTraversalScenario::WizardHarassment => "wizard-harassment",
+                StoryTraversalScenario::WizardTaunt => "wizard-taunt",
                 StoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
@@ -8468,6 +8470,44 @@ mod tests {
                             event,
                             EngineEvent::Message { key, .. }
                                 if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                        )
+                    }) {
+                        final_events = events;
+                        break;
+                    }
+                }
+                (world, final_events)
+            }
+            StoryTraversalScenario::WizardTaunt => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+                    hp.current = 12;
+                    hp.max = 20;
+                }
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+                    hp.current = 4;
+                    hp.max = 20;
+                }
+                let mut player_events = read_player_events(&world, player);
+                player_events.invoked = true;
+                persist_player_events(&mut world, player, player_events);
+                let mut rng = test_rng();
+                let mut final_events = Vec::new();
+                for _ in 0..256 {
+                    let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+                    if events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. }
+                                if key == "wizard-taunt-laughs"
+                                    || key == "wizard-taunt-relinquish"
+                                    || key == "wizard-taunt-panic"
+                                    || key == "wizard-taunt-return"
+                                    || key == "wizard-taunt-general"
                         )
                     }) {
                         final_events = events;
@@ -12575,6 +12615,41 @@ mod tests {
     }
 
     #[test]
+    fn test_deaf_player_does_not_receive_live_wizard_taunts() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let _wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+            hp.current = 4;
+            hp.max = 20;
+        }
+        if let Some(mut status) = world.get_component_mut::<crate::status::StatusEffects>(player) {
+            status.deaf = 50;
+        }
+        let mut player_events = read_player_events(&world, player);
+        player_events.invoked = true;
+        persist_player_events(&mut world, player, player_events);
+
+        let mut rng = test_rng();
+        for _ in 0..128 {
+            let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+            assert!(
+                !events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. }
+                        if key == "wizard-taunt-laughs"
+                            || key == "wizard-taunt-relinquish"
+                            || key == "wizard-taunt-panic"
+                            || key == "wizard-taunt-return"
+                            || key == "wizard-taunt-general"
+                )),
+                "deaf players should not hear Wizard taunts"
+            );
+        }
+    }
+
+    #[test]
     fn test_wizard_summon_nasties_uses_catalog_driven_pool() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -16369,6 +16444,7 @@ mod tests {
             StoryTraversalScenario::UntendedTempleGhost,
             StoryTraversalScenario::SanctumRevisit,
             StoryTraversalScenario::WizardHarassment,
+            StoryTraversalScenario::WizardTaunt,
             StoryTraversalScenario::WizardIntervention,
             StoryTraversalScenario::WizardLevelTeleport,
             StoryTraversalScenario::EndgameAscension,
@@ -17058,6 +17134,25 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.invoked),
                         "{} should preserve the invoked harassment trigger state",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::WizardTaunt => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if key == "wizard-taunt-laughs"
+                                || key == "wizard-taunt-relinquish"
+                                || key == "wizard-taunt-panic"
+                                || key == "wizard-taunt-return"
+                                || key == "wizard-taunt-general"
+                    )));
+                    assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 1);
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.invoked),
+                        "{} should preserve the live-taunt trigger state",
                         scenario.label()
                     );
                 }

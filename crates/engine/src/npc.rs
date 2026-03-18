@@ -733,6 +733,10 @@ pub fn maybe_wizard_taunt(
     player_has_amulet: bool,
     rng: &mut impl Rng,
 ) -> Option<EngineEvent> {
+    if crate::status::is_deaf(world, player) {
+        return None;
+    }
+
     if rng.random_range(0..5) == 0 {
         return Some(EngineEvent::msg_with(
             "wizard-taunt-laughs",
@@ -1222,6 +1226,38 @@ mod tests {
                         || key == "wizard-taunt-general"
             ));
         }
+    }
+
+    #[test]
+    fn test_wizard_taunt_suppressed_when_player_is_deaf() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 20);
+        let mut status = world
+            .get_component::<crate::status::StatusEffects>(player)
+            .map(|status| (*status).clone())
+            .unwrap_or_default();
+        status.deaf = 20;
+        if world
+            .get_component::<crate::status::StatusEffects>(player)
+            .is_some()
+        {
+            *world
+                .get_component_mut::<crate::status::StatusEffects>(player)
+                .expect("player should have status effects") = status;
+        } else {
+            world
+                .ecs_mut()
+                .insert_one(player, status)
+                .expect("player should accept status effects");
+        }
+
+        let mut rng = test_rng();
+        let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng);
+        assert!(
+            event.is_none(),
+            "deaf players should not hear wizard taunts"
+        );
     }
 
     // ── Stealing tests ───────────────────────────────────────────

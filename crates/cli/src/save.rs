@@ -1614,6 +1614,7 @@ mod tests {
         UntendedTempleGhost,
         SanctumRevisit,
         WizardHarassment,
+        WizardTaunt,
         WizardIntervention,
         WizardLevelTeleport,
         EndgameAscension,
@@ -1659,6 +1660,7 @@ mod tests {
                 SaveStoryTraversalScenario::UntendedTempleGhost => "untended-temple-ghost",
                 SaveStoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 SaveStoryTraversalScenario::WizardHarassment => "wizard-harassment",
+                SaveStoryTraversalScenario::WizardTaunt => "wizard-taunt",
                 SaveStoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
@@ -3126,6 +3128,46 @@ mod tests {
                             event,
                             EngineEvent::Message { key, .. }
                                 if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                        )
+                    }) {
+                        final_events = events;
+                        break;
+                    }
+                }
+                (loaded, final_events)
+            }
+            SaveStoryTraversalScenario::WizardTaunt => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+                    hp.current = 12;
+                    hp.max = 20;
+                }
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+                    hp.current = 4;
+                    hp.max = 20;
+                }
+                if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+                    player_events.invoked = true;
+                }
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-wizard-taunt", &world, [62u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let mut final_events = Vec::new();
+                for _ in 0..256 {
+                    let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
+                    if events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. }
+                                if key == "wizard-taunt-laughs"
+                                    || key == "wizard-taunt-relinquish"
+                                    || key == "wizard-taunt-panic"
+                                    || key == "wizard-taunt-return"
+                                    || key == "wizard-taunt-general"
                         )
                     }) {
                         final_events = events;
@@ -5334,6 +5376,7 @@ mod tests {
             SaveStoryTraversalScenario::UntendedTempleGhost,
             SaveStoryTraversalScenario::SanctumRevisit,
             SaveStoryTraversalScenario::WizardHarassment,
+            SaveStoryTraversalScenario::WizardTaunt,
             SaveStoryTraversalScenario::WizardIntervention,
             SaveStoryTraversalScenario::WizardLevelTeleport,
             SaveStoryTraversalScenario::EndgameAscension,
@@ -5945,6 +5988,24 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.invoked),
                         "save/load wizard matrix should preserve the invoked harassment trigger"
+                    );
+                }
+                SaveStoryTraversalScenario::WizardTaunt => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if key == "wizard-taunt-laughs"
+                                || key == "wizard-taunt-relinquish"
+                                || key == "wizard-taunt-panic"
+                                || key == "wizard-taunt-return"
+                                || key == "wizard-taunt-general"
+                    )));
+                    assert_eq!(count_monsters_named(&world, "Wizard of Yendor"), 1);
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.invoked),
+                        "save/load wizard matrix should preserve the live taunt trigger"
                     );
                 }
                 SaveStoryTraversalScenario::WizardIntervention => {
