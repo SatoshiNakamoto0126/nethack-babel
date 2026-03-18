@@ -1598,11 +1598,15 @@ mod tests {
         ShopkeeperDeath,
         ShopRobbery,
         ShopRestitution,
+        TempleWrongAlignment,
         TempleAleGift,
+        TempleVirtuesOfPoverty,
         TempleDonationThanks,
+        TemplePious,
         TempleDonation,
         TempleBlessing,
         TempleCleansing,
+        TempleSelflessGenerosity,
         TempleWrath,
         TempleCalm,
         UntendedTempleGhost,
@@ -1634,11 +1638,17 @@ mod tests {
                 SaveStoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
                 SaveStoryTraversalScenario::ShopRobbery => "shop-robbery",
                 SaveStoryTraversalScenario::ShopRestitution => "shop-restitution",
+                SaveStoryTraversalScenario::TempleWrongAlignment => "temple-wrong-alignment",
                 SaveStoryTraversalScenario::TempleAleGift => "temple-ale-gift",
+                SaveStoryTraversalScenario::TempleVirtuesOfPoverty => "temple-virtues-of-poverty",
                 SaveStoryTraversalScenario::TempleDonationThanks => "temple-donation-thanks",
+                SaveStoryTraversalScenario::TemplePious => "temple-pious",
                 SaveStoryTraversalScenario::TempleDonation => "temple-donation",
                 SaveStoryTraversalScenario::TempleBlessing => "temple-blessing",
                 SaveStoryTraversalScenario::TempleCleansing => "temple-cleansing",
+                SaveStoryTraversalScenario::TempleSelflessGenerosity => {
+                    "temple-selfless-generosity"
+                }
                 SaveStoryTraversalScenario::TempleWrath => "temple-wrath",
                 SaveStoryTraversalScenario::TempleCalm => "temple-calm",
                 SaveStoryTraversalScenario::UntendedTempleGhost => "untended-temple-ghost",
@@ -2491,6 +2501,51 @@ mod tests {
                 );
                 (loaded, events)
             }
+            SaveStoryTraversalScenario::TempleWrongAlignment => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 500, 'g');
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, nethack_babel_engine::world::Peaceful)
+                    .expect("priest should accept peaceful marker");
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        priest,
+                        Priest {
+                            alignment: Alignment::Chaotic,
+                            has_shrine: true,
+                            is_high_priest: false,
+                            angry: false,
+                        },
+                    )
+                    .expect("priest should accept explicit runtime state");
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-temple-wrong-alignment",
+                    &world,
+                    [60u8; 32],
+                );
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
             SaveStoryTraversalScenario::TempleAleGift => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
                 let player = world.player();
@@ -2510,6 +2565,50 @@ mod tests {
 
                 let (mut loaded, loaded_rng) =
                     save_and_reload_world("story-matrix-temple-ale-gift", &world, [34u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::TempleVirtuesOfPoverty => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, nethack_babel_engine::world::Peaceful)
+                    .expect("priest should accept peaceful marker");
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        priest,
+                        Priest {
+                            alignment: Alignment::Lawful,
+                            has_shrine: false,
+                            is_high_priest: false,
+                            angry: false,
+                        },
+                    )
+                    .expect("priest should accept explicit runtime state");
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-temple-virtues-of-poverty",
+                    &world,
+                    [57u8; 32],
+                );
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(
                     &mut loaded,
@@ -2543,6 +2642,36 @@ mod tests {
                     &world,
                     [35u8; 32],
                 );
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::TemplePious => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 300, 'g');
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, nethack_babel_engine::world::Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-temple-pious", &world, [58u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(
                     &mut loaded,
@@ -2663,6 +2792,50 @@ mod tests {
 
                 let (mut loaded, loaded_rng) =
                     save_and_reload_world("story-matrix-temple-cleansing", &world, [37u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::TempleSelflessGenerosity => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 700, 'g');
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        player,
+                        nethack_babel_engine::status::SpellProtection {
+                            layers: 1,
+                            countdown: 10,
+                            interval: 10,
+                        },
+                    )
+                    .expect("player should accept spell protection");
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, nethack_babel_engine::world::Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-temple-selfless-generosity",
+                    &world,
+                    [59u8; 32],
+                );
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(
                     &mut loaded,
@@ -5001,11 +5174,15 @@ mod tests {
             SaveStoryTraversalScenario::ShopkeeperDeath,
             SaveStoryTraversalScenario::ShopRobbery,
             SaveStoryTraversalScenario::ShopRestitution,
+            SaveStoryTraversalScenario::TempleWrongAlignment,
             SaveStoryTraversalScenario::TempleAleGift,
+            SaveStoryTraversalScenario::TempleVirtuesOfPoverty,
             SaveStoryTraversalScenario::TempleDonationThanks,
+            SaveStoryTraversalScenario::TemplePious,
             SaveStoryTraversalScenario::TempleDonation,
             SaveStoryTraversalScenario::TempleBlessing,
             SaveStoryTraversalScenario::TempleCleansing,
+            SaveStoryTraversalScenario::TempleSelflessGenerosity,
             SaveStoryTraversalScenario::TempleWrath,
             SaveStoryTraversalScenario::TempleCalm,
             SaveStoryTraversalScenario::UntendedTempleGhost,
@@ -5267,6 +5444,29 @@ mod tests {
                     assert!(!shop.angry);
                     assert!(!shop.surcharge);
                 }
+                SaveStoryTraversalScenario::TempleWrongAlignment => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-wrong-alignment"
+                    )));
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 500);
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::status::SpellProtection>(player)
+                            .is_none()
+                    );
+                }
                 SaveStoryTraversalScenario::TempleAleGift => {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
@@ -5284,6 +5484,29 @@ mod tests {
                         })
                         .unwrap_or(0);
                     assert_eq!(gold_total, 2);
+                }
+                SaveStoryTraversalScenario::TempleVirtuesOfPoverty => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-virtues-of-poverty"
+                    )));
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 0);
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::status::SpellProtection>(player)
+                            .is_none()
+                    );
                 }
                 SaveStoryTraversalScenario::TempleDonationThanks => {
                     assert!(final_events.iter().any(|event| matches!(
@@ -5308,6 +5531,34 @@ mod tests {
                             .is_none()
                     );
                 }
+                SaveStoryTraversalScenario::TemplePious => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-pious"
+                    )));
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 0);
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::status::SpellProtection>(player)
+                            .is_none()
+                    );
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::status::StatusEffects>(player)
+                            .is_none_or(|status| status.clairvoyance == 0)
+                    );
+                }
                 SaveStoryTraversalScenario::TempleDonation => {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
@@ -5325,6 +5576,30 @@ mod tests {
                         })
                         .unwrap_or(0);
                     assert_eq!(gold_total, 600);
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::status::SpellProtection>(player)
+                            .is_some_and(|protection| protection.layers == 1)
+                    );
+                }
+                SaveStoryTraversalScenario::TempleSelflessGenerosity => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if key == "priest-selfless-generosity"
+                    )));
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 0);
                     assert!(
                         world
                             .get_component::<nethack_babel_engine::status::SpellProtection>(player)

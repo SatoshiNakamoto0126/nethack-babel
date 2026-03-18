@@ -6910,11 +6910,15 @@ mod tests {
         ShopkeeperDeath,
         ShopRobbery,
         ShopRestitution,
+        TempleWrongAlignment,
         TempleAleGift,
+        TempleVirtuesOfPoverty,
         TempleDonationThanks,
+        TemplePious,
         TempleDonation,
         TempleBlessing,
         TempleCleansing,
+        TempleSelflessGenerosity,
         TempleWrath,
         TempleCalm,
         UntendedTempleGhost,
@@ -6946,11 +6950,15 @@ mod tests {
                 StoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
                 StoryTraversalScenario::ShopRobbery => "shop-robbery",
                 StoryTraversalScenario::ShopRestitution => "shop-restitution",
+                StoryTraversalScenario::TempleWrongAlignment => "temple-wrong-alignment",
                 StoryTraversalScenario::TempleAleGift => "temple-ale-gift",
+                StoryTraversalScenario::TempleVirtuesOfPoverty => "temple-virtues-of-poverty",
                 StoryTraversalScenario::TempleDonationThanks => "temple-donation-thanks",
+                StoryTraversalScenario::TemplePious => "temple-pious",
                 StoryTraversalScenario::TempleDonation => "temple-donation",
                 StoryTraversalScenario::TempleBlessing => "temple-blessing",
                 StoryTraversalScenario::TempleCleansing => "temple-cleansing",
+                StoryTraversalScenario::TempleSelflessGenerosity => "temple-selfless-generosity",
                 StoryTraversalScenario::TempleWrath => "temple-wrath",
                 StoryTraversalScenario::TempleCalm => "temple-calm",
                 StoryTraversalScenario::UntendedTempleGhost => "untended-temple-ghost",
@@ -7781,6 +7789,47 @@ mod tests {
                     resolve_turn(&mut world, PlayerAction::Drop { item }, &mut rng);
                 (world, restitution_events)
             }
+            StoryTraversalScenario::TempleWrongAlignment => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 500, 'g');
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, Peaceful)
+                    .expect("priest should accept peaceful marker");
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        priest,
+                        crate::npc::Priest {
+                            alignment: Alignment::Chaotic,
+                            has_shrine: true,
+                            is_high_priest: false,
+                            angry: false,
+                        },
+                    )
+                    .expect("priest should accept explicit runtime state");
+
+                let mut rng = test_rng();
+                let chat_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, chat_events)
+            }
             StoryTraversalScenario::TempleAleGift => {
                 let mut world = make_test_world();
                 install_test_catalogs(&mut world);
@@ -7809,6 +7858,46 @@ mod tests {
                 );
                 (world, chat_events)
             }
+            StoryTraversalScenario::TempleVirtuesOfPoverty => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, Peaceful)
+                    .expect("priest should accept peaceful marker");
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        priest,
+                        crate::npc::Priest {
+                            alignment: Alignment::Lawful,
+                            has_shrine: false,
+                            is_high_priest: false,
+                            angry: false,
+                        },
+                    )
+                    .expect("priest should accept explicit runtime state");
+
+                let mut rng = test_rng();
+                let chat_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, chat_events)
+            }
             StoryTraversalScenario::TempleDonationThanks => {
                 let mut world = make_test_world();
                 install_test_catalogs(&mut world);
@@ -7818,6 +7907,35 @@ mod tests {
                     .insert_one(player, monk_identity())
                     .expect("player should accept monk identity");
                 let _gold = spawn_inventory_gold(&mut world, 100, 'g');
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let mut rng = test_rng();
+                let chat_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, chat_events)
+            }
+            StoryTraversalScenario::TemplePious => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 300, 'g');
                 world
                     .dungeon_mut()
                     .current_level
@@ -7935,6 +8053,46 @@ mod tests {
                 while world.turn() <= 5001 {
                     world.advance_turn();
                 }
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let mut rng = test_rng();
+                let chat_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, chat_events)
+            }
+            StoryTraversalScenario::TempleSelflessGenerosity => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 700, 'g');
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        player,
+                        crate::status::SpellProtection {
+                            layers: 1,
+                            countdown: 10,
+                            interval: 10,
+                        },
+                    )
+                    .expect("player should accept spell protection");
                 world
                     .dungeon_mut()
                     .current_level
@@ -14344,6 +14502,198 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_priest_without_shrine_preaches_poverty() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("priest should accept peaceful marker");
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: Alignment::Lawful,
+                    has_shrine: false,
+                    is_high_priest: false,
+                    angry: false,
+                },
+            )
+            .expect("priest should accept explicit runtime state");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-virtues-of-poverty"
+        )));
+        assert_eq!(player_gold(&world, player), 0);
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_priest_can_reach_pious_donation_tier() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        let _gold = spawn_inventory_gold(&mut world, 300, 'g');
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("priest should accept peaceful marker");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-pious"
+        )));
+        assert_eq!(player_gold(&world, player), 0);
+        assert!(
+            world
+                .get_component::<crate::status::StatusEffects>(player)
+                .is_none_or(|status| status.clairvoyance == 0),
+            "pious donations should not trigger clairvoyance without the blessing conditions"
+        );
+    }
+
+    #[test]
+    fn test_chatting_with_protection_can_reach_selfless_generosity_tier() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        let _gold = spawn_inventory_gold(&mut world, 700, 'g');
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                crate::status::SpellProtection {
+                    layers: 1,
+                    countdown: 10,
+                    interval: 10,
+                },
+            )
+            .expect("player should accept spell protection");
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("priest should accept peaceful marker");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-selfless-generosity"
+        )));
+        assert_eq!(player_gold(&world, player), 0);
+        assert!(
+            world
+                .get_component::<crate::status::SpellProtection>(player)
+                .is_some_and(|protection| protection.layers == 1),
+            "selfless generosity should preserve the existing protection layer"
+        );
+    }
+
+    #[test]
+    fn test_chatting_with_wrong_alignment_priest_preserves_gold_and_rejects() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        let _gold = spawn_inventory_gold(&mut world, 500, 'g');
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("priest should accept peaceful marker");
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: Alignment::Chaotic,
+                    has_shrine: true,
+                    is_high_priest: false,
+                    angry: false,
+                },
+            )
+            .expect("priest should accept explicit runtime state");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-wrong-alignment"
+        )));
+        assert_eq!(player_gold(&world, player), 500);
+        assert!(
+            world
+                .get_component::<crate::status::SpellProtection>(player)
+                .is_none(),
+            "wrong-alignment priests should not sell divine protection"
+        );
+    }
+
+    #[test]
     fn test_first_visit_tended_temple_emits_peace_message() {
         let mut world = make_test_world();
         let player = world.player();
@@ -15523,11 +15873,15 @@ mod tests {
             StoryTraversalScenario::ShopkeeperDeath,
             StoryTraversalScenario::ShopRobbery,
             StoryTraversalScenario::ShopRestitution,
+            StoryTraversalScenario::TempleWrongAlignment,
             StoryTraversalScenario::TempleAleGift,
+            StoryTraversalScenario::TempleVirtuesOfPoverty,
             StoryTraversalScenario::TempleDonationThanks,
+            StoryTraversalScenario::TemplePious,
             StoryTraversalScenario::TempleDonation,
             StoryTraversalScenario::TempleBlessing,
             StoryTraversalScenario::TempleCleansing,
+            StoryTraversalScenario::TempleSelflessGenerosity,
             StoryTraversalScenario::TempleWrath,
             StoryTraversalScenario::TempleCalm,
             StoryTraversalScenario::UntendedTempleGhost,
@@ -15866,6 +16220,25 @@ mod tests {
                         scenario.label()
                     );
                 }
+                StoryTraversalScenario::TempleWrongAlignment => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-wrong-alignment"
+                    )));
+                    assert_eq!(
+                        player_gold(&world, player),
+                        500,
+                        "{} should not spend gold on a wrong-alignment priest",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::status::SpellProtection>(player)
+                            .is_none(),
+                        "{} should not grant protection for a wrong-alignment priest",
+                        scenario.label()
+                    );
+                }
                 StoryTraversalScenario::TempleAleGift => {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
@@ -15875,6 +16248,25 @@ mod tests {
                         player_gold(&world, player),
                         2,
                         "{} should grant the hero ale money",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::TempleVirtuesOfPoverty => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-virtues-of-poverty"
+                    )));
+                    assert_eq!(
+                        player_gold(&world, player),
+                        0,
+                        "{} should keep the player broke",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::status::SpellProtection>(player)
+                            .is_none(),
+                        "{} should not grant protection when preaching poverty",
                         scenario.label()
                     );
                 }
@@ -15894,6 +16286,32 @@ mod tests {
                             .get_component::<crate::status::SpellProtection>(player)
                             .is_none(),
                         "{} should not grant protection for a small donation",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::TemplePious => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-pious"
+                    )));
+                    assert_eq!(
+                        player_gold(&world, player),
+                        0,
+                        "{} should spend the pious donation",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::status::SpellProtection>(player)
+                            .is_none(),
+                        "{} should not convert a pious donation into protection",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::status::StatusEffects>(player)
+                            .is_none_or(|status| status.clairvoyance == 0),
+                        "{} should not grant clairvoyance for the plain pious tier",
                         scenario.label()
                     );
                 }
@@ -15957,6 +16375,25 @@ mod tests {
                             .get_component::<crate::status::SpellProtection>(player)
                             .is_some_and(|protection| protection.layers == 1),
                         "{} should not consume existing protection layers",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::TempleSelflessGenerosity => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-selfless-generosity"
+                    )));
+                    assert_eq!(
+                        player_gold(&world, player),
+                        0,
+                        "{} should spend the selfless donation",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::status::SpellProtection>(player)
+                            .is_some_and(|protection| protection.layers == 1),
+                        "{} should preserve the existing protection layer",
                         scenario.label()
                     );
                 }
