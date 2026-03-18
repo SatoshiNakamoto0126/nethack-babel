@@ -27,6 +27,3 @@ jobs:
           -A clippy::manual-is-multiple-of
           -A clippy::too-many-arguments
           -A clippy::unnecessary-cast
-          -A clippy::manual-find
-          -A clippy::if-same-then-else
-          -A clippy::manual-flatten

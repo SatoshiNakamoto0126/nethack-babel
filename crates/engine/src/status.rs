@@ -1120,8 +1120,6 @@ pub fn tick_luck(
         1i32
     } else if luckstone_cursed {
         -1i32
-    } else if has_luckstone {
-        0i32
     } else {
         0i32
     };

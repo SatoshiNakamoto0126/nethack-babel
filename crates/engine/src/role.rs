@@ -1156,12 +1156,7 @@ pub fn all_ranks(role: Role, is_female: bool) -> Vec<(u8, &'static str)> {
 /// Returns `None` if already at maximum rank (level 30).
 pub fn next_rank_level(_role: Role, current_level: u8) -> Option<u8> {
     const MIN_LEVELS: [u8; 9] = [1, 3, 6, 10, 14, 18, 22, 26, 30];
-    for &lvl in &MIN_LEVELS {
-        if lvl > current_level {
-            return Some(lvl);
-        }
-    }
-    None
+    MIN_LEVELS.iter().find(|&&lvl| lvl > current_level).copied()
 }
 
 /// Player alignment title.

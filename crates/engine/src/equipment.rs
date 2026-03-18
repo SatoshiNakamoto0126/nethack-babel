@@ -746,18 +746,16 @@ pub fn calculate_ac(world: &GameWorld, player: Entity, obj_defs: &[ObjectDef]) -
 
     // Ring of protection contributions (by enchantment value).
     // We check if the ring's conferred_property indicates protection.
-    for ring_slot in [equip.ring_left, equip.ring_right] {
-        if let Some(ring) = ring_slot {
-            if let Some(core) = world.get_component::<ObjectCore>(ring)
-                && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
-                && def.conferred_property == Some(nethack_babel_data::Property::Protection)
-            {
-                let spe = world
-                    .get_component::<Enchantment>(ring)
-                    .map(|e| e.spe as i32)
-                    .unwrap_or(0);
-                ac -= spe;
-            }
+    for ring in [equip.ring_left, equip.ring_right].into_iter().flatten() {
+        if let Some(core) = world.get_component::<ObjectCore>(ring)
+            && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
+            && def.conferred_property == Some(nethack_babel_data::Property::Protection)
+        {
+            let spe = world
+                .get_component::<Enchantment>(ring)
+                .map(|e| e.spe as i32)
+                .unwrap_or(0);
+            ac -= spe;
         }
     }
 

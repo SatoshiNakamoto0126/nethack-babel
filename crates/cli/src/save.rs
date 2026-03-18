@@ -1533,6 +1533,9 @@ mod tests {
     enum SaveStoryTraversalScenario {
         QuestClosure,
         QuestLeaderAnger,
+        ShopEntry,
+        ShopEntryWelcomeBack,
+        ShopEntryRobbed,
         ShopkeeperFollow,
         ShopkeeperPayoff,
         ShopkeeperCredit,
@@ -1555,6 +1558,9 @@ mod tests {
             match self {
                 SaveStoryTraversalScenario::QuestClosure => "quest-closure",
                 SaveStoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
+                SaveStoryTraversalScenario::ShopEntry => "shop-entry",
+                SaveStoryTraversalScenario::ShopEntryWelcomeBack => "shop-entry-welcome-back",
+                SaveStoryTraversalScenario::ShopEntryRobbed => "shop-entry-robbed",
                 SaveStoryTraversalScenario::ShopkeeperFollow => "shopkeeper-follow",
                 SaveStoryTraversalScenario::ShopkeeperPayoff => "shopkeeper-payoff",
                 SaveStoryTraversalScenario::ShopkeeperCredit => "shopkeeper-credit",
@@ -1731,6 +1737,101 @@ mod tests {
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let blocked_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
                 (loaded, blocked_events)
+            }
+            SaveStoryTraversalScenario::ShopEntry => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(6, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-entry", &world, [53u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Move {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopEntryWelcomeBack => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(6, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                world.dungeon_mut().shop_rooms[0].surcharge = true;
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-shop-entry-welcome-back",
+                    &world,
+                    [54u8; 32],
+                );
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Move {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopEntryRobbed => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(6, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                world.dungeon_mut().shop_rooms[0].robbed = 75;
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-entry-robbed", &world, [55u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Move {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
             }
             SaveStoryTraversalScenario::ShopkeeperFollow => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
@@ -4213,6 +4314,9 @@ mod tests {
         for scenario in [
             SaveStoryTraversalScenario::QuestClosure,
             SaveStoryTraversalScenario::QuestLeaderAnger,
+            SaveStoryTraversalScenario::ShopEntry,
+            SaveStoryTraversalScenario::ShopEntryWelcomeBack,
+            SaveStoryTraversalScenario::ShopEntryRobbed,
             SaveStoryTraversalScenario::ShopkeeperFollow,
             SaveStoryTraversalScenario::ShopkeeperPayoff,
             SaveStoryTraversalScenario::ShopkeeperCredit,
@@ -4269,6 +4373,24 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.quest_expelled)
                     );
+                }
+                SaveStoryTraversalScenario::ShopEntry => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-enter"
+                    )));
+                }
+                SaveStoryTraversalScenario::ShopEntryWelcomeBack => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-welcome-back"
+                    )));
+                }
+                SaveStoryTraversalScenario::ShopEntryRobbed => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-stolen"
+                    )));
                 }
                 SaveStoryTraversalScenario::ShopkeeperFollow => {
                     let shopkeeper =

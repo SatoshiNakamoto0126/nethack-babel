@@ -3821,7 +3821,7 @@ fn try_move_entity(
         if let Some(occupant) = monster_at(world, target_pos, entity) {
             if world.get_component::<Tame>(occupant).is_some() && !force_attack_non_hostile {
                 swap_entities(world, entity, occupant, current_pos, target_pos, events);
-                finish_player_movement(world, entity, target_pos, events, rng);
+                finish_player_movement(world, entity, current_pos, target_pos, events, rng);
                 return;
             }
             if world.get_component::<Peaceful>(occupant).is_some() && !force_attack_non_hostile {
@@ -3901,7 +3901,7 @@ fn try_move_entity(
 
     maybe_trigger_shop_exit_robbery(world, entity, current_pos, target_pos, events, rng);
 
-    finish_player_movement(world, entity, target_pos, events, rng);
+    finish_player_movement(world, entity, current_pos, target_pos, events, rng);
 }
 
 fn monster_at(world: &GameWorld, pos: Position, exclude: hecs::Entity) -> Option<hecs::Entity> {
@@ -3943,6 +3943,7 @@ fn swap_entities(
 fn finish_player_movement(
     world: &mut GameWorld,
     entity: hecs::Entity,
+    from_pos: Position,
     target_pos: Position,
     events: &mut Vec<EngineEvent>,
     rng: &mut impl Rng,
@@ -3981,6 +3982,8 @@ fn finish_player_movement(
         ));
     }
 
+    maybe_emit_shop_entry_greeting(world, entity, from_pos, target_pos, events);
+
     if !crate::status::is_levitating(world, entity) {
         let mut letter_state = crate::items::LetterState::default();
         let (autopickup_enabled, autopickup_classes) = {
@@ -4003,6 +4006,29 @@ fn finish_player_movement(
             vec![("count", items_here.to_string())],
         ));
     }
+}
+
+fn maybe_emit_shop_entry_greeting(
+    world: &GameWorld,
+    entity: hecs::Entity,
+    from_pos: Position,
+    target_pos: Position,
+    events: &mut Vec<EngineEvent>,
+) {
+    if entity != world.player() {
+        return;
+    }
+
+    let previous_shop = find_shop_index_containing_position(world, from_pos);
+    let Some(next_shop_idx) = find_shop_index_containing_position(world, target_pos) else {
+        return;
+    };
+    if previous_shop == Some(next_shop_idx) {
+        return;
+    }
+
+    let shop = &world.dungeon().shop_rooms[next_shop_idx];
+    events.extend(crate::shop::enter_shop(world, entity, shop));
 }
 
 /// Find a boulder entity at the given position.
@@ -6574,6 +6600,9 @@ mod tests {
     enum StoryTraversalScenario {
         QuestClosure,
         QuestLeaderAnger,
+        ShopEntry,
+        ShopEntryWelcomeBack,
+        ShopEntryRobbed,
         ShopkeeperFollow,
         ShopkeeperPayoff,
         ShopkeeperCredit,
@@ -6596,6 +6625,9 @@ mod tests {
             match self {
                 StoryTraversalScenario::QuestClosure => "quest-closure",
                 StoryTraversalScenario::QuestLeaderAnger => "quest-leader-anger",
+                StoryTraversalScenario::ShopEntry => "shop-entry",
+                StoryTraversalScenario::ShopEntryWelcomeBack => "shop-entry-welcome-back",
+                StoryTraversalScenario::ShopEntryRobbed => "shop-entry-robbed",
                 StoryTraversalScenario::ShopkeeperFollow => "shopkeeper-follow",
                 StoryTraversalScenario::ShopkeeperPayoff => "shopkeeper-payoff",
                 StoryTraversalScenario::ShopkeeperCredit => "shopkeeper-credit",
@@ -6751,6 +6783,95 @@ mod tests {
 
                 let blocked_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
                 (world, blocked_events)
+            }
+            StoryTraversalScenario::ShopEntry => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(6, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+
+                let mut rng = test_rng();
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Move {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, events)
+            }
+            StoryTraversalScenario::ShopEntryWelcomeBack => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(6, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                world.dungeon_mut().shop_rooms[0].surcharge = true;
+
+                let mut rng = test_rng();
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Move {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, events)
+            }
+            StoryTraversalScenario::ShopEntryRobbed => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(6, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                world.dungeon_mut().shop_rooms[0].robbed = 75;
+
+                let mut rng = test_rng();
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Move {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, events)
             }
             StoryTraversalScenario::ShopkeeperFollow => {
                 let mut world = make_test_world();
@@ -12598,6 +12719,110 @@ mod tests {
     }
 
     #[test]
+    fn test_entering_shop_emits_shop_entry_message() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-enter"
+        )));
+    }
+
+    #[test]
+    fn test_entering_robbed_shop_emits_stolen_entry_message() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        world.dungeon_mut().shop_rooms[0].robbed = 50;
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-stolen"
+        )));
+    }
+
+    #[test]
+    fn test_entering_surcharged_shop_emits_welcome_back_message() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        world.dungeon_mut().shop_rooms[0].surcharge = true;
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Move {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-welcome-back"
+        )));
+    }
+
+    #[test]
     fn test_peaceful_shopkeeper_with_unpaid_bill_follows_player_outside_shop() {
         let mut world = make_test_world();
         let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
@@ -14326,6 +14551,9 @@ mod tests {
         for scenario in [
             StoryTraversalScenario::QuestClosure,
             StoryTraversalScenario::QuestLeaderAnger,
+            StoryTraversalScenario::ShopEntry,
+            StoryTraversalScenario::ShopEntryWelcomeBack,
+            StoryTraversalScenario::ShopEntryRobbed,
             StoryTraversalScenario::ShopkeeperFollow,
             StoryTraversalScenario::ShopkeeperPayoff,
             StoryTraversalScenario::ShopkeeperCredit,
@@ -14382,6 +14610,24 @@ mod tests {
                     );
                     assert_eq!(world.dungeon().branch, DungeonBranch::Quest);
                     assert_eq!(world.dungeon().depth, 1);
+                }
+                StoryTraversalScenario::ShopEntry => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-enter"
+                    )));
+                }
+                StoryTraversalScenario::ShopEntryWelcomeBack => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-welcome-back"
+                    )));
+                }
+                StoryTraversalScenario::ShopEntryRobbed => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-stolen"
+                    )));
                 }
                 StoryTraversalScenario::ShopkeeperFollow => {
                     let shopkeeper =
