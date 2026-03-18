@@ -2680,6 +2680,12 @@ mod tests {
                     .ecs_mut()
                     .insert_one(player, wizard_identity())
                     .expect("player should accept wizard identity");
+                if let Some(mut hp) =
+                    world.get_component_mut::<nethack_babel_engine::world::HitPoints>(player)
+                {
+                    hp.current = 40;
+                    hp.max = 40;
+                }
                 world
                     .dungeon_mut()
                     .current_level
@@ -2689,6 +2695,11 @@ mod tests {
                     .ecs_mut()
                     .insert_one(priest, nethack_babel_engine::world::Peaceful)
                     .expect("priest should accept peaceful marker");
+                if let Some(mut mp) =
+                    world.get_component_mut::<nethack_babel_engine::world::MovementPoints>(priest)
+                {
+                    mp.0 = 0;
+                }
 
                 let mut rng = Pcg64::seed_from_u64(7105);
                 let _attack_events = resolve_turn(
@@ -4799,6 +4810,76 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_preserves_temple_wrath_hp_and_blindness() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        if let Some(mut hp) =
+            world.get_component_mut::<nethack_babel_engine::world::HitPoints>(player)
+        {
+            hp.current = 40;
+            hp.max = 40;
+        }
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 20);
+        world
+            .ecs_mut()
+            .insert_one(priest, nethack_babel_engine::world::Peaceful)
+            .expect("priest should accept peaceful marker");
+        if let Some(mut mp) =
+            world.get_component_mut::<nethack_babel_engine::world::MovementPoints>(priest)
+        {
+            mp.0 = 0;
+        }
+
+        let mut rng = Pcg64::seed_from_u64(7105);
+        let attack_events = resolve_turn(
+            &mut world,
+            PlayerAction::FightDirection {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+        assert!(attack_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::HpChange {
+                entity,
+                amount,
+                source: nethack_babel_engine::event::HpSource::Divine,
+                ..
+            } if *entity == player && *amount < 0
+        )));
+        assert!(
+            world
+                .get_component::<nethack_babel_engine::status::StatusEffects>(player)
+                .is_some_and(|status| status.blindness > 0),
+            "pre-save wrath should blind the player"
+        );
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("temple-wrath-runtime-round-trip", &world, [49u8; 32]);
+        let loaded_player = loaded.player();
+        assert!(
+            loaded
+                .get_component::<nethack_babel_engine::world::HitPoints>(loaded_player)
+                .is_some_and(|hp| hp.current < 40),
+            "divine wrath HP loss should survive load"
+        );
+        assert!(
+            loaded
+                .get_component::<nethack_babel_engine::status::StatusEffects>(loaded_player)
+                .is_some_and(|status| status.blindness > 0),
+            "divine wrath blindness should survive load"
+        );
+    }
+
+    #[test]
     fn round_trip_loaded_floor_items_stay_on_original_level() {
         use nethack_babel_data::schema::{ObjectClass, ObjectTypeId};
 
@@ -5321,6 +5402,19 @@ mod tests {
                             EngineEvent::Message { key, .. } if key == "priest-protection-granted"
                         )),
                         "hostile priest should not grant protection after save/load"
+                    );
+                    let player = world.player();
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::world::HitPoints>(player)
+                            .is_some_and(|hp| hp.current < 40),
+                        "divine wrath HP loss should survive save/load"
+                    );
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::status::StatusEffects>(player)
+                            .is_some_and(|status| status.blindness > 0),
+                        "divine wrath blindness should survive save/load"
                     );
                 }
                 SaveStoryTraversalScenario::TempleCalm => {

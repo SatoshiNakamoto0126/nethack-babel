@@ -536,10 +536,59 @@ fn apply_domain_hostility_side_effects_from_player_events(
             temple.is_sanctum = priest.is_high_priest;
             temple.priest_angry = priest.angry;
             extra_events.extend(crate::priest::anger_priest(&mut temple));
-            extra_events.extend(crate::priest::ghod_hitsu(&temple, rng));
+            extra_events.extend(apply_priest_divine_wrath(world, player, &temple, rng));
         }
     }
     events.extend(extra_events);
+}
+
+fn apply_priest_divine_wrath(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    temple: &crate::priest::TempleInfo,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    let mut events = crate::priest::ghod_hitsu(temple, rng);
+    if !temple.has_priest || !temple.has_shrine {
+        return events;
+    }
+
+    let shock_resistant = crate::status::has_intrinsic_shock_res(world, player);
+    let damage = if shock_resistant {
+        rng.random_range(1..=3)
+    } else {
+        rng.random_range(8..=16)
+    };
+
+    let new_hp = if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+        hp.current -= damage;
+        hp.current
+    } else {
+        return events;
+    };
+
+    events.push(EngineEvent::HpChange {
+        entity: player,
+        amount: -damage,
+        new_hp,
+        source: HpSource::Divine,
+    });
+    if new_hp <= 0 {
+        events.push(EngineEvent::EntityDied {
+            entity: player,
+            killer: None,
+            cause: DeathCause::KilledBy {
+                killer_name: "an angry god".to_string(),
+            },
+        });
+    }
+
+    if !shock_resistant {
+        let blind_turns = rng.random_range(8..=16);
+        events.extend(crate::status::make_blinded(world, player, blind_turns));
+    }
+
+    events
 }
 
 fn status_is_hostile_toward_monster(status: crate::event::StatusEffect) -> bool {
@@ -5629,6 +5678,14 @@ fn player_gold(world: &GameWorld, player: hecs::Entity) -> i64 {
         .unwrap_or(0)
 }
 
+#[cfg(test)]
+fn player_hp(world: &GameWorld, player: hecs::Entity) -> i32 {
+    world
+        .get_component::<HitPoints>(player)
+        .map(|hp| hp.current)
+        .unwrap_or(0)
+}
+
 fn spend_player_gold(world: &mut GameWorld, player: hecs::Entity, amount: u32) -> bool {
     if amount == 0 {
         return true;
@@ -7911,11 +7968,18 @@ mod tests {
                     .dungeon_mut()
                     .current_level
                     .set_terrain(Position::new(6, 5), Terrain::Altar);
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
+                    hp.current = 40;
+                    hp.max = 40;
+                }
                 let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
                 world
                     .ecs_mut()
                     .insert_one(priest, Peaceful)
                     .expect("priest should accept peaceful marker");
+                if let Some(mut mp) = world.get_component_mut::<MovementPoints>(priest) {
+                    mp.0 = 0;
+                }
 
                 let mut rng = test_rng();
                 let _attack_events = resolve_turn(
@@ -13987,6 +14051,10 @@ mod tests {
             .dungeon_mut()
             .current_level
             .set_terrain(Position::new(6, 5), Terrain::Altar);
+        if let Some(mut player_hp) = world.get_component_mut::<HitPoints>(player) {
+            player_hp.current = 40;
+            player_hp.max = 40;
+        }
         let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
         world
             .ecs_mut()
@@ -14016,11 +14084,38 @@ mod tests {
             event,
             EngineEvent::Message { key, .. } if key == "god-lightning-bolt"
         )));
+        assert!(attack_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::HpChange {
+                entity,
+                amount,
+                source: HpSource::Divine,
+                ..
+            } if *entity == player && *amount < 0
+        )));
+        assert!(attack_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::StatusApplied {
+                entity,
+                status: crate::event::StatusEffect::Blind,
+                ..
+            } if *entity == player
+        )));
         assert!(
             world
                 .get_component::<crate::npc::Priest>(priest)
                 .is_some_and(|state| state.angry),
             "attacking a priest should persist explicit angry state"
+        );
+        assert!(
+            player_hp(&world, player) < 40,
+            "divine wrath should deal real damage to the player"
+        );
+        assert!(
+            world
+                .get_component::<crate::status::StatusEffects>(player)
+                .is_some_and(|status| status.blindness > 0),
+            "divine wrath should blind a non-resistant player"
         );
 
         let chat_events = resolve_turn(
@@ -14044,6 +14139,84 @@ mod tests {
                 EngineEvent::Message { key, .. } if key == "priest-protection-granted"
             )),
             "hostile priests should no longer grant protection"
+        );
+    }
+
+    #[test]
+    fn test_attacking_priest_with_shock_resistance_reduces_wrath_and_avoids_blindness() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        let _gold = spawn_inventory_gold(&mut world, 1_000, 'g');
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        if let Some(mut player_hp) = world.get_component_mut::<HitPoints>(player) {
+            player_hp.current = 40;
+            player_hp.max = 40;
+        }
+        let _ = world.ecs_mut().insert_one(
+            player,
+            crate::status::Intrinsics {
+                shock_resistance: true,
+                ..Default::default()
+            },
+        );
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("priest should accept peaceful marker");
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(priest) {
+            hp.current = 40;
+            hp.max = 40;
+        }
+        if let Some(mut mp) = world.get_component_mut::<MovementPoints>(priest) {
+            mp.0 = 0;
+        }
+
+        let mut rng = test_rng();
+        let attack_events = resolve_turn(
+            &mut world,
+            PlayerAction::FightDirection {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        let divine_damage = attack_events.iter().find_map(|event| match event {
+            EngineEvent::HpChange {
+                entity,
+                amount,
+                source: HpSource::Divine,
+                ..
+            } if *entity == player && *amount < 0 => Some(-amount),
+            _ => None,
+        });
+        assert!(
+            divine_damage.is_some_and(|damage| damage <= 3),
+            "shock resistance should reduce priest wrath damage"
+        );
+        assert!(
+            !attack_events.iter().any(|event| matches!(
+                event,
+                EngineEvent::StatusApplied {
+                    entity,
+                    status: crate::event::StatusEffect::Blind,
+                    ..
+                } if *entity == player
+            )),
+            "shock resistance should prevent priest wrath blindness"
+        );
+        assert!(
+            world
+                .get_component::<crate::status::StatusEffects>(player)
+                .is_none_or(|status| status.blindness == 0),
+            "shock-resistant players should stay unblinded"
         );
     }
 
@@ -15818,6 +15991,18 @@ mod tests {
                             EngineEvent::Message { key, .. } if key == "priest-protection-granted"
                         )),
                         "{} should not allow protection after wrath",
+                        scenario.label()
+                    );
+                    assert!(
+                        player_hp(&world, player) < 40,
+                        "{} should keep the divine wrath HP loss",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::status::StatusEffects>(player)
+                            .is_some_and(|status| status.blindness > 0),
+                        "{} should keep the wrath blindness timer",
                         scenario.label()
                     );
                 }

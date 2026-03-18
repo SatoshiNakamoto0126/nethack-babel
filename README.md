@@ -280,7 +280,7 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 ## Roadmap (2026)
 
 1. **Temple and shop long-tail parity**  
-   Push beyond the current `temple-entry / sanctum-entry / untended-temple-ghost / shop-entry / follow / payoff / pray / calm-down / cranky-priest-chat / repair / drop-credit / live-sell / robbery / restitution / shopkeeper-death / deserted-shop / protection-spend / donation-tiers / ale-gift / blessing-clairvoyance / cleansing` runtime closure and finish the remaining priest/shopkeeper edge cases: richer deity/shop feedback and deeper economy-side aftermath.
+   Push beyond the current `temple-entry / sanctum-entry / untended-temple-ghost / priest-wrath-damage / priest-wrath-blindness / shop-entry / follow / payoff / pray / calm-down / cranky-priest-chat / repair / drop-credit / live-sell / robbery / restitution / shopkeeper-death / deserted-shop / protection-spend / donation-tiers / ale-gift / blessing-clairvoyance / cleansing` runtime closure and finish the remaining priest/shopkeeper edge cases: richer deity/shop feedback and deeper economy-side aftermath.
 2. **Wizard harassment parity**  
    Broaden Wizard of Yendor harassment beyond the current respawn/theft/curse/nasty-summon/level-teleport runtime, with richer nasty pools, stronger cadence, and more long-tail original-NetHack behavior.
 3. **Story drift detection**  
@@ -292,7 +292,7 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 
 ## TODO (Short-Term)
 
-- [ ] Extend temple/shop parity beyond the current temple-entry/sanctum-entry/untended-temple-ghost/shop-entry/payoff/follow/pray/calm/cranky-priest-chat/repair/drop-credit/live-sell/robbery/restitution/shopkeeper-death/deserted-shop/protection-spend/donation-tiers/ale-gift/blessing-clairvoyance/cleansing path: remaining richer deity/shop feedback and more original economy aftermath.
+- [ ] Extend temple/shop parity beyond the current temple-entry/sanctum-entry/untended-temple-ghost/priest-wrath-damage/priest-wrath-blindness/shop-entry/payoff/follow/pray/calm/cranky-priest-chat/repair/drop-credit/live-sell/robbery/restitution/shopkeeper-death/deserted-shop/protection-spend/donation-tiers/ale-gift/blessing-clairvoyance/cleansing path: remaining richer deity/shop feedback and more original economy aftermath.
 - [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, theft, cursing, scaled nasty summon, level teleport, and repeated reload coverage.
 - [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state beyond the current quest/endgame/shop/temple/sanctum/wizard/Medusa/Castle/Orcus/Fort-Ludios/Vlad/invocation-portal scenarios.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and save/load omissions.
