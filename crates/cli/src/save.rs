@@ -1545,6 +1545,7 @@ mod tests {
         TempleDonation,
         TempleWrath,
         TempleCalm,
+        SanctumRevisit,
         WizardHarassment,
         EndgameAscension,
     }
@@ -1566,6 +1567,7 @@ mod tests {
                 SaveStoryTraversalScenario::TempleDonation => "temple-donation",
                 SaveStoryTraversalScenario::TempleWrath => "temple-wrath",
                 SaveStoryTraversalScenario::TempleCalm => "temple-calm",
+                SaveStoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 SaveStoryTraversalScenario::WizardHarassment => "wizard-harassment",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -2188,6 +2190,44 @@ mod tests {
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(&mut loaded, PlayerAction::Pray, &mut rng);
                 (loaded, events)
+            }
+            SaveStoryTraversalScenario::SanctumRevisit => {
+                let mut world = make_stair_world(DungeonBranch::Gehennom, 19, Terrain::StairsDown);
+                let mut rng = Pcg64::seed_from_u64(7106);
+
+                let first_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(first_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "sanctum-infidel"
+                )));
+                assert!(first_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "sanctum-be-gone"
+                )));
+                assert_eq!(count_monsters_named(&world, "high priest"), 1);
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-sanctum-revisit", &world, [52u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+
+                let sanctum_up = find_terrain(&loaded.dungeon().current_level, Terrain::StairsUp)
+                    .expect("Sanctum should preserve stairs up after save/load");
+                set_player_position(&mut loaded, sanctum_up);
+                let ascend_events = resolve_turn(&mut loaded, PlayerAction::GoUp, &mut rng);
+                assert!(
+                    ascend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should leave Sanctum after save/load",
+                    scenario.label()
+                );
+
+                let gehennom_down =
+                    find_terrain(&loaded.dungeon().current_level, Terrain::StairsDown)
+                        .expect("Gehennom 19 should preserve stairs down to Sanctum");
+                set_player_position(&mut loaded, gehennom_down);
+                let revisit_events = resolve_turn(&mut loaded, PlayerAction::GoDown, &mut rng);
+                (loaded, revisit_events)
             }
             SaveStoryTraversalScenario::WizardHarassment => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
@@ -4185,6 +4225,7 @@ mod tests {
             SaveStoryTraversalScenario::TempleDonation,
             SaveStoryTraversalScenario::TempleWrath,
             SaveStoryTraversalScenario::TempleCalm,
+            SaveStoryTraversalScenario::SanctumRevisit,
             SaveStoryTraversalScenario::WizardHarassment,
             SaveStoryTraversalScenario::EndgameAscension,
         ] {
@@ -4469,6 +4510,23 @@ mod tests {
                         event,
                         EngineEvent::Message { key, .. } if key == "priest-calmed"
                     )));
+                }
+                SaveStoryTraversalScenario::SanctumRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
+                    assert_eq!(world.dungeon().depth, 20);
+                    assert_eq!(count_monsters_named(&world, "high priest"), 1);
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "sanctum-desecrate"
+                    )));
+                    assert!(
+                        !final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. }
+                                if key == "sanctum-infidel" || key == "sanctum-be-gone"
+                        )),
+                        "Sanctum revisit after save/load should not replay first-entry messaging"
+                    );
                 }
                 SaveStoryTraversalScenario::WizardHarassment => {
                     assert!(final_events.iter().any(|event| matches!(

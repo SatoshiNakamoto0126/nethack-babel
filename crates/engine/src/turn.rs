@@ -3031,6 +3031,7 @@ pub(crate) fn change_level_to_branch(
         apply_special_level_population(world, pop, rng);
     }
     sync_current_level_npc_state(world);
+    maybe_emit_current_level_temple_entry(world, player, first_visit, rng, events);
     maybe_spawn_astral_guardian_angel(world, first_visit, rng, events);
 
     // 6. Mark visited and check level feeling.
@@ -3187,6 +3188,7 @@ fn change_level(
         apply_special_level_population(world, pop, rng);
     }
     sync_current_level_npc_state(world);
+    maybe_emit_current_level_temple_entry(world, player, first_visit, rng, events);
     maybe_spawn_astral_guardian_angel(world, first_visit, rng, events);
 
     // 8. Emit LevelChanged event.
@@ -4798,6 +4800,13 @@ fn current_player_level(world: &GameWorld, player: hecs::Entity) -> u8 {
         .unwrap_or(1)
 }
 
+fn current_player_alignment_record(world: &GameWorld, player: hecs::Entity) -> i32 {
+    world
+        .get_component::<crate::religion::ReligionState>(player)
+        .map(|state| state.alignment_record)
+        .unwrap_or_else(|| default_religion_state(world, player).alignment_record)
+}
+
 fn current_player_is_female(world: &GameWorld, player: hecs::Entity) -> bool {
     world
         .get_component::<PlayerIdentity>(player)
@@ -5747,6 +5756,81 @@ fn resolve_priest_chat<R: Rng>(
     donation_events
 }
 
+fn maybe_emit_current_level_temple_entry(
+    world: &GameWorld,
+    player: hecs::Entity,
+    first_visit: bool,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) {
+    let has_altar = world
+        .dungeon()
+        .current_level
+        .cells
+        .iter()
+        .flatten()
+        .any(|cell| cell.terrain == Terrain::Altar);
+    if !has_altar {
+        return;
+    }
+
+    let priest = world
+        .ecs()
+        .query::<(&Monster,)>()
+        .iter()
+        .find_map(|(entity, _)| infer_priest_runtime(world, entity));
+
+    if let Some(priest) = priest {
+        if priest.is_high_priest {
+            events.extend(crate::priest::sanctum_entry(first_visit));
+            return;
+        }
+        if !first_visit {
+            return;
+        }
+
+        let coaligned = crate::priest::player_coaligned(
+            current_player_alignment(world, player),
+            priest.alignment,
+        );
+        match crate::npc::temple_entry(
+            true,
+            priest.has_shrine,
+            coaligned,
+            current_player_alignment_record(world, player),
+            false,
+            false,
+            rng,
+        ) {
+            crate::npc::TempleEntryResult::Tended { message_key, .. } => {
+                events.push(EngineEvent::msg(message_key));
+            }
+            crate::npc::TempleEntryResult::Sanctum { first_time } => {
+                events.extend(crate::priest::sanctum_entry(first_time));
+            }
+            crate::npc::TempleEntryResult::Untended { message_index } => {
+                events.extend(crate::npc::untended_temple_events(message_index, false));
+            }
+        }
+        return;
+    }
+
+    if !first_visit {
+        return;
+    }
+    if let crate::npc::TempleEntryResult::Untended { message_index } = crate::npc::temple_entry(
+        false,
+        false,
+        false,
+        current_player_alignment_record(world, player),
+        false,
+        false,
+        rng,
+    ) {
+        events.extend(crate::npc::untended_temple_events(message_index, false));
+    }
+}
+
 fn handle_player_drop(
     world: &mut GameWorld,
     player: hecs::Entity,
@@ -6502,6 +6586,7 @@ mod tests {
         TempleDonation,
         TempleWrath,
         TempleCalm,
+        SanctumRevisit,
         WizardHarassment,
         EndgameAscension,
     }
@@ -6523,6 +6608,7 @@ mod tests {
                 StoryTraversalScenario::TempleDonation => "temple-donation",
                 StoryTraversalScenario::TempleWrath => "temple-wrath",
                 StoryTraversalScenario::TempleCalm => "temple-calm",
+                StoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 StoryTraversalScenario::WizardHarassment => "wizard-harassment",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -7107,6 +7193,42 @@ mod tests {
                 let mut rng = test_rng();
                 let pray_events = resolve_turn(&mut world, PlayerAction::Pray, &mut rng);
                 (world, pray_events)
+            }
+            StoryTraversalScenario::SanctumRevisit => {
+                let mut world = make_stair_world(Terrain::StairsDown, 19);
+                install_test_catalogs(&mut world);
+                world.dungeon_mut().branch = DungeonBranch::Gehennom;
+
+                let mut rng = test_rng();
+                let first_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(first_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "sanctum-infidel"
+                )));
+                assert!(first_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "sanctum-be-gone"
+                )));
+                assert_eq!(count_monsters_named(&world, "high priest"), 1);
+
+                let sanctum_up = find_terrain(&world.dungeon().current_level, Terrain::StairsUp)
+                    .expect("Sanctum should preserve stairs up");
+                set_player_position(&mut world, sanctum_up);
+                let ascend_events = resolve_turn(&mut world, PlayerAction::GoUp, &mut rng);
+                assert!(
+                    ascend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "{} should allow leaving Sanctum",
+                    scenario.label()
+                );
+
+                let gehennom_down =
+                    find_terrain(&world.dungeon().current_level, Terrain::StairsDown)
+                        .expect("Gehennom 19 should preserve stairs down to Sanctum");
+                set_player_position(&mut world, gehennom_down);
+                let revisit_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                (world, revisit_events)
             }
             StoryTraversalScenario::WizardHarassment => {
                 let mut world = make_test_world();
@@ -9270,13 +9392,21 @@ mod tests {
         world.dungeon_mut().branch = crate::dungeon::DungeonBranch::Gehennom;
         let mut rng = test_rng();
 
-        let _events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+        let events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
 
         assert_eq!(world.dungeon().depth, 20, "expected to descend to Sanctum");
         assert!(
             has_monster_named(&world, "high priest"),
             "entering Sanctum should spawn the high priest"
         );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "sanctum-infidel"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "sanctum-be-gone"
+        )));
     }
 
     #[test]
@@ -9926,19 +10056,24 @@ mod tests {
         let mut world = make_stair_world(Terrain::StairsDown, 19);
         world.dungeon_mut().branch = crate::dungeon::DungeonBranch::Gehennom;
         let mut rng = test_rng();
-        let mut events = Vec::new();
+        let mut first_events = Vec::new();
 
-        change_level(&mut world, 20, false, &mut rng, &mut events);
+        change_level(&mut world, 20, false, &mut rng, &mut first_events);
         assert_eq!(count_monsters_named(&world, "high priest"), 1);
 
-        change_level(&mut world, 19, true, &mut rng, &mut events);
-        change_level(&mut world, 20, false, &mut rng, &mut events);
+        let mut revisit_events = Vec::new();
+        change_level(&mut world, 19, true, &mut rng, &mut revisit_events);
+        change_level(&mut world, 20, false, &mut rng, &mut revisit_events);
 
         assert_eq!(
             count_monsters_named(&world, "high priest"),
             1,
             "revisiting Sanctum should not duplicate the high priest"
         );
+        assert!(revisit_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "sanctum-desecrate"
+        )));
     }
 
     #[test]
@@ -13070,6 +13205,72 @@ mod tests {
     }
 
     #[test]
+    fn test_first_visit_tended_temple_emits_peace_message() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        let mut religion = default_religion_state(&world, player);
+        religion.alignment_record = 15;
+        world
+            .ecs_mut()
+            .insert_one(player, religion)
+            .expect("player should accept religion state");
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: Alignment::Lawful,
+                    has_shrine: true,
+                    is_high_priest: false,
+                    angry: false,
+                },
+            )
+            .expect("priest should accept explicit runtime state");
+
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+        maybe_emit_current_level_temple_entry(&world, player, true, &mut rng, &mut events);
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "temple-peace"
+        )));
+    }
+
+    #[test]
+    fn test_first_visit_untended_temple_emits_untended_message() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+
+        let mut rng = test_rng();
+        let mut events = Vec::new();
+        maybe_emit_current_level_temple_entry(&world, player, true, &mut rng, &mut events);
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. }
+                if key == "temple-eerie" || key == "temple-watched" || key == "temple-shiver"
+        )));
+    }
+
+    #[test]
     fn test_pray_on_aligned_altar_calms_angry_priest() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -14137,6 +14338,7 @@ mod tests {
             StoryTraversalScenario::TempleDonation,
             StoryTraversalScenario::TempleWrath,
             StoryTraversalScenario::TempleCalm,
+            StoryTraversalScenario::SanctumRevisit,
             StoryTraversalScenario::WizardHarassment,
             StoryTraversalScenario::EndgameAscension,
         ] {
@@ -14462,6 +14664,29 @@ mod tests {
                         event,
                         EngineEvent::Message { key, .. } if key == "priest-calmed"
                     )));
+                }
+                StoryTraversalScenario::SanctumRevisit => {
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Gehennom);
+                    assert_eq!(world.dungeon().depth, 20);
+                    assert_eq!(
+                        count_monsters_named(&world, "high priest"),
+                        1,
+                        "{} should not duplicate the Sanctum high priest",
+                        scenario.label()
+                    );
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "sanctum-desecrate"
+                    )));
+                    assert!(
+                        !final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. }
+                                if key == "sanctum-infidel" || key == "sanctum-be-gone"
+                        )),
+                        "{} should only emit revisit Sanctum messaging",
+                        scenario.label()
+                    );
                 }
                 StoryTraversalScenario::WizardHarassment => {
                     let sword = find_player_named_item(&world, player, "long sword")

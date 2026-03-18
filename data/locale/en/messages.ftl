@@ -820,6 +820,9 @@ shop-shoplift = "Stop, thief!" shrieks { $shopkeeper }.
 temple-enter = You enter a temple of { $god }.
 temple-donate = { $priest } accepts your donation.
 temple-protection = { $priest } bestows protection upon you.
+temple-forbidding = You feel an air of forbidding holiness.
+temple-peace = A deep sense of peace settles over the temple.
+temple-unusual-peace = The temple feels unusually calm.
 vault-guard = Suddenly one of the vault's guards appears!
 vault-guard-ask = "Who are you, and what are you doing here?"
 
