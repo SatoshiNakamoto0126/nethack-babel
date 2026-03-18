@@ -6905,6 +6905,8 @@ mod tests {
         ShopkeeperFollow,
         ShopkeeperPayoff,
         ShopkeeperCredit,
+        ShopCreditCovers,
+        ShopNoMoney,
         ShopkeeperSell,
         ShopRepair,
         ShopkeeperDeath,
@@ -6945,6 +6947,8 @@ mod tests {
                 StoryTraversalScenario::ShopkeeperFollow => "shopkeeper-follow",
                 StoryTraversalScenario::ShopkeeperPayoff => "shopkeeper-payoff",
                 StoryTraversalScenario::ShopkeeperCredit => "shopkeeper-credit",
+                StoryTraversalScenario::ShopCreditCovers => "shop-credit-covers",
+                StoryTraversalScenario::ShopNoMoney => "shop-no-money",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopRepair => "shop-repair",
                 StoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
@@ -7555,6 +7559,99 @@ mod tests {
                 let drop_events =
                     resolve_turn(&mut world, PlayerAction::Drop { item: gold }, &mut rng);
                 (world, drop_events)
+            }
+            StoryTraversalScenario::ShopCreditCovers => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                world.dungeon_mut().shop_rooms[0].credit = 150;
+                world.dungeon_mut().shop_rooms[0].debit = 20;
+                let unpaid_item = world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Tool,
+                        quantity: 1,
+                        weight: 10,
+                        age: 0,
+                        inv_letter: Some('u'),
+                        artifact: None,
+                    },
+                    ObjectLocation::Floor {
+                        x: 6,
+                        y: 5,
+                        level: world.dungeon().current_data_dungeon_level(),
+                    },
+                ));
+                assert!(
+                    world.dungeon_mut().shop_rooms[0]
+                        .bill
+                        .add(unpaid_item, 100, 1),
+                    "shop bill should accept a credited entry"
+                );
+
+                let mut rng = test_rng();
+                let pay_events = resolve_turn(&mut world, PlayerAction::Pay, &mut rng);
+                (world, pay_events)
+            }
+            StoryTraversalScenario::ShopNoMoney => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let _gold = spawn_inventory_gold(&mut world, 50, 'g');
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let unpaid_item = world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Tool,
+                        quantity: 1,
+                        weight: 10,
+                        age: 0,
+                        inv_letter: Some('u'),
+                        artifact: None,
+                    },
+                    ObjectLocation::Floor {
+                        x: 6,
+                        y: 5,
+                        level: world.dungeon().current_data_dungeon_level(),
+                    },
+                ));
+                assert!(
+                    world.dungeon_mut().shop_rooms[0]
+                        .bill
+                        .add(unpaid_item, 100, 1),
+                    "shop bill should accept an underfunded entry"
+                );
+
+                let mut rng = test_rng();
+                let pay_events = resolve_turn(&mut world, PlayerAction::Pay, &mut rng);
+                (world, pay_events)
             }
             StoryTraversalScenario::ShopkeeperSell => {
                 let mut world = make_test_world();
@@ -13972,6 +14069,120 @@ mod tests {
     }
 
     #[test]
+    fn test_pay_uses_credit_before_spending_player_gold() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        world.dungeon_mut().shop_rooms[0].credit = 150;
+        world.dungeon_mut().shop_rooms[0].debit = 20;
+        let unpaid_item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('u'),
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: 6,
+                y: 5,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
+        ));
+        assert!(
+            world.dungeon_mut().shop_rooms[0]
+                .bill
+                .add(unpaid_item, 100, 1),
+            "shop bill should accept a credited entry"
+        );
+
+        let mut rng = test_rng();
+        let events = resolve_turn(&mut world, PlayerAction::Pay, &mut rng);
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-credit-covers"
+        )));
+        assert_eq!(player_gold(&world, player), 0);
+        assert_eq!(world.dungeon().shop_rooms[0].credit, 30);
+        assert!(world.dungeon().shop_rooms[0].bill.is_empty());
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 0);
+    }
+
+    #[test]
+    fn test_pay_without_enough_money_preserves_bill_and_gold() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let _gold = spawn_inventory_gold(&mut world, 50, 'g');
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let unpaid_item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('u'),
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: 6,
+                y: 5,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
+        ));
+        assert!(
+            world.dungeon_mut().shop_rooms[0]
+                .bill
+                .add(unpaid_item, 100, 1),
+            "shop bill should accept an underfunded entry"
+        );
+
+        let mut rng = test_rng();
+        let events = resolve_turn(&mut world, PlayerAction::Pay, &mut rng);
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-no-money"
+        )));
+        assert_eq!(player_gold(&world, player), 50);
+        assert_eq!(world.dungeon().shop_rooms[0].bill.total(), 100);
+        assert_eq!(world.dungeon().shop_rooms[0].credit, 0);
+    }
+
+    #[test]
     fn test_drop_merchandise_in_shop_pays_player_and_updates_shop_gold() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -15868,6 +16079,8 @@ mod tests {
             StoryTraversalScenario::ShopkeeperFollow,
             StoryTraversalScenario::ShopkeeperPayoff,
             StoryTraversalScenario::ShopkeeperCredit,
+            StoryTraversalScenario::ShopCreditCovers,
+            StoryTraversalScenario::ShopNoMoney,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopRepair,
             StoryTraversalScenario::ShopkeeperDeath,
@@ -16073,6 +16286,50 @@ mod tests {
                         player_gold(&world, player),
                         0,
                         "{} should consume the dropped gold",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopCreditCovers => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-credit-covers"
+                    )));
+                    assert!(
+                        shop.bill.is_empty(),
+                        "{} should clear the bill",
+                        scenario.label()
+                    );
+                    assert_eq!(shop.debit, 0, "{} should clear debit", scenario.label());
+                    assert_eq!(
+                        shop.credit,
+                        30,
+                        "{} should spend only the owed credit",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopNoMoney => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-no-money"
+                    )));
+                    assert_eq!(
+                        player_gold(&world, player),
+                        50,
+                        "{} should leave the player's gold untouched",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        shop.bill.total(),
+                        100,
+                        "{} should preserve the bill",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        shop.credit,
+                        0,
+                        "{} should keep credit unchanged",
                         scenario.label()
                     );
                 }
