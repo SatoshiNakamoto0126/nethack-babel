@@ -5296,6 +5296,35 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_fountain_ambient_preserves_runtime_conditions() {
+        let mut world = make_stair_world(DungeonBranch::Main, 5, Terrain::Floor);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Fountain);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("fountain-ambient-round-trip", &world, [67u8; 32]);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-fountain-")
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("fountain ambience should survive save/load round-trip");
+    }
+
+    #[test]
     fn round_trip_loaded_revisit_restores_cached_runtime_state() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::StairsDown);
         let shopkeeper = world.spawn((

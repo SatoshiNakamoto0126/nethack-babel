@@ -828,24 +828,24 @@ fn emit_ambient_dungeon_sound(
     let has_temple = current_level_has_temple_ambient(world);
     let has_oracle = current_level_has_oracle_ambient(world);
     let vault_ambient = current_level_vault_ambient_kind(world);
-    if let Some(key) = crate::music::ambient_sounds(
-        world.dungeon().depth,
-        ambient_branch_name(world.dungeon().branch),
+    let ambient_context = crate::music::AmbientSoundContext {
+        depth: world.dungeon().depth,
+        branch: ambient_branch_name(world.dungeon().branch),
         has_shop,
         has_temple,
         has_oracle,
+        has_fountain: current_level_has_terrain(world, Terrain::Fountain),
+        has_sink: current_level_has_terrain(world, Terrain::Sink),
+        hallucinating: crate::status::is_hallucinating(world, player),
         vault_ambient,
-        rng,
-    ) {
+    };
+    if let Some(key) = crate::music::ambient_sounds(ambient_context, rng) {
         events.push(EngineEvent::msg(key));
     }
 }
 
 #[doc(hidden)]
-pub fn force_emit_ambient_dungeon_sound(
-    world: &GameWorld,
-    rng: &mut impl Rng,
-) -> Vec<EngineEvent> {
+pub fn force_emit_ambient_dungeon_sound(world: &GameWorld, rng: &mut impl Rng) -> Vec<EngineEvent> {
     let mut events = Vec::new();
     emit_ambient_dungeon_sound(world, rng, &mut events);
     events
@@ -888,6 +888,16 @@ fn current_level_has_oracle_ambient(world: &GameWorld) -> bool {
         == Some(crate::special_levels::SpecialLevelId::OracleLevel)
 }
 
+fn current_level_has_terrain(world: &GameWorld, terrain: Terrain) -> bool {
+    world
+        .dungeon()
+        .current_level
+        .cells
+        .iter()
+        .flatten()
+        .any(|cell| cell.terrain == terrain)
+}
+
 fn current_level_vault_ambient_kind(world: &GameWorld) -> Option<crate::music::VaultAmbientKind> {
     let player_pos = world
         .get_component::<Positioned>(world.player())
@@ -908,7 +918,10 @@ fn current_level_vault_ambient_kind(world: &GameWorld) -> Option<crate::music::V
     }
 }
 
-fn current_level_vault_has_gold(world: &GameWorld, vault_rooms: &[crate::vault::VaultRoom]) -> bool {
+fn current_level_vault_has_gold(
+    world: &GameWorld,
+    vault_rooms: &[crate::vault::VaultRoom],
+) -> bool {
     let branch = crate::dungeon::data_branch_id(world.dungeon().branch);
     let depth = world.dungeon().depth as i16;
     world
@@ -17172,6 +17185,71 @@ mod tests {
         assert!(
             found,
             "vault levels with an active guard should eventually emit guard-footstep texture"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_fountain_texture() {
+        let mut world = make_test_world();
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Fountain);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-fountain-")
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "levels with a fountain should eventually emit fountain ambience"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_hallucinating_sink_uses_sink_texture() {
+        let mut world = make_test_world();
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Sink);
+        set_player_position(&mut world, Position::new(2, 2));
+        let player = world.player();
+        crate::status::make_hallucinated(&mut world, player, 20);
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. }
+                        if key == "ambient-sink-gurgle" || key == "ambient-sink-dishes"
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "hallucinating levels with a sink should eventually emit sink ambience"
         );
     }
 

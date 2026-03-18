@@ -3378,6 +3378,20 @@ ambient-oracle-ravings = You hear convulsive ravings.
 # TODO: translate
 ambient-oracle-snakes = You hear snoring snakes.
 # TODO: translate
+ambient-fountain-bubbling = You hear bubbling water.
+# TODO: translate
+ambient-fountain-coins = You hear water falling on coins.
+# TODO: translate
+ambient-fountain-naiad = You hear the splashing of a naiad.
+# TODO: translate
+ambient-fountain-soda = You hear a soda fountain!
+# TODO: translate
+ambient-sink-drip = You hear a slow drip.
+# TODO: translate
+ambient-sink-gurgle = You hear a gurgling noise.
+# TODO: translate
+ambient-sink-dishes = You hear dishes being washed!
+# TODO: translate
 ambient-vault-counting = You hear someone counting money.
 # TODO: translate
 ambient-vault-searching = You hear someone searching.
