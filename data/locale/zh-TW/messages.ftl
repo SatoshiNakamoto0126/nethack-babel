@@ -3372,6 +3372,9 @@ shk-business-good = { $shopkeeper } says that business is good.
 shk-shoplifters = { $shopkeeper } talks about the problem of shoplifters.
 
 # TODO: translate
+shk-geico-pitch = { $shopkeeper } says: "Fifteen minutes could save you fifteen zorkmids."
+
+# TODO: translate
 god-roars-suffer = A booming voice roars: "Suffer for thy blasphemy!"
 
 # TODO: translate

@@ -1852,16 +1852,23 @@ fn resolve_player_action(
 
                 if let Some(shop_idx) = find_shop_room_index_by_shopkeeper(world, monster_entity) {
                     let shop = &world.dungeon().shop_rooms[shop_idx];
+                    let hallucinating = crate::status::is_hallucinating(world, player);
                     let honorific = crate::npc::shopkeeper_honorific(
                         current_player_is_female(world, player),
                         current_player_level(world, player),
-                        crate::status::is_hallucinating(world, player),
+                        hallucinating,
                     );
                     let following = world
                         .get_component::<crate::npc::Shopkeeper>(monster_entity)
                         .map(|state| state.following)
                         .unwrap_or(false);
-                    events.push(crate::npc::shopkeeper_chat(shop, following, honorific));
+                    if hallucinating && rng.random_range(0..2) == 0 {
+                        events.push(crate::npc::shopkeeper_hallucination_pitch(
+                            &shop.shopkeeper_name,
+                        ));
+                    } else {
+                        events.push(crate::npc::shopkeeper_chat(shop, following, honorific));
+                    }
                     return;
                 }
 
@@ -15999,6 +16006,43 @@ mod tests {
                         .iter()
                         .any(|(name, value)| name == "amount" && value == "150")
         )));
+    }
+
+    #[test]
+    fn test_hallucinating_chatting_with_shopkeeper_can_emit_geico_pitch() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let _ = crate::status::make_hallucinated(&mut world, player, 200);
+
+        let mut rng = test_rng();
+        for _ in 0..64 {
+            let events = resolve_turn(
+                &mut world,
+                PlayerAction::Chat {
+                    direction: Direction::East,
+                },
+                &mut rng,
+            );
+            if events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "shk-geico-pitch"
+            )) {
+                return;
+            }
+        }
+
+        panic!("hallucinating shop chat should eventually emit the GEICO-style pitch");
     }
 
     #[test]

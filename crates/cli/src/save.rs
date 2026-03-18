@@ -5623,6 +5623,52 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_hallucinating_shopkeeper_chat_can_emit_geico_pitch() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(nethack_babel_engine::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                nethack_babel_engine::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        if let Some(mut status) =
+            world.get_component_mut::<nethack_babel_engine::status::StatusEffects>(player)
+        {
+            status.hallucination = 200;
+        }
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("hallu-shopkeeper-chat-round-trip", &world, [76u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        for _ in 0..64 {
+            let events = resolve_turn(
+                &mut loaded,
+                PlayerAction::Chat {
+                    direction: Direction::East,
+                },
+                &mut rng,
+            );
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "shk-geico-pitch"
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("hallucinating shopkeeper chat should survive save/load round-trip");
+    }
+
+    #[test]
     fn round_trip_loaded_zoo_ambient_preserves_runtime_conditions() {
         let mut world = make_stair_world(DungeonBranch::Main, 12, Terrain::Floor);
         spawn_monster_with_symbol(&mut world, Position::new(7, 7), "jackal", 8, 'd', 20);

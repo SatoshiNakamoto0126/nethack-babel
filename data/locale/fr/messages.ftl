@@ -497,6 +497,7 @@ shk-surcharge-greeting = { $shopkeeper } dit : « Les prix sont plus élevés po
 shk-business-bad = { $shopkeeper } se plaint que les affaires vont mal.
 shk-business-good = { $shopkeeper } dit que les affaires vont bien.
 shk-shoplifters = { $shopkeeper } parle du problème des voleurs à l'étalage.
+shk-geico-pitch = { $shopkeeper } says: "Fifteen minutes could save you fifteen zorkmids."
 shop-enter-digging-tool = Une voix venue de la boutique vous avertit de laisser votre outil de creusement dehors.
 shop-enter-steed = Une voix venue de la boutique exige que vous laissiez { $steed } dehors.
 shop-enter-invisible = Une voix soupçonneuse avertit que les clients invisibles ne sont pas les bienvenus.

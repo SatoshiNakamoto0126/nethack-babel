@@ -1785,6 +1785,7 @@ shk-surcharge-greeting = { $shopkeeper } says: "Prices are higher for you now, {
 shk-business-bad = { $shopkeeper } complains that business is bad.
 shk-business-good = { $shopkeeper } says that business is good.
 shk-shoplifters = { $shopkeeper } talks about the problem of shoplifters.
+shk-geico-pitch = { $shopkeeper } says: "Fifteen minutes could save you fifteen zorkmids."
 
 ## ============================================================================
 ## Content delivery (rumors, oracles)

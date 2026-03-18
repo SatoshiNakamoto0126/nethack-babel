@@ -590,6 +590,13 @@ pub fn shopkeeper_chat(
     }
 }
 
+pub fn shopkeeper_hallucination_pitch(shopkeeper_name: &str) -> EngineEvent {
+    EngineEvent::msg_with(
+        "shk-geico-pitch",
+        vec![("shopkeeper", shopkeeper_name.to_string())],
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Guard patrol
 // ---------------------------------------------------------------------------
@@ -2015,6 +2022,12 @@ mod tests {
         shop.shopkeeper_gold = 500;
         let evt = shopkeeper_chat(&shop, false, "sir");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-shoplifters"));
+    }
+
+    #[test]
+    fn test_shopkeeper_hallucination_pitch_event() {
+        let evt = shopkeeper_hallucination_pitch("Bob");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-geico-pitch"));
     }
 
     // ── Guard patrol tests ───────────────────────────────────────
