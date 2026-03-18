@@ -597,6 +597,16 @@ pub fn shopkeeper_hallucination_pitch(shopkeeper_name: &str) -> EngineEvent {
     )
 }
 
+pub fn laughing_monster_chat(monster_name: &str, roll: u32) -> EngineEvent {
+    let key = match roll % 4 {
+        0 => "npc-laugh-giggles",
+        1 => "npc-laugh-chuckles",
+        2 => "npc-laugh-snickers",
+        _ => "npc-laugh-laughs",
+    };
+    EngineEvent::msg_with(key, vec![("monster", monster_name.to_string())])
+}
+
 // ---------------------------------------------------------------------------
 // Guard patrol
 // ---------------------------------------------------------------------------
@@ -2028,6 +2038,12 @@ mod tests {
     fn test_shopkeeper_hallucination_pitch_event() {
         let evt = shopkeeper_hallucination_pitch("Bob");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-geico-pitch"));
+    }
+
+    #[test]
+    fn test_laughing_monster_chat_event() {
+        let evt = laughing_monster_chat("gremlin", 2);
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-laugh-snickers"));
     }
 
     // ── Guard patrol tests ───────────────────────────────────────

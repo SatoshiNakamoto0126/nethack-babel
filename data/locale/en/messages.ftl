@@ -1786,6 +1786,10 @@ shk-business-bad = { $shopkeeper } complains that business is bad.
 shk-business-good = { $shopkeeper } says that business is good.
 shk-shoplifters = { $shopkeeper } talks about the problem of shoplifters.
 shk-geico-pitch = { $shopkeeper } says: "Fifteen minutes could save you fifteen zorkmids."
+npc-laugh-giggles = { $monster } giggles.
+npc-laugh-chuckles = { $monster } chuckles.
+npc-laugh-snickers = { $monster } snickers.
+npc-laugh-laughs = { $monster } laughs.
 
 ## ============================================================================
 ## Content delivery (rumors, oracles)

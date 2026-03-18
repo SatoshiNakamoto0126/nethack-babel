@@ -933,6 +933,14 @@ fn current_level_monster_def_by_name<'a>(world: &'a GameWorld, name: &str) -> Op
     world.monster_catalog().iter().find(|def| def.id == monster_id)
 }
 
+fn current_level_monster_def_for_entity(
+    world: &GameWorld,
+    entity: hecs::Entity,
+) -> Option<&MonsterDef> {
+    let name = world.get_component::<Name>(entity)?;
+    current_level_monster_def_by_name(world, &name.0)
+}
+
 fn current_level_has_court_ambient(world: &GameWorld) -> bool {
     world
         .ecs()
@@ -1877,6 +1885,22 @@ fn resolve_player_action(
                     let priest_events =
                         resolve_priest_chat(world, player, monster_entity, priest_data, rng);
                     events.extend(priest_events);
+                    return;
+                }
+
+                if !crate::status::is_deaf(world, player)
+                    && let Some(monster_def) =
+                        current_level_monster_def_for_entity(world, monster_entity)
+                    && monster_def.sound == nethack_babel_data::schema::MonsterSound::Laugh
+                {
+                    let monster_name = world
+                        .get_component::<Name>(monster_entity)
+                        .map(|name| name.0.clone())
+                        .unwrap_or_else(|| monster_def.names.male.clone());
+                    events.push(crate::npc::laughing_monster_chat(
+                        &monster_name,
+                        rng.random_range(0..4),
+                    ));
                     return;
                 }
 
@@ -16043,6 +16067,64 @@ mod tests {
         }
 
         panic!("hallucinating shop chat should eventually emit the GEICO-style pitch");
+    }
+
+    #[test]
+    fn test_chatting_with_laughing_monster_emits_laughter_line() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        spawn_full_monster(&mut world, Position::new(6, 5), "leprechaun", 12);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. }
+                    if matches!(
+                        key.as_str(),
+                        "npc-laugh-giggles"
+                            | "npc-laugh-chuckles"
+                            | "npc-laugh-snickers"
+                            | "npc-laugh-laughs"
+                    )
+            )
+        }));
+    }
+
+    #[test]
+    fn test_deaf_player_chatting_with_laughing_monster_gets_no_response() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        spawn_full_monster(&mut world, Position::new(6, 5), "leprechaun", 12);
+        if let Some(mut status) = world.get_component_mut::<crate::status::StatusEffects>(player) {
+            status.deaf = 20;
+        }
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-chat-no-response")
+        }));
+        assert!(!events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key.starts_with("npc-laugh-")
+            )
+        }));
     }
 
     #[test]

@@ -3375,6 +3375,18 @@ shk-shoplifters = { $shopkeeper } talks about the problem of shoplifters.
 shk-geico-pitch = { $shopkeeper } says: "Fifteen minutes could save you fifteen zorkmids."
 
 # TODO: translate
+npc-laugh-giggles = { $monster } giggles.
+
+# TODO: translate
+npc-laugh-chuckles = { $monster } chuckles.
+
+# TODO: translate
+npc-laugh-snickers = { $monster } snickers.
+
+# TODO: translate
+npc-laugh-laughs = { $monster } laughs.
+
+# TODO: translate
 god-roars-suffer = A booming voice roars: "Suffer for thy blasphemy!"
 
 # TODO: translate
