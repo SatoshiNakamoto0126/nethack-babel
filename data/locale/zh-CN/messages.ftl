@@ -1712,6 +1712,7 @@ priest-cheapskate = 祭司怀疑地看着你寒酸的捐赠。
 priest-small-thanks = 祭司感谢你尽力拿出的这点捐赠。
 priest-pious = 祭司说你确实相当虔诚。
 priest-clairvoyance = 祭司赐予你片刻的洞察。
+status-clairvoyance-end = 你的洞察渐渐消退。
 priest-selfless-generosity = 祭司深深感激你无私的慷慨。
 priest-cleansing = 祭司的祝福减轻了你的精神负担。
 priest-cranky-1 = 祭司厉声道：“你还想说话？那我就跟你说道说道！”

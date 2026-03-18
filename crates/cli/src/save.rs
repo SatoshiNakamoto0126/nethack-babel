@@ -18,7 +18,7 @@ use nethack_babel_engine::o_init::AppearanceTable;
 use nethack_babel_engine::quest::{QuestNpcRole, QuestState};
 use nethack_babel_engine::religion::ReligionState;
 use nethack_babel_engine::spells::SpellBook;
-use nethack_babel_engine::status::{Intrinsics, StatusEffects};
+use nethack_babel_engine::status::{Intrinsics, SpellProtection, StatusEffects};
 use nethack_babel_engine::world::Attributes as EngineAttributes;
 use nethack_babel_engine::world::{
     ArmorClass, Encumbrance, EncumbranceLevel, ExperienceLevel, GameWorld, HeroSpeed,
@@ -142,6 +142,8 @@ pub struct SerializablePlayer {
     pub name: String,
     // New in v0.3.0:
     pub status_effects: StatusEffects,
+    #[serde(default)]
+    pub spell_protection: Option<SpellProtection>,
     pub intrinsics: Intrinsics,
     pub combat: PlayerCombat,
     pub attribute_exercise: AttributeExercise,
@@ -331,6 +333,9 @@ fn extract_player(
         .get_component::<Intrinsics>(entity)
         .map(|i| (*i).clone())
         .unwrap_or_default();
+    let spell_protection = world
+        .get_component::<SpellProtection>(entity)
+        .map(|protection| (*protection).clone());
     let combat = world
         .get_component::<PlayerCombat>(entity)
         .map(|c| *c)
@@ -429,6 +434,7 @@ fn extract_player(
         nutrition,
         name,
         status_effects,
+        spell_protection,
         intrinsics,
         combat,
         attribute_exercise,
@@ -619,6 +625,18 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
     // Restore new v0.3.0 components.
     if let Some(mut se) = world.get_component_mut::<StatusEffects>(player) {
         *se = p.status_effects.clone();
+    }
+    match &p.spell_protection {
+        Some(spell_protection) => {
+            if let Some(mut live_protection) = world.get_component_mut::<SpellProtection>(player) {
+                *live_protection = spell_protection.clone();
+            } else {
+                let _ = world.ecs_mut().insert_one(player, spell_protection.clone());
+            }
+        }
+        None => {
+            let _ = world.ecs_mut().remove_one::<SpellProtection>(player);
+        }
     }
     if let Some(mut intr) = world.get_component_mut::<Intrinsics>(player) {
         *intr = p.intrinsics.clone();
@@ -1582,6 +1600,8 @@ mod tests {
         TempleAleGift,
         TempleDonationThanks,
         TempleDonation,
+        TempleBlessing,
+        TempleCleansing,
         TempleWrath,
         TempleCalm,
         SanctumRevisit,
@@ -1613,6 +1633,8 @@ mod tests {
                 SaveStoryTraversalScenario::TempleAleGift => "temple-ale-gift",
                 SaveStoryTraversalScenario::TempleDonationThanks => "temple-donation-thanks",
                 SaveStoryTraversalScenario::TempleDonation => "temple-donation",
+                SaveStoryTraversalScenario::TempleBlessing => "temple-blessing",
+                SaveStoryTraversalScenario::TempleCleansing => "temple-cleansing",
                 SaveStoryTraversalScenario::TempleWrath => "temple-wrath",
                 SaveStoryTraversalScenario::TempleCalm => "temple-calm",
                 SaveStoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
@@ -2459,6 +2481,96 @@ mod tests {
 
                 let (mut loaded, loaded_rng) =
                     save_and_reload_world("story-matrix-temple-donation", &world, [32u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::TempleBlessing => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 300, 'g');
+                let mut religion = wizard_story_religion(&world, player);
+                religion.alignment = Alignment::Lawful;
+                religion.original_alignment = Alignment::Lawful;
+                religion.alignment_record = -5;
+                world
+                    .ecs_mut()
+                    .insert_one(player, religion)
+                    .expect("player should accept religion state");
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, nethack_babel_engine::world::Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-temple-blessing", &world, [36u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::TempleCleansing => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 700, 'g');
+                let mut religion = wizard_story_religion(&world, player);
+                religion.alignment = Alignment::Lawful;
+                religion.original_alignment = Alignment::Lawful;
+                religion.alignment_record = -5;
+                world
+                    .ecs_mut()
+                    .insert_one(player, religion)
+                    .expect("player should accept religion state");
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        player,
+                        nethack_babel_engine::status::SpellProtection {
+                            layers: 1,
+                            countdown: 10,
+                            interval: 10,
+                        },
+                    )
+                    .expect("player should accept spell protection");
+                while world.turn() <= 5001 {
+                    world.advance_turn();
+                }
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, nethack_babel_engine::world::Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-temple-cleansing", &world, [37u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(
                     &mut loaded,
@@ -3376,6 +3488,38 @@ mod tests {
         assert_eq!(se.blindness, 200);
         assert_eq!(se.hallucination, 50);
         assert_eq!(se.stoning, 5);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn round_trip_spell_protection() {
+        let dir = test_dir("spell_protection");
+        let path = dir.join("spell_protection.nbsv");
+
+        let mut world = make_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                SpellProtection {
+                    layers: 2,
+                    countdown: 17,
+                    interval: 10,
+                },
+            )
+            .expect("player should accept spell protection");
+
+        save_game(&world, &path, SaveReason::Checkpoint, [0u8; 32]).unwrap();
+        let (loaded, _, _, _) = load_game(&path).unwrap();
+
+        let protection = loaded
+            .get_component::<SpellProtection>(loaded.player())
+            .expect("spell protection should survive round-trip");
+        assert_eq!(protection.layers, 2);
+        assert_eq!(protection.countdown, 17);
+        assert_eq!(protection.interval, 10);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -4590,6 +4734,8 @@ mod tests {
             SaveStoryTraversalScenario::TempleAleGift,
             SaveStoryTraversalScenario::TempleDonationThanks,
             SaveStoryTraversalScenario::TempleDonation,
+            SaveStoryTraversalScenario::TempleBlessing,
+            SaveStoryTraversalScenario::TempleCleansing,
             SaveStoryTraversalScenario::TempleWrath,
             SaveStoryTraversalScenario::TempleCalm,
             SaveStoryTraversalScenario::SanctumRevisit,
@@ -4888,6 +5034,50 @@ mod tests {
                         })
                         .unwrap_or(0);
                     assert_eq!(gold_total, 600);
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::status::SpellProtection>(player)
+                            .is_some_and(|protection| protection.layers == 1)
+                    );
+                }
+                SaveStoryTraversalScenario::TempleBlessing => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-clairvoyance"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if key == "clairvoyance-reveal" || key == "clairvoyance-nothing-new"
+                    )));
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::status::StatusEffects>(player)
+                            .is_some_and(|status| status.clairvoyance > 0)
+                    );
+                }
+                SaveStoryTraversalScenario::TempleCleansing => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-cleansing"
+                    )));
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 0);
+                    assert!(
+                        world
+                            .get_component::<ReligionState>(player)
+                            .is_some_and(|state| state.alignment_record >= 0)
+                    );
                     assert!(
                         world
                             .get_component::<nethack_babel_engine::status::SpellProtection>(player)

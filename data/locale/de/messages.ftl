@@ -552,6 +552,7 @@ priest-cheapskate = Der Priester mustert Eure dürftige Spende skeptisch.
 priest-small-thanks = Der Priester dankt Euch für das Wenige, das Ihr entbehren könnt.
 priest-pious = Der Priester sagt, Ihr seid wahrlich fromm.
 priest-clairvoyance = Der Priester gewährt Euch einen Moment der Einsicht.
+status-clairvoyance-end = Eure hellsichtige Einsicht schwindet.
 priest-selfless-generosity = Der Priester würdigt Eure selbstlose Großzügigkeit zutiefst.
 priest-cleansing = Der Segen des Priesters erleichtert Eure geistige Last.
 priest-not-enough-gold = Der Priester verlangt { $cost } Goldstücke.

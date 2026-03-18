@@ -1760,6 +1760,7 @@ priest-cheapskate = The priest eyes your meager donation skeptically.
 priest-small-thanks = The priest thanks you for what little you can spare.
 priest-pious = The priest says you are indeed pious.
 priest-clairvoyance = The priest blesses you with a moment of insight.
+status-clairvoyance-end = Your clairvoyant insight fades.
 priest-selfless-generosity = The priest deeply appreciates your selfless generosity.
 priest-cleansing = The priest's blessing lightens your spiritual burden.
 priest-cranky-1 = The priest snaps: "Thou wouldst have words, eh? I'll give thee a word or two!"

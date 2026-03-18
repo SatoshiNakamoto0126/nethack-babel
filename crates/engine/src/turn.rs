@@ -5760,8 +5760,12 @@ fn resolve_priest_chat<R: Rng>(
         crate::npc::DonationResult::Cheapskate => vec![EngineEvent::msg("priest-cheapskate")],
         crate::npc::DonationResult::SmallThanks => vec![EngineEvent::msg("priest-small-thanks")],
         crate::npc::DonationResult::Pious => vec![EngineEvent::msg("priest-pious")],
-        crate::npc::DonationResult::Blessing { .. } => {
-            vec![EngineEvent::msg("priest-clairvoyance")]
+        crate::npc::DonationResult::Blessing { clairvoyance_turns } => {
+            let mut events =
+                crate::status::make_clairvoyant(world, player, clairvoyance_turns.max(1) as u32);
+            events.extend(crate::detect::clairvoyance(world, player, 8));
+            events.push(EngineEvent::msg("priest-clairvoyance"));
+            events
         }
         crate::npc::DonationResult::ProtectionReward => {
             grant_player_spell_protection(world, player);
@@ -6620,6 +6624,8 @@ mod tests {
         TempleAleGift,
         TempleDonationThanks,
         TempleDonation,
+        TempleBlessing,
+        TempleCleansing,
         TempleWrath,
         TempleCalm,
         SanctumRevisit,
@@ -6651,6 +6657,8 @@ mod tests {
                 StoryTraversalScenario::TempleAleGift => "temple-ale-gift",
                 StoryTraversalScenario::TempleDonationThanks => "temple-donation-thanks",
                 StoryTraversalScenario::TempleDonation => "temple-donation",
+                StoryTraversalScenario::TempleBlessing => "temple-blessing",
+                StoryTraversalScenario::TempleCleansing => "temple-cleansing",
                 StoryTraversalScenario::TempleWrath => "temple-wrath",
                 StoryTraversalScenario::TempleCalm => "temple-calm",
                 StoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
@@ -7465,6 +7473,94 @@ mod tests {
                     .insert_one(player, monk_identity())
                     .expect("player should accept monk identity");
                 let _gold = spawn_inventory_gold(&mut world, 1_000, 'g');
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let mut rng = test_rng();
+                let chat_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, chat_events)
+            }
+            StoryTraversalScenario::TempleBlessing => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 300, 'g');
+                let mut religion = default_religion_state(&world, player);
+                religion.alignment = Alignment::Lawful;
+                religion.original_alignment = Alignment::Lawful;
+                religion.alignment_record = -5;
+                world
+                    .ecs_mut()
+                    .insert_one(player, religion)
+                    .expect("player should accept religion state");
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let mut rng = test_rng();
+                let chat_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, chat_events)
+            }
+            StoryTraversalScenario::TempleCleansing => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 700, 'g');
+                let mut religion = default_religion_state(&world, player);
+                religion.alignment = Alignment::Lawful;
+                religion.original_alignment = Alignment::Lawful;
+                religion.alignment_record = -5;
+                world
+                    .ecs_mut()
+                    .insert_one(player, religion)
+                    .expect("player should accept religion state");
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        player,
+                        crate::status::SpellProtection {
+                            layers: 1,
+                            countdown: 10,
+                            interval: 10,
+                        },
+                    )
+                    .expect("player should accept spell protection");
+                while world.turn() <= 5001 {
+                    world.advance_turn();
+                }
                 world
                     .dungeon_mut()
                     .current_level
@@ -14824,6 +14920,8 @@ mod tests {
             StoryTraversalScenario::TempleAleGift,
             StoryTraversalScenario::TempleDonationThanks,
             StoryTraversalScenario::TempleDonation,
+            StoryTraversalScenario::TempleBlessing,
+            StoryTraversalScenario::TempleCleansing,
             StoryTraversalScenario::TempleWrath,
             StoryTraversalScenario::TempleCalm,
             StoryTraversalScenario::SanctumRevisit,
@@ -15167,6 +15265,50 @@ mod tests {
                             .get_component::<crate::status::SpellProtection>(player)
                             .is_some_and(|protection| protection.layers == 1),
                         "{} should still grant one protection layer",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::TempleBlessing => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-clairvoyance"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if key == "clairvoyance-reveal" || key == "clairvoyance-nothing-new"
+                    )));
+                    assert!(
+                        world
+                            .get_component::<crate::status::StatusEffects>(player)
+                            .is_some_and(|status| status.clairvoyance > 0),
+                        "{} should grant timed clairvoyance",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::TempleCleansing => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-cleansing"
+                    )));
+                    assert_eq!(
+                        player_gold(&world, player),
+                        0,
+                        "{} should spend the cleansing donation",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::religion::ReligionState>(player)
+                            .is_some_and(|state| state.alignment_record >= 0),
+                        "{} should improve the player's alignment record",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::status::SpellProtection>(player)
+                            .is_some_and(|protection| protection.layers == 1),
+                        "{} should not consume existing protection layers",
                         scenario.label()
                     );
                 }

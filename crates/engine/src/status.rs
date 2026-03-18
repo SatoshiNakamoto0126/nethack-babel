@@ -55,6 +55,7 @@ pub struct StatusEffects {
     pub stun: u32,
     pub blindness: u32,
     pub hallucination: u32,
+    pub clairvoyance: u32,
     pub deaf: u32,
     pub glib: u32,
     pub stoning: u32,
@@ -174,6 +175,12 @@ pub fn is_hallucinating(world: &GameWorld, entity: Entity) -> bool {
     world
         .get_component::<StatusEffects>(entity)
         .is_some_and(|s| s.hallucination > 0)
+}
+
+pub fn is_clairvoyant(world: &GameWorld, entity: Entity) -> bool {
+    world
+        .get_component::<StatusEffects>(entity)
+        .is_some_and(|s| s.clairvoyance > 0)
 }
 
 pub fn is_levitating(world: &GameWorld, entity: Entity) -> bool {
@@ -391,6 +398,27 @@ pub fn make_hallucinated(w: &mut GameWorld, e: Entity, dur: u32) -> Vec<EngineEv
             ev.push(EngineEvent::StatusRemoved {
                 entity: e,
                 status: StatusEffect::Hallucinating,
+            });
+        }
+    }
+    ev
+}
+
+pub fn make_clairvoyant(w: &mut GameWorld, e: Entity, dur: u32) -> Vec<EngineEvent> {
+    let mut ev = Vec::new();
+    if let Some((was, is)) = apply_field(w, e, |s| s.clairvoyance, |s, v| s.clairvoyance = v, dur) {
+        if !was && is {
+            ev.push(EngineEvent::StatusApplied {
+                entity: e,
+                status: StatusEffect::Clairvoyant,
+                duration: Some(dur),
+                source: None,
+            });
+        } else if was && !is {
+            ev.push(EngineEvent::msg("status-clairvoyance-end"));
+            ev.push(EngineEvent::StatusRemoved {
+                entity: e,
+                status: StatusEffect::Clairvoyant,
             });
         }
     }
@@ -933,6 +961,11 @@ pub fn tick_status_effects(
         hallucination,
         "status-hallucination-end",
         StatusEffect::Hallucinating
+    );
+    dec!(
+        clairvoyance,
+        "status-clairvoyance-end",
+        StatusEffect::Clairvoyant
     );
     dec_silent!(deaf);
     dec_silent!(glib);

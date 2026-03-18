@@ -43,6 +43,7 @@ pub enum StatusEffect {
     Confused,
     Stunned,
     Hallucinating,
+    Clairvoyant,
     Paralyzed,
     Sleeping,
     Levitating,
