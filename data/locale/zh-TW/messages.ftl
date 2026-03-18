@@ -1704,6 +1704,13 @@ shop-theft-warning = { $shopkeeper }大喊：「小偷！快付錢！」
 priest-welcome = 祭司向你唸誦了祝福。
 priest-protection-offer = 祭司提供神聖保護，需要{ $cost }金幣。
 priest-donation-thanks = 祭司感謝你慷慨的捐贈。
+priest-ale-gift = 祭司給了你 { $amount } 枚金幣買酒。
+priest-cheapskate = 祭司懷疑地看著你寒酸的捐贈。
+priest-small-thanks = 祭司感謝你盡力拿出的這點捐贈。
+priest-pious = 祭司說你確實相當虔誠。
+priest-clairvoyance = 祭司賜予你片刻的洞察。
+priest-selfless-generosity = 祭司深深感激你無私的慷慨。
+priest-cleansing = 祭司的祝福減輕了你的精神負擔。
 
 ## ============================================================================
 ## 內容傳遞（謠言、神諭）

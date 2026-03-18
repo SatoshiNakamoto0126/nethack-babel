@@ -934,12 +934,6 @@ pub fn drop_in_shop(
         return events;
     }
 
-    // Angry shopkeeper takes without paying.
-    if shop.angry {
-        events.push(EngineEvent::msg("shop-angry-take"));
-        return events;
-    }
-
     // If previously robbed, item value reduces robbed amount.
     let sell_price = get_cost(base_cost, quantity, 10, false, false);
 
@@ -949,6 +943,12 @@ pub fn drop_in_shop(
             "shop-restock",
             vec![("shopkeeper", shop.shopkeeper_name.clone())],
         ));
+        return events;
+    }
+
+    // Angry shopkeeper takes without paying.
+    if shop.angry {
+        events.push(EngineEvent::msg("shop-angry-take"));
         return events;
     }
 

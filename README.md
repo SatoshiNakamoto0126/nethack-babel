@@ -280,7 +280,7 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 ## Roadmap (2026)
 
 1. **Temple and shop long-tail parity**  
-   Push beyond the current `follow / payoff / pray / calm-down / repair / drop-credit / live-sell / robbery / protection-spend` runtime closure and finish the remaining priest/shopkeeper edge cases: richer donation dialogue, sanctuary nuance, and deeper economy-side aftermath.
+   Push beyond the current `follow / payoff / pray / calm-down / repair / drop-credit / live-sell / robbery / restitution / protection-spend / donation-tiers / ale-gift` runtime closure and finish the remaining priest/shopkeeper edge cases: sanctuary nuance, richer deity/shop feedback, and deeper economy-side aftermath.
 2. **Wizard harassment parity**  
    Broaden Wizard of Yendor harassment beyond the current respawn/theft/curse/nasty-summon runtime, with richer nasty pools, stronger cadence, and more long-tail original-NetHack behavior.
 3. **Story drift detection**  
@@ -292,7 +292,7 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 
 ## TODO (Short-Term)
 
-- [ ] Extend temple/shop parity beyond the current payoff/follow/pray/calm/repair/drop-credit/live-sell/robbery/protection-spend path: richer donation dialogue, sanctuary edge semantics, and more original economy aftermath.
+- [ ] Extend temple/shop parity beyond the current payoff/follow/pray/calm/repair/drop-credit/live-sell/robbery/restitution/protection-spend/donation-tiers/ale-gift path: remaining sanctuary edge semantics, richer deity/shop feedback, and more original economy aftermath.
 - [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, theft, cursing, scaled nasty summon, and repeated reload coverage.
 - [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state beyond the current quest/endgame/shop/temple/wizard scenarios.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and save/load omissions.

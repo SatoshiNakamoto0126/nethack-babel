@@ -1392,58 +1392,8 @@ fn resolve_player_action(
 
                 if let Some(priest_data) = infer_priest_runtime(world, monster_entity) {
                     upsert_priest_component(world, monster_entity, priest_data);
-                    if priest_data.angry
-                        || world.get_component::<Peaceful>(monster_entity).is_none()
-                    {
-                        events.push(EngineEvent::msg("npc-chat-no-response"));
-                        return;
-                    }
-
-                    let current_protection = world
-                        .get_component::<crate::status::SpellProtection>(player)
-                        .map(|protection| i32::from(protection.layers))
-                        .unwrap_or(0);
-                    let priest_events = crate::npc::priest_interaction(
-                        world,
-                        player,
-                        monster_entity,
-                        player_gold(world, player) as i32,
-                        current_player_alignment(world, player),
-                        current_protection,
-                    );
-                    let granted_protection = priest_events.iter().any(|event| {
-                        matches!(
-                            event,
-                            EngineEvent::Message { key, .. } if key == "priest-protection-granted"
-                        )
-                    });
-                    if granted_protection {
-                        let cost = crate::npc::priest_protection_cost(current_protection);
-                        let _ = spend_player_gold(world, player, cost as u32);
-                        record_player_exercise_action(
-                            world,
-                            player,
-                            crate::attributes::ExerciseAction::DonatedToTemple,
-                        );
-                        if let Some(mut protection) =
-                            world.get_component_mut::<crate::status::SpellProtection>(player)
-                        {
-                            protection.layers = protection.layers.saturating_add(1);
-                            protection.countdown = protection.interval.max(10);
-                            if protection.interval == 0 {
-                                protection.interval = 10;
-                            }
-                        } else {
-                            let _ = world.ecs_mut().insert_one(
-                                player,
-                                crate::status::SpellProtection {
-                                    layers: 1,
-                                    countdown: 10,
-                                    interval: 10,
-                                },
-                            );
-                        }
-                    }
+                    let priest_events =
+                        resolve_priest_chat(world, player, monster_entity, priest_data, rng);
                     events.extend(priest_events);
                     return;
                 }
@@ -5652,6 +5602,151 @@ fn record_player_exercise_action(
     }
 }
 
+fn current_spell_protection_layers(world: &GameWorld, player: hecs::Entity) -> i32 {
+    world
+        .get_component::<crate::status::SpellProtection>(player)
+        .map(|protection| i32::from(protection.layers))
+        .unwrap_or(0)
+}
+
+fn grant_player_spell_protection(world: &mut GameWorld, player: hecs::Entity) {
+    if let Some(mut protection) = world.get_component_mut::<crate::status::SpellProtection>(player)
+    {
+        protection.layers = protection.layers.saturating_add(1);
+        protection.countdown = protection.interval.max(10);
+        if protection.interval == 0 {
+            protection.interval = 10;
+        }
+    } else {
+        let _ = world.ecs_mut().insert_one(
+            player,
+            crate::status::SpellProtection {
+                layers: 1,
+                countdown: 10,
+                interval: 10,
+            },
+        );
+    }
+}
+
+fn resolve_priest_chat<R: Rng>(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    priest_entity: hecs::Entity,
+    priest_data: crate::npc::Priest,
+    rng: &mut R,
+) -> Vec<EngineEvent> {
+    if priest_data.angry || world.get_component::<Peaceful>(priest_entity).is_none() {
+        return vec![EngineEvent::msg("npc-chat-no-response")];
+    }
+
+    let current_protection = current_spell_protection_layers(world, player);
+    let player_alignment = current_player_alignment(world, player);
+    let player_gold_total = player_gold(world, player) as i32;
+
+    let priest_events = crate::npc::priest_interaction(
+        world,
+        player,
+        priest_entity,
+        player_gold_total,
+        player_alignment,
+        current_protection,
+    );
+    let granted_protection = priest_events.iter().any(|event| {
+        matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-protection-granted"
+        )
+    });
+    if granted_protection {
+        let cost = crate::npc::priest_protection_cost(current_protection);
+        let _ = spend_player_gold(world, player, cost as u32);
+        record_player_exercise_action(
+            world,
+            player,
+            crate::attributes::ExerciseAction::DonatedToTemple,
+        );
+        grant_player_spell_protection(world, player);
+        return priest_events;
+    }
+
+    if player_alignment != priest_data.alignment {
+        return priest_events;
+    }
+
+    if player_gold_total <= 0 {
+        if priest_data.has_shrine && !priest_data.is_high_priest {
+            add_player_gold(world, player, 2);
+            return crate::npc::priest_ale_gift(2);
+        }
+        return vec![EngineEvent::msg("priest-virtues-of-poverty")];
+    }
+
+    let mut religion_state = world
+        .get_component::<crate::religion::ReligionState>(player)
+        .map(|state| (*state).clone())
+        .unwrap_or_else(|| default_religion_state(world, player));
+    refresh_religion_state_from_world(&mut religion_state, world, player);
+
+    let donation_offer = player_gold_total as u32;
+    let donation_result = crate::npc::priest_donation(
+        player_gold_total,
+        player_gold_total,
+        current_player_level(world, player),
+        religion_state.alignment_record,
+        true,
+        current_protection,
+        religion_state.turn,
+        rng,
+    );
+
+    let _ = spend_player_gold(world, player, donation_offer);
+    record_player_exercise_action(
+        world,
+        player,
+        crate::attributes::ExerciseAction::DonatedToTemple,
+    );
+
+    let donation_events = match donation_result {
+        crate::npc::DonationResult::Refused | crate::npc::DonationResult::RefusedToDonate => {
+            vec![EngineEvent::msg("priest-virtues-of-poverty")]
+        }
+        crate::npc::DonationResult::AleGift { amount } => {
+            add_player_gold(world, player, amount.max(0) as u32);
+            vec![EngineEvent::msg_with(
+                "priest-ale-gift",
+                vec![("amount", amount.to_string())],
+            )]
+        }
+        crate::npc::DonationResult::VirtuesOfPoverty => {
+            vec![EngineEvent::msg("priest-virtues-of-poverty")]
+        }
+        crate::npc::DonationResult::Cheapskate => vec![EngineEvent::msg("priest-cheapskate")],
+        crate::npc::DonationResult::SmallThanks => vec![EngineEvent::msg("priest-small-thanks")],
+        crate::npc::DonationResult::Pious => vec![EngineEvent::msg("priest-pious")],
+        crate::npc::DonationResult::Blessing { .. } => {
+            vec![EngineEvent::msg("priest-clairvoyance")]
+        }
+        crate::npc::DonationResult::ProtectionReward => {
+            grant_player_spell_protection(world, player);
+            vec![EngineEvent::msg_with(
+                "priest-protection-granted",
+                vec![("cost", donation_offer.to_string())],
+            )]
+        }
+        crate::npc::DonationResult::SelflessGenerosity => {
+            vec![EngineEvent::msg("priest-selfless-generosity")]
+        }
+        crate::npc::DonationResult::Cleansing => {
+            let cleansing_delta = (-religion_state.alignment_record).max(1);
+            crate::religion::adjust_alignment(&mut religion_state, cleansing_delta);
+            vec![EngineEvent::msg("priest-cleansing")]
+        }
+    };
+    persist_religion_state(world, player, religion_state);
+    donation_events
+}
+
 fn handle_player_drop(
     world: &mut GameWorld,
     player: hecs::Entity,
@@ -6401,6 +6496,9 @@ mod tests {
         ShopkeeperSell,
         ShopRepair,
         ShopRobbery,
+        ShopRestitution,
+        TempleAleGift,
+        TempleDonationThanks,
         TempleDonation,
         TempleWrath,
         TempleCalm,
@@ -6419,6 +6517,9 @@ mod tests {
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopRepair => "shop-repair",
                 StoryTraversalScenario::ShopRobbery => "shop-robbery",
+                StoryTraversalScenario::ShopRestitution => "shop-restitution",
+                StoryTraversalScenario::TempleAleGift => "temple-ale-gift",
+                StoryTraversalScenario::TempleDonationThanks => "temple-donation-thanks",
                 StoryTraversalScenario::TempleDonation => "temple-donation",
                 StoryTraversalScenario::TempleWrath => "temple-wrath",
                 StoryTraversalScenario::TempleCalm => "temple-calm",
@@ -6808,6 +6909,99 @@ mod tests {
                     &mut rng,
                 );
                 (world, robbery_events)
+            }
+            StoryTraversalScenario::ShopRestitution => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                world.dungeon_mut().shop_rooms[0].robbed = 5;
+                world.dungeon_mut().shop_rooms[0].angry = true;
+                world.dungeon_mut().shop_rooms[0].surcharge = true;
+                sync_current_level_shopkeeper_state(&mut world);
+
+                let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+                if let Some(mut inv) =
+                    world.get_component_mut::<crate::inventory::Inventory>(player)
+                {
+                    inv.items.push(item);
+                }
+
+                let mut rng = test_rng();
+                let restitution_events =
+                    resolve_turn(&mut world, PlayerAction::Drop { item }, &mut rng);
+                (world, restitution_events)
+            }
+            StoryTraversalScenario::TempleAleGift => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let mut rng = test_rng();
+                let chat_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, chat_events)
+            }
+            StoryTraversalScenario::TempleDonationThanks => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, monk_identity())
+                    .expect("player should accept monk identity");
+                let _gold = spawn_inventory_gold(&mut world, 100, 'g');
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(6, 5), Terrain::Altar);
+                let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(priest, Peaceful)
+                    .expect("priest should accept peaceful marker");
+
+                let mut rng = test_rng();
+                let chat_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (world, chat_events)
             }
             StoryTraversalScenario::TempleDonation => {
                 let mut world = make_test_world();
@@ -12505,6 +12699,48 @@ mod tests {
     }
 
     #[test]
+    fn test_drop_merchandise_after_robbery_reduces_robbed_balance_and_pacifies_shop() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        world.dungeon_mut().shop_rooms[0].robbed = 5;
+        world.dungeon_mut().shop_rooms[0].angry = true;
+        world.dungeon_mut().shop_rooms[0].surcharge = true;
+        sync_current_level_shopkeeper_state(&mut world);
+        let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.push(item);
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(&mut world, PlayerAction::Drop { item }, &mut rng);
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-restock"
+        )));
+        let shop = &world.dungeon().shop_rooms[0];
+        assert_eq!(shop.robbed, 0);
+        assert!(!shop.angry);
+        assert!(!shop.surcharge);
+    }
+
+    #[test]
     fn test_new_turn_repairs_shop_damage_for_idle_shopkeeper() {
         let mut world = make_test_world();
         let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
@@ -12750,6 +12986,87 @@ mod tests {
             EngineEvent::Message { key, .. } if key == "priest-protection-granted"
         )));
         assert_eq!(player_gold(&world, player), 600);
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_priest_without_gold_grants_ale_money() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("priest should accept peaceful marker");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-ale-gift"
+        )));
+        assert_eq!(player_gold(&world, player), 2);
+        assert!(
+            world
+                .get_component::<crate::status::SpellProtection>(player)
+                .is_none(),
+            "ale money should not grant divine protection"
+        );
+    }
+
+    #[test]
+    fn test_chatting_with_peaceful_priest_spends_small_donation_without_granting_protection() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        let _gold = spawn_inventory_gold(&mut world, 100, 'g');
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("priest should accept peaceful marker");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-small-thanks"
+        )));
+        assert_eq!(player_gold(&world, player), 0);
+        assert!(
+            world
+                .get_component::<crate::status::SpellProtection>(player)
+                .is_none(),
+            "small donations should not grant divine protection"
+        );
     }
 
     #[test]
@@ -13814,6 +14131,9 @@ mod tests {
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopRepair,
             StoryTraversalScenario::ShopRobbery,
+            StoryTraversalScenario::ShopRestitution,
+            StoryTraversalScenario::TempleAleGift,
+            StoryTraversalScenario::TempleDonationThanks,
             StoryTraversalScenario::TempleDonation,
             StoryTraversalScenario::TempleWrath,
             StoryTraversalScenario::TempleCalm,
@@ -14018,6 +14338,62 @@ mod tests {
                     assert!(
                         shopkeeper_state.following,
                         "{} should make the robbed shopkeeper pursue the hero",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopRestitution => {
+                    let shopkeeper =
+                        find_monster_named(&world, "Izchak").expect("shopkeeper should exist");
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-restock"
+                    )));
+                    assert_eq!(
+                        shop.robbed,
+                        0,
+                        "{} should clear robbed balance",
+                        scenario.label()
+                    );
+                    assert!(!shop.angry, "{} should pacify the shop", scenario.label());
+                    let shopkeeper_state = world
+                        .get_component::<crate::npc::Shopkeeper>(shopkeeper)
+                        .map(|state| (*state).clone())
+                        .expect("shopkeeper should keep explicit runtime state");
+                    assert!(
+                        !shopkeeper_state.following,
+                        "{} should stop follow behavior after restitution",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::TempleAleGift => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-ale-gift"
+                    )));
+                    assert_eq!(
+                        player_gold(&world, player),
+                        2,
+                        "{} should grant the hero ale money",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::TempleDonationThanks => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "priest-small-thanks"
+                    )));
+                    assert_eq!(
+                        player_gold(&world, player),
+                        0,
+                        "{} should spend the available donation gold",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<crate::status::SpellProtection>(player)
+                            .is_none(),
+                        "{} should not grant protection for a small donation",
                         scenario.label()
                     );
                 }
