@@ -5378,15 +5378,13 @@ fn process_wizard_of_yendor_turn(
             times_killed: wizard_times_killed,
         };
         if crate::npc::wizard_should_respawn(&wizard_state, world.turn(), rng) {
-            if let Some((wizard, pos)) =
-                spawn_named_monster_near_entity(world, player, "Wizard of Yendor", rng)
-            {
+            if let Some((wizard, pos, origin)) = spawn_or_respawn_wizard_near_player(world, rng) {
                 seed_wizard_runtime_state(world, wizard);
                 events.push(EngineEvent::MonsterGenerated {
                     entity: wizard,
                     position: pos,
                 });
-                events.push(EngineEvent::msg("wizard-respawned"));
+                emit_wizard_respawn_messages(world, player, origin, events);
             }
             return;
         }
@@ -5449,13 +5447,41 @@ fn wizard_harassment_messages(
     player: hecs::Entity,
     action: crate::npc::WizardAction,
 ) -> Vec<EngineEvent> {
-    if matches!(action, crate::npc::WizardAction::BlackGlowCurse)
-        && crate::status::is_blind(world, player)
-    {
-        Vec::new()
-    } else {
-        crate::npc::wizard_harass_events(action)
+    match action {
+        crate::npc::WizardAction::BlackGlowCurse if crate::status::is_blind(world, player) => {
+            Vec::new()
+        }
+        crate::npc::WizardAction::Resurrect => Vec::new(),
+        _ => crate::npc::wizard_harass_events(action),
     }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum WizardRespawnOrigin {
+    New,
+    Cached,
+}
+
+fn emit_wizard_respawn_messages(
+    world: &GameWorld,
+    player: hecs::Entity,
+    origin: WizardRespawnOrigin,
+    events: &mut Vec<EngineEvent>,
+) {
+    events.push(EngineEvent::msg("wizard-respawned"));
+    if crate::status::is_deaf(world, player) {
+        return;
+    }
+
+    events.push(EngineEvent::msg("wizard-respawned-boom"));
+    let verb = match origin {
+        WizardRespawnOrigin::New => "kill",
+        WizardRespawnOrigin::Cached => "elude",
+    };
+    events.push(EngineEvent::msg_with(
+        "wizard-respawned-taunt",
+        vec![("verb", verb.to_string())],
+    ));
 }
 
 #[doc(hidden)]
@@ -5649,9 +5675,10 @@ fn try_respawn_cached_wizard_near_player(
         hp.current = cached_wizard.hp_current;
         hp.max = cached_wizard.hp_max;
     }
-    let _ = world
-        .ecs_mut()
-        .insert_one(entity, cached_wizard.status_effects.clone());
+    let mut status_effects = cached_wizard.status_effects.clone();
+    status_effects.sleeping = 0;
+    status_effects.paralysis = 0;
+    let _ = world.ecs_mut().insert_one(entity, status_effects);
     if cached_wizard.is_peaceful {
         let _ = world.ecs_mut().insert_one(entity, Peaceful);
     }
@@ -5674,6 +5701,18 @@ fn try_respawn_cached_wizard_near_player(
     }
 
     Some((entity, spawn_pos))
+}
+
+fn spawn_or_respawn_wizard_near_player(
+    world: &mut GameWorld,
+    rng: &mut impl Rng,
+) -> Option<(hecs::Entity, Position, WizardRespawnOrigin)> {
+    let player = world.player();
+    if let Some((wizard, pos)) = try_respawn_cached_wizard_near_player(world, rng) {
+        return Some((wizard, pos, WizardRespawnOrigin::Cached));
+    }
+    spawn_named_monster_near_entity(world, player, "Wizard of Yendor", rng)
+        .map(|(wizard, pos)| (wizard, pos, WizardRespawnOrigin::New))
 }
 
 fn apply_wizard_harassment_action(
@@ -5712,9 +5751,13 @@ fn apply_wizard_harassment_action(
         crate::npc::WizardAction::SummonNasties => {
             let summon_anchor = wizard.unwrap_or(player);
             for spec in choose_wizard_nasty_summon_specs(world, rng) {
-                if let Some((monster, pos)) =
-                    spawn_named_monster_near_entity(world, summon_anchor, spec.as_str(), rng)
-                {
+                if let Some((monster, pos)) = spawn_named_monster_near_entity_with_flags(
+                    world,
+                    summon_anchor,
+                    spec.as_str(),
+                    MakeMonFlags::empty(),
+                    rng,
+                ) {
                     events.push(EngineEvent::MonsterGenerated {
                         entity: monster,
                         position: pos,
@@ -5734,16 +5777,14 @@ fn apply_wizard_harassment_action(
         }
         crate::npc::WizardAction::Resurrect => {
             if wizard_of_yendor_entities(world).is_empty()
-                && let Some((wizard, pos)) = try_respawn_cached_wizard_near_player(world, rng)
-                    .or_else(|| {
-                        spawn_named_monster_near_entity(world, player, "Wizard of Yendor", rng)
-                    })
+                && let Some((wizard, pos, origin)) = spawn_or_respawn_wizard_near_player(world, rng)
             {
                 seed_wizard_runtime_state(world, wizard);
                 events.push(EngineEvent::MonsterGenerated {
                     entity: wizard,
                     position: pos,
                 });
+                emit_wizard_respawn_messages(world, player, origin, events);
             }
         }
     }
@@ -5946,6 +5987,22 @@ fn spawn_named_monster_near_entity(
     monster_spec: &str,
     rng: &mut impl Rng,
 ) -> Option<(hecs::Entity, Position)> {
+    spawn_named_monster_near_entity_with_flags(
+        world,
+        anchor,
+        monster_spec,
+        MakeMonFlags::NO_GROUP,
+        rng,
+    )
+}
+
+fn spawn_named_monster_near_entity_with_flags(
+    world: &mut GameWorld,
+    anchor: hecs::Entity,
+    monster_spec: &str,
+    flags: MakeMonFlags,
+    rng: &mut impl Rng,
+) -> Option<(hecs::Entity, Position)> {
     let anchor_pos = world.get_component::<Positioned>(anchor).map(|pos| pos.0)?;
     let monster_defs = world.monster_catalog().to_vec();
     if let Some(monster_id) = resolve_monster_id_by_spec(&monster_defs, monster_spec)
@@ -5956,7 +6013,7 @@ fn spawn_named_monster_near_entity(
             &monster_defs,
             Some(monster_id),
             spawn_pos,
-            MakeMonFlags::NO_GROUP,
+            flags,
             rng,
         )
     {
@@ -12952,10 +13009,52 @@ mod tests {
             event,
             EngineEvent::Message { key, .. } if key == "wizard-respawned"
         )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "wizard-respawned-boom"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, args }
+                if key == "wizard-respawned-taunt"
+                    && args.iter().any(|(name, value)| name == "verb" && value == "kill")
+        )));
         assert!(
             events
                 .iter()
                 .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
+        );
+    }
+
+    #[test]
+    fn test_wizard_respawn_messages_respect_deafness() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        if let Some(mut status) = world.get_component_mut::<crate::status::StatusEffects>(player) {
+            status.deaf = 50;
+        }
+        let mut rng = test_rng();
+
+        let events = force_wizard_harassment_action(
+            &mut world,
+            None,
+            player,
+            crate::npc::WizardAction::Resurrect,
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "wizard-respawned"
+        )));
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. }
+                    if key == "wizard-respawned-boom" || key == "wizard-respawned-taunt"
+            )),
+            "deaf players should not hear the Wizard's resurrection taunt"
         );
     }
 
@@ -13352,6 +13451,8 @@ mod tests {
                 quest_npc_role: None,
                 status_effects: crate::status::StatusEffects {
                     blindness: 9,
+                    sleeping: 12,
+                    paralysis: 6,
                     ..Default::default()
                 },
             }],
@@ -13379,6 +13480,20 @@ mod tests {
             .get_component::<crate::status::StatusEffects>(wizard)
             .expect("respawned cached wizard should keep status effects");
         assert_eq!(status.blindness, 9);
+        assert_eq!(
+            status.sleeping, 0,
+            "respawned cached wizard should not remain asleep"
+        );
+        assert_eq!(
+            status.paralysis, 0,
+            "respawned cached wizard should not remain paralyzed"
+        );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, args }
+                if key == "wizard-respawned-taunt"
+                    && args.iter().any(|(name, value)| name == "verb" && value == "elude")
+        )));
         assert!(
             !world
                 .dungeon()
@@ -13386,6 +13501,68 @@ mod tests {
                 .contains_key(&(DungeonBranch::Main, 2)),
             "cached wizard entry should be consumed when resurrected"
         );
+    }
+
+    #[test]
+    fn test_wizard_turn_respawn_prefers_cached_wizard() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+            player_events.killed_wizard = true;
+            player_events.wizard_times_killed = 1;
+            player_events.wizard_last_killed_turn = 0;
+        }
+        world.dungeon_mut().monster_cache.insert(
+            (DungeonBranch::Main, 2),
+            vec![CachedMonster {
+                position: Position::new(3, 3),
+                name: "Wizard of Yendor".to_string(),
+                hp_current: 11,
+                hp_max: 27,
+                speed: NORMAL_SPEED,
+                symbol: '@',
+                color: nethack_babel_data::Color::BrightMagenta,
+                is_tame: false,
+                is_peaceful: false,
+                creation_order: 88,
+                priest: None,
+                shopkeeper: None,
+                quest_npc_role: None,
+                status_effects: crate::status::StatusEffects {
+                    blindness: 5,
+                    sleeping: 10,
+                    paralysis: 4,
+                    ..Default::default()
+                },
+            }],
+        );
+        while world.turn() < 99 {
+            world.advance_turn();
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+
+        let wizard = find_monster_named(&world, "Wizard of Yendor")
+            .expect("timed wizard respawn should prefer cached wizard when available");
+        let hp = world
+            .get_component::<HitPoints>(wizard)
+            .expect("respawned wizard should have hp");
+        assert_eq!(hp.current, 11);
+        assert_eq!(hp.max, 27);
+        let status = world
+            .get_component::<crate::status::StatusEffects>(wizard)
+            .expect("respawned wizard should keep status effects");
+        assert_eq!(status.blindness, 5);
+        assert_eq!(status.sleeping, 0);
+        assert_eq!(status.paralysis, 0);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, args }
+                if key == "wizard-respawned-taunt"
+                    && args.iter().any(|(name, value)| name == "verb" && value == "elude")
+        )));
     }
 
     #[test]
@@ -13666,6 +13843,49 @@ mod tests {
             generated_positions
                 .iter()
                 .all(|pos| { crate::ball::chebyshev_distance(*pos, player_pos) >= 3 })
+        );
+    }
+
+    #[test]
+    fn test_spawn_named_monster_near_entity_can_allow_group_generation() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let before = world.ecs().query::<&Monster>().iter().count();
+        let mut rng = test_rng();
+
+        let _spawned = spawn_named_monster_near_entity_with_flags(
+            &mut world,
+            player,
+            "giant ant",
+            MakeMonFlags::empty(),
+            &mut rng,
+        )
+        .expect("group-capable monster should spawn near the player");
+
+        let after = world.ecs().query::<&Monster>().iter().count();
+        assert!(
+            after >= before + 3,
+            "small-group monster generation should add the leader plus at least two escorts"
+        );
+    }
+
+    #[test]
+    fn test_spawn_named_monster_near_entity_default_blocks_group_generation() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let before = world.ecs().query::<&Monster>().iter().count();
+        let mut rng = test_rng();
+
+        let _spawned = spawn_named_monster_near_entity(&mut world, player, "giant ant", &mut rng)
+            .expect("single monster spawn should succeed near the player");
+
+        let after = world.ecs().query::<&Monster>().iter().count();
+        assert_eq!(
+            after,
+            before + 1,
+            "default special spawns should continue suppressing natural monster groups"
         );
     }
 

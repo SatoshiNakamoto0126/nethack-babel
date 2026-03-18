@@ -282,7 +282,7 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 1. **Temple and shop long-tail parity**  
    Push beyond the current `temple-entry / sanctum-entry / untended-temple-ghost / priest-wrath-damage / priest-wrath-blindness / wrong-alignment-priest / shop-entry / follow / payoff / credit-covers / no-money / pray / calm-down / cranky-priest-chat / repair / drop-credit / live-sell / robbery / restitution / shopkeeper-death / deserted-shop / protection-spend / donation-tiers / poverty / pious / selfless-generosity / ale-gift / blessing-clairvoyance / cleansing` runtime closure and finish the remaining priest/shopkeeper edge cases: richer deity/shop feedback and deeper economy-side aftermath.
 2. **Wizard harassment parity**  
-   Broaden Wizard of Yendor harassment beyond the current respawn/theft/curse/nasty-summon/level-teleport/off-screen-intervention/intervention-resurrection/intervention-aggravation/amulet-portal-sense/live-taunt runtime, with richer nasty pools, stronger cadence, and more long-tail original-NetHack behavior.
+   Broaden Wizard of Yendor harassment beyond the current respawn/cached-respawn/respawn-taunt/theft/curse/group-enabled nasty-summon/level-teleport/off-screen-intervention/intervention-resurrection/intervention-aggravation/amulet-portal-sense/live-taunt runtime, with stronger cadence and more long-tail original-NetHack behavior.
 3. **Story drift detection**  
    Expand the current quest/endgame/shop/temple/sanctum/wizard plus `Medusa`/`Castle`/`Orcus`/`Fort Ludios`/`Vlad`/invocation-portal/wizard-taunt traversal/save-load matrices into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
 4. **Runtime cache and save hardening**  
@@ -293,7 +293,7 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 ## TODO (Short-Term)
 
 - [ ] Extend temple/shop parity beyond the current temple-entry/sanctum-entry/untended-temple-ghost/priest-wrath-damage/priest-wrath-blindness/wrong-alignment-priest/shop-entry/payoff/follow/credit-covers/no-money/pray/calm/cranky-priest-chat/repair/drop-credit/live-sell/robbery/restitution/shopkeeper-death/deserted-shop/protection-spend/donation-tiers/poverty/pious/selfless-generosity/ale-gift/blessing-clairvoyance/cleansing path: remaining richer deity/shop feedback and more original economy aftermath.
-- [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, theft, cursing, scaled nasty summon, level teleport, off-screen intervention, intervention resurrection, intervention aggravation, amulet portal sensing, live taunts, and repeated reload coverage.
+- [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, cached resurrection, resurrection taunts, theft, cursing, group-enabled scaled nasty summon, level teleport, off-screen intervention, intervention resurrection, intervention aggravation, amulet portal sensing, live taunts, and repeated reload coverage.
 - [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state beyond the current quest/endgame/shop/temple/sanctum/wizard/Medusa/Castle/Orcus/Fort-Ludios/Vlad/invocation-portal/wizard-intervention/wizard-taunt scenarios.
 - [ ] Audit remaining level-local runtime state for cross-level leakage and save/load omissions.
 

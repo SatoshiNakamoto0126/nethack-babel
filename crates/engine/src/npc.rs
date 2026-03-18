@@ -765,7 +765,7 @@ pub fn wizard_harass_events(action: WizardAction) -> Vec<EngineEvent> {
         WizardAction::VagueNervous => vec![EngineEvent::msg("wizard-vague-nervous")],
         WizardAction::BlackGlowCurse => vec![EngineEvent::msg("wizard-black-glow")],
         WizardAction::Aggravate => vec![EngineEvent::msg("wizard-aggravate")],
-        WizardAction::Resurrect => vec![EngineEvent::msg("wizard-respawned")],
+        WizardAction::Resurrect => Vec::new(),
     }
 }
 

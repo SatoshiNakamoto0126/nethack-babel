@@ -3204,6 +3204,12 @@ wizard-aggravate = Distant noises echo as the dungeon suddenly awakens.
 wizard-respawned = The Wizard of Yendor rises again!
 
 # TODO: translate
+wizard-respawned-boom = A voice booms out...
+
+# TODO: translate
+wizard-respawned-taunt = So thou thought thou couldst {$verb} me, fool.
+
+# TODO: translate
 wizard-steal-amulet = The Wizard of Yendor steals the Amulet!
 
 # TODO: translate
