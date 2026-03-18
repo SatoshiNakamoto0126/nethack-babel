@@ -1675,6 +1675,7 @@ offer-what = 献上什么？
 
 ## 对话
 npc-chat-no-response = 这个生物似乎不想聊天。
+npc-chat-sleeping = 这个生物似乎根本没注意到你。
 chat-nobody-there = 那里没有人可以交谈。
 
 ## 移动/旅行
@@ -3297,6 +3298,18 @@ shk-welcome = { $shopkeeper } says: "Welcome to my shop, { $honorific }."
 
 # TODO: translate
 shk-angry-greeting = { $shopkeeper } glares at you angrily.
+
+# TODO: translate
+shk-follow-reminder = { $shopkeeper } says: "Hello, { $honorific }! Didn't you forget to pay?"
+
+# TODO: translate
+shk-bill-total = { $shopkeeper } says that your bill comes to { $amount } gold.
+
+# TODO: translate
+shk-debit-reminder = { $shopkeeper } reminds you that you owe { $amount } gold.
+
+# TODO: translate
+shk-credit-reminder = { $shopkeeper } encourages you to use your { $amount } gold of credit.
 
 # TODO: translate
 shk-robbed-greeting = { $shopkeeper } says: "I still remember that robbery, { $honorific }."

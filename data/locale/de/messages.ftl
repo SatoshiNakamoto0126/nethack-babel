@@ -460,6 +460,7 @@ offer-what = Was opfern?
 
 ## Gespräch
 npc-chat-no-response = Die Kreatur scheint nicht reden zu wollen.
+npc-chat-sleeping = Die Kreatur scheint Euch nicht zu bemerken.
 chat-nobody-there = Dort ist niemand zum Reden.
 
 ## Bewegung / Reise
@@ -572,6 +573,10 @@ priest-not-enough-gold = Der Priester verlangt { $cost } Goldstücke.
 priest-protection-granted = Der Priester gewährt Euch göttlichen Schutz für { $cost } Goldstücke.
 shk-welcome = { $shopkeeper } sagt: „Willkommen in meinem Laden, { $honorific }.“
 shk-angry-greeting = { $shopkeeper } starrt Euch wütend an.
+shk-follow-reminder = { $shopkeeper } sagt: „Hallo, { $honorific }! Habt Ihr nicht vergessen zu bezahlen?“
+shk-bill-total = { $shopkeeper } sagt, dass Eure Rechnung { $amount } Goldstücke beträgt.
+shk-debit-reminder = { $shopkeeper } erinnert Euch daran, dass Ihr { $amount } Goldstücke schuldet.
+shk-credit-reminder = { $shopkeeper } ermuntert Euch, Eure { $amount } Goldstücke Guthaben zu nutzen.
 shk-robbed-greeting = { $shopkeeper } sagt: „Den Raub habe ich nicht vergessen, { $honorific }.“
 shk-surcharge-greeting = { $shopkeeper } sagt: „Für Euch sind die Preise jetzt höher, { $honorific }.“
 shop-leave-warning = { $shopkeeper } ruft: „Bezahlt, bevor Ihr geht!“

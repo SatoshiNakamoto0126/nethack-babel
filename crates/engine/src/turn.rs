@@ -1496,6 +1496,16 @@ fn resolve_player_action(
                 .iter()
                 .find_map(|(entity, (_, pos))| (pos.0 == target_pos).then_some(entity));
             if let Some(monster_entity) = monster_at_target {
+                let priest_data = infer_priest_runtime(world, monster_entity);
+                if crate::status::is_sleeping(world, monster_entity) {
+                    if priest_data.is_some() {
+                        events.extend(crate::status::wake_from_sleeping(world, monster_entity));
+                    } else {
+                        events.push(EngineEvent::msg("npc-chat-sleeping"));
+                        return;
+                    }
+                }
+
                 if world.dungeon().branch == DungeonBranch::Quest
                     && current_player_role(world).is_some()
                 {
@@ -1539,17 +1549,15 @@ fn resolve_player_action(
                         current_player_level(world, player),
                         crate::status::is_hallucinating(world, player),
                     );
-                    events.push(crate::npc::shopkeeper_greeting(
-                        shop.angry,
-                        shop.robbed > 0,
-                        shop.surcharge,
-                        &shop.shopkeeper_name,
-                        honorific,
-                    ));
+                    let following = world
+                        .get_component::<crate::npc::Shopkeeper>(monster_entity)
+                        .map(|state| state.following)
+                        .unwrap_or(false);
+                    events.push(crate::npc::shopkeeper_chat(shop, following, honorific));
                     return;
                 }
 
-                if let Some(priest_data) = infer_priest_runtime(world, monster_entity) {
+                if let Some(priest_data) = priest_data {
                     upsert_priest_component(world, monster_entity, priest_data);
                     let priest_events =
                         resolve_priest_chat(world, player, monster_entity, priest_data, rng);
@@ -1562,7 +1570,10 @@ fn resolve_player_action(
                 if let Some(shop_idx) = find_shop_index_containing_position(world, player_pos) {
                     let shop = world.dungeon().shop_rooms[shop_idx].clone();
                     let floor_items = crate::inventory::items_at_position(world, player_pos);
-                    if let Some(item) = floor_items.first().copied()
+                    let can_quote = live_monster_entity(world, shop.shopkeeper)
+                        && !crate::status::is_sleeping(world, shop.shopkeeper);
+                    if can_quote
+                        && let Some(item) = floor_items.first().copied()
                         && let Some(quote) = crate::shop::quote_item_in_shop(
                             world,
                             player,
@@ -14999,6 +15010,137 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_shopkeeper_reports_outstanding_bill_total() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        assert!(
+            world.dungeon_mut().shop_rooms[0]
+                .bill
+                .add(hecs::Entity::DANGLING, 75, 2),
+            "shop bill should accept a quoted entry"
+        );
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, args, .. }
+                if key == "shk-bill-total"
+                    && args
+                        .iter()
+                        .any(|(name, value)| name == "amount" && value == "150")
+        )));
+    }
+
+    #[test]
+    fn test_chatting_with_sleeping_shopkeeper_gets_no_response() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let _ = crate::status::make_sleeping(&mut world, shopkeeper, 10);
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "npc-chat-sleeping"
+        )));
+        assert!(
+            crate::status::is_sleeping(&world, shopkeeper),
+            "non-priest sleepers should remain asleep after ignored chat"
+        );
+    }
+
+    #[test]
+    fn test_chatting_with_sleeping_priest_wakes_and_talks() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, monk_identity())
+            .expect("player should accept identity");
+        let shrine_pos = Position::new(6, 5);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(shrine_pos, Terrain::Altar);
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        let player_alignment = current_player_alignment(&world, player);
+        world
+            .ecs_mut()
+            .insert_one(priest, Peaceful)
+            .expect("priest should accept peaceful marker");
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: player_alignment,
+                    has_shrine: true,
+                    is_high_priest: false,
+                    angry: false,
+                },
+            )
+            .expect("priest should accept explicit runtime state");
+        let _ = crate::status::make_sleeping(&mut world, priest, 10);
+        let _gold = spawn_inventory_gold(&mut world, 1_000, '$');
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
+            pos.0 = Position::new(5, 5);
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(
+            !crate::status::is_sleeping(&world, priest),
+            "sleeping priests should wake up when addressed"
+        );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "priest-protection-granted"
+        )));
+    }
+
+    #[test]
     fn test_chatting_on_shop_item_quotes_price() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -15147,6 +15289,60 @@ mod tests {
                     },
                 )
                 .expect("player should accept deaf status");
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-price"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "chat-nobody-there"
+        )));
+    }
+
+    #[test]
+    fn test_sleeping_shopkeeper_does_not_quote_floor_merchandise() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let _ = crate::status::make_sleeping(&mut world, shopkeeper, 10);
+
+        let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.retain(|entry| *entry != item);
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+            *loc = ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: current_level,
+            };
         }
 
         let mut rng = test_rng();

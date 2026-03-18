@@ -1723,6 +1723,7 @@ offer-what = Sacrifice what?
 
 ## Chat
 npc-chat-no-response = The creature doesn't seem to want to chat.
+npc-chat-sleeping = The creature seems not to notice you.
 chat-nobody-there = There is nobody there to talk to.
 
 ## Movement / travel
@@ -1772,6 +1773,10 @@ priest-not-enough-gold = The priest asks for { $cost } gold.
 priest-protection-granted = The priest grants you protection for { $cost } gold.
 shk-welcome = { $shopkeeper } says: "Welcome to my shop, { $honorific }."
 shk-angry-greeting = { $shopkeeper } glares at you angrily.
+shk-follow-reminder = { $shopkeeper } says: "Hello, { $honorific }! Didn't you forget to pay?"
+shk-bill-total = { $shopkeeper } says that your bill comes to { $amount } gold.
+shk-debit-reminder = { $shopkeeper } reminds you that you owe { $amount } gold.
+shk-credit-reminder = { $shopkeeper } encourages you to use your { $amount } gold of credit.
 shk-robbed-greeting = { $shopkeeper } says: "I still remember that robbery, { $honorific }."
 shk-surcharge-greeting = { $shopkeeper } says: "Prices are higher for you now, { $honorific }."
 

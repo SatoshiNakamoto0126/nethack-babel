@@ -512,6 +512,76 @@ pub fn shopkeeper_greeting(
     }
 }
 
+/// Shopkeeper direct chat response based on current shop state.
+pub fn shopkeeper_chat(
+    shop: &crate::shop::ShopRoom,
+    following: bool,
+    honorific: &str,
+) -> EngineEvent {
+    if shop.angry {
+        EngineEvent::msg_with(
+            "shk-angry-greeting",
+            vec![("shopkeeper", shop.shopkeeper_name.clone())],
+        )
+    } else if following {
+        EngineEvent::msg_with(
+            "shk-follow-reminder",
+            vec![
+                ("shopkeeper", shop.shopkeeper_name.clone()),
+                ("honorific", honorific.to_string()),
+            ],
+        )
+    } else if !shop.bill.is_empty() {
+        EngineEvent::msg_with(
+            "shk-bill-total",
+            vec![
+                ("shopkeeper", shop.shopkeeper_name.clone()),
+                ("amount", (shop.bill.total() + shop.debit).to_string()),
+            ],
+        )
+    } else if shop.debit > 0 {
+        EngineEvent::msg_with(
+            "shk-debit-reminder",
+            vec![
+                ("shopkeeper", shop.shopkeeper_name.clone()),
+                ("amount", shop.debit.to_string()),
+            ],
+        )
+    } else if shop.credit > 0 {
+        EngineEvent::msg_with(
+            "shk-credit-reminder",
+            vec![
+                ("shopkeeper", shop.shopkeeper_name.clone()),
+                ("amount", shop.credit.to_string()),
+            ],
+        )
+    } else if shop.robbed > 0 {
+        EngineEvent::msg_with(
+            "shk-robbed-greeting",
+            vec![
+                ("shopkeeper", shop.shopkeeper_name.clone()),
+                ("honorific", honorific.to_string()),
+            ],
+        )
+    } else if shop.surcharge {
+        EngineEvent::msg_with(
+            "shk-surcharge-greeting",
+            vec![
+                ("shopkeeper", shop.shopkeeper_name.clone()),
+                ("honorific", honorific.to_string()),
+            ],
+        )
+    } else {
+        EngineEvent::msg_with(
+            "shk-welcome",
+            vec![
+                ("shopkeeper", shop.shopkeeper_name.clone()),
+                ("honorific", honorific.to_string()),
+            ],
+        )
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Guard patrol
 // ---------------------------------------------------------------------------
@@ -1775,6 +1845,33 @@ mod tests {
 
         let evt = shopkeeper_greeting(false, false, false, "Bob", "sir");
         matches!(evt, EngineEvent::Message { key, .. } if key == "shk-welcome");
+    }
+
+    #[test]
+    fn test_shopkeeper_chat_types() {
+        let mut shop = crate::shop::ShopRoom::new(
+            Position::new(1, 1),
+            Position::new(3, 3),
+            crate::shop::ShopType::Tool,
+            hecs::Entity::DANGLING,
+            "Bob".to_string(),
+        );
+        let evt = shopkeeper_chat(&shop, true, "sir");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-follow-reminder"));
+
+        assert!(shop.bill.add(hecs::Entity::DANGLING, 40, 2));
+        let evt = shopkeeper_chat(&shop, false, "sir");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-bill-total"));
+
+        shop.bill.clear();
+        shop.debit = 15;
+        let evt = shopkeeper_chat(&shop, false, "sir");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-debit-reminder"));
+
+        shop.debit = 0;
+        shop.credit = 25;
+        let evt = shopkeeper_chat(&shop, false, "sir");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-credit-reminder"));
     }
 
     // ── Guard patrol tests ───────────────────────────────────────
