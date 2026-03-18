@@ -2438,11 +2438,20 @@ mod tests {
                         "Izchak".to_string(),
                     ));
                 let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+                let second_item = spawn_inventory_object_by_name(&mut world, "lock pick", 'q');
                 if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
                     inv.items.retain(|entry| *entry != item);
+                    inv.items.retain(|entry| *entry != second_item);
                 }
                 let current_level = world.dungeon().current_data_dungeon_level();
                 if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+                    *loc = ObjectLocation::Floor {
+                        x: 5,
+                        y: 5,
+                        level: current_level,
+                    };
+                }
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(second_item) {
                     *loc = ObjectLocation::Floor {
                         x: 5,
                         y: 5,
@@ -5764,10 +5773,13 @@ mod tests {
                     assert_eq!(shop.shopkeeper_gold, 75);
                 }
                 SaveStoryTraversalScenario::ShopChatPriceQuote => {
-                    assert!(final_events.iter().any(|event| matches!(
-                        event,
-                        EngineEvent::Message { key, .. } if key == "shop-price"
-                    )));
+                    let quote_count = final_events
+                        .iter()
+                        .filter(|event| {
+                            matches!(event, EngineEvent::Message { key, .. } if key == "shop-price")
+                        })
+                        .count();
+                    assert_eq!(quote_count, 2);
                 }
                 SaveStoryTraversalScenario::ShopRepair => {
                     let shop = &world.dungeon().shop_rooms[0];

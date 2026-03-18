@@ -798,6 +798,7 @@ fn process_new_turn(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<
 
     emit_ambient_dungeon_sound(world, rng, events);
     process_amulet_portal_sense(world, rng, events);
+    process_amulet_wakes_sleeping_wizard(world, rng, events);
     process_wizard_of_yendor_turn(world, rng, events);
     process_shop_repairs(world, events);
 
@@ -1642,18 +1643,22 @@ fn resolve_player_action(
                     let floor_items = crate::inventory::items_at_position(world, player_pos);
                     let can_quote = live_monster_entity(world, shop.shopkeeper)
                         && !crate::status::is_sleeping(world, shop.shopkeeper);
-                    if can_quote
-                        && let Some(item) = floor_items.first().copied()
-                        && let Some(quote) = crate::shop::quote_item_in_shop(
-                            world,
-                            player,
-                            item,
-                            &shop,
-                            world.object_catalog(),
-                        )
-                    {
-                        events.push(quote);
-                    } else {
+                    let mut quoted_any = false;
+                    if can_quote {
+                        for item in floor_items {
+                            if let Some(quote) = crate::shop::quote_item_in_shop(
+                                world,
+                                player,
+                                item,
+                                &shop,
+                                world.object_catalog(),
+                            ) {
+                                quoted_any = true;
+                                events.push(quote);
+                            }
+                        }
+                    }
+                    if !quoted_any {
                         events.push(EngineEvent::msg("chat-nobody-there"));
                     }
                 } else {
@@ -5940,6 +5945,37 @@ fn process_amulet_portal_sense(
     events.push(EngineEvent::msg(key));
 }
 
+fn process_amulet_wakes_sleeping_wizard(
+    world: &mut GameWorld,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) {
+    let player = world.player();
+    if !player_has_named_item(world, player, "Amulet of Yendor") || rng.random_range(0..40) != 0 {
+        return;
+    }
+
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return;
+    };
+
+    for wizard in wizard_of_yendor_entities(world) {
+        if !crate::status::is_sleeping(world, wizard) {
+            continue;
+        }
+
+        let wizard_far_away = world
+            .get_component::<Positioned>(wizard)
+            .map(|pos| crate::ball::chebyshev_distance(player_pos, pos.0) > 1)
+            .unwrap_or(true);
+        events.extend(crate::status::wake_from_sleeping(world, wizard));
+        if wizard_far_away {
+            events.push(EngineEvent::msg("wizard-vague-nervous"));
+        }
+        return;
+    }
+}
+
 fn wizard_nasty_weight(
     monster: &MonsterDef,
     branch: DungeonBranch,
@@ -7578,6 +7614,7 @@ mod tests {
         WizardHarassment,
         WizardTaunt,
         WizardIntervention,
+        WizardAmuletWake,
         WizardBlackGlowBlind,
         WizardLevelTeleport,
         EndgameAscension,
@@ -7624,6 +7661,7 @@ mod tests {
                 StoryTraversalScenario::WizardHarassment => "wizard-harassment",
                 StoryTraversalScenario::WizardTaunt => "wizard-taunt",
                 StoryTraversalScenario::WizardIntervention => "wizard-intervention",
+                StoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 StoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
@@ -8373,13 +8411,22 @@ mod tests {
                     ));
 
                 let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+                let second_item = spawn_inventory_object_by_name(&mut world, "lock pick", 'q');
                 if let Some(mut inv) =
                     world.get_component_mut::<crate::inventory::Inventory>(player)
                 {
                     inv.items.retain(|entry| *entry != item);
+                    inv.items.retain(|entry| *entry != second_item);
                 }
                 let current_level = world.dungeon().current_data_dungeon_level();
                 if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+                    *loc = ObjectLocation::Floor {
+                        x: 5,
+                        y: 5,
+                        level: current_level,
+                    };
+                }
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(second_item) {
                     *loc = ObjectLocation::Floor {
                         x: 5,
                         y: 5,
@@ -9213,6 +9260,24 @@ mod tests {
                                     || key == "wizard-respawned"
                         )
                     }) {
+                        final_events = events;
+                        break;
+                    }
+                }
+                (world, final_events)
+            }
+            StoryTraversalScenario::WizardAmuletWake => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let _amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 12);
+                let _ = crate::status::make_sleeping(&mut world, wizard, 10_000);
+                let mut rng = test_rng();
+                let mut final_events = Vec::new();
+                for _ in 0..4096 {
+                    let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+                    if !crate::status::is_sleeping(&world, wizard) {
                         final_events = events;
                         break;
                     }
@@ -14174,6 +14239,30 @@ mod tests {
     }
 
     #[test]
+    fn test_real_amulet_can_wake_sleeping_wizard_from_inventory() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let _amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        let wizard = spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 12);
+        let _ = crate::status::make_sleeping(&mut world, wizard, 20);
+        let mut rng = test_rng();
+
+        for _ in 0..4096 {
+            let mut events = Vec::new();
+            process_amulet_wakes_sleeping_wizard(&mut world, &mut rng, &mut events);
+            if !crate::status::is_sleeping(&world, wizard) {
+                assert!(events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "wizard-vague-nervous"
+                )));
+                return;
+            }
+        }
+
+        panic!("real Amulet should eventually wake a sleeping Wizard");
+    }
+
+    #[test]
     fn test_wizard_can_continue_harassment_after_stealing_amulet() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -15687,6 +15776,62 @@ mod tests {
             event,
             EngineEvent::Message { key, .. } if key == "shop-price"
         )));
+    }
+
+    #[test]
+    fn test_chatting_on_shop_items_quotes_each_floor_stack() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        let second_item = spawn_inventory_object_by_name(&mut world, "lock pick", 'q');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.retain(|entry| *entry != item);
+            inv.items.retain(|entry| *entry != second_item);
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        for entity in [item, second_item] {
+            if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(entity) {
+                *loc = ObjectLocation::Floor {
+                    x: 5,
+                    y: 5,
+                    level: current_level,
+                };
+            }
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        let quote_count = events
+            .iter()
+            .filter(
+                |event| matches!(event, EngineEvent::Message { key, .. } if key == "shop-price"),
+            )
+            .count();
+        assert_eq!(quote_count, 2);
     }
 
     #[test]
@@ -18600,6 +18745,7 @@ mod tests {
             StoryTraversalScenario::WizardHarassment,
             StoryTraversalScenario::WizardTaunt,
             StoryTraversalScenario::WizardIntervention,
+            StoryTraversalScenario::WizardAmuletWake,
             StoryTraversalScenario::WizardBlackGlowBlind,
             StoryTraversalScenario::WizardLevelTeleport,
             StoryTraversalScenario::EndgameAscension,
@@ -18855,10 +19001,18 @@ mod tests {
                     );
                 }
                 StoryTraversalScenario::ShopChatPriceQuote => {
-                    assert!(final_events.iter().any(|event| matches!(
-                        event,
-                        EngineEvent::Message { key, .. } if key == "shop-price"
-                    )));
+                    let quote_count = final_events
+                        .iter()
+                        .filter(|event| {
+                            matches!(event, EngineEvent::Message { key, .. } if key == "shop-price")
+                        })
+                        .count();
+                    assert_eq!(
+                        quote_count,
+                        2,
+                        "{} should quote both floor items",
+                        scenario.label()
+                    );
                 }
                 StoryTraversalScenario::ShopRepair => {
                     let shop = &world.dungeon().shop_rooms[0];
@@ -19400,6 +19554,25 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.killed_wizard),
                         "{} should preserve the intervention trigger state",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::WizardAmuletWake => {
+                    assert!(
+                        final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-vague-nervous"
+                        )),
+                        "{} should warn when the Amulet wakes a distant Wizard",
+                        scenario.label()
+                    );
+                    let wizard = wizard_of_yendor_entities(&world)
+                        .into_iter()
+                        .next()
+                        .expect("wizard amulet wake scenario should keep a live Wizard");
+                    assert!(
+                        !crate::status::is_sleeping(&world, wizard),
+                        "{} should wake the sleeping Wizard",
                         scenario.label()
                     );
                 }
