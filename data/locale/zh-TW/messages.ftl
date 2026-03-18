@@ -2719,6 +2719,32 @@ spell-no-spellbook = You don't have any spellbooks to study.
 spell-polymorph-hit = { $target } undergoes a transformation!
 
 # TODO: translate
+ambient-court-conversation = You hear the tones of courtly conversation.
+# TODO: translate
+ambient-court-judgment = You hear a sceptre pounded in judgment.
+# TODO: translate
+ambient-court-off-with-your-head = You hear someone shout, "Off with your head!"
+# TODO: translate
+ambient-court-beruthiel = You hear Queen Beruthiel's cats!
+# TODO: translate
+ambient-beehive-buzzing = You hear a low buzzing.
+# TODO: translate
+ambient-beehive-drone = You hear an angry drone.
+# TODO: translate
+ambient-beehive-bonnet = You hear bees in your bonnet!
+# TODO: translate
+ambient-morgue-quiet = You suddenly realize it is unnaturally quiet.
+# TODO: translate
+ambient-morgue-neck-hair = The hair on the back of your neck stands up.
+# TODO: translate
+ambient-morgue-head-hair = The hair on your head seems to stand up.
+# TODO: translate
+ambient-zoo-elephant = You hear a sound reminiscent of an elephant stepping on a peanut.
+# TODO: translate
+ambient-zoo-seal = You hear a sound reminiscent of a seal barking.
+# TODO: translate
+ambient-zoo-dolittle = You hear Doctor Dolittle!
+# TODO: translate
 spell-polymorph-miss = You miss { $target }.
 
 # TODO: translate

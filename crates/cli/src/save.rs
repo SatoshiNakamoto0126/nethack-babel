@@ -5354,6 +5354,32 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_court_ambient_preserves_runtime_conditions() {
+        let mut world = make_stair_world(DungeonBranch::Main, 12, Terrain::Floor);
+        spawn_full_monster(&mut world, Position::new(7, 7), "kobold lord", 12);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("court-ambient-round-trip", &world, [70u8; 32]);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-court-")
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("court ambience should survive save/load round-trip");
+    }
+
+    #[test]
     fn round_trip_loaded_swamp_ambient_preserves_runtime_conditions() {
         let mut world = make_stair_world(DungeonBranch::Main, 18, Terrain::Floor);
         for y in 5..9 {
@@ -5385,6 +5411,58 @@ mod tests {
         }
 
         panic!("swamp ambience should survive save/load round-trip");
+    }
+
+    #[test]
+    fn round_trip_loaded_beehive_ambient_preserves_runtime_conditions() {
+        let mut world = make_stair_world(DungeonBranch::Main, 12, Terrain::Floor);
+        spawn_full_monster(&mut world, Position::new(7, 7), "killer bee", 8);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("beehive-ambient-round-trip", &world, [71u8; 32]);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-beehive-")
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("beehive ambience should survive save/load round-trip");
+    }
+
+    #[test]
+    fn round_trip_loaded_morgue_ambient_preserves_runtime_conditions() {
+        let mut world = make_stair_world(DungeonBranch::Main, 12, Terrain::Floor);
+        spawn_full_monster(&mut world, Position::new(7, 7), "ghost", 8);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("morgue-ambient-round-trip", &world, [72u8; 32]);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-morgue-")
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("morgue ambience should survive save/load round-trip");
     }
 
     #[test]
@@ -5421,6 +5499,32 @@ mod tests {
         }
 
         panic!("barracks ambience should survive save/load round-trip");
+    }
+
+    #[test]
+    fn round_trip_loaded_zoo_ambient_preserves_runtime_conditions() {
+        let mut world = make_stair_world(DungeonBranch::Main, 12, Terrain::Floor);
+        spawn_monster_with_symbol(&mut world, Position::new(7, 7), "jackal", 8, 'd', 20);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let (loaded, _loaded_rng) =
+            save_and_reload_world("zoo-ambient-round-trip", &world, [73u8; 32]);
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events =
+                nethack_babel_engine::turn::force_emit_ambient_dungeon_sound(&loaded, &mut rng);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-zoo-")
+                )
+            }) {
+                return;
+            }
+        }
+
+        panic!("zoo ambience should survive save/load round-trip");
     }
 
     #[test]

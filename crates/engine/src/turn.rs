@@ -834,8 +834,12 @@ fn emit_ambient_dungeon_sound(
         has_shop,
         has_temple,
         has_oracle,
+        has_court: current_level_has_court_ambient(world),
         has_swamp: current_level_has_swamp_ambient(world),
+        has_beehive: current_level_has_beehive_ambient(world),
+        has_morgue: current_level_has_morgue_ambient(world),
         has_barracks: current_level_has_barracks_ambient(world),
+        has_zoo: current_level_has_zoo_ambient(world),
         has_fountain: current_level_has_terrain(world, Terrain::Fountain),
         has_sink: current_level_has_terrain(world, Terrain::Sink),
         hallucinating: crate::status::is_hallucinating(world, player),
@@ -890,6 +894,37 @@ fn current_level_has_oracle_ambient(world: &GameWorld) -> bool {
         == Some(crate::special_levels::SpecialLevelId::OracleLevel)
 }
 
+fn current_level_monster_def_by_name<'a>(world: &'a GameWorld, name: &str) -> Option<&'a MonsterDef> {
+    let monster_id = resolve_monster_id_by_spec(world.monster_catalog(), name)?;
+    world.monster_catalog().iter().find(|def| def.id == monster_id)
+}
+
+fn current_level_has_court_ambient(world: &GameWorld) -> bool {
+    world
+        .ecs()
+        .query::<(&Monster, &Name)>()
+        .iter()
+        .any(|(entity, (_, name))| {
+            if !live_monster_entity(world, entity) {
+                return false;
+            }
+            let Some(monster_def) = current_level_monster_def_by_name(world, &name.0) else {
+                return false;
+            };
+            let lower = name.0.to_ascii_lowercase();
+            let titled_name = lower.contains("lord")
+                || lower.contains("lady")
+                || lower.contains("prince")
+                || lower.contains("princess")
+                || lower.contains("king")
+                || lower.contains("queen");
+            (crate::mondata::is_lord(monster_def)
+                || crate::mondata::is_prince(monster_def)
+                || titled_name)
+                && !crate::mondata::is_animal(monster_def)
+        })
+}
+
 fn current_level_has_swamp_ambient(world: &GameWorld) -> bool {
     let has_swamp_lair_monster = world
         .ecs()
@@ -905,6 +940,34 @@ fn current_level_has_swamp_ambient(world: &GameWorld) -> bool {
     has_swamp_lair_monster && current_level_terrain_count(world, Terrain::Pool) >= 12
 }
 
+fn current_level_has_beehive_ambient(world: &GameWorld) -> bool {
+    world
+        .ecs()
+        .query::<(&Monster, &Name)>()
+        .iter()
+        .any(|(entity, (_, name))| {
+            if !live_monster_entity(world, entity) {
+                return false;
+            }
+            let Some(monster_def) = current_level_monster_def_by_name(world, &name.0) else {
+                return false;
+            };
+            monster_def.symbol == 'a' && crate::mondata::is_flyer(monster_def)
+        })
+}
+
+fn current_level_has_morgue_ambient(world: &GameWorld) -> bool {
+    world
+        .ecs()
+        .query::<(&Monster, &Name)>()
+        .iter()
+        .any(|(entity, (_, name))| {
+            live_monster_entity(world, entity)
+                && current_level_monster_def_by_name(world, &name.0)
+                    .is_some_and(crate::mondata::is_undead)
+        })
+}
+
 fn current_level_has_barracks_ambient(world: &GameWorld) -> bool {
     let mut sleeping_mercenaries = 0usize;
     let mut mercenary_count = 0usize;
@@ -913,12 +976,10 @@ fn current_level_has_barracks_ambient(world: &GameWorld) -> bool {
         if !live_monster_entity(world, entity) {
             continue;
         }
-        let lower = name.0.to_ascii_lowercase();
-        let is_mercenary = lower.contains("soldier")
-            || lower.contains("sergeant")
-            || lower.contains("lieutenant")
-            || lower.contains("captain");
-        if !is_mercenary {
+        let Some(monster_def) = current_level_monster_def_by_name(world, &name.0) else {
+            continue;
+        };
+        if !crate::mondata::is_mercenary(monster_def) {
             continue;
         }
         mercenary_count += 1;
@@ -931,6 +992,25 @@ fn current_level_has_barracks_ambient(world: &GameWorld) -> bool {
     }
 
     sleeping_mercenaries > 0 || mercenary_count > 5
+}
+
+fn current_level_has_zoo_ambient(world: &GameWorld) -> bool {
+    world
+        .ecs()
+        .query::<(&Monster, &Name)>()
+        .iter()
+        .any(|(entity, (_, name))| {
+            if !live_monster_entity(world, entity) {
+                return false;
+            }
+            let Some(monster_def) = current_level_monster_def_by_name(world, &name.0) else {
+                return false;
+            };
+            let sleeping = world
+                .get_component::<crate::status::StatusEffects>(entity)
+                .is_some_and(|status| status.sleeping > 0);
+            sleeping || crate::mondata::is_animal(monster_def)
+        })
 }
 
 fn current_level_has_terrain(world: &GameWorld, terrain: Terrain) -> bool {
@@ -17310,6 +17390,32 @@ mod tests {
     }
 
     #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_court_texture() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        spawn_full_monster(&mut world, Position::new(7, 7), "kobold lord", 12);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-court-")
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(found, "levels with court royalty should eventually emit court ambience");
+    }
+
+    #[test]
     fn test_emit_ambient_dungeon_sound_can_emit_swamp_texture() {
         let mut world = make_test_world();
         for y in 5..9 {
@@ -17357,8 +17463,61 @@ mod tests {
     }
 
     #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_beehive_texture() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        spawn_full_monster(&mut world, Position::new(7, 7), "killer bee", 8);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-beehive-")
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(found, "levels with beehive monsters should eventually emit beehive ambience");
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_morgue_texture() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        spawn_full_monster(&mut world, Position::new(7, 7), "ghost", 8);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-morgue-")
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(found, "levels with undead should eventually emit morgue ambience");
+    }
+
+    #[test]
     fn test_emit_ambient_dungeon_sound_can_emit_barracks_texture() {
         let mut world = make_test_world();
+        install_test_catalogs(&mut world);
         for idx in 0..6 {
             let soldier = spawn_full_monster(&mut world, Position::new(5 + idx, 5), "soldier", 12);
             if let Some(mut symbol) = world.get_component_mut::<DisplaySymbol>(soldier) {
@@ -17405,6 +17564,42 @@ mod tests {
             found,
             "levels with sleeping mercenaries should eventually emit barracks ambience"
         );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_zoo_texture() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let jackal = spawn_full_monster(&mut world, Position::new(7, 7), "jackal", 8);
+        world
+            .ecs_mut()
+            .insert_one(
+                jackal,
+                crate::status::StatusEffects {
+                    sleeping: 20,
+                    ..Default::default()
+                },
+            )
+            .expect("jackal should accept sleeping status");
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-zoo-")
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(found, "levels with zoo animals should eventually emit zoo ambience");
     }
 
     #[test]

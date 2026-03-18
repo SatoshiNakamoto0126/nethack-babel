@@ -518,8 +518,12 @@ pub struct AmbientSoundContext<'a> {
     pub has_shop: bool,
     pub has_temple: bool,
     pub has_oracle: bool,
+    pub has_court: bool,
     pub has_swamp: bool,
+    pub has_beehive: bool,
+    pub has_morgue: bool,
     pub has_barracks: bool,
+    pub has_zoo: bool,
     pub has_fountain: bool,
     pub has_sink: bool,
     pub hallucinating: bool,
@@ -534,8 +538,12 @@ impl<'a> AmbientSoundContext<'a> {
             has_shop: false,
             has_temple: false,
             has_oracle: false,
+            has_court: false,
             has_swamp: false,
+            has_beehive: false,
+            has_morgue: false,
             has_barracks: false,
+            has_zoo: false,
             has_fountain: false,
             has_sink: false,
             hallucinating: false,
@@ -563,11 +571,57 @@ pub fn ambient_sounds(ctx: AmbientSoundContext<'_>, rng: &mut impl Rng) -> Optio
             _ => "ambient-mines-cart",
         }),
         _ => {
-            if let Some(vault_ambient) = ctx.vault_ambient {
+            if ctx.has_court {
+                Some(match (ctx.hallucinating, rng.random_range(0..3u32)) {
+                    (false, 0) => "ambient-court-conversation",
+                    (false, 1) => "ambient-court-judgment",
+                    (false, _) => "ambient-court-off-with-your-head",
+                    (true, 0) => "ambient-court-judgment",
+                    (true, 1) => "ambient-court-off-with-your-head",
+                    (true, _) => "ambient-court-beruthiel",
+                })
+            } else if ctx.has_swamp {
+                Some(match (ctx.hallucinating, rng.random_range(0..2u32)) {
+                    (false, 0) => "ambient-swamp-mosquitoes",
+                    (false, _) => "ambient-swamp-marsh-gas",
+                    (true, 0) => "ambient-swamp-marsh-gas",
+                    (true, _) => "ambient-swamp-donald-duck",
+                })
+            } else if let Some(vault_ambient) = ctx.vault_ambient {
                 Some(match vault_ambient {
                     VaultAmbientKind::CountingGold => "ambient-vault-counting",
                     VaultAmbientKind::Searching => "ambient-vault-searching",
                     VaultAmbientKind::GuardFootsteps => "ambient-vault-footsteps",
+                })
+            } else if ctx.has_beehive {
+                Some(match (ctx.hallucinating, rng.random_range(0..2u32)) {
+                    (false, 0) => "ambient-beehive-buzzing",
+                    (false, _) => "ambient-beehive-drone",
+                    (true, 0) => "ambient-beehive-drone",
+                    (true, _) => "ambient-beehive-bonnet",
+                })
+            } else if ctx.has_morgue {
+                Some(match (ctx.hallucinating, rng.random_range(0..2u32)) {
+                    (false, 0) => "ambient-morgue-quiet",
+                    (false, _) => "ambient-morgue-neck-hair",
+                    (true, 0) => "ambient-morgue-neck-hair",
+                    (true, _) => "ambient-morgue-head-hair",
+                })
+            } else if ctx.has_barracks {
+                Some(match (ctx.hallucinating, rng.random_range(0..3u32)) {
+                    (false, 0) => "ambient-barracks-honed",
+                    (false, 1) => "ambient-barracks-snoring",
+                    (false, _) => "ambient-barracks-dice",
+                    (true, 0) => "ambient-barracks-snoring",
+                    (true, 1) => "ambient-barracks-dice",
+                    (true, _) => "ambient-barracks-macarthur",
+                })
+            } else if ctx.has_zoo {
+                Some(match (ctx.hallucinating, rng.random_range(0..2u32)) {
+                    (false, 0) => "ambient-zoo-elephant",
+                    (false, _) => "ambient-zoo-seal",
+                    (true, 0) => "ambient-zoo-seal",
+                    (true, _) => "ambient-zoo-dolittle",
                 })
             } else if ctx.has_shop {
                 Some(match rng.random_range(0..3u32) {
@@ -587,22 +641,6 @@ pub fn ambient_sounds(ctx: AmbientSoundContext<'_>, rng: &mut impl Rng) -> Optio
                     0 => "ambient-oracle-wind",
                     1 => "ambient-oracle-ravings",
                     _ => "ambient-oracle-snakes",
-                })
-            } else if ctx.has_barracks {
-                Some(match (ctx.hallucinating, rng.random_range(0..3u32)) {
-                    (false, 0) => "ambient-barracks-honed",
-                    (false, 1) => "ambient-barracks-snoring",
-                    (false, _) => "ambient-barracks-dice",
-                    (true, 0) => "ambient-barracks-snoring",
-                    (true, 1) => "ambient-barracks-dice",
-                    (true, _) => "ambient-barracks-macarthur",
-                })
-            } else if ctx.has_swamp {
-                Some(match (ctx.hallucinating, rng.random_range(0..2u32)) {
-                    (false, 0) => "ambient-swamp-mosquitoes",
-                    (false, _) => "ambient-swamp-marsh-gas",
-                    (true, 0) => "ambient-swamp-marsh-gas",
-                    (true, _) => "ambient-swamp-donald-duck",
                 })
             } else if ctx.has_fountain {
                 Some(match (ctx.hallucinating, rng.random_range(0..3u32)) {
@@ -1244,6 +1282,30 @@ mod tests {
     }
 
     #[test]
+    fn ambient_sounds_court() {
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    has_court: true,
+                    ..AmbientSoundContext::new(12, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert!(
+                    msg.starts_with("ambient-court-"),
+                    "court sound should be thematic: {}",
+                    msg
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "should eventually get a court ambient sound");
+    }
+
+    #[test]
     fn ambient_sounds_vault_counting() {
         let mut found = false;
         for seed in 0..200u64 {
@@ -1363,6 +1425,54 @@ mod tests {
     }
 
     #[test]
+    fn ambient_sounds_beehive() {
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    has_beehive: true,
+                    ..AmbientSoundContext::new(12, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert!(
+                    matches!(msg, "ambient-beehive-buzzing" | "ambient-beehive-drone"),
+                    "beehive sound should be thematic: {}",
+                    msg
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "should eventually get a beehive ambient sound");
+    }
+
+    #[test]
+    fn ambient_sounds_morgue() {
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    has_morgue: true,
+                    ..AmbientSoundContext::new(12, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert!(
+                    matches!(msg, "ambient-morgue-quiet" | "ambient-morgue-neck-hair"),
+                    "morgue sound should be thematic: {}",
+                    msg
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "should eventually get a morgue ambient sound");
+    }
+
+    #[test]
     fn ambient_sounds_barracks() {
         let mut found = false;
         for seed in 0..200u64 {
@@ -1389,6 +1499,30 @@ mod tests {
             }
         }
         assert!(found, "should eventually get a barracks ambient sound");
+    }
+
+    #[test]
+    fn ambient_sounds_zoo() {
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    has_zoo: true,
+                    ..AmbientSoundContext::new(12, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert!(
+                    matches!(msg, "ambient-zoo-elephant" | "ambient-zoo-seal"),
+                    "zoo sound should be thematic: {}",
+                    msg
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "should eventually get a zoo ambient sound");
     }
 
     // -----------------------------------------------------------------------
