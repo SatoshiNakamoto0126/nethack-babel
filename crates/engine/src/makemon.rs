@@ -21,8 +21,8 @@ use crate::monster_ai::{
 };
 use crate::status::{Intrinsics, StatusEffects};
 use crate::world::{
-    ArmorClass, Boulder, DisplaySymbol, GameWorld, HitPoints, Monster, MovementPoints,
-    NORMAL_SPEED, Name, Peaceful, Positioned, Speed,
+    ArmorClass, Boulder, DisplaySymbol, GameWorld, HitPoints, Monster, MonsterIdentity,
+    MovementPoints, NORMAL_SPEED, Name, Peaceful, Positioned, Speed,
 };
 
 // ---------------------------------------------------------------------------
@@ -95,6 +95,7 @@ pub fn makemon(
             current: hp,
             max: hp,
         },
+        MonsterIdentity(mid),
         Speed(def.speed.max(1) as u32),
         ArmorClass(def.armor_class as i32),
         Name(def.names.male.clone()),

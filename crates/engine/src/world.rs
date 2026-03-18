@@ -5,7 +5,7 @@
 //! this struct.
 
 use hecs::{Entity, World};
-use nethack_babel_data::{MonsterDef, ObjectDef, PlayerEvents, PlayerQuestItems};
+use nethack_babel_data::{MonsterDef, MonsterId, ObjectDef, PlayerEvents, PlayerQuestItems};
 use serde::{Deserialize, Serialize};
 
 use crate::action::Position;
@@ -93,6 +93,10 @@ pub struct PlayerCombat {
 /// Marker component for monster entities.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Monster;
+
+/// Stable monster catalog identity for runtime lookups.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct MonsterIdentity(pub MonsterId);
 
 /// Marker component for boulder entities.
 ///

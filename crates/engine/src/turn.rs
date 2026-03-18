@@ -942,6 +942,15 @@ fn current_level_monster_def_for_entity(
     world: &GameWorld,
     entity: hecs::Entity,
 ) -> Option<&MonsterDef> {
+    if let Some(monster_id) = world
+        .get_component::<crate::world::MonsterIdentity>(entity)
+        .map(|id| id.0)
+    {
+        return world
+            .monster_catalog()
+            .iter()
+            .find(|def| def.id == monster_id);
+    }
     let name = world.get_component::<Name>(entity)?;
     current_level_monster_def_by_name(world, &name.0)
 }
@@ -1955,9 +1964,18 @@ fn resolve_player_action(
                             fleeing,
                             hungry,
                             satiated,
+                            full_moon: crate::were::is_full_moon(world.turn()),
                         },
                     ) {
                         events.push(sound_event);
+                        if monster_def.sound == nethack_babel_data::schema::MonsterSound::Were
+                            && crate::were::is_full_moon(world.turn())
+                            && let Some(monster_pos) = world
+                                .get_component::<Positioned>(monster_entity)
+                                .map(|pos| pos.0)
+                        {
+                            wake_sleeping_monsters_near_position(world, monster_pos, 11, events);
+                        }
                         return;
                     }
                 }
@@ -8034,6 +8052,7 @@ mod tests {
         WizardIntervention,
         WizardAmuletWake,
         WizardBlackGlowBlind,
+        WereFullMoonChat,
         WizardLevelTeleport,
         EndgameAscension,
     }
@@ -8081,6 +8100,7 @@ mod tests {
                 StoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 StoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 StoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
+                StoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
                 StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -9734,6 +9754,31 @@ mod tests {
                     crate::npc::WizardAction::BlackGlowCurse,
                     &mut rng,
                     &mut events,
+                );
+
+                (world, events)
+            }
+            StoryTraversalScenario::WereFullMoonChat => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let were_name =
+                    monster_name_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+                let were = spawn_full_monster(&mut world, Position::new(6, 5), &were_name, 10);
+                let were_id =
+                    monster_id_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+                world
+                    .ecs_mut()
+                    .insert_one(were, crate::world::MonsterIdentity(were_id))
+                    .expect("were full moon scenario should accept explicit monster identity");
+                let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+                let _ = crate::status::make_sleeping(&mut world, sleeper, 20);
+
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
                 );
 
                 (world, events)
@@ -11634,7 +11679,7 @@ mod tests {
         name: &str,
         speed: u32,
     ) -> hecs::Entity {
-        world.spawn((
+        let entity = world.spawn((
             Monster,
             Positioned(pos),
             Speed(speed),
@@ -11645,7 +11690,36 @@ mod tests {
                 symbol: 'g',
                 color: nethack_babel_data::Color::Brown,
             },
-        ))
+        ));
+        if let Some(monster_id) = test_game_data()
+            .monsters
+            .iter()
+            .find(|def| def.names.male.eq_ignore_ascii_case(name))
+            .map(|def| def.id)
+        {
+            let _ = world
+                .ecs_mut()
+                .insert_one(entity, crate::world::MonsterIdentity(monster_id));
+        }
+        entity
+    }
+
+    fn monster_id_with_sound_excluding(
+        world: &GameWorld,
+        sound: MonsterSound,
+        excluded: &[&str],
+    ) -> nethack_babel_data::MonsterId {
+        world
+            .monster_catalog()
+            .iter()
+            .find(|def| {
+                def.sound == sound
+                    && !excluded
+                        .iter()
+                        .any(|name| def.names.male.eq_ignore_ascii_case(name))
+            })
+            .map(|def| def.id)
+            .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
     }
 
     #[test]
@@ -16446,7 +16520,7 @@ mod tests {
         install_test_catalogs(&mut world);
         let bark_name = monster_name_with_sound_excluding(&world, MonsterSound::Bark, &["dingo"]);
         let monster = spawn_full_monster(&mut world, Position::new(6, 5), &bark_name, 10);
-        advance_world_turns(&mut world, 400);
+        advance_world_turns(&mut world, 410);
         let current_turn = world.turn();
         make_tame_pet_state(&mut world, monster, 10, current_turn.saturating_sub(400));
 
@@ -16461,6 +16535,84 @@ mod tests {
         assert!(events.iter().any(|event| {
             matches!(event, EngineEvent::Message { key, .. } if key == "npc-bark-whines")
         }));
+    }
+
+    #[test]
+    fn test_chatting_with_full_moon_wolf_howls() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        spawn_full_monster(&mut world, Position::new(6, 5), "wolf", 10);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-bark-howls")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_werewolf_off_full_moon_mentions_moon() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        advance_world_turns(&mut world, 20);
+        let were_name = monster_name_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+        let were = spawn_full_monster(&mut world, Position::new(6, 5), &were_name, 10);
+        let were_id = monster_id_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+        world
+            .ecs_mut()
+            .insert_one(were, crate::world::MonsterIdentity(were_id))
+            .expect("werewolf chat test should accept explicit monster identity");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-were-moon")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_full_moon_werewolf_wakes_sleepers() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let were_name = monster_name_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+        let were = spawn_full_monster(&mut world, Position::new(6, 5), &were_name, 10);
+        let were_id = monster_id_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+        world
+            .ecs_mut()
+            .insert_one(were, crate::world::MonsterIdentity(were_id))
+            .expect("full moon were test should accept explicit monster identity");
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+        let _ = crate::status::make_sleeping(&mut world, sleeper, 20);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-were-howls")
+        }));
+        assert!(
+            world
+                .get_component::<crate::status::StatusEffects>(sleeper)
+                .is_none_or(|status| status.sleeping == 0),
+            "full moon were chat should wake nearby sleeping monsters"
+        );
     }
 
     #[test]
@@ -20206,6 +20358,7 @@ mod tests {
             StoryTraversalScenario::WizardIntervention,
             StoryTraversalScenario::WizardAmuletWake,
             StoryTraversalScenario::WizardBlackGlowBlind,
+            StoryTraversalScenario::WereFullMoonChat,
             StoryTraversalScenario::WizardLevelTeleport,
             StoryTraversalScenario::EndgameAscension,
         ] {
@@ -21076,6 +21229,23 @@ mod tests {
                     assert!(
                         cursed,
                         "{} should still curse inventory despite suppressing the message",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::WereFullMoonChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-were-howls"
+                    )));
+                    let sleeper = world
+                        .ecs()
+                        .query::<(&Monster, &Name)>()
+                        .iter()
+                        .find_map(|(entity, (_, name))| (name.0 == "kobold").then_some(entity))
+                        .expect("were full moon scenario should keep the sleeping kobold");
+                    assert!(
+                        !crate::status::is_sleeping(&world, sleeper),
+                        "{} should wake nearby sleeping monsters",
                         scenario.label()
                     );
                 }

@@ -6,7 +6,8 @@ use nethack_babel_data::components::{
     BucStatus, Enchantment, Erosion, KnowledgeState, ObjectCore, ObjectLocation,
 };
 use nethack_babel_data::{
-    GameData, PlayerEvents, PlayerIdentity, PlayerQuestItems, PlayerSkills, loader::load_game_data,
+    GameData, MonsterId, PlayerEvents, PlayerIdentity, PlayerQuestItems, PlayerSkills,
+    loader::load_game_data,
 };
 use nethack_babel_engine::action::Position;
 use nethack_babel_engine::attributes::{AttributeExercise, NaturalAttributes};
@@ -23,8 +24,8 @@ use nethack_babel_engine::status::{Intrinsics, SpellProtection, StatusEffects};
 use nethack_babel_engine::world::Attributes as EngineAttributes;
 use nethack_babel_engine::world::{
     ArmorClass, Encumbrance, EncumbranceLevel, ExperienceLevel, GameWorld, HeroSpeed,
-    HeroSpeedBonus, HitPoints, Monster, MovementPoints, Name, Nutrition, PlayerCombat, Positioned,
-    Power, Speed, Tame,
+    HeroSpeedBonus, HitPoints, Monster, MonsterIdentity, MovementPoints, Name, Nutrition,
+    PlayerCombat, Positioned, Power, Speed, Tame,
 };
 use nethack_babel_engine::{
     npc::{Priest, Shopkeeper},
@@ -188,6 +189,8 @@ pub struct SerializableMonster {
     pub speed: u32,
     pub movement_points: i32,
     pub name: String,
+    #[serde(default)]
+    pub monster_id: Option<MonsterId>,
     #[serde(default)]
     pub is_tame: bool,
     #[serde(default)]
@@ -544,6 +547,16 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             .map(|m| m.0)
             .unwrap_or(12);
         let name = world.entity_name(entity);
+        let monster_id = world
+            .get_component::<MonsterIdentity>(entity)
+            .map(|identity| identity.0)
+            .or_else(|| {
+                world
+                    .monster_catalog()
+                    .iter()
+                    .find(|def| def.names.male.eq_ignore_ascii_case(&name))
+                    .map(|def| def.id)
+            });
         let is_tame = world.get_component::<Tame>(entity).is_some();
         let is_peaceful = world
             .get_component::<nethack_babel_engine::world::Peaceful>(entity)
@@ -574,6 +587,7 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             speed,
             movement_points,
             name,
+            monster_id,
             is_tame,
             is_peaceful,
             creation_order,
@@ -790,6 +804,12 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
             Name(m.name.clone()),
             nethack_babel_engine::world::CreationOrder(m.creation_order),
         ));
+
+        if let Some(monster_id) = m.monster_id {
+            let _ = world
+                .ecs_mut()
+                .insert_one(entity, MonsterIdentity(monster_id));
+        }
 
         if m.is_tame {
             let _ = world.ecs_mut().insert_one(entity, Tame);
@@ -1325,6 +1345,24 @@ mod tests {
             .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
     }
 
+    fn monster_name_with_sound_excluding(
+        world: &GameWorld,
+        sound: MonsterSound,
+        excluded: &[&str],
+    ) -> String {
+        world
+            .monster_catalog()
+            .iter()
+            .find(|def| {
+                def.sound == sound
+                    && !excluded
+                        .iter()
+                        .any(|name| def.names.male.eq_ignore_ascii_case(name))
+            })
+            .map(|def| def.names.male.clone())
+            .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
+    }
+
     fn make_tame_pet_state(
         world: &mut GameWorld,
         monster: hecs::Entity,
@@ -1464,6 +1502,24 @@ mod tests {
         })
     }
 
+    fn monster_id_with_sound_excluding(
+        world: &GameWorld,
+        sound: MonsterSound,
+        excluded: &[&str],
+    ) -> MonsterId {
+        world
+            .monster_catalog()
+            .iter()
+            .find(|def| {
+                def.sound == sound
+                    && !excluded
+                        .iter()
+                        .any(|name| def.names.male.eq_ignore_ascii_case(name))
+            })
+            .map(|def| def.id)
+            .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
+    }
+
     fn count_objects_named(world: &GameWorld, name: &str) -> usize {
         let Some(object_type) = resolve_object_type_by_spec(world, name) else {
             return 0;
@@ -1533,7 +1589,7 @@ mod tests {
         name: &str,
         hp: i32,
     ) -> hecs::Entity {
-        world.spawn((
+        let entity = world.spawn((
             Monster,
             Positioned(pos),
             Name(name.to_string()),
@@ -1547,7 +1603,18 @@ mod tests {
                 symbol: '@',
                 color: nethack_babel_data::Color::Green,
             },
-        ))
+        ));
+        if let Some(monster_id) = world
+            .monster_catalog()
+            .iter()
+            .find(|def| def.names.male.eq_ignore_ascii_case(name))
+            .map(|def| def.id)
+        {
+            let _ = world
+                .ecs_mut()
+                .insert_one(entity, MonsterIdentity(monster_id));
+        }
+        entity
     }
 
     fn spawn_monster_with_symbol(
@@ -1720,6 +1787,7 @@ mod tests {
         WizardIntervention,
         WizardAmuletWake,
         WizardBlackGlowBlind,
+        WereFullMoonChat,
         WizardLevelTeleport,
         EndgameAscension,
     }
@@ -1769,6 +1837,7 @@ mod tests {
                 SaveStoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 SaveStoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 SaveStoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
+                SaveStoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
                 SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -3481,6 +3550,32 @@ mod tests {
                         .get_component::<BucStatus>(sword)
                         .is_some_and(|status| status.cursed),
                     "deterministic black-glow harness should still curse the tracked item"
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::WereFullMoonChat => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let were_name =
+                    monster_name_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+                let were = spawn_full_monster(&mut world, Position::new(6, 5), &were_name, 10);
+                let were_id =
+                    monster_id_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+                world
+                    .ecs_mut()
+                    .insert_one(were, MonsterIdentity(were_id))
+                    .expect("were full moon save scenario should accept explicit monster identity");
+                let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+                let _ = nethack_babel_engine::status::make_sleeping(&mut world, sleeper, 20);
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-were-full-moon-chat", &world, [66u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
                 );
                 (loaded, events)
             }
@@ -5844,6 +5939,52 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_chatting_with_full_moon_werewolf_keeps_howl_and_wake() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let were_name = monster_name_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+        let were = spawn_full_monster(&mut world, Position::new(6, 5), &were_name, 8);
+        let were_id = monster_id_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+        world
+            .ecs_mut()
+            .insert_one(were, MonsterIdentity(were_id))
+            .expect("were chat round-trip should accept explicit monster identity");
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+        let _ = nethack_babel_engine::status::make_sleeping(&mut world, sleeper, 20);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("were-chat-round-trip", &world, [84u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-were-howls")
+        }));
+        let woken = loaded
+            .ecs()
+            .query::<(
+                &nethack_babel_engine::world::Monster,
+                &nethack_babel_engine::world::Name,
+            )>()
+            .iter()
+            .find_map(|(entity, (_, name))| (name.0 == "kobold").then_some(entity))
+            .and_then(|entity| {
+                loaded.get_component::<nethack_babel_engine::status::StatusEffects>(entity)
+            })
+            .is_none_or(|status| status.sleeping == 0);
+        assert!(
+            woken,
+            "full moon were chat should still wake nearby sleeping monsters after load"
+        );
+    }
+
+    #[test]
     fn round_trip_loaded_chatting_with_peaceful_buzzing_monster_keeps_drone_line() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         let buzz_name = monster_name_with_sound(&world, MonsterSound::Buzz);
@@ -6388,6 +6529,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardIntervention,
             SaveStoryTraversalScenario::WizardAmuletWake,
             SaveStoryTraversalScenario::WizardBlackGlowBlind,
+            SaveStoryTraversalScenario::WereFullMoonChat,
             SaveStoryTraversalScenario::WizardLevelTeleport,
             SaveStoryTraversalScenario::EndgameAscension,
         ] {
@@ -7166,6 +7308,25 @@ mod tests {
                             .get_component::<StatusEffects>(player)
                             .is_some_and(|status| status.blindness > 0),
                         "black-glow blind scenario should preserve blindness through round-trip"
+                    );
+                }
+                SaveStoryTraversalScenario::WereFullMoonChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-were-howls"
+                    )));
+                    let sleeper = world
+                        .ecs()
+                        .query::<(
+                            &nethack_babel_engine::world::Monster,
+                            &nethack_babel_engine::world::Name,
+                        )>()
+                        .iter()
+                        .find_map(|(entity, (_, name))| (name.0 == "kobold").then_some(entity))
+                        .expect("were full moon save matrix should keep the sleeping kobold");
+                    assert!(
+                        !nethack_babel_engine::status::is_sleeping(&world, sleeper),
+                        "full moon were chat should still wake nearby sleeping monsters after save/load"
                     );
                 }
                 SaveStoryTraversalScenario::WizardLevelTeleport => {

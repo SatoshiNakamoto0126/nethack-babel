@@ -641,6 +641,7 @@ pub struct MonsterChatState {
     pub fleeing: bool,
     pub hungry: bool,
     pub satiated: bool,
+    pub full_moon: bool,
 }
 
 pub fn voiced_monster_chat(
@@ -651,7 +652,15 @@ pub fn voiced_monster_chat(
     let tame_level = state.tameness.unwrap_or(if state.is_tame { 10 } else { 0 });
     let key = match sound {
         MonsterSound::Bark => {
-            if state.is_tame && (state.confused || state.fleeing || tame_level < 5 || state.hungry)
+            if state.full_moon {
+                "npc-bark-howls"
+            } else if monster_name.eq_ignore_ascii_case("dingo")
+                && state.is_peaceful
+                && !state.is_tame
+            {
+                return None;
+            } else if state.is_tame
+                && (state.confused || state.fleeing || tame_level < 5 || state.hungry)
             {
                 "npc-bark-whines"
             } else if state.is_tame && state.satiated {
@@ -660,6 +669,17 @@ pub fn voiced_monster_chat(
                 "npc-bark-barks"
             } else {
                 "npc-growl-growls"
+            }
+        }
+        MonsterSound::Were => {
+            if state.full_moon {
+                if monster_name.to_ascii_lowercase().contains("wererat") {
+                    "npc-were-shrieks"
+                } else {
+                    "npc-were-howls"
+                }
+            } else {
+                "npc-were-moon"
             }
         }
         MonsterSound::Mew => {
@@ -2265,6 +2285,41 @@ mod tests {
         )
         .expect("satiated tame cats should emit a chat line");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-mew-purrs"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_full_moon_barker_howls() {
+        let evt = voiced_monster_chat(
+            "wolf",
+            MonsterSound::Bark,
+            MonsterChatState {
+                full_moon: true,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("full moon barkers should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-bark-howls"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_were_off_full_moon_mentions_moon() {
+        let evt = voiced_monster_chat("werewolf", MonsterSound::Were, MonsterChatState::default())
+            .expect("were-creatures should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-were-moon"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_full_moon_wererat_shrieks() {
+        let evt = voiced_monster_chat(
+            "wererat",
+            MonsterSound::Were,
+            MonsterChatState {
+                full_moon: true,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("full moon wererats should emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-were-shrieks"));
     }
 
     #[test]
