@@ -5313,11 +5313,7 @@ fn item_display_name(world: &GameWorld, item: hecs::Entity) -> Option<String> {
         return Some(name.0.clone());
     }
     let core = world.get_component::<ObjectCore>(item)?;
-    world
-        .object_catalog()
-        .iter()
-        .find(|def| def.id == core.otyp)
-        .map(|def| def.name.clone())
+    crate::items::object_def_for_core(world.object_catalog(), &core).map(|def| def.name.clone())
 }
 
 fn find_player_named_item(
@@ -5615,6 +5611,25 @@ pub fn force_wizard_harassment_action(
     let mut events = wizard_harassment_messages(world, player, action);
     apply_wizard_harassment_action(world, wizard, player, action, rng, &mut events);
     events
+}
+
+#[doc(hidden)]
+pub fn force_player_has_named_item(
+    world: &GameWorld,
+    player: hecs::Entity,
+    expected_name: &str,
+) -> bool {
+    player_has_named_item(world, player, expected_name)
+}
+
+#[doc(hidden)]
+pub fn force_live_wizard_count(world: &GameWorld) -> usize {
+    wizard_of_yendor_entities(world).len()
+}
+
+#[doc(hidden)]
+pub fn force_item_display_name(world: &GameWorld, item: hecs::Entity) -> Option<String> {
+    item_display_name(world, item)
 }
 
 fn should_wizard_level_teleport_player(
@@ -5980,6 +5995,13 @@ fn process_amulet_wakes_sleeping_wizard(
         }
         return;
     }
+}
+
+#[doc(hidden)]
+pub fn force_amulet_wake_check(world: &mut GameWorld, rng: &mut impl Rng) -> Vec<EngineEvent> {
+    let mut events = Vec::new();
+    process_amulet_wakes_sleeping_wizard(world, rng, &mut events);
+    events
 }
 
 fn wizard_nasty_weight(

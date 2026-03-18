@@ -845,7 +845,7 @@ pub fn resolve_melee_attack_ex(
     let has_shield = equipment::wearing_shield(world, attacker);
     let is_bimanual = weapon_entity
         .and_then(|we| world.get_component::<ObjectCore>(we))
-        .and_then(|core| obj_defs.iter().find(|d| d.id == core.otyp))
+        .and_then(|core| crate::items::object_def_for_core(obj_defs, &core))
         .is_some_and(|d| d.is_bimanual);
 
     // ---- Extract defender stats ----

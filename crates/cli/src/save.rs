@@ -1625,6 +1625,7 @@ mod tests {
         WizardHarassment,
         WizardTaunt,
         WizardIntervention,
+        WizardAmuletWake,
         WizardBlackGlowBlind,
         WizardLevelTeleport,
         EndgameAscension,
@@ -1673,6 +1674,7 @@ mod tests {
                 SaveStoryTraversalScenario::WizardHarassment => "wizard-harassment",
                 SaveStoryTraversalScenario::WizardTaunt => "wizard-taunt",
                 SaveStoryTraversalScenario::WizardIntervention => "wizard-intervention",
+                SaveStoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 SaveStoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
@@ -3328,6 +3330,29 @@ mod tests {
                 }
                 (loaded, final_events)
             }
+            SaveStoryTraversalScenario::WizardAmuletWake => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 20);
+                let _ = nethack_babel_engine::status::make_sleeping(&mut world, wizard, 10_000);
+
+                let (mut loaded, _loaded_rng) =
+                    save_and_reload_world("story-matrix-wizard-amulet-wake", &world, [63u8; 32]);
+                let mut rng = Pcg64::seed_from_u64(42);
+                let mut final_events = Vec::new();
+                for _ in 0..4096 {
+                    let events =
+                        nethack_babel_engine::turn::force_amulet_wake_check(&mut loaded, &mut rng);
+                    let restored = find_monster_named(&loaded, "Wizard of Yendor")
+                        .expect("wizard amulet wake matrix should keep a live Wizard");
+                    if !nethack_babel_engine::status::is_sleeping(&loaded, restored) {
+                        final_events = events;
+                        break;
+                    }
+                }
+                (loaded, final_events)
+            }
             SaveStoryTraversalScenario::WizardBlackGlowBlind => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
                 let player = world.player();
@@ -4977,9 +5002,20 @@ mod tests {
         );
         if saw_curse {
             assert!(
-                loaded
-                    .get_component::<BucStatus>(cursed_target)
-                    .is_some_and(|status| status.cursed),
+                resolve_object_type_by_spec(&loaded, "long sword").is_some_and(|sword_type| {
+                    loaded
+                        .get_component::<Inventory>(loaded.player())
+                        .is_some_and(|inv| {
+                            inv.items.iter().any(|item| {
+                                loaded
+                                    .get_component::<ObjectCore>(*item)
+                                    .is_some_and(|core| core.otyp == sword_type)
+                                    && loaded
+                                        .get_component::<BucStatus>(*item)
+                                        .is_some_and(|status| status.cursed)
+                            })
+                        })
+                }),
                 "curse harassment after reload should mutate live inventory state"
             );
         }
@@ -5115,6 +5151,90 @@ mod tests {
             nethack_babel_engine::status::is_sleeping(&loaded, restored),
             "live sleeping monsters should keep their sleep timer across save/load"
         );
+    }
+
+    #[test]
+    fn round_trip_loaded_amulet_wakes_sleeping_wizard() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        let wizard = spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 20);
+        let _ = nethack_babel_engine::status::make_sleeping(&mut world, wizard, 10_000);
+
+        let (mut loaded, _loaded_rng) =
+            save_and_reload_world("wizard-amulet-wake-round-trip", &world, [65u8; 32]);
+        let restored = find_monster_named(&loaded, "Wizard of Yendor")
+            .expect("sleeping Wizard of Yendor should survive round-trip");
+        assert!(
+            nethack_babel_engine::status::is_sleeping(&loaded, restored),
+            "round-trip should preserve the sleeping Wizard before the Amulet wake check"
+        );
+        assert!(
+            resolve_object_type_by_spec(&loaded, "Amulet of Yendor").is_some_and(|amulet_type| {
+                loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .is_some_and(|inv| {
+                        inv.items.iter().any(|item| {
+                            loaded
+                                .get_component::<ObjectCore>(*item)
+                                .is_some_and(|core| core.otyp == amulet_type)
+                        })
+                    })
+            }),
+            "round-trip should preserve the Amulet in the player's live inventory"
+        );
+        let amulet_name =
+            resolve_object_type_by_spec(&loaded, "Amulet of Yendor").and_then(|amulet_type| {
+                loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .and_then(|inv| {
+                        inv.items.iter().find_map(|item| {
+                            loaded
+                                .get_component::<ObjectCore>(*item)
+                                .is_some_and(|core| core.otyp == amulet_type)
+                                .then(|| {
+                                    nethack_babel_engine::turn::force_item_display_name(
+                                        &loaded, *item,
+                                    )
+                                })
+                                .flatten()
+                        })
+                    })
+            });
+        assert_eq!(
+            amulet_name.as_deref(),
+            Some("Amulet of Yendor"),
+            "round-trip should preserve the display name used by wizard amulet wake logic"
+        );
+        assert!(
+            nethack_babel_engine::turn::force_player_has_named_item(
+                &loaded,
+                loaded.player(),
+                "Amulet of Yendor",
+            ),
+            "round-trip should preserve carried Amulet lookup for wizard wake logic"
+        );
+        assert_eq!(
+            nethack_babel_engine::turn::force_live_wizard_count(&loaded),
+            1,
+            "round-trip should preserve one live Wizard for the amulet wake check"
+        );
+
+        let mut rng = Pcg64::seed_from_u64(42);
+        for _ in 0..4096 {
+            let events = nethack_babel_engine::turn::force_amulet_wake_check(&mut loaded, &mut rng);
+            if !nethack_babel_engine::status::is_sleeping(&loaded, restored) {
+                assert!(
+                    events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "wizard-vague-nervous"
+                    )),
+                    "waking a distant Wizard with the carried Amulet should emit the nervous warning"
+                );
+                return;
+            }
+        }
+
+        panic!("carried Amulet should eventually wake the sleeping Wizard after save/load");
     }
 
     #[test]
@@ -5582,6 +5702,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardHarassment,
             SaveStoryTraversalScenario::WizardTaunt,
             SaveStoryTraversalScenario::WizardIntervention,
+            SaveStoryTraversalScenario::WizardAmuletWake,
             SaveStoryTraversalScenario::WizardBlackGlowBlind,
             SaveStoryTraversalScenario::WizardLevelTeleport,
             SaveStoryTraversalScenario::EndgameAscension,
@@ -6320,6 +6441,18 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.killed_wizard),
                         "save/load wizard matrix should preserve the off-screen intervention trigger"
+                    );
+                }
+                SaveStoryTraversalScenario::WizardAmuletWake => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "wizard-vague-nervous"
+                    )));
+                    let restored = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("wizard amulet wake matrix should keep a live Wizard");
+                    assert!(
+                        !nethack_babel_engine::status::is_sleeping(&world, restored),
+                        "save/load wizard matrix should wake the sleeping Wizard when the player carries the Amulet"
                     );
                 }
                 SaveStoryTraversalScenario::WizardBlackGlowBlind => {

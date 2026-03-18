@@ -654,7 +654,7 @@ pub fn get_weapon_stats(
     let weapon_entity = get_equipped_weapon(world, player)?;
 
     let core = world.get_component::<ObjectCore>(weapon_entity)?;
-    let obj_def = obj_defs.iter().find(|d| d.id == core.otyp)?;
+    let obj_def = crate::items::object_def_for_core(obj_defs, &core)?;
     let weapon_info = obj_def.weapon.as_ref()?;
 
     let spe = world
@@ -723,7 +723,7 @@ pub fn calculate_ac(world: &GameWorld, player: Entity, obj_defs: &[ObjectDef]) -
     for slot_item in armor_slots.iter().flatten() {
         let item = *slot_item;
         if let Some(core) = world.get_component::<ObjectCore>(item)
-            && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
+            && let Some(def) = crate::items::object_def_for_core(obj_defs, &core)
             && let Some(ref armor_info) = def.armor
         {
             let a_ac = -(armor_info.ac_bonus as i32); // ac_bonus is negative in data
@@ -743,7 +743,7 @@ pub fn calculate_ac(world: &GameWorld, player: Entity, obj_defs: &[ObjectDef]) -
     // We check if the ring's conferred_property indicates protection.
     for ring in [equip.ring_left, equip.ring_right].into_iter().flatten() {
         if let Some(core) = world.get_component::<ObjectCore>(ring)
-            && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
+            && let Some(def) = crate::items::object_def_for_core(obj_defs, &core)
             && def.conferred_property == Some(nethack_babel_data::Property::Protection)
         {
             let spe = world
@@ -757,7 +757,7 @@ pub fn calculate_ac(world: &GameWorld, player: Entity, obj_defs: &[ObjectDef]) -
     // Amulet of guarding: flat -2 AC.
     if let Some(amulet) = equip.amulet
         && let Some(core) = world.get_component::<ObjectCore>(amulet)
-        && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
+        && let Some(def) = crate::items::object_def_for_core(obj_defs, &core)
         && def.name == "amulet of guarding"
     {
         ac -= 2;
@@ -801,7 +801,7 @@ pub fn magic_cancellation(world: &GameWorld, player: Entity, obj_defs: &[ObjectD
             continue;
         }
         if let Some(core) = world.get_component::<ObjectCore>(item)
-            && let Some(def) = obj_defs.iter().find(|d| d.id == core.otyp)
+            && let Some(def) = crate::items::object_def_for_core(obj_defs, &core)
             && let Some(ref armor_info) = def.armor
             && armor_info.magic_cancel > mc
         {
@@ -894,7 +894,7 @@ pub fn equipment_attribute_bonuses(
             Some(c) => c,
             None => continue,
         };
-        let def = match obj_defs.iter().find(|d| d.id == core.otyp) {
+        let def = match crate::items::object_def_for_core(obj_defs, &core) {
             Some(d) => d,
             None => continue,
         };
@@ -1011,7 +1011,7 @@ pub fn body_armor_material(
     let equip = world.get_component::<EquipmentSlots>(player)?;
     let armor_entity = equip.body_armor?;
     let core = world.get_component::<ObjectCore>(armor_entity)?;
-    let def = obj_defs.iter().find(|d| d.id == core.otyp)?;
+    let def = crate::items::object_def_for_core(obj_defs, &core)?;
     Some(def.material)
 }
 
@@ -1084,7 +1084,7 @@ pub fn conferred_properties(
         };
 
         // Look up the ObjectDef for this item.
-        let def = obj_defs.iter().find(|d| d.id == core.otyp);
+        let def = crate::items::object_def_for_core(obj_defs, &core);
         if let Some(def) = def {
             // Check conferred_property field.
             if let Some(ref prop) = def.conferred_property {
@@ -1238,7 +1238,7 @@ pub fn cursed_item_penalties(
 
         let core = world.get_component::<ObjectCore>(item);
         let item_name = core
-            .and_then(|c| obj_defs.iter().find(|d| d.id == c.otyp))
+            .and_then(|c| crate::items::object_def_for_core(obj_defs, &c))
             .map(|d| d.name.clone())
             .unwrap_or_else(|| "unknown item".to_string());
 

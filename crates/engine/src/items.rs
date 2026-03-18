@@ -14,6 +14,15 @@ use crate::action::Position;
 use crate::event::EngineEvent;
 use crate::world::{Encumbrance, GameWorld, Positioned};
 
+pub fn object_def_for_core<'a>(
+    obj_defs: &'a [ObjectDef],
+    core: &ObjectCore,
+) -> Option<&'a ObjectDef> {
+    obj_defs
+        .iter()
+        .find(|def| def.id == core.otyp && def.class == core.object_class)
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -476,7 +485,7 @@ fn find_merge_target(
         .get_component::<ObjectExtra>(item_entity)
         .map(|r| (*r).clone());
 
-    let obj_def = obj_defs.iter().find(|d| d.id == item_core.otyp)?;
+    let obj_def = object_def_for_core(obj_defs, &item_core)?;
 
     get_inventory(world, owner)
         .iter()

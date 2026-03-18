@@ -253,22 +253,28 @@ proptest! {
             "Plural of '{}' should not be empty", name);
     }
 
-    /// Article prefix is always "a " or "an ".
+    /// Article prefix is always "", "a ", or "an ".
     #[test]
-    fn article_always_a_or_an(name in "[a-z]{2,20}") {
+    fn article_always_valid(name in "[a-z]{2,20}") {
         let article = just_an(&name);
-        prop_assert!(article == "a " || article == "an ",
-            "Article for '{}' should be 'a ' or 'an ', got '{}'", name, article);
+        prop_assert!(article == "" || article == "a " || article == "an ",
+            "Article for '{}' should be '', 'a ', or 'an ', got '{}'", name, article);
     }
 
-    /// an() prepends the correct article to the name.
+    /// an() either prepends the correct article or preserves no-article nouns.
     #[test]
-    fn an_prepends_article(name in "[a-z]{2,20}") {
+    fn an_respects_article_selection(name in "[a-z]{2,20}") {
+        let article = just_an(&name);
         let result = an(&name);
-        prop_assert!(result.starts_with("a ") || result.starts_with("an "),
-            "an('{}') should start with 'a ' or 'an ', got '{}'", name, result);
-        prop_assert!(result.ends_with(&name),
-            "an('{}') = '{}' should end with the original name", name, result);
+        if article.is_empty() {
+            prop_assert_eq!(result.as_str(), name.as_str(),
+                "an('{}') should preserve no-article noun, got '{}'", name, result);
+        } else {
+            prop_assert!(result.starts_with("a ") || result.starts_with("an "),
+                "an('{}') should start with 'a ' or 'an ', got '{}'", name, result);
+            prop_assert!(result.ends_with(&name),
+                "an('{}') = '{}' should end with the original name", name, result);
+        }
     }
 
     /// Singularization of a pluralized word should not be longer than the plural.

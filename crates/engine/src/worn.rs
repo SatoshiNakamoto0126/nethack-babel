@@ -130,7 +130,7 @@ pub fn recalc_worn_intrinsics(
             Some(c) => c,
             None => continue,
         };
-        let obj_def = match obj_defs.iter().find(|d| d.id == core.otyp) {
+        let obj_def = match crate::items::object_def_for_core(obj_defs, &core) {
             Some(d) => d,
             None => continue,
         };

@@ -983,10 +983,7 @@ pub fn drop_in_shop(
             .get_component::<crate::world::Name>(item)
             .map(|name| name.0.clone())
             .or_else(|| {
-                obj_defs
-                    .iter()
-                    .find(|def| def.id == core.otyp)
-                    .map(|def| def.name.clone())
+                crate::items::object_def_for_core(obj_defs, &core).map(|def| def.name.clone())
             })
             .unwrap_or_else(|| "item".to_string());
         (core.otyp, core.quantity, item_name)

@@ -2435,9 +2435,7 @@ fn inventory_display_name(
         .map(|name| name.0.clone())
         .filter(|name| !name.trim().is_empty())
         .or_else(|| {
-            obj_defs
-                .iter()
-                .find(|def| def.id == core.otyp)
+            nethack_babel_engine::items::object_def_for_core(obj_defs, core)
                 .map(|def| def.name.clone())
         })
         .unwrap_or_else(|| format!("item(otyp={})", core.otyp.0));

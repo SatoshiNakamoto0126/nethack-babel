@@ -308,7 +308,7 @@ pub fn not_fully_identified(
 
     // Check rknown for damageable items.
     if !k.rknown {
-        let def = obj_defs.iter().find(|d| d.id == core.otyp);
+        let def = crate::items::object_def_for_core(obj_defs, &core);
         if let Some(d) = def
             && is_damageable_material(d.material)
             && matches!(
@@ -1444,7 +1444,7 @@ pub fn doname(
     let erosion = world.get_component::<Erosion>(item);
     let enchant = world.get_component::<Enchantment>(item);
     let container_state = world.get_component::<ContainerState>(item);
-    let obj_def = obj_defs.iter().find(|d| d.id == core.otyp);
+    let obj_def = crate::items::object_def_for_core(obj_defs, &core);
 
     let base_name = xname(item, world, id_state, obj_defs);
     let class = core.object_class;
@@ -1573,7 +1573,7 @@ pub fn get_display_name(
     let otyp = core.otyp;
 
     // Find the definition.
-    let obj_def = obj_defs.iter().find(|d| d.id == otyp);
+    let obj_def = crate::items::object_def_for_core(obj_defs, &core);
     let class_name = obj_def
         .map(|d| class_display_name(d.class))
         .unwrap_or("thing");
