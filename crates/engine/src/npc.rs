@@ -17,6 +17,7 @@ use nethack_babel_data::Alignment;
 
 use crate::action::Position;
 use crate::event::EngineEvent;
+use crate::fov::FovMap;
 use crate::inventory::Inventory;
 use crate::world::{GameWorld, HitPoints, Positioned};
 
@@ -823,7 +824,7 @@ pub fn maybe_wizard_taunt(
     player_has_amulet: bool,
     rng: &mut impl Rng,
 ) -> Option<EngineEvent> {
-    if crate::status::is_deaf(world, player) {
+    if !wizard_can_taunt_player(world, wizard, player) {
         return None;
     }
 
@@ -879,6 +880,40 @@ pub fn maybe_wizard_taunt(
             ),
         ],
     ))
+}
+
+fn wizard_can_taunt_player(world: &GameWorld, wizard: Entity, player: Entity) -> bool {
+    if crate::status::is_deaf(world, player) || crate::status::is_blind(world, player) {
+        return false;
+    }
+
+    let Some(wizard_pos) = world.get_component::<Positioned>(wizard).map(|pos| pos.0) else {
+        return false;
+    };
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return false;
+    };
+
+    let dx = wizard_pos.x - player_pos.x;
+    let dy = wizard_pos.y - player_pos.y;
+    if dx * dx + dy * dy > 64 {
+        return false;
+    }
+
+    if world
+        .get_component::<crate::status::StatusEffects>(wizard)
+        .is_some_and(|status| status.invisibility > 0)
+    {
+        return false;
+    }
+
+    let map = &world.dungeon().current_level;
+    let mut fov = FovMap::new(map.width, map.height);
+    fov.compute(player_pos, 8, |x, y| {
+        map.get(Position::new(x, y))
+            .is_none_or(|cell| cell.terrain.is_opaque())
+    });
+    fov.is_visible_pos(wizard_pos)
 }
 
 /// Resolve a Wizard of Yendor harassment action.
@@ -1364,6 +1399,58 @@ mod tests {
         assert!(
             event.is_none(),
             "deaf players should not hear wizard taunts"
+        );
+    }
+
+    #[test]
+    fn test_wizard_taunt_suppressed_when_player_is_blind() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 20);
+        let _ = crate::status::make_blinded(&mut world, player, 20);
+
+        let mut rng = test_rng();
+        let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng);
+        assert!(
+            event.is_none(),
+            "blind players should not get wizard taunts"
+        );
+    }
+
+    #[test]
+    fn test_wizard_taunt_suppressed_when_wizard_is_invisible() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 20);
+        let mut status = world
+            .get_component::<crate::status::StatusEffects>(wizard)
+            .map(|status| (*status).clone())
+            .unwrap_or_default();
+        status.invisibility = 20;
+        world
+            .ecs_mut()
+            .insert_one(wizard, status)
+            .expect("wizard should accept status effects");
+
+        let mut rng = test_rng();
+        let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng);
+        assert!(
+            event.is_none(),
+            "invisible wizards should not taunt through the visibility gate"
+        );
+    }
+
+    #[test]
+    fn test_wizard_taunt_suppressed_when_out_of_range() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let wizard = spawn_monster(&mut world, Position::new(18, 18), "Wizard of Yendor", 20);
+
+        let mut rng = test_rng();
+        let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng);
+        assert!(
+            event.is_none(),
+            "wizard taunts should stay within the original ranged-pressure distance"
         );
     }
 

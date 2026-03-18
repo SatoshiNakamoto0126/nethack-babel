@@ -3333,3 +3333,55 @@ god-how-dare-harm-servant = A booming voice roars: "How darest thou harm my serv
 
 # TODO: translate
 god-profane-shrine = A booming voice roars: "Thou hast profaned my shrine!"
+# TODO: translate
+ambient-gehennom-damned = You hear the howling of the damned!
+# TODO: translate
+ambient-gehennom-groans = You hear groans and moans!
+# TODO: translate
+ambient-gehennom-laughter = You hear diabolical laughter!
+# TODO: translate
+ambient-gehennom-brimstone = You smell brimstone!
+# TODO: translate
+ambient-mines-money = You hear someone counting money.
+# TODO: translate
+ambient-mines-register = You hear the chime of a cash register.
+# TODO: translate
+ambient-mines-cart = You hear a sound reminiscent of a straining mine cart.
+# TODO: translate
+ambient-shop-shoplifters = You hear someone cursing shoplifters.
+# TODO: translate
+ambient-shop-register = You hear the chime of a cash register.
+# TODO: translate
+ambient-shop-prices = You hear someone mumbling about prices.
+# TODO: translate
+ambient-temple-praise = You hear someone praising the gods.
+# TODO: translate
+ambient-temple-beseech = You hear someone beseeching the gods.
+# TODO: translate
+ambient-temple-sacrifice = You hear an animal carcass being offered in sacrifice.
+# TODO: translate
+ambient-temple-donations = You hear a strident plea for donations.
+# TODO: translate
+ambient-oracle-wind = You hear a strange wind.
+# TODO: translate
+ambient-oracle-ravings = You hear convulsive ravings.
+# TODO: translate
+ambient-oracle-snakes = You hear snoring snakes.
+# TODO: translate
+ambient-deep-crunching = You hear a crunching sound.
+# TODO: translate
+ambient-deep-hollow = You hear a hollow sound.
+# TODO: translate
+ambient-deep-rumble = You hear a rumble.
+# TODO: translate
+ambient-deep-roar = You hear a distant roar.
+# TODO: translate
+ambient-deep-digging = You hear someone digging.
+# TODO: translate
+ambient-shallow-door-open = You hear a door open.
+# TODO: translate
+ambient-shallow-door-close = You hear a door close.
+# TODO: translate
+ambient-shallow-water = You hear water dripping.
+# TODO: translate
+ambient-shallow-moving = You hear someone moving around.

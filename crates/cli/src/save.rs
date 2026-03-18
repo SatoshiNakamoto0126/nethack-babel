@@ -3219,6 +3219,10 @@ mod tests {
                 let player = world.player();
                 let wizard =
                     spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(wizard, nethack_babel_engine::world::Peaceful)
+                    .expect("wizard should accept Peaceful in wizard taunt save scenario");
                 if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
                     hp.current = 12;
                     hp.max = 20;
@@ -3276,6 +3280,7 @@ mod tests {
                     player_events.killed_wizard = true;
                     player_events.wizard_times_killed = 1;
                     player_events.wizard_last_killed_turn = current_turn;
+                    player_events.wizard_intervention_cooldown = 1;
                 }
 
                 let (mut loaded, loaded_rng) =

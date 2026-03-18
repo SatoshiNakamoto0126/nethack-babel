@@ -509,6 +509,7 @@ pub fn ambient_sounds(
     branch: &str,
     has_shop: bool,
     has_temple: bool,
+    has_oracle: bool,
     rng: &mut impl Rng,
 ) -> Option<&'static str> {
     // Only 1/35 chance per turn.
@@ -518,42 +519,50 @@ pub fn ambient_sounds(
 
     match branch {
         "Gehennom" => Some(match rng.random_range(0..4u32) {
-            0 => "You hear the howling of the damned!",
-            1 => "You hear groans and moans!",
-            2 => "You hear diabolical laughter!",
-            _ => "You smell brimstone!",
+            0 => "ambient-gehennom-damned",
+            1 => "ambient-gehennom-groans",
+            2 => "ambient-gehennom-laughter",
+            _ => "ambient-gehennom-brimstone",
         }),
         "Mines" => Some(match rng.random_range(0..3u32) {
-            0 => "You hear someone counting money.",
-            1 => "You hear the chime of a cash register.",
-            _ => "You hear a sound reminiscent of a straining mine cart.",
+            0 => "ambient-mines-money",
+            1 => "ambient-mines-register",
+            _ => "ambient-mines-cart",
         }),
         _ => {
             if has_shop {
                 Some(match rng.random_range(0..3u32) {
-                    0 => "You hear someone cursing shoplifters.",
-                    1 => "You hear the chime of a cash register.",
-                    _ => "You hear someone mumbling about prices.",
+                    0 => "ambient-shop-shoplifters",
+                    1 => "ambient-shop-register",
+                    _ => "ambient-shop-prices",
                 })
             } else if has_temple {
-                Some(match rng.random_range(0..2u32) {
-                    0 => "You hear a prayer intoned.",
-                    _ => "You hear a chant.",
+                Some(match rng.random_range(0..4u32) {
+                    0 => "ambient-temple-praise",
+                    1 => "ambient-temple-beseech",
+                    2 => "ambient-temple-sacrifice",
+                    _ => "ambient-temple-donations",
+                })
+            } else if has_oracle {
+                Some(match rng.random_range(0..3u32) {
+                    0 => "ambient-oracle-wind",
+                    1 => "ambient-oracle-ravings",
+                    _ => "ambient-oracle-snakes",
                 })
             } else if depth > 15 {
                 Some(match rng.random_range(0..5u32) {
-                    0 => "You hear a crunching sound.",
-                    1 => "You hear a hollow sound.",
-                    2 => "You hear a rumble.",
-                    3 => "You hear a distant roar.",
-                    _ => "You hear someone digging.",
+                    0 => "ambient-deep-crunching",
+                    1 => "ambient-deep-hollow",
+                    2 => "ambient-deep-rumble",
+                    3 => "ambient-deep-roar",
+                    _ => "ambient-deep-digging",
                 })
             } else {
                 Some(match rng.random_range(0..4u32) {
-                    0 => "You hear a door open.",
-                    1 => "You hear a door close.",
-                    2 => "You hear water dripping.",
-                    _ => "You hear someone moving around.",
+                    0 => "ambient-shallow-door-open",
+                    1 => "ambient-shallow-door-close",
+                    2 => "ambient-shallow-water",
+                    _ => "ambient-shallow-moving",
                 })
             }
         }
@@ -985,7 +994,7 @@ mod tests {
         let mut rng = test_rng();
         let mut none_count = 0;
         for _ in 0..100 {
-            if ambient_sounds(5, "Dungeons", false, false, &mut rng).is_none() {
+            if ambient_sounds(5, "Dungeons", false, false, false, &mut rng).is_none() {
                 none_count += 1;
             }
         }
@@ -1006,12 +1015,9 @@ mod tests {
         let mut found = false;
         for seed in 0..200u64 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            if let Some(msg) = ambient_sounds(30, "Gehennom", false, false, &mut rng) {
+            if let Some(msg) = ambient_sounds(30, "Gehennom", false, false, false, &mut rng) {
                 assert!(
-                    msg.contains("damned")
-                        || msg.contains("groans")
-                        || msg.contains("laughter")
-                        || msg.contains("brimstone"),
+                    msg.starts_with("ambient-gehennom-"),
                     "Gehennom sound should be thematic: {}",
                     msg
                 );
@@ -1030,11 +1036,9 @@ mod tests {
         let mut found = false;
         for seed in 0..200u64 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            if let Some(msg) = ambient_sounds(10, "Mines", false, false, &mut rng) {
+            if let Some(msg) = ambient_sounds(10, "Mines", false, false, false, &mut rng) {
                 assert!(
-                    msg.contains("money")
-                        || msg.contains("cash register")
-                        || msg.contains("mine cart"),
+                    msg.starts_with("ambient-mines-"),
                     "Mines sound should be thematic: {}",
                     msg
                 );
@@ -1053,11 +1057,9 @@ mod tests {
         let mut found = false;
         for seed in 0..200u64 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            if let Some(msg) = ambient_sounds(5, "Dungeons", true, false, &mut rng) {
+            if let Some(msg) = ambient_sounds(5, "Dungeons", true, false, false, &mut rng) {
                 assert!(
-                    msg.contains("shoplifters")
-                        || msg.contains("cash register")
-                        || msg.contains("prices"),
+                    msg.starts_with("ambient-shop-"),
                     "shop sound should be thematic: {}",
                     msg
                 );
@@ -1076,9 +1078,9 @@ mod tests {
         let mut found = false;
         for seed in 0..200u64 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            if let Some(msg) = ambient_sounds(5, "Dungeons", false, true, &mut rng) {
+            if let Some(msg) = ambient_sounds(5, "Dungeons", false, true, false, &mut rng) {
                 assert!(
-                    msg.contains("prayer") || msg.contains("chant"),
+                    msg.starts_with("ambient-temple-"),
                     "temple sound should be thematic: {}",
                     msg
                 );
@@ -1097,13 +1099,9 @@ mod tests {
         let mut found = false;
         for seed in 0..200u64 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            if let Some(msg) = ambient_sounds(20, "Dungeons", false, false, &mut rng) {
+            if let Some(msg) = ambient_sounds(20, "Dungeons", false, false, false, &mut rng) {
                 assert!(
-                    msg.contains("crunching")
-                        || msg.contains("hollow")
-                        || msg.contains("rumble")
-                        || msg.contains("roar")
-                        || msg.contains("digging"),
+                    msg.starts_with("ambient-deep-"),
                     "deep dungeon sound should be thematic: {}",
                     msg
                 );
@@ -1122,9 +1120,9 @@ mod tests {
         let mut found = false;
         for seed in 0..200u64 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            if let Some(msg) = ambient_sounds(3, "Dungeons", false, false, &mut rng) {
+            if let Some(msg) = ambient_sounds(3, "Dungeons", false, false, false, &mut rng) {
                 assert!(
-                    msg.contains("door") || msg.contains("water") || msg.contains("moving"),
+                    msg.starts_with("ambient-shallow-"),
                     "shallow dungeon sound should be thematic: {}",
                     msg
                 );
@@ -1136,6 +1134,24 @@ mod tests {
             found,
             "should eventually get a shallow dungeon ambient sound"
         );
+    }
+
+    #[test]
+    fn ambient_sounds_oracle() {
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(5, "Dungeons", false, false, true, &mut rng) {
+                assert!(
+                    msg.starts_with("ambient-oracle-"),
+                    "oracle sound should be thematic: {}",
+                    msg
+                );
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "should eventually get an oracle ambient sound");
     }
 
     // -----------------------------------------------------------------------

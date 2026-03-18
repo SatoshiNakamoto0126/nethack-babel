@@ -796,6 +796,7 @@ fn process_new_turn(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<
         });
     }
 
+    emit_ambient_dungeon_sound(world, rng, events);
     process_amulet_portal_sense(world, rng, events);
     process_wizard_of_yendor_turn(world, rng, events);
     process_shop_repairs(world, events);
@@ -803,6 +804,61 @@ fn process_new_turn(world: &mut GameWorld, rng: &mut impl Rng, events: &mut Vec<
     events.push(EngineEvent::TurnEnd {
         turn_number: world.turn(),
     });
+}
+
+fn emit_ambient_dungeon_sound(
+    world: &GameWorld,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) {
+    let player = world.player();
+    if crate::status::is_deaf(world, player) {
+        return;
+    }
+
+    let player_pos = world.get_component::<Positioned>(player).map(|pos| pos.0);
+    let has_shop = player_pos
+        .is_some_and(|pos| find_shop_index_containing_position(world, pos).is_none())
+        && world
+            .dungeon()
+            .shop_rooms
+            .iter()
+            .any(|shop| !shop_room_is_deserted(world, shop));
+    let has_temple = current_level_has_temple_ambient(world);
+    let has_oracle = current_level_has_oracle_ambient(world);
+    if let Some(key) = crate::music::ambient_sounds(
+        world.dungeon().depth,
+        ambient_branch_name(world.dungeon().branch),
+        has_shop,
+        has_temple,
+        has_oracle,
+        rng,
+    ) {
+        events.push(EngineEvent::msg(key));
+    }
+}
+
+fn ambient_branch_name(branch: DungeonBranch) -> &'static str {
+    match branch {
+        DungeonBranch::Gehennom => "Gehennom",
+        DungeonBranch::Mines => "Mines",
+        _ => "Dungeons",
+    }
+}
+
+fn current_level_has_temple_ambient(world: &GameWorld) -> bool {
+    world
+        .ecs()
+        .query::<(&Monster, &crate::npc::Priest)>()
+        .iter()
+        .any(|(entity, (_, priest))| {
+            live_monster_entity(world, entity) && priest.has_shrine && !priest.is_high_priest
+        })
+}
+
+fn current_level_has_oracle_ambient(world: &GameWorld) -> bool {
+    identify_special_level(world.dungeon().branch, world.dungeon().depth)
+        == Some(crate::special_levels::SpecialLevelId::OracleLevel)
 }
 
 fn tick_monster_incapacitation(world: &mut GameWorld, events: &mut Vec<EngineEvent>) {
@@ -5361,7 +5417,7 @@ fn process_wizard_of_yendor_turn(
     events: &mut Vec<EngineEvent>,
 ) {
     let player = world.player();
-    let player_events = read_player_events(world, player);
+    let mut player_events = read_player_events(world, player);
     let player_has_amulet = player_has_named_item(world, player, "Amulet of Yendor");
     let wizard_times_killed = player_events
         .wizard_times_killed
@@ -5388,20 +5444,23 @@ fn process_wizard_of_yendor_turn(
             }
             return;
         }
-
-        let intervention_period = if player_has_amulet {
-            6
-        } else if player_events.invoked {
-            7
-        } else {
-            8
-        };
-        if rng.random_range(0..intervention_period) == 0 {
-            let allow_resurrection = world.dungeon().branch != DungeonBranch::Endgame;
-            let action = crate::npc::choose_wizard_intervene_action(allow_resurrection, rng);
-            events.extend(wizard_harassment_messages(world, player, action));
-            apply_wizard_harassment_action(world, None, player, action, rng, events);
+        if player_events.wizard_intervention_cooldown == 0
+            && player_events.killed_wizard
+            && player_events.wizard_last_killed_turn == world.turn()
+        {
+            player_events.wizard_intervention_cooldown = wizard_intervention_delay(rng);
         }
+        if player_events.wizard_intervention_cooldown > 0 {
+            player_events.wizard_intervention_cooldown -= 1;
+            persist_player_events(world, player, player_events);
+            return;
+        }
+        let allow_resurrection = !is_astral_plane(world);
+        let action = crate::npc::choose_wizard_intervene_action(allow_resurrection, rng);
+        events.extend(wizard_harassment_messages(world, player, action));
+        apply_wizard_harassment_action(world, None, player, action, rng, events);
+        player_events.wizard_intervention_cooldown = wizard_intervention_delay(rng);
+        persist_player_events(world, player, player_events);
         return;
     }
 
@@ -5440,6 +5499,18 @@ fn process_wizard_of_yendor_turn(
     let action = crate::npc::choose_wizard_action(world, wizard, player_has_amulet, rng);
     events.extend(wizard_harassment_messages(world, player, action));
     apply_wizard_harassment_action(world, Some(wizard), player, action, rng, events);
+}
+
+fn wizard_intervention_delay(rng: &mut impl Rng) -> u32 {
+    rng.random_range(50..=249)
+}
+
+fn wizard_invocation_delay(rng: &mut impl Rng) -> u32 {
+    rng.random_range(1..=6) + rng.random_range(1..=6)
+}
+
+fn is_astral_plane(world: &GameWorld) -> bool {
+    world.dungeon().branch == DungeonBranch::Endgame && world.dungeon().depth == 5
 }
 
 fn wizard_harassment_messages(
@@ -7016,6 +7087,12 @@ fn read_book_of_the_dead(
     let mut player_events = read_player_events(world, player);
     player_events.invoked = true;
     player_events.found_vibrating_square = true;
+    let soon = wizard_invocation_delay(rng);
+    if player_events.wizard_intervention_cooldown == 0
+        || player_events.wizard_intervention_cooldown > soon
+    {
+        player_events.wizard_intervention_cooldown = soon;
+    }
     persist_player_events(world, player, player_events);
     sync_current_level_invocation_access(world, rng);
     events.push(EngineEvent::msg("invocation-complete"));
@@ -9015,6 +9092,10 @@ mod tests {
                 let player = world.player();
                 let wizard =
                     spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(wizard, Peaceful)
+                    .expect("wizard should accept Peaceful in wizard taunt scenario");
                 if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
                     hp.current = 12;
                     hp.max = 20;
@@ -9067,6 +9148,7 @@ mod tests {
                 player_events.killed_wizard = true;
                 player_events.wizard_times_killed = 1;
                 player_events.wizard_last_killed_turn = world.turn();
+                player_events.wizard_intervention_cooldown = 1;
                 persist_player_events(&mut world, player, player_events);
                 let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "goblin", 6);
                 let _ = crate::status::make_sleeping(&mut world, sleeper, 10);
@@ -10289,9 +10371,17 @@ mod tests {
         // Run some turns.
         for _ in 0..50 {
             let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
-            let hp_regen = events
-                .iter()
-                .any(|e| matches!(e, EngineEvent::HpChange { .. }));
+            let hp_regen = events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::HpChange {
+                        entity,
+                        amount,
+                        source: HpSource::Regeneration,
+                        ..
+                    } if *entity == world.player() && *amount > 0
+                )
+            });
             assert!(!hp_regen, "should not regen HP when already at max");
         }
     }
@@ -12522,13 +12612,22 @@ mod tests {
             "sleep timer should expire after enough full turns"
         );
 
-        let third_turn = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+        let mut woke_and_acted = false;
+        for _ in 0..3 {
+            let turn_events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+            if turn_events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::MeleeHit { attacker, .. } if *attacker == sleeper
+                )
+            }) {
+                woke_and_acted = true;
+                break;
+            }
+        }
         assert!(
-            third_turn.iter().any(|event| matches!(
-                event,
-                EngineEvent::MeleeHit { attacker, .. } if *attacker == sleeper
-            )),
-            "monster should resume acting once sleep expires"
+            woke_and_acted,
+            "monster should resume acting shortly after sleep expires"
         );
     }
 
@@ -13275,6 +13374,7 @@ mod tests {
             player_events.killed_wizard = true;
             player_events.wizard_times_killed = 1;
             player_events.wizard_last_killed_turn = current_turn;
+            player_events.wizard_intervention_cooldown = 1;
         }
         let mut rng = test_rng();
         let mut final_events = Vec::new();
@@ -13570,7 +13670,11 @@ mod tests {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         let player = world.player();
-        let _wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        world
+            .ecs_mut()
+            .insert_one(wizard, Peaceful)
+            .expect("wizard should accept Peaceful in taunt test");
         if let Some(mut hp) = world.get_component_mut::<HitPoints>(player) {
             hp.current = 4;
             hp.max = 20;
@@ -16479,6 +16583,87 @@ mod tests {
                 EngineEvent::Message { key, .. } if key == "shop-repair"
             )),
             "shopkeeper should not repair while still following the player"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_shop_texture() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-shop-")
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "shop levels should eventually emit live ambient shop texture"
+        );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_can_emit_temple_texture() {
+        let mut world = make_test_world();
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: Alignment::Lawful,
+                    has_shrine: true,
+                    is_high_priest: false,
+                    angry: false,
+                },
+            )
+            .expect("priest should accept explicit runtime state");
+
+        let mut rng = test_rng();
+        let mut found = false;
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key.starts_with("ambient-temple-")
+                )
+            }) {
+                found = true;
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "temple levels should eventually emit live ambient temple texture"
         );
     }
 

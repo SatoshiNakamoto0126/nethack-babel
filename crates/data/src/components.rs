@@ -528,6 +528,10 @@ pub struct PlayerEvents {
     /// Number of times the Wizard of Yendor has been killed.
     #[serde(default)]
     pub wizard_times_killed: u32,
+    /// Countdown in turns until the next off-screen Wizard intervention.
+    /// Mirrors NetHack's `u.udg_cnt` cadence once the Wizard starts meddling.
+    #[serde(default)]
+    pub wizard_intervention_cooldown: u32,
     /// Whether the vibrating square was found.  From `u.uevent.ufound_vibsquare`.
     pub found_vibrating_square: bool,
     /// Whether the player ascended.
