@@ -3182,8 +3182,9 @@ mod tests {
             SaveStoryTraversalScenario::WizardHarassment => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
                 let player = world.player();
+                spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
                 let wizard =
-                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
+                    spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 20);
                 if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
                     hp.current = 20;
                     hp.max = 40;
@@ -3221,6 +3222,18 @@ mod tests {
                         break;
                     }
                 }
+                assert!(
+                    resolve_object_type_by_spec(&loaded, "Amulet of Yendor").is_some_and(
+                        |amulet_type| loaded.get_component::<Inventory>(player).is_some_and(
+                            |inv| inv.items.iter().any(|item| {
+                                loaded
+                                    .get_component::<ObjectCore>(*item)
+                                    .is_some_and(|core| core.otyp == amulet_type)
+                            })
+                        )
+                    ),
+                    "save/load wizard harassment setup should keep the Amulet on the player"
+                );
                 (loaded, final_events)
             }
             SaveStoryTraversalScenario::WizardTaunt => {
@@ -4861,7 +4874,8 @@ mod tests {
     #[test]
     fn round_trip_loaded_live_wizard_still_harasses_player() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
-        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
+        spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'b');
+        let wizard = spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 20);
         if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
             hp.current = 12;
             hp.max = 20;
@@ -4889,6 +4903,7 @@ mod tests {
         let mut saw_curse = false;
         let mut saw_summon = false;
         let mut saw_level_teleport = false;
+        let mut saw_remote_theft = false;
 
         for _ in 0..256 {
             let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
@@ -4902,6 +4917,12 @@ mod tests {
                 )
             }) {
                 saw_harassment = true;
+                saw_remote_theft = events.iter().any(|event| {
+                    matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
+                    )
+                });
                 saw_curse = events.iter().any(|event| {
                     matches!(
                         event,
@@ -4935,6 +4956,24 @@ mod tests {
         assert!(
             saw_harassment,
             "a live wizard should eventually keep harassing the player after save/load"
+        );
+        assert!(
+            !saw_remote_theft,
+            "a distant live wizard should not remotely steal the Amulet after save/load"
+        );
+        assert!(
+            resolve_object_type_by_spec(&loaded, "Amulet of Yendor").is_some_and(|amulet_type| {
+                loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .is_some_and(|inv| {
+                        inv.items.iter().any(|item| {
+                            loaded
+                                .get_component::<ObjectCore>(*item)
+                                .is_some_and(|core| core.otyp == amulet_type)
+                        })
+                    })
+            }),
+            "save/load should keep the Amulet on the player when the wizard stays distant"
         );
         if saw_curse {
             assert!(
@@ -6158,6 +6197,25 @@ mod tests {
                         .iter()
                         .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }));
                     assert!(cursed || summoned);
+                    assert!(
+                        !final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
+                        )),
+                        "save/load wizard matrix should not allow remote amulet theft"
+                    );
+                    assert!(
+                        resolve_object_type_by_spec(&world, "Amulet of Yendor").is_some_and(
+                            |amulet_type| world.get_component::<Inventory>(player).is_some_and(
+                                |inv| inv.items.iter().any(|item| {
+                                    world
+                                        .get_component::<ObjectCore>(*item)
+                                        .is_some_and(|core| core.otyp == amulet_type)
+                                })
+                            )
+                        ),
+                        "save/load wizard matrix should keep the Amulet on the player"
+                    );
                     assert!(
                         world
                             .get_component::<PlayerEvents>(player)

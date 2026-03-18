@@ -813,7 +813,7 @@ pub fn choose_wizard_action(
         .map(|hp| (hp.current, hp.max))
         .unwrap_or((1, 1));
 
-    if player_has_amulet {
+    if player_has_amulet && wizard_is_adjacent_to_player(world, wizard, world.player()) {
         WizardAction::StealAmulet
     } else if wizard_hp.0 >= wizard_hp.1 {
         WizardAction::DoubleTrouble
@@ -822,6 +822,19 @@ pub fn choose_wizard_action(
     } else {
         WizardAction::CurseItems
     }
+}
+
+fn wizard_is_adjacent_to_player(world: &GameWorld, wizard: Entity, player: Entity) -> bool {
+    let Some(wizard_pos) = world.get_component::<Positioned>(wizard).map(|pos| pos.0) else {
+        return false;
+    };
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return false;
+    };
+
+    let dx = (wizard_pos.x - player_pos.x).abs();
+    let dy = (wizard_pos.y - player_pos.y).abs();
+    dx <= 1 && dy <= 1 && (dx != 0 || dy != 0)
 }
 
 pub fn maybe_wizard_taunt(

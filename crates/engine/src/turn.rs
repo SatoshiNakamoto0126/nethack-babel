@@ -5846,6 +5846,12 @@ fn apply_wizard_harassment_action(
     match action {
         crate::npc::WizardAction::StealAmulet => {
             if let Some(wizard) = wizard
+                && world
+                    .get_component::<Positioned>(wizard)
+                    .zip(world.get_component::<Positioned>(player))
+                    .is_some_and(|(wizard_pos, player_pos)| {
+                        crate::ball::chebyshev_distance(wizard_pos.0, player_pos.0) == 1
+                    })
                 && let Some(amulet) = find_player_named_item(world, player, "Amulet of Yendor")
             {
                 wizard_steal_amulet(world, wizard, player, amulet);
@@ -9141,6 +9147,7 @@ mod tests {
                 let mut world = make_test_world();
                 install_test_catalogs(&mut world);
                 let player = world.player();
+                spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
                 let sword = spawn_inventory_object_by_name(&mut world, "long sword", 'b');
                 world
                     .ecs_mut()
@@ -9154,7 +9161,7 @@ mod tests {
                     )
                     .expect("inventory item should accept a BUC component");
                 let wizard =
-                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+                    spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 12);
                 if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
                     hp.current = 20;
                     hp.max = 40;
@@ -13308,6 +13315,38 @@ mod tests {
     }
 
     #[test]
+    fn test_wizard_cannot_steal_amulet_from_range() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 12);
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::StealAmulet,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            player_carries_item(&world, player, amulet),
+            "Wizard harassment should not steal the Amulet from across the level"
+        );
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
+            )),
+            "ranged amulet theft should stay silent because nothing was stolen"
+        );
+    }
+
+    #[test]
     fn test_wizard_double_trouble_spawns_clone() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -14318,6 +14357,62 @@ mod tests {
             buc.cursed,
             "wizard should still be able to curse inventory after stealing the amulet"
         );
+    }
+
+    #[test]
+    fn test_far_wizard_harasses_without_remote_amulet_theft() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 12);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+            hp.current = 10;
+            hp.max = 20;
+        }
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        let item = spawn_inventory_object_by_name(&mut world, "long sword", 'b');
+        world
+            .ecs_mut()
+            .insert_one(
+                item,
+                BucStatus {
+                    cursed: false,
+                    blessed: false,
+                    bknown: false,
+                },
+            )
+            .expect("inventory item should accept a BUC component");
+        let mut rng = test_rng();
+
+        for _ in 0..256 {
+            let mut events = Vec::new();
+            process_wizard_of_yendor_turn(&mut world, &mut rng, &mut events);
+            let cursed = world
+                .get_component::<BucStatus>(item)
+                .is_some_and(|status| status.cursed);
+            let summoned = events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }));
+            let remote_theft = events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
+                )
+            });
+            assert!(
+                !remote_theft,
+                "far Wizard pressure should not use remote amulet theft"
+            );
+            assert!(
+                player_carries_item(&world, player, amulet),
+                "far Wizard pressure should leave the Amulet on the player"
+            );
+            if cursed || summoned {
+                return;
+            }
+        }
+
+        panic!("far Wizard should still produce non-theft harassment");
     }
 
     // ── Cross-system wiring tests ──────────────────────────────
@@ -19443,6 +19538,25 @@ mod tests {
                     assert!(
                         followup_curse || followup_summon,
                         "{} should produce a real follow-up harassment side-effect",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<Inventory>(player)
+                            .is_some_and(|inv| inv.items.iter().any(|item| {
+                                world
+                                    .get_component::<Name>(*item)
+                                    .is_some_and(|name| name.0 == "Amulet of Yendor")
+                            })),
+                        "{} should not let a distant wizard steal the Amulet",
+                        scenario.label()
+                    );
+                    assert!(
+                        !final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
+                        )),
+                        "{} should not emit remote amulet theft",
                         scenario.label()
                     );
                     assert!(
