@@ -8,9 +8,9 @@ use hecs::Entity;
 use nethack_babel_engine::action::{Direction, NameTarget, PlayerAction, Position, SpellId};
 
 use crate::input::{
-    DirectionCommand, ItemCommand, ItemDirectionCommand, PromptKind, complete_extended_command,
-    extended_command_needs_prompt, key_needs_prompt, map_direction_key, map_extended_command,
-    map_key, regular_commands,
+    CommandMenuKind, DirectionCommand, ItemCommand, ItemDirectionCommand, PromptKind,
+    command_menu_commands, complete_extended_command, extended_command_needs_prompt,
+    key_needs_prompt, map_direction_key, map_extended_command, map_key,
 };
 use crate::port::{InputEvent, InputKeyCode, MapView, MessageUrgency, StatusLine, WindowPort};
 
@@ -95,6 +95,8 @@ pub struct TuiMessages {
     pub not_implemented: String,
     pub no_previous_command: String,
     pub commands_title: String,
+    pub here_commands_title: String,
+    pub there_commands_title: String,
     pub wizard_mode_disabled: String,
     pub direction_prompt: String,
     pub direction_prompt_optional: String,
@@ -153,6 +155,8 @@ impl Default for TuiMessages {
             not_implemented: "Not yet implemented.".to_string(),
             no_previous_command: "No previous command to repeat.".to_string(),
             commands_title: "Commands".to_string(),
+            here_commands_title: "Commands For Here".to_string(),
+            there_commands_title: "Commands For There".to_string(),
             wizard_mode_disabled: "Wizard mode is not enabled.".to_string(),
             direction_prompt: "In what direction?".to_string(),
             direction_prompt_optional: "In what direction? (Esc for none)".to_string(),
@@ -306,10 +310,13 @@ impl App {
         None
     }
 
-    fn show_request_command_menu(&self, port: &mut impl WindowPort) {
-        let mut commands = regular_commands();
-        commands.sort_by(|a, b| a.name.cmp(b.name));
-        let lines: Vec<String> = commands
+    fn show_command_menu(&self, port: &mut impl WindowPort, kind: CommandMenuKind) {
+        let title = match kind {
+            CommandMenuKind::Request => &self.messages_i18n.commands_title,
+            CommandMenuKind::Here => &self.messages_i18n.here_commands_title,
+            CommandMenuKind::There => &self.messages_i18n.there_commands_title,
+        };
+        let lines: Vec<String> = command_menu_commands(kind)
             .iter()
             .map(|cmd| {
                 if let Some(description) = self.messages_i18n.command_descriptions.get(cmd.name) {
@@ -319,7 +326,7 @@ impl App {
                 }
             })
             .collect();
-        port.show_text(&self.messages_i18n.commands_title, &lines.join("\n"));
+        port.show_text(title, &lines.join("\n"));
     }
 
     fn resolve_tui_only_extended_command(
@@ -330,11 +337,15 @@ impl App {
         match command_name.trim().to_lowercase().as_str() {
             "repeat" => Some(self.repeat_last_action(port)),
             "reqmenu" => {
-                self.show_request_command_menu(port);
+                self.show_command_menu(port, CommandMenuKind::Request);
                 Some(None)
             }
-            "herecmdmenu" | "therecmdmenu" => {
-                self.show_request_command_menu(port);
+            "herecmdmenu" => {
+                self.show_command_menu(port, CommandMenuKind::Here);
+                Some(None)
+            }
+            "therecmdmenu" => {
+                self.show_command_menu(port, CommandMenuKind::There);
                 Some(None)
             }
             "perminv" => Some(Some(PlayerAction::ViewInventory)),
@@ -1199,7 +1210,7 @@ impl App {
                         && !modifiers.alt
                         && matches!(code, InputKeyCode::Char('m'))
                     {
-                        self.show_request_command_menu(port);
+                        self.show_command_menu(port, CommandMenuKind::Request);
                         continue;
                     }
 
@@ -2951,7 +2962,7 @@ mod tests {
     }
 
     #[test]
-    fn get_extended_command_herecmdmenu_shows_command_index() {
+    fn get_extended_command_herecmdmenu_shows_contextual_menu() {
         let mut app = App::new();
         let mut port = MockPort::new(vec![
             MockPort::key('h'),
@@ -2975,7 +2986,42 @@ mod tests {
         assert!(
             port.shown_text
                 .iter()
-                .any(|(title, _)| title.contains("Commands"))
+                .any(|(title, body)| title.contains("Commands For Here")
+                    && body.contains("#pickup")
+                    && !body.contains("#save"))
+        );
+    }
+
+    #[test]
+    fn get_extended_command_therecmdmenu_shows_contextual_menu() {
+        let mut app = App::new();
+        let mut port = MockPort::new(vec![
+            MockPort::key('t'),
+            MockPort::key('h'),
+            MockPort::key('e'),
+            MockPort::key('r'),
+            MockPort::key('e'),
+            MockPort::key('c'),
+            MockPort::key('m'),
+            MockPort::key('d'),
+            MockPort::key('m'),
+            MockPort::key('e'),
+            MockPort::key('n'),
+            MockPort::key('u'),
+            InputEvent::Key {
+                code: InputKeyCode::Enter,
+                modifiers: InputModifiers::NONE,
+            },
+        ]);
+        let action = app.get_extended_command(&mut port);
+        assert!(action.is_none());
+        assert!(
+            port.shown_text
+                .iter()
+                .any(|(title, body)| title.contains("Commands For There")
+                    && body.contains("#chat")
+                    && body.contains("#throw")
+                    && !body.contains("#pray"))
         );
     }
 }

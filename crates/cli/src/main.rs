@@ -42,7 +42,8 @@ use nethack_babel_i18n::locale::{LanguageManifest, LocaleManager};
 use nethack_babel_tui::{
     App, DisplayCell, InventoryI18n, InventoryItem, MAP_COLS, MAP_ROWS, MapView, Menu, MenuHow,
     MenuItem, MenuResult, MessageUrgency, StatusLine, TermColor, TuiMessages, TuiPort, WindowPort,
-    input::regular_commands, make_inventory_item,
+    input::{CommandMenuKind, command_menu_commands, regular_commands},
+    make_inventory_item,
 };
 
 #[derive(Parser)]
@@ -2122,6 +2123,16 @@ mod text_input_tests {
     }
 
     #[test]
+    fn localized_command_menu_text_uses_contextual_subset() {
+        let locale = init_embedded_locale_manager("en").expect("locale");
+        let (title, body) = localized_command_menu_text(&locale, CommandMenuKind::There);
+        assert!(title.contains("There"));
+        assert!(body.contains("#chat"));
+        assert!(body.contains("#throw"));
+        assert!(!body.contains("#pray"));
+    }
+
+    #[test]
     fn repeatable_text_action_filter_excludes_ui_actions() {
         assert!(is_repeatable_text_action(&PlayerAction::Rest));
         assert!(is_repeatable_text_action(&PlayerAction::Move {
@@ -3019,6 +3030,31 @@ fn localized_extended_command_descriptions(
         .collect()
 }
 
+fn localized_command_menu_title(locale: &LocaleManager, kind: CommandMenuKind) -> String {
+    match kind {
+        CommandMenuKind::Request => locale.translate("ui-commands-title", None),
+        CommandMenuKind::Here => locale.translate("ui-here-commands-title", None),
+        CommandMenuKind::There => locale.translate("ui-there-commands-title", None),
+    }
+}
+
+fn localized_command_menu_text(locale: &LocaleManager, kind: CommandMenuKind) -> (String, String) {
+    let descriptions = localized_extended_command_descriptions(locale);
+    let title = localized_command_menu_title(locale, kind);
+    let body = command_menu_commands(kind)
+        .iter()
+        .map(|cmd| {
+            if let Some(description) = descriptions.get(cmd.name) {
+                format!("#{} - {}", cmd.name, description)
+            } else {
+                format!("#{}", cmd.name)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    (title, body)
+}
+
 fn localized_help_text(locale: &LocaleManager) -> (String, String) {
     let title = locale.translate("help-title", None);
     let help_keys = [
@@ -3125,6 +3161,8 @@ fn run_tui_mode(
         not_implemented: locale.translate("ui-not-implemented", None),
         no_previous_command: locale.translate("ui-no-previous-command", None),
         commands_title: locale.translate("ui-commands-title", None),
+        here_commands_title: locale.translate("ui-here-commands-title", None),
+        there_commands_title: locale.translate("ui-there-commands-title", None),
         wizard_mode_disabled: locale.translate("ui-wizard-mode-disabled", None),
         direction_prompt: locale.translate("ui-direction-prompt", None),
         direction_prompt_optional: locale.translate("ui-direction-prompt-optional", None),
@@ -3595,6 +3633,21 @@ fn run_text_mode(
         }
         if command_input == "?" || command_input == "help" {
             let (title, body) = localized_help_text(locale);
+            println!();
+            println!("=== {title} ===");
+            for line in body.lines() {
+                println!("{line}");
+            }
+            println!();
+            continue;
+        }
+        if let Some(kind) = match command_input {
+            "reqmenu" => Some(CommandMenuKind::Request),
+            "herecmdmenu" => Some(CommandMenuKind::Here),
+            "therecmdmenu" => Some(CommandMenuKind::There),
+            _ => None,
+        } {
+            let (title, body) = localized_command_menu_text(locale, kind);
             println!();
             println!("=== {title} ===");
             for line in body.lines() {

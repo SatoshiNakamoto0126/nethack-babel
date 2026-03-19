@@ -589,6 +589,14 @@ pub struct ExtendedCommand {
     pub wizard_only: bool,
 }
 
+/// Context for request-command style menus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandMenuKind {
+    Request,
+    Here,
+    There,
+}
+
 /// Complete list of all extended commands from NetHack 3.7.
 ///
 /// This includes 99 regular extended commands and 33 wizard-mode commands,
@@ -1541,6 +1549,42 @@ pub fn regular_commands() -> Vec<&'static ExtendedCommand> {
         .iter()
         .filter(|c| !c.wizard_only)
         .collect()
+}
+
+fn commands_named(names: &[&str]) -> Vec<&'static ExtendedCommand> {
+    names
+        .iter()
+        .filter_map(|name| find_extended_command(name))
+        .collect()
+}
+
+/// Return the command list for the given request-command menu flavor.
+pub fn command_menu_commands(kind: CommandMenuKind) -> Vec<&'static ExtendedCommand> {
+    match kind {
+        CommandMenuKind::Request => {
+            let mut commands = regular_commands();
+            commands.sort_by(|a, b| a.name.cmp(b.name));
+            commands
+        }
+        CommandMenuKind::Here => commands_named(&[
+            "pickup",
+            "loot",
+            "look",
+            "search",
+            "offer",
+            "pray",
+            "drop",
+            "inventory",
+            "sit",
+            "travel",
+            "jump",
+            "whatis",
+        ]),
+        CommandMenuKind::There => commands_named(&[
+            "look", "glance", "whatis", "travel", "jump", "open", "close", "kick", "chat", "fight",
+            "throw", "zap", "untrap",
+        ]),
+    }
 }
 
 /// Return all wizard-mode-only commands.
@@ -2725,6 +2769,29 @@ mod tests {
             "should have 90+ regular commands, got {}",
             regular.len()
         );
+    }
+
+    #[test]
+    fn command_menu_here_is_contextual_subset() {
+        let commands = command_menu_commands(CommandMenuKind::Here);
+        let names: Vec<&str> = commands.iter().map(|c| c.name).collect();
+        assert!(names.contains(&"pickup"));
+        assert!(names.contains(&"offer"));
+        assert!(names.contains(&"sit"));
+        assert!(!names.contains(&"wizwish"));
+        assert!(!names.contains(&"therecmdmenu"));
+    }
+
+    #[test]
+    fn command_menu_there_is_contextual_subset() {
+        let commands = command_menu_commands(CommandMenuKind::There);
+        let names: Vec<&str> = commands.iter().map(|c| c.name).collect();
+        assert!(names.contains(&"glance"));
+        assert!(names.contains(&"chat"));
+        assert!(names.contains(&"throw"));
+        assert!(names.contains(&"untrap"));
+        assert!(!names.contains(&"pray"));
+        assert!(!names.contains(&"wizwish"));
     }
 
     #[test]
