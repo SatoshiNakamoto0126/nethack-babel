@@ -42,7 +42,7 @@ use nethack_babel_i18n::locale::{LanguageManifest, LocaleManager};
 use nethack_babel_tui::{
     App, DisplayCell, InventoryI18n, InventoryItem, MAP_COLS, MAP_ROWS, MapView, Menu, MenuHow,
     MenuItem, MenuResult, MessageUrgency, StatusLine, TermColor, TuiMessages, TuiPort, WindowPort,
-    make_inventory_item,
+    input::regular_commands, make_inventory_item,
 };
 
 #[derive(Parser)]
@@ -2986,6 +2986,39 @@ fn build_equipped_lines(
         .collect()
 }
 
+fn extended_command_description_key(name: &str) -> String {
+    let suffix = match name {
+        "#" => "hash".to_string(),
+        "?" => "question".to_string(),
+        _ => name.replace(|c: char| !c.is_ascii_alphanumeric(), "-"),
+    };
+    format!("ui-extcmd-desc-{suffix}")
+}
+
+fn localized_extended_command_descriptions(
+    locale: &LocaleManager,
+) -> std::collections::HashMap<String, String> {
+    let is_zh = locale.current_language().starts_with("zh");
+
+    regular_commands()
+        .into_iter()
+        .filter_map(|cmd| {
+            let key = extended_command_description_key(cmd.name);
+            let translated = locale.translate(&key, None);
+
+            if translated == key {
+                return (!is_zh).then(|| (cmd.name.to_string(), cmd.description.to_string()));
+            }
+
+            if is_zh && translated == cmd.description {
+                return None;
+            }
+
+            Some((cmd.name.to_string(), translated))
+        })
+        .collect()
+}
+
 fn localized_help_text(locale: &LocaleManager) -> (String, String) {
     let title = locale.translate("help-title", None);
     let help_keys = [
@@ -3085,6 +3118,7 @@ fn run_tui_mode(
     let mut app = App::new();
     app.set_wizard_mode(wizard_mode);
     app.messages_i18n = TuiMessages {
+        command_descriptions: localized_extended_command_descriptions(locale),
         empty_handed: locale.translate("ui-empty-handed", None),
         never_mind: locale.translate("ui-never-mind", None),
         no_such_item: locale.translate("ui-no-such-item", None),

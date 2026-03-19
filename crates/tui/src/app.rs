@@ -88,6 +88,7 @@ impl MessageLog {
 /// injected by the caller.
 #[derive(Debug, Clone)]
 pub struct TuiMessages {
+    pub command_descriptions: HashMap<String, String>,
     pub empty_handed: String,
     pub never_mind: String,
     pub no_such_item: String,
@@ -144,6 +145,7 @@ pub struct TuiMessages {
 impl Default for TuiMessages {
     fn default() -> Self {
         Self {
+            command_descriptions: HashMap::new(),
             empty_handed: "You are empty handed.".to_string(),
             never_mind: "Never mind.".to_string(),
             no_such_item: "You don't have that item.".to_string(),
@@ -307,7 +309,13 @@ impl App {
         commands.sort_by(|a, b| a.name.cmp(b.name));
         let lines: Vec<String> = commands
             .iter()
-            .map(|cmd| format!("#{} - {}", cmd.name, cmd.description))
+            .map(|cmd| {
+                if let Some(description) = self.messages_i18n.command_descriptions.get(cmd.name) {
+                    format!("#{} - {}", cmd.name, description)
+                } else {
+                    format!("#{}", cmd.name)
+                }
+            })
             .collect();
         port.show_text(&self.messages_i18n.commands_title, &lines.join("\n"));
     }
