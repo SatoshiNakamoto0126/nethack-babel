@@ -6738,20 +6738,72 @@ fn wizard_should_fall_back_to_heal(
         && !(player_has_amulet || player_has_invocation_tool || player_has_quest_artifact)
 }
 
-fn find_wizard_retreat_stairs(world: &GameWorld) -> Option<Position> {
+fn branch_builds_up(branch: DungeonBranch) -> bool {
+    matches!(branch, DungeonBranch::VladsTower)
+}
+
+fn find_positions_with_terrain(world: &GameWorld, terrain: Terrain) -> Vec<Position> {
     let map = &world.dungeon().current_level;
+    let mut positions = Vec::new();
     for y in 0..map.height {
         for x in 0..map.width {
             let pos = Position::new(x as i32, y as i32);
-            if map
-                .get(pos)
-                .is_some_and(|cell| matches!(cell.terrain, Terrain::StairsUp | Terrain::StairsDown))
-            {
-                return Some(pos);
+            if map.get(pos).is_some_and(|cell| cell.terrain == terrain) {
+                positions.push(pos);
             }
         }
     }
-    None
+    positions
+}
+
+fn choose_retreat_position_farthest_from_player(
+    positions: &[Position],
+    player_pos: Position,
+) -> Option<Position> {
+    positions
+        .iter()
+        .copied()
+        .max_by_key(|pos| dist2_positions(*pos, player_pos))
+}
+
+fn find_wizard_retreat_stairs(
+    world: &GameWorld,
+    wizard: hecs::Entity,
+    player_pos: Position,
+) -> Option<Position> {
+    let forward = wizard.to_bits().get().is_multiple_of(2);
+    let preferred_is_up = if branch_builds_up(world.dungeon().branch) {
+        forward
+    } else {
+        !forward
+    };
+    let preferred_terrain = if preferred_is_up {
+        Terrain::StairsUp
+    } else {
+        Terrain::StairsDown
+    };
+    let opposite_terrain = if preferred_is_up {
+        Terrain::StairsDown
+    } else {
+        Terrain::StairsUp
+    };
+
+    choose_retreat_position_farthest_from_player(
+        &find_positions_with_terrain(world, preferred_terrain),
+        player_pos,
+    )
+    .or_else(|| {
+        choose_retreat_position_farthest_from_player(
+            &find_positions_with_terrain(world, Terrain::MagicPortal),
+            player_pos,
+        )
+    })
+    .or_else(|| {
+        choose_retreat_position_farthest_from_player(
+            &find_positions_with_terrain(world, opposite_terrain),
+            player_pos,
+        )
+    })
 }
 
 fn find_random_walkable_unoccupied_tile(world: &GameWorld, rng: &mut impl Rng) -> Option<Position> {
@@ -6797,7 +6849,7 @@ fn apply_wizard_retreat_and_heal(
         return false;
     };
 
-    let retreat_pos = find_wizard_retreat_stairs(world)
+    let retreat_pos = find_wizard_retreat_stairs(world, wizard, player_pos)
         .or_else(|| find_random_walkable_unoccupied_tile(world, rng));
     let Some(retreat_pos) = retreat_pos else {
         return false;
@@ -11176,10 +11228,16 @@ mod tests {
                             .set_terrain(Position::new(x, y), Terrain::Floor);
                     }
                 }
+                let up_stairs = Position::new(3, 3);
+                let down_stairs = Position::new(21, 20);
                 world
                     .dungeon_mut()
                     .current_level
-                    .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+                    .set_terrain(up_stairs, Terrain::StairsUp);
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(down_stairs, Terrain::StairsDown);
                 let player = world.player();
                 set_player_position(&mut world, Position::new(20, 20));
                 let wizard =
@@ -17318,6 +17376,84 @@ mod tests {
             .get_component::<HitPoints>(wizard)
             .expect("wounded wizard should keep HP after healing");
         assert!(hp.current > 12);
+    }
+
+    #[test]
+    fn test_wounded_wizard_retreat_prefers_directional_stair_type() {
+        let mut world = make_stair_world(Terrain::Floor, 5);
+        for y in 3..=21 {
+            for x in 3..=21 {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(x, y), Terrain::Floor);
+            }
+        }
+        let up_stairs = Position::new(3, 3);
+        let down_stairs = Position::new(21, 20);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(up_stairs, Terrain::StairsUp);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(down_stairs, Terrain::StairsDown);
+        let player = world.player();
+        set_player_position(&mut world, Position::new(12, 12));
+        let wizard = spawn_full_monster(&mut world, Position::new(7, 7), "Wizard of Yendor", 20);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+            hp.current = 12;
+            hp.max = 20;
+        }
+        let mut rng = test_rng();
+
+        let retreat_events = force_wizard_retreat_and_heal(&mut world, wizard, player, &mut rng);
+        let expected = if wizard.to_bits().get().is_multiple_of(2) {
+            down_stairs
+        } else {
+            up_stairs
+        };
+        assert!(retreat_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::EntityTeleported { entity, to, .. }
+                if *entity == wizard && *to == expected
+        )));
+    }
+
+    #[test]
+    fn test_wounded_wizard_retreat_falls_back_to_magic_portal_without_stairs() {
+        let mut world = make_portal_world(DungeonBranch::Main, 20, Position::new(79, 20));
+        let map_width = world.dungeon().current_level.width;
+        let map_height = world.dungeon().current_level.height;
+        for y in 0..map_height {
+            for x in 0..map_width {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(x as i32, y as i32), Terrain::Floor);
+            }
+        }
+        let portal_pos = Position::new(79, 20);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(portal_pos, Terrain::MagicPortal);
+        let player = world.player();
+        set_player_position(&mut world, Position::new(5, 5));
+        let wizard = spawn_full_monster(&mut world, Position::new(12, 12), "Wizard of Yendor", 20);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+            hp.current = 12;
+            hp.max = 20;
+        }
+        let mut rng = test_rng();
+
+        let retreat_events = force_wizard_retreat_and_heal(&mut world, wizard, player, &mut rng);
+        assert!(retreat_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::EntityTeleported { entity, to, .. }
+                if *entity == wizard && *to == portal_pos
+        )));
     }
 
     // ── Cross-system wiring tests ──────────────────────────────
@@ -25222,9 +25358,14 @@ mod tests {
                         .get_component::<Positioned>(wizard)
                         .expect("wizard retreat story matrix should keep wizard position")
                         .0;
+                    let expected = if wizard.to_bits().get().is_multiple_of(2) {
+                        Position::new(21, 20)
+                    } else {
+                        Position::new(3, 3)
+                    };
                     assert_eq!(
                         wizard_pos,
-                        Position::new(3, 3),
+                        expected,
                         "{} should retreat to the staircase before healing",
                         scenario.label()
                     );

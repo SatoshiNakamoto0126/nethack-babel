@@ -3934,7 +3934,11 @@ mod tests {
                 world
                     .dungeon_mut()
                     .current_level
-                    .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+                    .set_terrain(Position::new(3, 3), Terrain::StairsUp);
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(21, 20), Terrain::StairsDown);
                 let player = world.player();
                 set_player_position(&mut world, Position::new(20, 20));
                 let wizard =
@@ -3953,6 +3957,10 @@ mod tests {
                     player,
                     &mut pre_save_rng,
                 );
+                let expected_retreat_pos = world
+                    .get_component::<Positioned>(wizard)
+                    .expect("wizard retreat save matrix should keep pre-save wizard position")
+                    .0;
 
                 let (mut loaded, loaded_rng) =
                     save_and_reload_world("story-matrix-wizard-retreat-heal", &world, [73u8; 32]);
@@ -3960,6 +3968,14 @@ mod tests {
                 let loaded_player = loaded.player();
                 let loaded_wizard = find_monster_named(&loaded, "Wizard of Yendor")
                     .expect("wizard retreat save matrix should keep a live Wizard");
+                let loaded_pos = loaded
+                    .get_component::<Positioned>(loaded_wizard)
+                    .expect("wizard retreat save matrix should restore wizard position")
+                    .0;
+                assert_eq!(
+                    loaded_pos, expected_retreat_pos,
+                    "save/load wizard retreat matrix should preserve the directional retreat target"
+                );
                 let final_events = nethack_babel_engine::turn::force_wizard_retreat_and_heal(
                     &mut loaded,
                     loaded_wizard,
@@ -8681,7 +8697,10 @@ mod tests {
                         .get_component::<Positioned>(wizard)
                         .expect("wizard retreat save matrix should keep wizard position")
                         .0;
-                    assert_eq!(wizard_pos, Position::new(3, 3));
+                    assert!(
+                        wizard_pos == Position::new(3, 3) || wizard_pos == Position::new(21, 20),
+                        "save/load wizard retreat matrix should leave the Wizard on one of the retreat stairs"
+                    );
                     let hp = world
                         .get_component::<HitPoints>(wizard)
                         .expect("wizard retreat save matrix should keep wizard HP");
