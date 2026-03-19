@@ -7389,6 +7389,59 @@ fn wizard_nasty_is_high_spellcaster(monster: &MonsterDef, difficulty_cap: u8) ->
             .any(|attack| attack.method == nethack_babel_data::AttackMethod::MagicMissile)
 }
 
+const WIZARD_NASTY_BASE_POOL: &[&str] = &[
+    "cockatrice",
+    "ettin",
+    "stalker",
+    "minotaur",
+    "owlbear",
+    "purple worm",
+    "xan",
+    "umber hulk",
+    "xorn",
+    "zruty",
+    "leocrotta",
+    "baluchitherium",
+    "carnivorous ape",
+    "fire elemental",
+    "jabberwock",
+    "iron golem",
+    "ochre jelly",
+    "green slime",
+    "displacer beast",
+    "genetic engineer",
+    "black dragon",
+    "red dragon",
+    "arch-lich",
+    "vampire leader",
+    "master mind flayer",
+    "disenchanter",
+    "winged gargoyle",
+    "storm giant",
+    "olog-hai",
+    "elf noble",
+    "elven monarch",
+    "ogre tyrant",
+    "captain",
+    "gremlin",
+    "silver dragon",
+    "orange dragon",
+    "green dragon",
+    "yellow dragon",
+    "guardian naga",
+    "fire giant",
+    "Aleax",
+    "couatl",
+    "horned devil",
+    "barbed devil",
+];
+
+fn wizard_nasty_uses_original_pool(monster: &MonsterDef) -> bool {
+    WIZARD_NASTY_BASE_POOL
+        .iter()
+        .any(|name| quest_name_matches(&monster.names.male, name))
+}
+
 fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Vec<String> {
     let branch = world.dungeon().branch;
     let depth = world.dungeon().depth.max(1) as u8;
@@ -7417,12 +7470,10 @@ fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Ve
         .monster_catalog()
         .iter()
         .filter(|monster| {
-            !monster
-                .geno_flags
-                .intersects(GenoFlags::G_UNIQ | GenoFlags::G_NOGEN)
-                && monster.flags.contains(MonsterFlags::HOSTILE)
-                && (monster.flags.contains(MonsterFlags::NASTY)
-                    || monster.difficulty >= desired_difficulty)
+            wizard_nasty_uses_original_pool(monster)
+                && !monster
+                    .geno_flags
+                    .intersects(GenoFlags::G_UNIQ | GenoFlags::G_NOGEN)
                 && monster.names.male != "Wizard of Yendor"
                 && (branch == DungeonBranch::Gehennom
                     || !monster.geno_flags.contains(GenoFlags::G_HELL))
@@ -7436,7 +7487,31 @@ fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Ve
     });
 
     if candidates.is_empty() {
-        return vec!["vampire lord".to_string(), "xorn".to_string()];
+        candidates = world
+            .monster_catalog()
+            .iter()
+            .filter(|monster| {
+                !monster
+                    .geno_flags
+                    .intersects(GenoFlags::G_UNIQ | GenoFlags::G_NOGEN)
+                    && monster.flags.contains(MonsterFlags::HOSTILE)
+                    && (monster.flags.contains(MonsterFlags::NASTY)
+                        || monster.difficulty >= desired_difficulty)
+                    && monster.names.male != "Wizard of Yendor"
+                    && (branch == DungeonBranch::Gehennom
+                        || !monster.geno_flags.contains(GenoFlags::G_HELL))
+            })
+            .collect();
+        candidates.sort_by(|lhs, rhs| {
+            rhs.difficulty
+                .cmp(&lhs.difficulty)
+                .then(rhs.base_level.cmp(&lhs.base_level))
+                .then(lhs.names.male.cmp(&rhs.names.male))
+        });
+    }
+
+    if candidates.is_empty() {
+        return vec!["vampire leader".to_string(), "xorn".to_string()];
     }
 
     let mut picks = Vec::new();
@@ -17011,7 +17086,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wizard_summon_nasties_uses_catalog_driven_pool() {
+    fn test_wizard_summon_nasties_uses_original_nasty_pool() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         world.dungeon_mut().branch = DungeonBranch::Gehennom;
@@ -17063,12 +17138,13 @@ mod tests {
                 .find(|monster| monster.id == monster_id)
                 .expect("generated nasty should exist in the monster catalog");
             assert!(
-                monster_def.flags.contains(MonsterFlags::HOSTILE),
-                "{name} should come from the hostile nasty summon pool"
+                wizard_nasty_uses_original_pool(monster_def)
+                    || monster_def.flags.contains(MonsterFlags::DEMON),
+                "{name} should come from the original wizard nasty pool or Gehennom demon surge"
             );
             assert!(
-                monster_def.flags.contains(MonsterFlags::NASTY) || monster_def.difficulty >= 16,
-                "{name} should come from the nasty/high-difficulty summon pool"
+                world.get_component::<Peaceful>(entity).is_none(),
+                "{name} should be instantiated as hostile even if the base species is not"
             );
             assert!(
                 !monster_def
