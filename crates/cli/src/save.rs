@@ -1951,6 +1951,8 @@ mod tests {
         ShopWandUsageFee,
         ShopGreaseUsageFee,
         ShopLampUsageFee,
+        ShopCameraUsageFee,
+        ShopTinningUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         DemonBribe,
@@ -2016,6 +2018,8 @@ mod tests {
                 SaveStoryTraversalScenario::ShopWandUsageFee => "shop-wand-usage-fee",
                 SaveStoryTraversalScenario::ShopGreaseUsageFee => "shop-grease-usage-fee",
                 SaveStoryTraversalScenario::ShopLampUsageFee => "shop-lamp-usage-fee",
+                SaveStoryTraversalScenario::ShopCameraUsageFee => "shop-camera-usage-fee",
+                SaveStoryTraversalScenario::ShopTinningUsageFee => "shop-tinning-usage-fee",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 SaveStoryTraversalScenario::DemonBribe => "demon-bribe",
@@ -2988,6 +2992,151 @@ mod tests {
                 let events = resolve_turn(
                     &mut loaded,
                     PlayerAction::Apply { item: loaded_lamp },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopCameraUsageFee => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player_pos = world
+                    .get_component::<Positioned>(world.player())
+                    .expect("player should have a position")
+                    .0;
+                let shopkeeper = spawn_full_monster(
+                    &mut world,
+                    Position::new(player_pos.x + 2, player_pos.y),
+                    "Izchak",
+                    20,
+                );
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(player_pos.x, player_pos.y - 1),
+                        Position::new(player_pos.x + 2, player_pos.y + 1),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                spawn_full_monster(
+                    &mut world,
+                    Position::new(player_pos.x + 1, player_pos.y),
+                    "goblin",
+                    5,
+                );
+                let camera = spawn_inventory_object_by_name(&mut world, "expensive camera", 'c');
+                world
+                    .ecs_mut()
+                    .insert_one(camera, Enchantment { spe: 2 })
+                    .expect("camera should accept charges");
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(camera, 100, 1),
+                    "shop bill should accept unpaid camera"
+                );
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-camera-usage-fee", &world, [67u8; 32]);
+                let loaded_camera = loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .and_then(|inv| {
+                        inv.items.iter().copied().find(|item| {
+                            loaded
+                                .get_component::<ObjectCore>(*item)
+                                .is_some_and(|core| {
+                                    core.object_class == ObjectClass::Tool
+                                        && core.inv_letter == Some('c')
+                                })
+                        })
+                    })
+                    .expect("reloaded inventory should preserve the unpaid camera");
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Apply {
+                        item: loaded_camera,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopTinningUsageFee => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player_pos = world
+                    .get_component::<Positioned>(world.player())
+                    .expect("player should have a position")
+                    .0;
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Food,
+                        quantity: 1,
+                        weight: 100,
+                        age: 0,
+                        inv_letter: None,
+                        artifact: None,
+                    },
+                    ObjectLocation::Floor {
+                        x: player_pos.x as i16,
+                        y: player_pos.y as i16,
+                        level: world.dungeon().current_data_dungeon_level(),
+                    },
+                    Name("giant ant corpse".to_string()),
+                ));
+                let tinning_kit = spawn_inventory_object_by_name(&mut world, "tinning kit", 't');
+                world
+                    .ecs_mut()
+                    .insert_one(tinning_kit, Enchantment { spe: 2 })
+                    .expect("tinning kit should accept charges");
+                assert!(
+                    world.dungeon_mut().shop_rooms[0]
+                        .bill
+                        .add(tinning_kit, 100, 1),
+                    "shop bill should accept unpaid tinning kit"
+                );
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-shop-tinning-usage-fee",
+                    &world,
+                    [68u8; 32],
+                );
+                let loaded_tinning_kit = loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .and_then(|inv| {
+                        inv.items.iter().copied().find(|item| {
+                            loaded
+                                .get_component::<ObjectCore>(*item)
+                                .is_some_and(|core| {
+                                    core.object_class == ObjectClass::Tool
+                                        && core.inv_letter == Some('t')
+                                })
+                        })
+                    })
+                    .expect("reloaded inventory should preserve the unpaid tinning kit");
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Apply {
+                        item: loaded_tinning_kit,
+                    },
                     &mut rng,
                 );
                 (loaded, events)
@@ -8064,6 +8213,8 @@ mod tests {
             SaveStoryTraversalScenario::ShopWandUsageFee,
             SaveStoryTraversalScenario::ShopGreaseUsageFee,
             SaveStoryTraversalScenario::ShopLampUsageFee,
+            SaveStoryTraversalScenario::ShopCameraUsageFee,
+            SaveStoryTraversalScenario::ShopTinningUsageFee,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopChatPriceQuote,
             SaveStoryTraversalScenario::DemonBribe,
@@ -8214,7 +8365,7 @@ mod tests {
                         .map(|pos| pos.0)
                         .expect("shopkeeper should still have a position");
                     assert!(
-                        pos.x <= 5,
+                        pos.x <= 6,
                         "shopkeeper should keep advancing toward the hero after save/load, got {:?}",
                         pos
                     );
@@ -8377,6 +8528,32 @@ mod tests {
                     )));
                     assert_eq!(shop.bill.total(), 100);
                     assert_eq!(shop.debit, 25);
+                }
+                SaveStoryTraversalScenario::ShopCameraUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "tool-camera-blind"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert!(!shop.bill.is_empty());
+                    assert_eq!(shop.debit, 10);
+                }
+                SaveStoryTraversalScenario::ShopTinningUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "tool-tinning-success"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(shop.bill.total(), 100);
+                    assert_eq!(shop.debit, 10);
                 }
                 SaveStoryTraversalScenario::ShopkeeperSell => {
                     let shop = &world.dungeon().shop_rooms[0];

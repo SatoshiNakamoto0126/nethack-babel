@@ -2814,6 +2814,8 @@ tool-saddle-no-mount = 没有什么东西可以装上鞍。
 
 tool-tin-whistle = 你吹出一声高亢的口哨。
 
+tool-tinning-no-charges = 你似乎没有空罐头了。
+
 tool-tinning-no-corpse = 这里没有可以装罐的尸体。
 
 tool-touchstone-identify = 你把宝石在试金石上摩擦，辨认出了它们。

@@ -2939,6 +2939,7 @@ tool-nothing-happens = Nothing seems to happen.
 tool-polearm-no-target = There is nothing to hit there.
 tool-saddle-no-mount = There is nothing to put a saddle on.
 tool-tin-whistle = You produce a high whistling sound.
+tool-tinning-no-charges = You seem to be out of tins.
 tool-tinning-no-corpse = There is no corpse to tin here.
 tool-touchstone-identify = You identify the gems by rubbing them on the touchstone.
 tool-touchstone-shatter = The gem shatters!

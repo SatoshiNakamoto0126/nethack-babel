@@ -1033,3 +1033,4 @@ ui-game-over-title = *** GAME OVER ***
 ui-game-over-score-line = Score: { $score }
 ui-game-over-cause-line = Cause: { $cause }
 ui-game-over-turns-line = Turns: { $turns }
+tool-tinning-no-charges = Dir scheinen die Dosen auszugehen.

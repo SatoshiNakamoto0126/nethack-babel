@@ -150,8 +150,8 @@ pub fn apply_tool(
         }
         ToolType::MagicWhistle | ToolType::TinWhistle => apply_whistle(world, player, tool_type),
         ToolType::Mirror => apply_mirror(world, player, rng),
-        ToolType::TinningKit => apply_tinning_kit(world, player, rng),
-        ToolType::Camera => apply_camera(world, player, rng),
+        ToolType::TinningKit => apply_tinning_kit(world, player, item, rng),
+        ToolType::Camera => apply_camera(world, player, item, rng),
     }
 }
 
@@ -648,9 +648,19 @@ fn apply_mirror(world: &mut GameWorld, player: Entity, rng: &mut impl Rng) -> Ve
 fn apply_tinning_kit(
     world: &mut GameWorld,
     player: Entity,
+    item: Entity,
     _rng: &mut impl Rng,
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
+
+    let charges = world
+        .get_component::<nethack_babel_data::Enchantment>(item)
+        .map(|e| e.spe)
+        .unwrap_or(0);
+    if charges <= 0 {
+        events.push(EngineEvent::msg("tool-tinning-no-charges"));
+        return events;
+    }
 
     let player_pos = match world.get_component::<Positioned>(player) {
         Some(p) => p.0,
@@ -687,6 +697,10 @@ fn apply_tinning_kit(
 
     match corpse_entity {
         Some(corpse) => {
+            if let Some(mut ench) = world.get_component_mut::<nethack_babel_data::Enchantment>(item)
+            {
+                ench.spe -= 1;
+            }
             // Remove the corpse entity.
             let _ = world.despawn(corpse);
 
@@ -710,8 +724,26 @@ fn apply_tinning_kit(
 // ---------------------------------------------------------------------------
 
 /// Apply a camera: blind all adjacent monsters for d10 turns.
-fn apply_camera(world: &mut GameWorld, player: Entity, rng: &mut impl Rng) -> Vec<EngineEvent> {
+fn apply_camera(
+    world: &mut GameWorld,
+    player: Entity,
+    item: Entity,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
     let mut events = Vec::new();
+
+    let charges = world
+        .get_component::<nethack_babel_data::Enchantment>(item)
+        .map(|e| e.spe)
+        .unwrap_or(0);
+    if charges <= 0 {
+        events.push(EngineEvent::msg("tool-nothing-happens"));
+        return events;
+    }
+
+    if let Some(mut ench) = world.get_component_mut::<nethack_babel_data::Enchantment>(item) {
+        ench.spe -= 1;
+    }
 
     let player_pos = match world.get_component::<Positioned>(player) {
         Some(p) => p.0,
@@ -1215,6 +1247,9 @@ mod tests {
         ));
 
         let tool = spawn_tool(&mut world, "tinning kit", false, false);
+        let _ = world
+            .ecs_mut()
+            .insert_one(tool, nethack_babel_data::Enchantment { spe: 2 });
         let events = apply_tool(&mut world, player, tool, &mut rng);
 
         assert!(
@@ -1232,6 +1267,9 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "tinning kit", false, false);
+        let _ = world
+            .ecs_mut()
+            .insert_one(tool, nethack_babel_data::Enchantment { spe: 2 });
         let events = apply_tool(&mut world, player, tool, &mut rng);
 
         assert!(
@@ -1240,6 +1278,63 @@ mod tests {
             }),
             "expected no corpse message"
         );
+    }
+
+    #[test]
+    fn test_tinning_kit_success_consumes_charge() {
+        let mut world = test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+        let player_pos = world.get_component::<Positioned>(player).unwrap().0;
+
+        world.spawn((
+            ObjectCore {
+                otyp: nethack_babel_data::ObjectTypeId(0),
+                object_class: ObjectClass::Food,
+                quantity: 1,
+                weight: 100,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: player_pos.x as i16,
+                y: player_pos.y as i16,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
+            Name("giant ant corpse".to_string()),
+        ));
+
+        let tool = spawn_tool(&mut world, "tinning kit", false, false);
+        let _ = world
+            .ecs_mut()
+            .insert_one(tool, nethack_babel_data::Enchantment { spe: 2 });
+        let _events = apply_tool(&mut world, player, tool, &mut rng);
+
+        let charges = world
+            .get_component::<nethack_babel_data::Enchantment>(tool)
+            .expect("tinning kit should keep charges");
+        assert_eq!(
+            charges.spe, 1,
+            "successful tinning should consume one charge"
+        );
+    }
+
+    #[test]
+    fn test_tinning_kit_without_charges_reports_empty() {
+        let mut world = test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let tool = spawn_tool(&mut world, "tinning kit", false, false);
+        let _ = world
+            .ecs_mut()
+            .insert_one(tool, nethack_babel_data::Enchantment { spe: 0 });
+        let events = apply_tool(&mut world, player, tool, &mut rng);
+
+        assert!(events.iter().any(|e| {
+            matches!(e, EngineEvent::Message { key, .. } if key == "tool-tinning-no-charges")
+        }));
     }
 
     // ── Camera tests ────────────────────────────────────────────
@@ -1252,6 +1347,9 @@ mod tests {
 
         let monster = spawn_adjacent_monster(&mut world, "goblin", (1, 0), 5);
         let tool = spawn_tool(&mut world, "expensive camera", false, false);
+        let _ = world
+            .ecs_mut()
+            .insert_one(tool, nethack_babel_data::Enchantment { spe: 2 });
         let events = apply_tool(&mut world, player, tool, &mut rng);
 
         // Monster should be blinded.
@@ -1274,6 +1372,9 @@ mod tests {
         let player = world.player();
 
         let tool = spawn_tool(&mut world, "expensive camera", false, false);
+        let _ = world
+            .ecs_mut()
+            .insert_one(tool, nethack_babel_data::Enchantment { spe: 2 });
         let events = apply_tool(&mut world, player, tool, &mut rng);
 
         assert!(
@@ -1282,6 +1383,41 @@ mod tests {
             }),
             "expected no target message"
         );
+    }
+
+    #[test]
+    fn test_camera_use_consumes_charge_even_without_target() {
+        let mut world = test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let tool = spawn_tool(&mut world, "expensive camera", false, false);
+        let _ = world
+            .ecs_mut()
+            .insert_one(tool, nethack_babel_data::Enchantment { spe: 2 });
+        let _events = apply_tool(&mut world, player, tool, &mut rng);
+
+        let charges = world
+            .get_component::<nethack_babel_data::Enchantment>(tool)
+            .expect("camera should keep charges");
+        assert_eq!(charges.spe, 1, "camera use should consume one charge");
+    }
+
+    #[test]
+    fn test_camera_without_charges_nothing_happens() {
+        let mut world = test_world();
+        let mut rng = test_rng();
+        let player = world.player();
+
+        let tool = spawn_tool(&mut world, "expensive camera", false, false);
+        let _ = world
+            .ecs_mut()
+            .insert_one(tool, nethack_babel_data::Enchantment { spe: 0 });
+        let events = apply_tool(&mut world, player, tool, &mut rng);
+
+        assert!(events.iter().any(|e| {
+            matches!(e, EngineEvent::Message { key, .. } if key == "tool-nothing-happens")
+        }));
     }
 
     // ── Stethoscope tests ───────────────────────────────────────
@@ -1520,6 +1656,9 @@ mod tests {
         let mon1 = spawn_adjacent_monster(&mut world, "goblin", (1, 0), 5);
         let mon2 = spawn_adjacent_monster(&mut world, "orc", (0, 1), 8);
         let tool = spawn_tool(&mut world, "expensive camera", false, false);
+        let _ = world
+            .ecs_mut()
+            .insert_one(tool, nethack_babel_data::Enchantment { spe: 2 });
         let events = apply_tool(&mut world, player, tool, &mut rng);
 
         // Both monsters should be blinded.
