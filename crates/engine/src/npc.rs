@@ -896,11 +896,6 @@ pub fn voiced_monster_chat(
         MonsterSound::Bark => {
             if state.full_moon && state.night {
                 "npc-bark-howls"
-            } else if monster_name.eq_ignore_ascii_case("dingo")
-                && state.is_peaceful
-                && !state.is_tame
-            {
-                return None;
             } else if state.is_tame
                 && (state.confused
                     || state.fleeing
@@ -912,6 +907,9 @@ pub fn voiced_monster_chat(
             } else if state.is_tame && state.satiated {
                 "npc-bark-yips"
             } else if state.is_peaceful {
+                if monster_name.eq_ignore_ascii_case("dingo") {
+                    return None;
+                }
                 "npc-bark-barks"
             } else {
                 "npc-growl-growls"
@@ -2723,6 +2721,24 @@ mod tests {
         assert!(
             evt.is_none(),
             "peaceful dingoes should not emit a bark line"
+        );
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_tame_dingo_stays_silent_when_content() {
+        let evt = voiced_monster_chat(
+            "dingo",
+            MonsterSound::Bark,
+            MonsterChatState {
+                is_peaceful: true,
+                is_tame: true,
+                tameness: Some(10),
+                ..MonsterChatState::default()
+            },
+        );
+        assert!(
+            evt.is_none(),
+            "content tame dingoes should not emit a bark line"
         );
     }
 

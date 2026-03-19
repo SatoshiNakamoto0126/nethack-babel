@@ -6447,6 +6447,60 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_chatting_with_tame_content_dingo_stays_silent() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        while nethack_babel_engine::were::is_full_moon(world.turn()) {
+            world.advance_turn();
+        }
+        let dingo = spawn_full_monster(&mut world, Position::new(6, 5), "dingo", 8);
+        world
+            .ecs_mut()
+            .insert_one(dingo, nethack_babel_engine::world::Peaceful)
+            .expect("dingo should accept peaceful marker");
+        world
+            .ecs_mut()
+            .insert_one(dingo, Tame)
+            .expect("dingo should accept tame marker");
+        let current_turn = world.turn();
+        world
+            .ecs_mut()
+            .insert_one(
+                dingo,
+                PetState {
+                    tameness: 10,
+                    apport: 10,
+                    hungrytime: current_turn.saturating_add(100),
+                    abuse: 0,
+                    revivals: 0,
+                    whistletime: 0,
+                    droptime: 0,
+                    dropdist: 0,
+                    mhpmax_penalty: 0,
+                    leashed: false,
+                    last_seen_turn: current_turn,
+                    killed_by_u: false,
+                },
+            )
+            .expect("dingo should accept pet state");
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("tame-dingo-chat-round-trip", &world, [188u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-chat-no-response")
+        }));
+    }
+
+    #[test]
     fn round_trip_loaded_zoo_ambient_preserves_runtime_conditions() {
         let mut world = make_stair_world(DungeonBranch::Main, 12, Terrain::Floor);
         spawn_monster_with_symbol(&mut world, Position::new(7, 7), "jackal", 8, 'd', 20);

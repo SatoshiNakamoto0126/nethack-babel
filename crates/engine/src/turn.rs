@@ -17153,6 +17153,33 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_tame_content_dingo_gets_no_response() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        advance_world_turns(&mut world, 20);
+        let dingo = spawn_full_monster(&mut world, Position::new(6, 5), "dingo", 10);
+        world
+            .ecs_mut()
+            .insert_one(dingo, Peaceful)
+            .expect("dingo should accept peaceful marker");
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, dingo, 10, current_turn.saturating_add(100));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "npc-chat-no-response"
+        )));
+    }
+
+    #[test]
     fn test_chatting_with_full_moon_wolf_howls() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
