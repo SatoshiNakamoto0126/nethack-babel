@@ -2920,20 +2920,20 @@ status-confusion-end = 你感觉不那么混乱了。
 status-fall-asleep = 你睡着了。
 
 # TODO: translate
-status-fumble-trip = You trip over something.
+status-fumble-trip = 你被什么东西绊了一下。
 
 # TODO: translate
-status-fumbling-end = You feel less clumsy.
+status-fumbling-end = 你觉得自己没那么笨拙了。
 
 status-fumbling-start = 你觉得自己笨手笨脚。
 
 # TODO: translate
-status-hallucination-end = Everything looks SO boring now.
+status-hallucination-end = 现在一切看起来都无聊透顶了。
 
 status-invisibility-end = 你不再隐形了。
 
 # TODO: translate
-status-levitation-end = You float gently to the floor.
+status-levitation-end = 你轻轻飘回了地面。
 
 # TODO: translate
 status-paralysis-end = 你又能动了。
@@ -2942,10 +2942,10 @@ status-paralysis-end = 你又能动了。
 status-paralyzed-cant-move = 你动弹不得！
 
 # TODO: translate
-status-sick-cured = What a relief!
+status-sick-cured = 总算松了一口气！
 
 # TODO: translate
-status-sick-recovered = You feel better.
+status-sick-recovered = 你感觉好多了。
 
 # TODO: translate
 status-sleepy-end = 你清醒过来了。
@@ -2954,21 +2954,21 @@ status-sleepy-end = 你清醒过来了。
 status-sleepy-start = 你感到困倦。
 
 # TODO: translate
-status-speed-end = You feel yourself slow down.
+status-speed-end = 你感觉自己慢了下来。
 
 # TODO: translate
-status-stun-end = You feel less stunned now.
+status-stun-end = 你觉得自己没那么晕了。
 
 # TODO: translate
-status-vomiting-end = You feel less nauseated now.
+status-vomiting-end = 你觉得没那么恶心了。
 
 status-vomiting-start = 你觉得一阵恶心。
 
 # TODO: translate
-status-wounded-legs-healed = Your legs feel better.
+status-wounded-legs-healed = 你的腿感觉好多了。
 
 # TODO: translate
-status-wounded-legs-start = Your legs are in bad shape!
+status-wounded-legs-start = 你的腿伤得很重！
 
 # TODO: translate
 steal-item-from-you = { $monster } steals { $item }!
@@ -3279,7 +3279,7 @@ wipe-cursed-towel = The towel is cursed!
 wipe-nothing = There is nothing to wipe off.
 
 # TODO: translate
-wizard-curse-items = You feel as if you need an exorcist.
+wizard-curse-items = 你感觉自己像是该找个驱魔人了。
 
 # TODO: translate
 wizard-detect-all = You sense everything around you.
@@ -3325,10 +3325,10 @@ wizard-aggravate = 远处回荡起噪音，整座地城仿佛突然苏醒了。
 wizard-respawned = 延德之巫再次站了起来！
 
 # TODO: translate
-wizard-respawned-boom = A voice booms out...
+wizard-respawned-boom = 一个声音轰然响起……
 
 # TODO: translate
-wizard-respawned-taunt = So thou thought thou couldst {$verb} me, fool.
+wizard-respawned-taunt = 蠢货，你竟以为自己能{$verb}我。
 
 wizard-steal-amulet = 延德之巫偷走了护符！
 
@@ -3626,7 +3626,7 @@ priest-protection-granted = The priest grants you protection for { $cost } gold.
 shk-welcome = { $shopkeeper } 说道：“欢迎光临我的店，{ $honorific }。”
 
 # TODO: translate
-shk-angry-greeting = { $shopkeeper } glares at you angrily.
+shk-angry-greeting = { $shopkeeper } 愤怒地瞪着你。
 
 # TODO: translate
 shk-angry-rude = { $shopkeeper } indicates how much rude customers are disliked.
@@ -3669,13 +3669,13 @@ shk-surcharge-greeting = { $shopkeeper } says: "Prices are higher for you now, {
 shk-surcharge-indicates = { $shopkeeper } indicates that prices are higher for you now.
 
 # TODO: translate
-shk-business-bad = { $shopkeeper } complains that business is bad.
+shk-business-bad = { $shopkeeper } 抱怨生意不好。
 
 # TODO: translate
 shk-business-bad-indicates = { $shopkeeper } indicates that business is bad.
 
 # TODO: translate
-shk-business-good = { $shopkeeper } says that business is good.
+shk-business-good = { $shopkeeper } 说最近生意不错。
 
 # TODO: translate
 shk-business-good-indicates = { $shopkeeper } indicates that business is good.
@@ -3906,11 +3906,11 @@ ambient-deep-roar = You hear a distant roar.
 # TODO: translate
 ambient-deep-digging = You hear someone digging.
 # TODO: translate
-ambient-shallow-door-open = You hear a door open.
+ambient-shallow-door-open = 你听到门被打开的声音。
 # TODO: translate
-ambient-shallow-door-close = You hear a door close.
+ambient-shallow-door-close = 你听到门被关上的声音。
 # TODO: translate
-ambient-shallow-water = You hear water dripping.
+ambient-shallow-water = 你听到滴水声。
 # TODO: translate
 ambient-shallow-moving = You hear someone moving around.
 ui-wizard-mode-disabled = 未启用巫师模式。
