@@ -646,6 +646,7 @@ pub struct MonsterChatState {
     pub satiated: bool,
     pub full_moon: bool,
     pub night: bool,
+    pub midnight: bool,
     pub blinded: bool,
     pub trapped: bool,
     pub hurt: bool,
@@ -857,8 +858,10 @@ pub fn contextual_monster_chat(
         }
         MonsterSound::Vampire => {
             let key = if state.is_tame {
-                if state.hungry {
+                if state.hungry && state.midnight {
                     "npc-vampire-tame-craving"
+                } else if state.hungry && state.night {
+                    "npc-vampire-tame-night-craving"
                 } else {
                     "npc-vampire-tame-weary"
                 }
@@ -3000,6 +3003,56 @@ mod tests {
         .expect("peaceful vampire should speak");
         assert!(
             matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-vampire-peaceful")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_tame_vampire_at_midnight_craves_blood() {
+        let monster = fake_monster(
+            MonsterSound::Vampire,
+            "vampire",
+            'V',
+            MonsterFlags::HUMANOID,
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "vampire",
+            MonsterChatState {
+                is_tame: true,
+                hungry: true,
+                midnight: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("tame vampire at midnight should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-vampire-tame-craving")
+        );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_tame_vampire_at_night_begs_for_help() {
+        let monster = fake_monster(
+            MonsterSound::Vampire,
+            "vampire",
+            'V',
+            MonsterFlags::HUMANOID,
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "vampire",
+            MonsterChatState {
+                is_tame: true,
+                hungry: true,
+                night: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("tame vampire at night should speak");
+        assert!(
+            matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-vampire-tame-night-craving")
         );
     }
 

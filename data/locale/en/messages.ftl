@@ -1879,6 +1879,7 @@ demon-looks-angry = { $monster } looks very angry.
 demon-tension-building = You feel tension building.
 npc-spell-cantrip = { $monster } seems to mutter a cantrip.
 npc-vampire-tame-craving = { $monster } says: "I can stand this craving no longer!"
+npc-vampire-tame-night-craving = { $monster } says: "I beg you, help me satisfy this growing craving!"
 npc-vampire-tame-weary = { $monster } says: "I find myself growing a little weary."
 npc-vampire-peaceful = { $monster } says: "I only drink... potions."
 npc-vampire-hostile-blood = { $monster } says: "I vant to suck your blood!"

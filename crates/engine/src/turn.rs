@@ -1978,6 +1978,7 @@ fn resolve_player_action(
                         satiated,
                         full_moon: crate::were::is_full_moon(world.turn()),
                         night: crate::were::is_night(world.turn()),
+                        midnight: crate::were::is_midnight(world.turn()),
                         blinded,
                         trapped,
                         hurt,
@@ -8525,6 +8526,8 @@ mod tests {
         WizardAmuletWake,
         WizardBlackGlowBlind,
         HumanoidAlohaChat,
+        VampireNightChat,
+        VampireMidnightChat,
         WereFullMoonChat,
         WereDaytimeMoonChat,
         WizardLevelTeleport,
@@ -8577,6 +8580,8 @@ mod tests {
                 StoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 StoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 StoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
+                StoryTraversalScenario::VampireNightChat => "vampire-night-chat",
+                StoryTraversalScenario::VampireMidnightChat => "vampire-midnight-chat",
                 StoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
                 StoryTraversalScenario::WereDaytimeMoonChat => "were-daytime-moon-chat",
                 StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
@@ -10289,6 +10294,44 @@ mod tests {
                     .ecs_mut()
                     .insert_one(tourist, Peaceful)
                     .expect("tourist should accept peaceful marker");
+
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
+                );
+                (world, events)
+            }
+            StoryTraversalScenario::VampireNightChat => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                while world.turn() < 313 {
+                    world.advance_turn();
+                }
+                let vampire = spawn_full_monster(&mut world, Position::new(6, 5), "vampire", 10);
+                let current_turn = world.turn();
+                make_tame_pet_state(&mut world, vampire, 10, current_turn.saturating_sub(300));
+
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
+                );
+                (world, events)
+            }
+            StoryTraversalScenario::VampireMidnightChat => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                while world.turn() < 312 {
+                    world.advance_turn();
+                }
+                let vampire = spawn_full_monster(&mut world, Position::new(6, 5), "vampire", 10);
+                let current_turn = world.turn();
+                make_tame_pet_state(&mut world, vampire, 10, current_turn.saturating_sub(300));
 
                 let events = resolve_turn(
                     &mut world,
@@ -17312,6 +17355,32 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_hungry_tame_vampire_at_night_begs_for_craving() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        while world.turn() < 313 {
+            world.advance_turn();
+        }
+        let vampire = spawn_full_monster(&mut world, Position::new(6, 5), "vampire", 10);
+        let current_turn = world.turn();
+        assert!(crate::were::is_night(current_turn));
+        assert!(!crate::were::is_midnight(current_turn));
+        make_tame_pet_state(&mut world, vampire, 10, current_turn.saturating_sub(300));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-vampire-tame-night-craving")
+        }));
+    }
+
+    #[test]
     fn test_chatting_with_trapped_tame_cat_yowls() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -21715,6 +21784,8 @@ mod tests {
             StoryTraversalScenario::WizardAmuletWake,
             StoryTraversalScenario::WizardBlackGlowBlind,
             StoryTraversalScenario::HumanoidAlohaChat,
+            StoryTraversalScenario::VampireNightChat,
+            StoryTraversalScenario::VampireMidnightChat,
             StoryTraversalScenario::WereFullMoonChat,
             StoryTraversalScenario::WereDaytimeMoonChat,
             StoryTraversalScenario::WizardLevelTeleport,
@@ -22640,6 +22711,18 @@ mod tests {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
                         EngineEvent::Message { key, .. } if key == "npc-humanoid-aloha"
+                    )));
+                }
+                StoryTraversalScenario::VampireNightChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-vampire-tame-night-craving"
+                    )));
+                }
+                StoryTraversalScenario::VampireMidnightChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-vampire-tame-craving"
                     )));
                 }
                 StoryTraversalScenario::WereFullMoonChat => {

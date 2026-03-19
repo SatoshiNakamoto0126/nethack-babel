@@ -281,6 +281,11 @@ pub fn is_night(turn: u32) -> bool {
     !(6..=21).contains(&hour)
 }
 
+/// Check whether the current turn falls exactly at midnight.
+pub fn is_midnight(turn: u32) -> bool {
+    turn.is_multiple_of(24)
+}
+
 /// Decide whether a were-creature should change form this turn.
 ///
 /// Mirrors C `were_change(mon)`.

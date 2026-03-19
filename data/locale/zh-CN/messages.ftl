@@ -3448,6 +3448,8 @@ npc-spell-cantrip = { $monster } seems to mutter a cantrip.
 # TODO: translate
 npc-vampire-tame-craving = { $monster } says: "I can stand this craving no longer!"
 # TODO: translate
+npc-vampire-tame-night-craving = { $monster } says: "I beg you, help me satisfy this growing craving!"
+# TODO: translate
 npc-vampire-tame-weary = { $monster } says: "I find myself growing a little weary."
 # TODO: translate
 npc-vampire-peaceful = { $monster } says: "I only drink... potions."

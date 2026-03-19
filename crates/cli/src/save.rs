@@ -1814,6 +1814,8 @@ mod tests {
         WizardAmuletWake,
         WizardBlackGlowBlind,
         HumanoidAlohaChat,
+        VampireNightChat,
+        VampireMidnightChat,
         WereFullMoonChat,
         WereDaytimeMoonChat,
         WizardLevelTeleport,
@@ -1868,6 +1870,8 @@ mod tests {
                 SaveStoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 SaveStoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 SaveStoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
+                SaveStoryTraversalScenario::VampireNightChat => "vampire-night-chat",
+                SaveStoryTraversalScenario::VampireMidnightChat => "vampire-midnight-chat",
                 SaveStoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
                 SaveStoryTraversalScenario::WereDaytimeMoonChat => "were-daytime-moon-chat",
                 SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
@@ -3656,6 +3660,51 @@ mod tests {
 
                 let (mut loaded, loaded_rng) =
                     save_and_reload_world("story-matrix-humanoid-aloha-chat", &world, [67u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::VampireNightChat => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                while world.turn() < 313 {
+                    world.advance_turn();
+                }
+                let vampire = spawn_full_monster(&mut world, Position::new(6, 5), "vampire", 10);
+                let current_turn = world.turn();
+                make_tame_pet_state(&mut world, vampire, 10, current_turn.saturating_sub(300));
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-vampire-night-chat", &world, [171u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::VampireMidnightChat => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                while world.turn() < 312 {
+                    world.advance_turn();
+                }
+                let vampire = spawn_full_monster(&mut world, Position::new(6, 5), "vampire", 10);
+                let current_turn = world.turn();
+                make_tame_pet_state(&mut world, vampire, 10, current_turn.saturating_sub(300));
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-vampire-midnight-chat",
+                    &world,
+                    [172u8; 32],
+                );
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(
                     &mut loaded,
@@ -6187,6 +6236,47 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_chatting_with_hungry_tame_vampire_at_night_begs_for_craving() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        while world.turn() < 313 {
+            world.advance_turn();
+        }
+        let vampire = spawn_full_monster(&mut world, Position::new(6, 5), "vampire", 8);
+        let current_turn = world.turn();
+        assert!(nethack_babel_engine::were::is_night(current_turn));
+        assert!(!nethack_babel_engine::were::is_midnight(current_turn));
+        make_tame_pet_state(&mut world, vampire, 10, current_turn.saturating_sub(300));
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("tame-vampire-night-chat-round-trip", &world, [190u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+        let restored = find_monster_named(&loaded, "vampire").expect("vampire should survive load");
+        assert!(loaded.get_component::<Tame>(restored).is_some());
+        assert!(
+            loaded
+                .get_component::<PetState>(restored)
+                .is_some_and(|pet_state| pet_state.is_hungry(loaded.turn()))
+        );
+        assert!(nethack_babel_engine::were::is_night(loaded.turn()));
+        assert!(!nethack_babel_engine::were::is_midnight(loaded.turn()));
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-vampire-tame-night-craving"
+            )
+        }));
+    }
+
+    #[test]
     fn round_trip_loaded_chatting_with_trumpeting_monster_keeps_wake_effect() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         let trumpet_name = monster_name_with_sound(&world, MonsterSound::Trumpet);
@@ -6996,6 +7086,8 @@ mod tests {
             SaveStoryTraversalScenario::WizardAmuletWake,
             SaveStoryTraversalScenario::WizardBlackGlowBlind,
             SaveStoryTraversalScenario::HumanoidAlohaChat,
+            SaveStoryTraversalScenario::VampireNightChat,
+            SaveStoryTraversalScenario::VampireMidnightChat,
             SaveStoryTraversalScenario::WereFullMoonChat,
             SaveStoryTraversalScenario::WereDaytimeMoonChat,
             SaveStoryTraversalScenario::WizardLevelTeleport,
@@ -7835,6 +7927,18 @@ mod tests {
                             .is_some_and(|status| status.blindness > 0),
                         "black-glow blind scenario should preserve blindness through round-trip"
                     );
+                }
+                SaveStoryTraversalScenario::VampireNightChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-vampire-tame-night-craving"
+                    )));
+                }
+                SaveStoryTraversalScenario::VampireMidnightChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-vampire-tame-craving"
+                    )));
                 }
                 SaveStoryTraversalScenario::WereFullMoonChat => {
                     assert!(final_events.iter().any(|event| matches!(
