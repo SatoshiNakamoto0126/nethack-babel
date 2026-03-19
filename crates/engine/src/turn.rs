@@ -2139,7 +2139,8 @@ fn resolve_player_action(
                     let shop = world.dungeon().shop_rooms[shop_idx].clone();
                     let floor_items = crate::inventory::items_at_position(world, player_pos);
                     let can_quote = live_monster_entity(world, shop.shopkeeper)
-                        && !crate::status::is_sleeping(world, shop.shopkeeper);
+                        && !crate::status::is_sleeping(world, shop.shopkeeper)
+                        && !crate::status::is_paralyzed(world, shop.shopkeeper);
                     let mut quoted_any = false;
                     if can_quote {
                         for item in floor_items {
@@ -19240,6 +19241,100 @@ mod tests {
                 level: current_level,
             };
         }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-price"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "chat-nobody-there"
+        )));
+    }
+
+    #[test]
+    fn test_paralyzed_shopkeeper_does_not_quote_floor_merchandise() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let _ = crate::status::make_paralyzed(&mut world, shopkeeper, 10);
+
+        let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.retain(|entry| *entry != item);
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+            *loc = ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: current_level,
+            };
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-price"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "chat-nobody-there"
+        )));
+    }
+
+    #[test]
+    fn test_chatting_on_shop_coins_does_not_quote_gold() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        spawn_floor_coin(&mut world, Position::new(5, 5));
 
         let mut rng = test_rng();
         let events = resolve_turn(

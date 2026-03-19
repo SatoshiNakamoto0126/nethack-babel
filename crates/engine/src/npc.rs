@@ -20,7 +20,6 @@ use nethack_babel_data::{
 
 use crate::action::Position;
 use crate::event::EngineEvent;
-use crate::fov::FovMap;
 use crate::inventory::Inventory;
 use crate::world::{GameWorld, HitPoints, Positioned};
 
@@ -1172,7 +1171,13 @@ pub fn voiced_monster_chat(
                 "npc-neigh-whickers"
             }
         }
-        MonsterSound::Moo => "npc-moo-moos",
+        MonsterSound::Moo => {
+            if state.is_tame {
+                "npc-moo-moos"
+            } else {
+                "npc-bellow-bellows"
+            }
+        }
         MonsterSound::Wail => "npc-wail-wails",
         MonsterSound::Gurgle => "npc-gurgle-gurgles",
         MonsterSound::Burble => "npc-burble-burbles",
@@ -1566,32 +1571,19 @@ fn wizard_can_taunt_player(world: &GameWorld, wizard: Entity, player: Entity) ->
         return false;
     }
 
-    let Some(wizard_pos) = world.get_component::<Positioned>(wizard).map(|pos| pos.0) else {
-        return false;
-    };
-    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
-        return false;
-    };
-
-    let dx = wizard_pos.x - player_pos.x;
-    let dy = wizard_pos.y - player_pos.y;
-    if dx * dx + dy * dy > 64 {
-        return false;
-    }
-
-    if let Some(status) = world.get_component::<crate::status::StatusEffects>(wizard)
-        && (status.invisibility > 0 || status.sleeping > 0 || status.paralysis > 0)
+    if world.get_component::<Positioned>(wizard).is_none()
+        || world.get_component::<Positioned>(player).is_none()
     {
         return false;
     }
 
-    let map = &world.dungeon().current_level;
-    let mut fov = FovMap::new(map.width, map.height);
-    fov.compute(player_pos, 8, |x, y| {
-        map.get(Position::new(x, y))
-            .is_none_or(|cell| cell.terrain.is_opaque())
-    });
-    fov.is_visible_pos(wizard_pos)
+    if let Some(status) = world.get_component::<crate::status::StatusEffects>(wizard)
+        && (status.sleeping > 0 || status.paralysis > 0)
+    {
+        return false;
+    }
+
+    true
 }
 
 /// Resolve a Wizard of Yendor harassment action.
@@ -2129,7 +2121,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wizard_taunt_suppressed_when_wizard_is_invisible() {
+    fn test_wizard_taunt_reaches_invisible_wizard() {
         let mut world = make_test_world();
         let player = world.player();
         let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 20);
@@ -2146,13 +2138,13 @@ mod tests {
         let mut rng = test_rng();
         let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng);
         assert!(
-            event.is_none(),
-            "invisible wizards should not taunt through the visibility gate"
+            event.is_some(),
+            "invisible wizards should still taunt like the original verbalize path"
         );
     }
 
     #[test]
-    fn test_wizard_taunt_suppressed_when_out_of_range() {
+    fn test_wizard_taunt_reaches_out_of_range_wizard() {
         let mut world = make_test_world();
         let player = world.player();
         let wizard = spawn_monster(&mut world, Position::new(18, 18), "Wizard of Yendor", 20);
@@ -2160,8 +2152,8 @@ mod tests {
         let mut rng = test_rng();
         let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng);
         assert!(
-            event.is_none(),
-            "wizard taunts should stay within the original ranged-pressure distance"
+            event.is_some(),
+            "wizard taunts should not depend on the extra local-range gate"
         );
     }
 
@@ -2973,10 +2965,10 @@ mod tests {
     }
 
     #[test]
-    fn test_voiced_monster_chat_hostile_moo_stays_moo() {
+    fn test_voiced_monster_chat_hostile_moo_becomes_bellow() {
         let evt = voiced_monster_chat("rothe", MonsterSound::Moo, MonsterChatState::default())
             .expect("untamed mooing monsters should emit a chat line");
-        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-moo-moos"));
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-bellow-bellows"));
     }
 
     #[test]

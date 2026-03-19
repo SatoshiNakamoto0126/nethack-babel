@@ -943,6 +943,13 @@ pub fn quote_item_in_shop(
     shop: &ShopRoom,
     obj_defs: &[ObjectDef],
 ) -> Option<EngineEvent> {
+    if world
+        .get_component::<ObjectCore>(item)
+        .is_some_and(|core| core.object_class == ObjectClass::Coin)
+    {
+        return None;
+    }
+
     if shop.angry || crate::status::is_blind(world, player) || crate::status::is_deaf(world, player)
     {
         return None;
