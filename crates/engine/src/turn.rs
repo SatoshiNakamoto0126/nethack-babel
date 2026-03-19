@@ -1974,6 +1974,8 @@ fn resolve_player_action(
                         player_is_silver_dragon,
                         player_is_baby_silver_dragon,
                     ) = current_player_polymorph_chat_flags(world, player);
+                    let full_moon = crate::were::is_full_moon(world.turn());
+                    let night = crate::were::is_night(world.turn());
                     let chat_state = crate::npc::MonsterChatState {
                         is_peaceful,
                         is_tame,
@@ -1982,9 +1984,10 @@ fn resolve_player_action(
                         fleeing,
                         hungry,
                         satiated,
-                        full_moon: crate::were::is_full_moon(world.turn()),
-                        night: crate::were::is_night(world.turn()),
+                        full_moon,
+                        night,
                         midnight: crate::were::is_midnight(world.turn()),
+                        were_howls: should_were_chat_howl(full_moon, night, rng),
                         blinded,
                         trapped,
                         wounded,
@@ -5788,6 +5791,52 @@ fn item_display_name(world: &GameWorld, item: hecs::Entity) -> Option<String> {
     crate::items::object_def_for_core(world.object_catalog(), &core).map(|def| def.name.clone())
 }
 
+fn spawn_monster_inventory_object_by_name(
+    world: &mut GameWorld,
+    monster: hecs::Entity,
+    name: &str,
+) -> Option<hecs::Entity> {
+    let object_type = resolve_object_type_by_spec(world.object_catalog(), name)?;
+    let object_def = world
+        .object_catalog()
+        .iter()
+        .find(|def| def.id == object_type && def.name.eq_ignore_ascii_case(name))?;
+    let carrier_id = monster.to_bits().get() as u32;
+
+    Some(world.spawn((
+        ObjectCore {
+            otyp: object_type,
+            object_class: object_def.class,
+            quantity: 1,
+            weight: object_def.weight as u32,
+            age: 0,
+            inv_letter: None,
+            artifact: None,
+        },
+        BucStatus {
+            cursed: false,
+            blessed: false,
+            bknown: false,
+        },
+        nethack_babel_data::KnowledgeState {
+            known: false,
+            dknown: false,
+            rknown: false,
+            cknown: false,
+            lknown: false,
+            tknown: false,
+        },
+        nethack_babel_data::Erosion {
+            eroded: 0,
+            eroded2: 0,
+            erodeproof: false,
+            greased: false,
+        },
+        ObjectLocation::MonsterInventory { carrier_id },
+        Name(name.to_string()),
+    )))
+}
+
 fn find_player_named_item(
     world: &GameWorld,
     player: hecs::Entity,
@@ -6355,6 +6404,15 @@ fn apply_wizard_harassment_action(
                 spawn_named_monster_near_entity(world, wizard, "Wizard of Yendor", rng)
             {
                 seed_wizard_runtime_state(world, clone);
+                if !player_has_named_item(world, player, "Amulet of Yendor")
+                    && rng.random_range(0..2) == 0
+                {
+                    let _ = spawn_monster_inventory_object_by_name(
+                        world,
+                        clone,
+                        "cheap plastic imitation of the Amulet of Yendor",
+                    );
+                }
                 events.push(EngineEvent::MonsterGenerated {
                     entity: clone,
                     position: pos,
@@ -6824,6 +6882,10 @@ fn item_charges(world: &GameWorld, item: hecs::Entity) -> i8 {
         .get_component::<Enchantment>(item)
         .map(|charges| charges.spe)
         .unwrap_or(0)
+}
+
+fn should_were_chat_howl(full_moon: bool, night: bool, rng: &mut impl Rng) -> bool {
+    full_moon && (night ^ (rng.random_range(0..13) == 0))
 }
 
 fn is_invocation_site(world: &GameWorld, pos: Position) -> bool {
@@ -8448,6 +8510,21 @@ mod tests {
             inv.items.push(item);
         }
         item
+    }
+
+    fn monster_carries_named_item(world: &GameWorld, monster: hecs::Entity, name: &str) -> bool {
+        let carrier_id = monster.to_bits().get() as u32;
+        world
+            .ecs()
+            .query::<(&ObjectCore, &ObjectLocation)>()
+            .iter()
+            .any(|(item, (_core, loc))| {
+                matches!(
+                    *loc,
+                    ObjectLocation::MonsterInventory { carrier_id: cid } if cid == carrier_id
+                ) && item_display_name(world, item)
+                    .is_some_and(|item_name| quest_name_matches(&item_name, name))
+            })
     }
 
     fn move_player_onto_magic_portal(
@@ -14572,6 +14649,126 @@ mod tests {
             events
                 .iter()
                 .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
+        );
+    }
+
+    #[test]
+    fn test_wizard_double_trouble_can_give_clone_fake_amulet() {
+        for seed in 0..512u64 {
+            let mut world = make_test_world();
+            install_test_catalogs(&mut world);
+            let player = world.player();
+            let wizard =
+                spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+            let mut events = Vec::new();
+            let mut rng = Pcg64::seed_from_u64(seed);
+
+            apply_wizard_harassment_action(
+                &mut world,
+                Some(wizard),
+                player,
+                crate::npc::WizardAction::DoubleTrouble,
+                &mut rng,
+                &mut events,
+            );
+
+            let clones_with_fake = world
+                .ecs()
+                .query::<(&Monster, &Name)>()
+                .iter()
+                .filter_map(|(entity, (_monster, name))| {
+                    (entity != wizard && name.0.eq_ignore_ascii_case("Wizard of Yendor"))
+                        .then_some(entity)
+                })
+                .filter(|entity| {
+                    monster_carries_named_item(
+                        &world,
+                        *entity,
+                        "cheap plastic imitation of the Amulet of Yendor",
+                    )
+                })
+                .count();
+            if clones_with_fake > 0 {
+                return;
+            }
+        }
+
+        panic!("Double Trouble should eventually hand the clone a fake amulet");
+    }
+
+    #[test]
+    fn test_wizard_double_trouble_skips_fake_amulet_when_player_has_real_one() {
+        let seed = (0..512u64)
+            .find(|seed| {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+                let mut events = Vec::new();
+                let mut rng = Pcg64::seed_from_u64(*seed);
+
+                apply_wizard_harassment_action(
+                    &mut world,
+                    Some(wizard),
+                    player,
+                    crate::npc::WizardAction::DoubleTrouble,
+                    &mut rng,
+                    &mut events,
+                );
+
+                world
+                    .ecs()
+                    .query::<(&Monster, &Name)>()
+                    .iter()
+                    .filter_map(|(entity, (_monster, name))| {
+                        (entity != wizard && name.0.eq_ignore_ascii_case("Wizard of Yendor"))
+                            .then_some(entity)
+                    })
+                    .any(|entity| {
+                        monster_carries_named_item(
+                            &world,
+                            entity,
+                            "cheap plastic imitation of the Amulet of Yendor",
+                        )
+                    })
+            })
+            .expect("a deterministic seed should eventually hand the clone a fake amulet");
+
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let _amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        let mut events = Vec::new();
+        let mut rng = Pcg64::seed_from_u64(seed);
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::DoubleTrouble,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            world
+                .ecs()
+                .query::<(&Monster, &Name)>()
+                .iter()
+                .filter_map(|(entity, (_monster, name))| {
+                    (entity != wizard && name.0.eq_ignore_ascii_case("Wizard of Yendor"))
+                        .then_some(entity)
+                })
+                .all(|entity| {
+                    !monster_carries_named_item(
+                        &world,
+                        entity,
+                        "cheap plastic imitation of the Amulet of Yendor",
+                    )
+                }),
+            "Double Trouble should not hand out fake amulets while the player already has the real one"
         );
     }
 

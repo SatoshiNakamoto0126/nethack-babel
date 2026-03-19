@@ -647,6 +647,7 @@ pub struct MonsterChatState {
     pub full_moon: bool,
     pub night: bool,
     pub midnight: bool,
+    pub were_howls: bool,
     pub blinded: bool,
     pub trapped: bool,
     pub wounded: bool,
@@ -961,7 +962,7 @@ pub fn voiced_monster_chat(
             }
         }
         MonsterSound::Were => {
-            if state.full_moon && state.night {
+            if state.were_howls {
                 if monster_name.to_ascii_lowercase().contains("wererat") {
                     "npc-were-shrieks"
                 } else {
@@ -2848,11 +2849,44 @@ mod tests {
             MonsterChatState {
                 full_moon: true,
                 night: true,
+                were_howls: true,
                 ..MonsterChatState::default()
             },
         )
         .expect("full moon wererats should emit a chat line");
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-were-shrieks"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_daytime_full_moon_were_can_rarely_howl() {
+        let evt = voiced_monster_chat(
+            "werewolf",
+            MonsterSound::Were,
+            MonsterChatState {
+                full_moon: true,
+                night: false,
+                were_howls: true,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("rare daytime were howl should still emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-were-howls"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_full_moon_were_can_rarely_whisper() {
+        let evt = voiced_monster_chat(
+            "werewolf",
+            MonsterSound::Were,
+            MonsterChatState {
+                full_moon: true,
+                night: true,
+                were_howls: false,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("rare nighttime were whisper should still emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-were-moon"));
     }
 
     #[test]
