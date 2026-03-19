@@ -1680,6 +1680,14 @@ offer-what = 獻上什麼？
 npc-chat-no-response = 這個生物似乎不想聊天。
 npc-chat-sleeping = 這個生物似乎根本沒注意到你。
 chat-nobody-there = 那裡沒有人可以交談。
+# TODO: translate
+chat-cannot-speak = As { $form }, you cannot speak.
+# TODO: translate
+chat-strangled = You can't speak. You're choking!
+# TODO: translate
+chat-swallowed = They won't hear you out there.
+# TODO: translate
+chat-underwater = Your speech is unintelligible underwater.
 
 ## 移動/旅行
 peaceful-monster-blocks = 你停了下來。{ $monster } 擋住了去路。
@@ -3553,6 +3561,18 @@ shk-welcome = { $shopkeeper } says: "Welcome to my shop, { $honorific }."
 
 # TODO: translate
 shk-angry-greeting = { $shopkeeper } glares at you angrily.
+
+# TODO: translate
+shk-angry-rude = { $shopkeeper } indicates how much rude customers are disliked.
+
+# TODO: translate
+shk-angry-rude-indicates = { $shopkeeper } indicates how much rude customers are disliked.
+
+# TODO: translate
+shk-angry-non-paying = { $shopkeeper } indicates how much non-paying customers are disliked.
+
+# TODO: translate
+shk-angry-non-paying-indicates = { $shopkeeper } indicates how much non-paying customers are disliked.
 
 # TODO: translate
 shk-follow-reminder = { $shopkeeper } says: "Hello, { $honorific }! Didn't you forget to pay?"

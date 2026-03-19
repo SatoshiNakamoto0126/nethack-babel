@@ -1728,6 +1728,10 @@ offer-what = Sacrifice what?
 npc-chat-no-response = The creature doesn't seem to want to chat.
 npc-chat-sleeping = The creature seems not to notice you.
 chat-nobody-there = There is nobody there to talk to.
+chat-cannot-speak = As { $form }, you cannot speak.
+chat-strangled = You can't speak. You're choking!
+chat-swallowed = They won't hear you out there.
+chat-underwater = Your speech is unintelligible underwater.
 
 ## Movement / travel
 peaceful-monster-blocks = You stop. { $monster } is in the way.
@@ -1776,6 +1780,10 @@ priest-not-enough-gold = The priest asks for { $cost } gold.
 priest-protection-granted = The priest grants you protection for { $cost } gold.
 shk-welcome = { $shopkeeper } says: "Welcome to my shop, { $honorific }."
 shk-angry-greeting = { $shopkeeper } glares at you angrily.
+shk-angry-rude = { $shopkeeper } mentions how much rude customers are disliked.
+shk-angry-rude-indicates = { $shopkeeper } indicates how much rude customers are disliked.
+shk-angry-non-paying = { $shopkeeper } mentions how much non-paying customers are disliked.
+shk-angry-non-paying-indicates = { $shopkeeper } indicates how much non-paying customers are disliked.
 shk-follow-reminder = { $shopkeeper } says: "Hello, { $honorific }! Didn't you forget to pay?"
 shk-follow-tap = { $shopkeeper } taps you on the arm.
 shk-bill-total = { $shopkeeper } says that your bill comes to { $amount } gold.

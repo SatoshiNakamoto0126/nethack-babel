@@ -375,6 +375,10 @@ offer-what = Offrir quoi ?
 npc-chat-no-response = La créature ne semble pas vouloir discuter.
 npc-chat-sleeping = La créature ne semble même pas vous remarquer.
 chat-nobody-there = Il n'y a personne à qui parler.
+chat-cannot-speak = As { $form }, you cannot speak.
+chat-strangled = You can't speak. You're choking!
+chat-swallowed = They won't hear you out there.
+chat-underwater = Your speech is unintelligible underwater.
 
 ## Déplacement / voyage
 peaceful-monster-blocks = Vous vous arrêtez. { $monster } vous bloque le passage.
@@ -493,6 +497,10 @@ priest-not-enough-gold = Le prêtre demande { $cost } pièces d'or.
 priest-protection-granted = Le prêtre vous accorde une protection divine pour { $cost } pièces d'or.
 shk-welcome = { $shopkeeper } dit : « Bienvenue dans ma boutique, { $honorific }. »
 shk-angry-greeting = { $shopkeeper } vous lance un regard furieux.
+shk-angry-rude = { $shopkeeper } laisse entendre combien les clients impolis sont détestés.
+shk-angry-rude-indicates = { $shopkeeper } indique combien les clients impolis sont détestés.
+shk-angry-non-paying = { $shopkeeper } laisse entendre combien les clients mauvais payeurs sont détestés.
+shk-angry-non-paying-indicates = { $shopkeeper } indique combien les clients mauvais payeurs sont détestés.
 shk-follow-reminder = { $shopkeeper } dit : « Bonjour, { $honorific } ! N'avez-vous pas oublié de payer ? »
 shk-follow-tap = { $shopkeeper } taps you on the arm.
 shk-bill-total = { $shopkeeper } dit que votre note s'élève à { $amount } pièces d'or.

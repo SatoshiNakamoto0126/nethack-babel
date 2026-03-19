@@ -814,7 +814,10 @@ fn emit_ambient_dungeon_sound(
     events: &mut Vec<EngineEvent>,
 ) {
     let player = world.player();
-    if crate::status::is_deaf(world, player) {
+    if crate::status::is_deaf(world, player)
+        || player_is_engulfed(world, player)
+        || player_is_underwater(world)
+    {
         return;
     }
 
@@ -856,6 +859,60 @@ pub fn force_emit_ambient_dungeon_sound(world: &GameWorld, rng: &mut impl Rng) -
     let mut events = Vec::new();
     emit_ambient_dungeon_sound(world, rng, &mut events);
     events
+}
+
+fn current_special_level_id(world: &GameWorld) -> Option<crate::special_levels::SpecialLevelId> {
+    world
+        .dungeon()
+        .check_topology_special(&world.dungeon().branch, world.dungeon().depth)
+        .or_else(|| identify_special_level(world.dungeon().branch, world.dungeon().depth))
+}
+
+fn player_is_underwater(world: &GameWorld) -> bool {
+    current_special_level_id(world) == Some(crate::special_levels::SpecialLevelId::WaterPlane)
+}
+
+fn player_is_engulfed(world: &GameWorld, player: hecs::Entity) -> bool {
+    world
+        .get_component::<crate::combat::Engulfed>(player)
+        .is_some()
+        || world
+            .get_component::<crate::movement::Engulfed>(player)
+            .is_some()
+}
+
+fn current_player_silent_polyform_name(world: &GameWorld, player: hecs::Entity) -> Option<String> {
+    let form_id = world
+        .get_component::<crate::polyself::PolymorphState>(player)
+        .map(|state| state.monster_form_id)?;
+    let monster_def = world
+        .monster_catalog()
+        .iter()
+        .find(|monster| monster.id == form_id)?;
+    crate::mondata::is_silent(monster_def)
+        .then(|| crate::identification::an(&monster_def.names.male))
+}
+
+fn player_chat_precondition_failure(
+    world: &GameWorld,
+    player: hecs::Entity,
+) -> Option<EngineEvent> {
+    if let Some(form) = current_player_silent_polyform_name(world, player) {
+        return Some(EngineEvent::msg_with(
+            "chat-cannot-speak",
+            vec![("form", form)],
+        ));
+    }
+    if crate::status::is_strangled(world, player) {
+        return Some(EngineEvent::msg("chat-strangled"));
+    }
+    if player_is_engulfed(world, player) {
+        return Some(EngineEvent::msg("chat-swallowed"));
+    }
+    if player_is_underwater(world) {
+        return Some(EngineEvent::msg("chat-underwater"));
+    }
+    None
 }
 
 fn ambient_branch_name(branch: DungeonBranch) -> &'static str {
@@ -1815,6 +1872,10 @@ fn resolve_player_action(
         PlayerAction::Chat { direction } => {
             // Chat with an NPC in the given direction.
             let player = world.player();
+            if let Some(event) = player_chat_precondition_failure(world, player) {
+                events.push(event);
+                return;
+            }
             let player_pos = world
                 .get_component::<Positioned>(player)
                 .map(|p| p.0)
@@ -2004,7 +2065,7 @@ fn resolve_player_action(
                         hurt,
                         badly_hurt,
                         player_hallucinating: crate::status::is_hallucinating(world, player),
-                        chat_roll: rng.random_range(0..4),
+                        chat_roll: rng.random(),
                         player_has_gold: player_gold(world, player) > 0,
                         player_has_amulet: player_has_named_item(world, player, "Amulet of Yendor"),
                         player_armed: player_equipment.weapon.is_some(),
@@ -8667,6 +8728,7 @@ mod tests {
         VampireMidnightChat,
         WereFullMoonChat,
         WereDaytimeMoonChat,
+        ChatPreconditionBlocks,
         WizardLevelTeleport,
         EndgameAscension,
     }
@@ -8723,6 +8785,7 @@ mod tests {
                 StoryTraversalScenario::VampireMidnightChat => "vampire-midnight-chat",
                 StoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
                 StoryTraversalScenario::WereDaytimeMoonChat => "were-daytime-moon-chat",
+                StoryTraversalScenario::ChatPreconditionBlocks => "chat-precondition-blocks",
                 StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -10588,6 +10651,106 @@ mod tests {
                 );
 
                 (world, events)
+            }
+            StoryTraversalScenario::ChatPreconditionBlocks => {
+                let mut silent_world = make_test_world();
+                install_test_catalogs(&mut silent_world);
+                let player = silent_world.player();
+                let giant_ant =
+                    resolve_monster_id_by_spec(silent_world.monster_catalog(), "giant ant")
+                        .expect("giant ant should resolve against the monster catalog");
+                silent_world
+                    .ecs_mut()
+                    .insert_one(
+                        player,
+                        crate::polyself::PolymorphState {
+                            original_hp: 12,
+                            original_max_hp: 12,
+                            original_level: 1,
+                            monster_form_id: giant_ant,
+                            timer: 20,
+                        },
+                    )
+                    .expect("player should accept polymorph state");
+                let silent_events = resolve_turn(
+                    &mut silent_world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
+                );
+                assert!(
+                    silent_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "chat-cannot-speak"
+                    )),
+                    "{} should block chat while silently polymorphed",
+                    scenario.label()
+                );
+
+                let mut strangled_world = make_test_world();
+                if let Some(mut status) = strangled_world
+                    .get_component_mut::<crate::status::StatusEffects>(strangled_world.player())
+                {
+                    status.strangled = 3;
+                }
+                let strangled_events = resolve_turn(
+                    &mut strangled_world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
+                );
+                assert!(
+                    strangled_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "chat-strangled"
+                    )),
+                    "{} should block chat while strangled",
+                    scenario.label()
+                );
+
+                let mut swallowed_world = make_test_world();
+                let swallowed_player = swallowed_world.player();
+                let engulfer =
+                    spawn_full_monster(&mut swallowed_world, Position::new(6, 5), "fog cloud", 8);
+                swallowed_world
+                    .ecs_mut()
+                    .insert_one(
+                        swallowed_player,
+                        crate::combat::Engulfed {
+                            by: engulfer,
+                            turns_remaining: 3,
+                        },
+                    )
+                    .expect("player should accept engulfed status");
+                let swallowed_events = resolve_turn(
+                    &mut swallowed_world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
+                );
+                assert!(
+                    swallowed_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "chat-swallowed"
+                    )),
+                    "{} should block chat while engulfed",
+                    scenario.label()
+                );
+
+                let mut underwater_world = make_stair_world(Terrain::Floor, 4);
+                underwater_world.dungeon_mut().branch = DungeonBranch::Endgame;
+                let events = resolve_turn(
+                    &mut underwater_world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
+                );
+
+                (underwater_world, events)
             }
             StoryTraversalScenario::WizardLevelTeleport => {
                 let mut world = make_stair_world(Terrain::Floor, 10);
@@ -17131,7 +17294,7 @@ mod tests {
         );
         assert!(angry_events.iter().any(|event| matches!(
             event,
-            EngineEvent::Message { key, .. } if key == "shk-angry-greeting"
+            EngineEvent::Message { key, .. } if key == "shk-angry-rude"
         )));
     }
 
@@ -18809,6 +18972,117 @@ mod tests {
             )
             .count();
         assert_eq!(quote_count, 2);
+    }
+
+    #[test]
+    fn test_silent_polyform_player_cannot_chat() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let giant_ant = resolve_monster_id_by_spec(world.monster_catalog(), "giant ant")
+            .expect("giant ant should exist in monster catalog");
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                crate::polyself::PolymorphState {
+                    original_hp: 12,
+                    original_max_hp: 12,
+                    original_level: 1,
+                    monster_form_id: giant_ant,
+                    timer: 20,
+                },
+            )
+            .expect("player should accept polymorph state");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "chat-cannot-speak"
+        )));
+    }
+
+    #[test]
+    fn test_strangled_player_cannot_chat() {
+        let mut world = make_test_world();
+        let player = world.player();
+        if let Some(mut status) = world.get_component_mut::<crate::status::StatusEffects>(player) {
+            status.strangled = 3;
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "chat-strangled"
+        )));
+    }
+
+    #[test]
+    fn test_engulfed_player_cannot_chat_outside() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let engulfer = spawn_full_monster(&mut world, Position::new(6, 5), "purple worm", 20);
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                crate::combat::Engulfed {
+                    by: engulfer,
+                    turns_remaining: 3,
+                },
+            )
+            .expect("player should accept engulfed state");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "chat-swallowed"
+        )));
+    }
+
+    #[test]
+    fn test_underwater_player_cannot_chat() {
+        let mut world = make_test_world();
+        world.dungeon_mut().branch = DungeonBranch::Endgame;
+        world.dungeon_mut().depth = 4;
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "chat-underwater"
+        )));
     }
 
     #[test]
@@ -20519,6 +20793,60 @@ mod tests {
             found,
             "temple levels should eventually emit live ambient temple texture"
         );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_suppressed_while_engulfed() {
+        let mut world = make_test_world();
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Fountain);
+        let player = world.player();
+        let engulfer = spawn_full_monster(&mut world, Position::new(7, 5), "purple worm", 20);
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                crate::combat::Engulfed {
+                    by: engulfer,
+                    turns_remaining: 3,
+                },
+            )
+            .expect("player should accept engulfed state");
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            assert!(
+                events.is_empty(),
+                "ambient sound should stay silent while the hero is engulfed"
+            );
+        }
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_suppressed_underwater() {
+        let mut world = make_test_world();
+        world.dungeon_mut().branch = DungeonBranch::Endgame;
+        world.dungeon_mut().depth = 4;
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Fountain);
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let mut rng = test_rng();
+        for _ in 0..200 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            assert!(
+                events.is_empty(),
+                "ambient sound should stay silent on underwater chat levels"
+            );
+        }
     }
 
     #[test]
@@ -22303,6 +22631,7 @@ mod tests {
             StoryTraversalScenario::VampireMidnightChat,
             StoryTraversalScenario::WereFullMoonChat,
             StoryTraversalScenario::WereDaytimeMoonChat,
+            StoryTraversalScenario::ChatPreconditionBlocks,
             StoryTraversalScenario::WizardLevelTeleport,
             StoryTraversalScenario::EndgameAscension,
         ] {
@@ -23285,6 +23614,14 @@ mod tests {
                         "{} should keep nearby sleeping monsters asleep",
                         scenario.label()
                     );
+                }
+                StoryTraversalScenario::ChatPreconditionBlocks => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "chat-underwater"
+                    )));
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+                    assert_eq!(world.dungeon().depth, 4);
                 }
                 StoryTraversalScenario::WizardLevelTeleport => {
                     assert!(final_events.iter().any(|event| matches!(

@@ -1896,6 +1896,7 @@ mod tests {
         VampireMidnightChat,
         WereFullMoonChat,
         WereDaytimeMoonChat,
+        ChatPreconditionBlocks,
         WizardLevelTeleport,
         EndgameAscension,
     }
@@ -1954,6 +1955,7 @@ mod tests {
                 SaveStoryTraversalScenario::VampireMidnightChat => "vampire-midnight-chat",
                 SaveStoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
                 SaveStoryTraversalScenario::WereDaytimeMoonChat => "were-daytime-moon-chat",
+                SaveStoryTraversalScenario::ChatPreconditionBlocks => "chat-precondition-blocks",
                 SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -3935,6 +3937,89 @@ mod tests {
                     "story-matrix-were-daytime-moon-chat",
                     &world,
                     [167u8; 32],
+                );
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ChatPreconditionBlocks => {
+                let mut silent_world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                install_test_catalogs(&mut silent_world);
+                let player = silent_world.player();
+                let giant_ant = silent_world
+                    .monster_catalog()
+                    .iter()
+                    .find(|monster| monster.names.male == "giant ant")
+                    .map(|monster| monster.id)
+                    .expect("giant ant should resolve");
+                silent_world
+                    .ecs_mut()
+                    .insert_one(
+                        player,
+                        nethack_babel_engine::polyself::PolymorphState {
+                            original_hp: 12,
+                            original_max_hp: 12,
+                            original_level: 1,
+                            monster_form_id: giant_ant,
+                            timer: 20,
+                        },
+                    )
+                    .expect("player should accept polymorph state");
+                let (mut silent_loaded, silent_rng) = save_and_reload_world(
+                    "story-matrix-chat-silent-polyform",
+                    &silent_world,
+                    [180u8; 32],
+                );
+                let mut silent_rng = Pcg64::from_seed(silent_rng);
+                let silent_events = resolve_turn(
+                    &mut silent_loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut silent_rng,
+                );
+                assert!(silent_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "chat-cannot-speak"
+                )));
+
+                let mut strangled_world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                if let Some(mut status) = strangled_world
+                    .get_component_mut::<nethack_babel_engine::status::StatusEffects>(
+                        strangled_world.player(),
+                    )
+                {
+                    status.strangled = 3;
+                }
+                let (mut strangled_loaded, strangled_rng) = save_and_reload_world(
+                    "story-matrix-chat-strangled",
+                    &strangled_world,
+                    [181u8; 32],
+                );
+                let mut strangled_rng = Pcg64::from_seed(strangled_rng);
+                let strangled_events = resolve_turn(
+                    &mut strangled_loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut strangled_rng,
+                );
+                assert!(strangled_events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "chat-strangled"
+                )));
+
+                let underwater_world = make_stair_world(DungeonBranch::Endgame, 4, Terrain::Floor);
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-chat-underwater",
+                    &underwater_world,
+                    [182u8; 32],
                 );
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(
@@ -7028,7 +7113,7 @@ mod tests {
         assert!(loaded.dungeon().shop_rooms[0].angry);
         assert!(events.iter().any(|event| matches!(
             event,
-            EngineEvent::Message { key, .. } if key == "shk-angry-greeting"
+            EngineEvent::Message { key, .. } if key == "shk-angry-rude"
         )));
     }
 
@@ -7357,6 +7442,7 @@ mod tests {
             SaveStoryTraversalScenario::VampireMidnightChat,
             SaveStoryTraversalScenario::WereFullMoonChat,
             SaveStoryTraversalScenario::WereDaytimeMoonChat,
+            SaveStoryTraversalScenario::ChatPreconditionBlocks,
             SaveStoryTraversalScenario::WizardLevelTeleport,
             SaveStoryTraversalScenario::EndgameAscension,
         ] {
@@ -8256,6 +8342,14 @@ mod tests {
                         nethack_babel_engine::status::is_sleeping(&world, sleeper),
                         "daytime full moon were chat should keep nearby sleepers asleep after save/load"
                     );
+                }
+                SaveStoryTraversalScenario::ChatPreconditionBlocks => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "chat-underwater"
+                    )));
+                    assert_eq!(world.dungeon().branch, DungeonBranch::Endgame);
+                    assert_eq!(world.dungeon().depth, 4);
                 }
                 SaveStoryTraversalScenario::HumanoidAlohaChat => {
                     assert!(final_events.iter().any(|event| matches!(

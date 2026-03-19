@@ -525,10 +525,14 @@ pub fn shopkeeper_chat(
     chat_roll: u32,
 ) -> EngineEvent {
     if shop.angry {
-        EngineEvent::msg_with(
-            "shk-angry-greeting",
-            vec![("shopkeeper", shop.shopkeeper_name.clone())],
-        )
+        let non_paying = shop.robbed > 0 || !shop.bill.is_empty() || shop.debit > 0;
+        let key = match (is_deaf, non_paying) {
+            (false, true) => "shk-angry-non-paying",
+            (true, true) => "shk-angry-non-paying-indicates",
+            (false, false) => "shk-angry-rude",
+            (true, false) => "shk-angry-rude-indicates",
+        };
+        EngineEvent::msg_with(key, vec![("shopkeeper", shop.shopkeeper_name.clone())])
     } else if following {
         let key = if is_deaf {
             "shk-follow-tap"
@@ -734,7 +738,7 @@ fn wizard_chat_outcome(monster_name: &str, state: MonsterChatState) -> MonsterCh
         };
     }
 
-    if state.player_has_amulet {
+    if state.player_has_amulet && (state.chat_roll as usize).is_multiple_of(WIZARD_INSULTS.len()) {
         return MonsterChatOutcome {
             event: EngineEvent::msg_with(
                 "wizard-taunt-relinquish",
@@ -2198,7 +2202,7 @@ mod tests {
             "Wizard of Yendor",
             MonsterChatState {
                 player_has_amulet: true,
-                chat_roll: 1,
+                chat_roll: WIZARD_INSULTS.len() as u32,
                 ..MonsterChatState::default()
             },
             false,
@@ -2207,6 +2211,31 @@ mod tests {
         assert!(matches!(
             outcome.event,
             EngineEvent::Message { ref key, .. } if key == "wizard-taunt-relinquish"
+        ));
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_hostile_wizard_with_amulet_can_still_use_general_taunt() {
+        let monster = fake_monster(
+            MonsterSound::Cuss,
+            "Wizard of Yendor",
+            '@',
+            MonsterFlags::empty(),
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "Wizard of Yendor",
+            MonsterChatState {
+                player_has_amulet: true,
+                chat_roll: 1,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("hostile Wizard chat should produce a taunt");
+        assert!(matches!(
+            outcome.event,
+            EngineEvent::Message { ref key, .. } if key == "wizard-taunt-general"
         ));
     }
 
@@ -2725,6 +2754,16 @@ mod tests {
             hecs::Entity::DANGLING,
             "Bob".to_string(),
         );
+        shop.angry = true;
+        let evt = shopkeeper_chat(&shop, false, "sir", false, 0);
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-angry-rude"));
+
+        shop.robbed = 10;
+        let evt = shopkeeper_chat(&shop, false, "sir", false, 0);
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-angry-non-paying"));
+
+        shop.angry = false;
+        shop.robbed = 0;
         let evt = shopkeeper_chat(&shop, true, "sir", false, 0);
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-follow-reminder"));
 
@@ -2765,6 +2804,21 @@ mod tests {
             hecs::Entity::DANGLING,
             "Bob".to_string(),
         );
+
+        shop.angry = true;
+        let evt = shopkeeper_chat(&shop, false, "sir", true, 0);
+        assert!(
+            matches!(evt, EngineEvent::Message { key, .. } if key == "shk-angry-rude-indicates")
+        );
+
+        shop.robbed = 10;
+        let evt = shopkeeper_chat(&shop, false, "sir", true, 0);
+        assert!(
+            matches!(evt, EngineEvent::Message { key, .. } if key == "shk-angry-non-paying-indicates")
+        );
+
+        shop.angry = false;
+        shop.robbed = 0;
 
         let evt = shopkeeper_chat(&shop, true, "sir", true, 0);
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-follow-tap"));
