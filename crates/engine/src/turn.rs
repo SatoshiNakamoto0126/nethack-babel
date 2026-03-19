@@ -1373,7 +1373,15 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, false, events, rng);
+            try_move_entity(
+                world,
+                world.player(),
+                effective_dir,
+                false,
+                true,
+                events,
+                rng,
+            );
         }
         PlayerAction::Rest => {
             // Resting: no movement, just pass the turn.
@@ -2295,7 +2303,15 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, false, events, rng);
+            try_move_entity(
+                world,
+                world.player(),
+                effective_dir,
+                false,
+                true,
+                events,
+                rng,
+            );
         }
         PlayerAction::FightDirection { direction } => {
             // Force fight: move/attack in direction, skipping peaceful check.
@@ -2309,7 +2325,15 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, true, events, rng);
+            try_move_entity(
+                world,
+                world.player(),
+                effective_dir,
+                true,
+                true,
+                events,
+                rng,
+            );
         }
         PlayerAction::RunDirection { direction } => {
             // Run until interrupted (simplified — one step for now).
@@ -2323,10 +2347,18 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, false, events, rng);
+            try_move_entity(
+                world,
+                world.player(),
+                effective_dir,
+                false,
+                true,
+                events,
+                rng,
+            );
         }
         PlayerAction::RushDirection { direction } => {
-            // Rush: run without picking up items (simplified — one step).
+            // Rush: simplified to a single-step directional move.
             let confused = crate::status::is_confused(world, player);
             let stunned = crate::status::is_stunned(world, player);
             let effective_dir = if confused || stunned {
@@ -2337,7 +2369,15 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, false, events, rng);
+            try_move_entity(
+                world,
+                world.player(),
+                effective_dir,
+                false,
+                true,
+                events,
+                rng,
+            );
         }
         PlayerAction::MoveNoPickup { direction } => {
             // Move without auto-pickup.
@@ -2351,7 +2391,15 @@ fn resolve_player_action(
             } else {
                 *direction
             };
-            try_move_entity(world, world.player(), effective_dir, false, events, rng);
+            try_move_entity(
+                world,
+                world.player(),
+                effective_dir,
+                false,
+                false,
+                events,
+                rng,
+            );
         }
         PlayerAction::Wait => {
             // Do nothing, consume one turn.
@@ -2377,7 +2425,15 @@ fn resolve_player_action(
                 } else {
                     direction
                 };
-                try_move_entity(world, world.player(), effective_dir, false, events, rng);
+                try_move_entity(
+                    world,
+                    world.player(),
+                    effective_dir,
+                    false,
+                    true,
+                    events,
+                    rng,
+                );
             }
         }
         PlayerAction::ToggleTwoWeapon => {
@@ -4672,6 +4728,7 @@ fn try_move_entity(
     entity: hecs::Entity,
     direction: Direction,
     force_attack_non_hostile: bool,
+    allow_autopickup: bool,
     events: &mut Vec<EngineEvent>,
     rng: &mut impl Rng,
 ) {
@@ -4701,7 +4758,15 @@ fn try_move_entity(
     {
         if world.get_component::<Tame>(occupant).is_some() && !force_attack_non_hostile {
             swap_entities(world, entity, occupant, current_pos, target_pos, events);
-            finish_player_movement(world, entity, current_pos, target_pos, events, rng);
+            finish_player_movement(
+                world,
+                entity,
+                current_pos,
+                target_pos,
+                allow_autopickup,
+                events,
+                rng,
+            );
             return;
         }
         if world.get_component::<Peaceful>(occupant).is_some() && !force_attack_non_hostile {
@@ -4781,7 +4846,15 @@ fn try_move_entity(
         from: current_pos,
         to: target_pos,
     });
-    finish_player_movement(world, entity, current_pos, target_pos, events, rng);
+    finish_player_movement(
+        world,
+        entity,
+        current_pos,
+        target_pos,
+        allow_autopickup,
+        events,
+        rng,
+    );
 }
 
 fn monster_at(world: &GameWorld, pos: Position, exclude: hecs::Entity) -> Option<hecs::Entity> {
@@ -4826,6 +4899,7 @@ fn finish_player_movement(
     entity: hecs::Entity,
     from_pos: Position,
     target_pos: Position,
+    allow_autopickup: bool,
     events: &mut Vec<EngineEvent>,
     rng: &mut impl Rng,
 ) {
@@ -4871,7 +4945,7 @@ fn finish_player_movement(
             let d = world.dungeon();
             (d.autopickup_enabled, d.autopickup_classes.clone())
         };
-        if autopickup_enabled {
+        if allow_autopickup && autopickup_enabled {
             let pickup_events =
                 crate::inventory::autopickup(world, &mut letter_state, &[], &autopickup_classes);
             events.extend(pickup_events);
@@ -11780,6 +11854,37 @@ mod tests {
         }));
         let loc = world.get_component::<ObjectLocation>(coin).unwrap();
         assert!(matches!(*loc, ObjectLocation::Inventory));
+    }
+
+    #[test]
+    fn move_no_pickup_skips_gold_autopickup_on_destination_tile() {
+        let mut world = make_test_world();
+        let coin = spawn_floor_coin(&mut world, Position::new(6, 5));
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::MoveNoPickup {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(
+            !events.iter().any(|e| {
+                matches!(
+                    e,
+                    EngineEvent::ItemPickedUp {
+                        actor,
+                        item,
+                        ..
+                    } if *actor == world.player() && *item == coin
+                )
+            }),
+            "MoveNoPickup should not trigger autopickup"
+        );
+        let loc = world.get_component::<ObjectLocation>(coin).unwrap();
+        assert!(matches!(*loc, ObjectLocation::Floor { x: 6, y: 5, .. }));
     }
 
     #[test]

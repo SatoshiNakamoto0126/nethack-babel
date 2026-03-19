@@ -1861,6 +1861,19 @@ fn parse_command(input: &str, wizard_mode: bool) -> Option<PlayerAction> {
         }
     }
 
+    if let Some(rest) = lower.strip_prefix('m') {
+        let dir_token = rest.trim();
+        if !dir_token.is_empty() {
+            return match parse_direction_token(dir_token) {
+                Some(Direction::Up) => Some(PlayerAction::GoUp),
+                Some(Direction::Down) => Some(PlayerAction::GoDown),
+                Some(Direction::Self_) => None,
+                Some(direction) => Some(PlayerAction::MoveNoPickup { direction }),
+                None => None,
+            };
+        }
+    }
+
     match lower.as_str() {
         "h" => Some(PlayerAction::Move {
             direction: Direction::West,
@@ -2035,6 +2048,27 @@ mod text_input_tests {
             parse_command("pray", false),
             Some(PlayerAction::Pray)
         ));
+    }
+
+    #[test]
+    fn parse_text_mode_reqmenu_prefix_moves_without_pickup() {
+        assert!(matches!(
+            parse_command("ml", false),
+            Some(PlayerAction::MoveNoPickup {
+                direction: Direction::East
+            })
+        ));
+        assert!(matches!(
+            parse_command("m h", false),
+            Some(PlayerAction::MoveNoPickup {
+                direction: Direction::West
+            })
+        ));
+        assert!(matches!(
+            parse_command("m>", false),
+            Some(PlayerAction::GoDown)
+        ));
+        assert!(parse_command("m.", false).is_none());
     }
 
     #[test]

@@ -1217,13 +1217,27 @@ impl App {
                         return Some(PlayerAction::ViewInventory);
                     }
 
-                    // reqmenu: show extended-command index.
+                    // reqmenu: one-shot move prefix that suppresses autopickup.
                     if !modifiers.shift
                         && !modifiers.ctrl
                         && !modifiers.alt
                         && matches!(code, InputKeyCode::Char('m'))
                     {
-                        self.show_command_menu(port, CommandMenuKind::Request);
+                        if let Some(direction) = self.prompt_direction(port, "In what direction?") {
+                            match direction {
+                                Direction::Up => return Some(PlayerAction::GoUp),
+                                Direction::Down => return Some(PlayerAction::GoDown),
+                                Direction::Self_ => {
+                                    port.show_message(
+                                        &self.messages_i18n.direction_invalid,
+                                        MessageUrgency::Normal,
+                                    );
+                                }
+                                direction => {
+                                    return Some(PlayerAction::MoveNoPickup { direction });
+                                }
+                            }
+                        }
                         continue;
                     }
 
@@ -2646,16 +2660,17 @@ mod tests {
     }
 
     #[test]
-    fn get_player_action_reqmenu_key_shows_command_index() {
+    fn get_player_action_reqmenu_key_moves_without_pickup() {
         let mut app = App::new();
-        let mut port = MockPort::new(vec![MockPort::key('m'), MockPort::key('.')]);
+        let mut port = MockPort::new(vec![MockPort::key('m'), MockPort::key('l')]);
         let action = app.get_player_action(&mut port);
-        assert!(matches!(action, Some(PlayerAction::Rest)));
-        assert!(
-            port.shown_text
-                .iter()
-                .any(|(title, _)| title.contains("Commands"))
-        );
+        assert!(matches!(
+            action,
+            Some(PlayerAction::MoveNoPickup {
+                direction: Direction::East
+            })
+        ));
+        assert!(port.shown_text.is_empty());
     }
 
     #[test]
