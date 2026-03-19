@@ -3739,7 +3739,7 @@ npc-bones-rattle = { $monster } rattles noisily.
 npc-shriek = { $monster } shrieks.
 
 # TODO: translate
-npc-bark-barks = { $monster } barks.
+npc-bark-barks = { $monster } 汪汪叫。
 
 # TODO: translate
 npc-bark-whines = { $monster } whines.
@@ -3757,13 +3757,13 @@ npc-mew-mews = { $monster } mews.
 npc-mew-yowls = { $monster } yowls.
 
 # TODO: translate
-npc-mew-meows = { $monster } meows.
+npc-mew-meows = { $monster } 喵喵叫。
 
 # TODO: translate
 npc-mew-purrs = { $monster } purrs.
 
 # TODO: translate
-npc-growl-growls = { $monster } growls!
+npc-growl-growls = { $monster } 發出低吼！
 
 # TODO: translate
 npc-growl-snarls = { $monster } snarls.
@@ -3775,7 +3775,7 @@ npc-roar-roars = { $monster } roars!
 npc-bellow-bellows = { $monster } bellows!
 
 # TODO: translate
-npc-squeak-squeaks = { $monster } squeaks.
+npc-squeak-squeaks = { $monster } 吱吱叫。
 
 # TODO: translate
 npc-squawk-squawks = { $monster } squawks.
@@ -3787,10 +3787,10 @@ npc-squawk-nevermore = { $monster } says: "Nevermore!"
 npc-chirp-chirps = { $monster } chirps.
 
 # TODO: translate
-npc-hiss-hisses = { $monster } hisses!
+npc-hiss-hisses = { $monster } 發出嘶嘶聲！
 
 # TODO: translate
-npc-buzz-drones = { $monster } drones.
+npc-buzz-drones = { $monster } 嗡嗡作響。
 
 # TODO: translate
 npc-buzz-angry = { $monster } buzzes angrily.
@@ -3799,7 +3799,7 @@ npc-buzz-angry = { $monster } buzzes angrily.
 npc-grunt-grunts = { $monster } grunts.
 
 # TODO: translate
-npc-neigh-neighs = { $monster } neighs.
+npc-neigh-neighs = { $monster } 嘶鳴起來。
 
 # TODO: translate
 npc-neigh-whinnies = { $monster } whinnies.
@@ -3811,7 +3811,7 @@ npc-neigh-whickers = { $monster } whickers.
 npc-were-shrieks = { $monster } lets out a blood curdling shriek!
 
 # TODO: translate
-npc-were-howls = { $monster } lets out a blood curdling howl!
+npc-were-howls = { $monster } 發出令人毛骨悚然的嚎叫！
 
 # TODO: translate
 npc-were-moon = { $monster } whispers inaudibly. All you can make out is "moon".
