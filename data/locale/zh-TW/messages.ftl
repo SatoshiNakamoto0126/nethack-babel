@@ -3742,37 +3742,37 @@ npc-shriek = { $monster } shrieks.
 npc-bark-barks = { $monster } 汪汪叫。
 
 # TODO: translate
-npc-bark-whines = { $monster } whines.
+npc-bark-whines = { $monster } 嗚咽起來。
 
 # TODO: translate
-npc-bark-howls = { $monster } howls.
+npc-bark-howls = { $monster } 嚎叫起來。
 
 # TODO: translate
 npc-bark-yips = { $monster } yips.
 
 # TODO: translate
-npc-mew-mews = { $monster } mews.
+npc-mew-mews = { $monster } 輕輕喵了一聲。
 
 # TODO: translate
-npc-mew-yowls = { $monster } yowls.
+npc-mew-yowls = { $monster } 淒厲地嚎叫起來。
 
 # TODO: translate
 npc-mew-meows = { $monster } 喵喵叫。
 
 # TODO: translate
-npc-mew-purrs = { $monster } purrs.
+npc-mew-purrs = { $monster } 發出呼嚕聲。
 
 # TODO: translate
 npc-growl-growls = { $monster } 發出低吼！
 
 # TODO: translate
-npc-growl-snarls = { $monster } snarls.
+npc-growl-snarls = { $monster } 齜牙低吼。
 
 # TODO: translate
-npc-roar-roars = { $monster } roars!
+npc-roar-roars = { $monster } 發出咆哮！
 
 # TODO: translate
-npc-bellow-bellows = { $monster } bellows!
+npc-bellow-bellows = { $monster } 發出怒吼！
 
 # TODO: translate
 npc-squeak-squeaks = { $monster } 吱吱叫。
@@ -3793,19 +3793,19 @@ npc-hiss-hisses = { $monster } 發出嘶嘶聲！
 npc-buzz-drones = { $monster } 嗡嗡作響。
 
 # TODO: translate
-npc-buzz-angry = { $monster } buzzes angrily.
+npc-buzz-angry = { $monster } 憤怒地嗡嗡作響。
 
 # TODO: translate
-npc-grunt-grunts = { $monster } grunts.
+npc-grunt-grunts = { $monster } 哼了一聲。
 
 # TODO: translate
 npc-neigh-neighs = { $monster } 嘶鳴起來。
 
 # TODO: translate
-npc-neigh-whinnies = { $monster } whinnies.
+npc-neigh-whinnies = { $monster } 嘶鳴不已。
 
 # TODO: translate
-npc-neigh-whickers = { $monster } whickers.
+npc-neigh-whickers = { $monster } 發出輕快的馬鳴。
 
 # TODO: translate
 npc-were-shrieks = { $monster } lets out a blood curdling shriek!
@@ -3820,7 +3820,7 @@ npc-were-moon = { $monster } whispers inaudibly. All you can make out is "moon".
 npc-moo-moos = { $monster } moos.
 
 # TODO: translate
-npc-wail-wails = { $monster } wails.
+npc-wail-wails = { $monster } 哀號起來。
 
 # TODO: translate
 npc-gurgle-gurgles = { $monster } gurgles.
@@ -3829,10 +3829,10 @@ npc-gurgle-gurgles = { $monster } gurgles.
 npc-burble-burbles = { $monster } burbles.
 
 # TODO: translate
-npc-trumpet-trumpets = { $monster } trumpets.
+npc-trumpet-trumpets = { $monster } 發出高亢的號鳴。
 
 # TODO: translate
-npc-groan-groans = { $monster } groans.
+npc-groan-groans = { $monster } 呻吟起來。
 
 # TODO: translate
 god-roars-suffer = A booming voice roars: "Suffer for thy blasphemy!"
@@ -3884,17 +3884,17 @@ ambient-fountain-naiad = You hear the splashing of a naiad.
 # TODO: translate
 ambient-fountain-soda = You hear a soda fountain!
 # TODO: translate
-ambient-sink-drip = You hear a slow drip.
+ambient-sink-drip = 你聽到水滴緩緩落下的聲音。
 # TODO: translate
-ambient-sink-gurgle = You hear a gurgling noise.
+ambient-sink-gurgle = 你聽到咕嚕咕嚕的水聲。
 # TODO: translate
 ambient-sink-dishes = You hear dishes being washed!
 # TODO: translate
-ambient-vault-counting = You hear someone counting money.
+ambient-vault-counting = 你聽到有人在數錢。
 # TODO: translate
 ambient-vault-searching = You hear someone searching.
 # TODO: translate
-ambient-vault-footsteps = You hear the footsteps of a guard on patrol.
+ambient-vault-footsteps = 你聽到巡邏守衛的腳步聲。
 # TODO: translate
 ambient-deep-crunching = You hear a crunching sound.
 # TODO: translate
@@ -3912,7 +3912,7 @@ ambient-shallow-door-close = 你聽到門被關上的聲音。
 # TODO: translate
 ambient-shallow-water = 你聽到滴水聲。
 # TODO: translate
-ambient-shallow-moving = You hear someone moving around.
+ambient-shallow-moving = 你聽到附近有人在走動。
 ui-wizard-mode-disabled = 未啟用巫師模式。
 ui-item-prompt-drop = 丟棄哪一件？[a-zA-Z 或 ?*]
 ui-item-prompt-wield = 揮舞哪一件？[a-zA-Z 或 - 表示空手]
