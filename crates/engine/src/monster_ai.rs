@@ -19,18 +19,22 @@
 use hecs::Entity;
 use rand::Rng;
 
-use nethack_babel_data::{MonsterFlags, ObjectClass, ObjectCore, ObjectLocation};
+use nethack_babel_data::{
+    MonsterFlags, ObjectClass, ObjectCore, ObjectLocation, PlayerEvents, PlayerIdentity,
+};
 
 use crate::action::{Direction, Position};
 use crate::combat::{
     MonsterAttacks, monster_ranged_attack_dispatch, resolve_melee_attack, resolve_monster_attacks,
 };
 use crate::dungeon::Terrain;
+use crate::equipment::EquipmentSlots;
 use crate::event::{EngineEvent, HpSource, StatusEffect};
+use crate::inventory::Inventory;
 use crate::npc::Shopkeeper;
 use crate::potions::PotionType;
 use crate::wands::{WandCharges, WandType};
-use crate::world::{GameWorld, HitPoints, Peaceful, Positioned, Tame};
+use crate::world::{GameWorld, HitPoints, Monster, Name, Peaceful, Positioned, Tame};
 
 // ---------------------------------------------------------------------------
 // Monster intelligence classification
@@ -178,8 +182,8 @@ pub fn resolve_monster_turn(
             monster,
             monster_pos,
             player_pos,
-            current_hp,
-            max_hp,
+            species_flags,
+            (current_hp, max_hp),
             rng,
         );
         if !covetous_events.is_empty() {
@@ -806,11 +810,12 @@ fn covetous_behavior(
     monster: Entity,
     monster_pos: Position,
     player_pos: Position,
-    current_hp: i32,
-    max_hp: i32,
+    species_flags: MonsterFlags,
+    hp: (i32, i32),
     rng: &mut impl Rng,
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
+    let (current_hp, max_hp) = hp;
 
     // HP ratio determines strategy (per spec section 4.5):
     //   ratio 0: HP < 33%  -> STRAT_HEAL
@@ -822,6 +827,17 @@ fn covetous_behavior(
     } else {
         3
     };
+
+    let is_wizard = world
+        .get_component::<Name>(monster)
+        .is_some_and(|name| crate::turn::quest_name_matches(&name.0, "Wizard of Yendor"));
+    let can_pursue_coveted_targets = !is_wizard && ratio >= 2;
+    if can_pursue_coveted_targets
+        && let Some(target) = find_covetous_target(world, monster, species_flags)
+        && apply_covetous_target(world, monster, target, &mut events)
+    {
+        return events;
+    }
 
     if ratio < 3 {
         // STRAT_HEAL: teleport to stairs and heal.
@@ -893,6 +909,321 @@ fn covetous_behavior(
     }
 
     events
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CovetousTarget {
+    Player(Entity),
+    Ground { item: Entity, position: Position },
+    Monster { carrier: Entity },
+}
+
+fn covetous_item_display_name(world: &GameWorld, item: Entity) -> Option<String> {
+    if let Some(name) = world.get_component::<Name>(item) {
+        return Some(name.0.clone());
+    }
+    let core = world.get_component::<ObjectCore>(item)?;
+    crate::items::object_def_for_core(world.object_catalog(), &core).map(|def| def.name.clone())
+}
+
+fn covetous_item_matches_expected_name(
+    world: &GameWorld,
+    item: Entity,
+    expected_name: &str,
+) -> bool {
+    let expected_artifact =
+        crate::artifacts::find_artifact_by_name(expected_name).map(|artifact| artifact.id);
+    world.get_component::<ObjectCore>(item).is_some_and(|core| {
+        expected_artifact.is_some_and(|artifact_id| core.artifact == Some(artifact_id))
+    }) || covetous_item_display_name(world, item)
+        .is_some_and(|name| crate::turn::quest_name_matches(&name, expected_name))
+}
+
+fn covetous_find_player_named_item(
+    world: &GameWorld,
+    player: Entity,
+    expected_name: &str,
+) -> Option<Entity> {
+    if let Some(inv) = world.get_component::<Inventory>(player)
+        && let Some(item) = inv
+            .items
+            .iter()
+            .find(|item| covetous_item_matches_expected_name(world, **item, expected_name))
+    {
+        return Some(*item);
+    }
+
+    world
+        .get_component::<EquipmentSlots>(player)
+        .and_then(|slots| {
+            slots.all_worn().iter().find_map(|(_, item)| {
+                covetous_item_matches_expected_name(world, *item, expected_name).then_some(*item)
+            })
+        })
+}
+
+fn covetous_monster_entity_with_runtime_id(world: &GameWorld, carrier_id: u32) -> Option<Entity> {
+    world
+        .ecs()
+        .query::<(&Monster,)>()
+        .iter()
+        .find_map(|(entity, _)| (entity.to_bits().get() as u32 == carrier_id).then_some(entity))
+}
+
+fn covetous_live_monster_entity(world: &GameWorld, entity: Entity) -> bool {
+    world.get_component::<Monster>(entity).is_some()
+        && world
+            .get_component::<HitPoints>(entity)
+            .is_some_and(|hp| hp.current > 0)
+}
+
+fn covetous_find_ground_named_item_on_current_level(
+    world: &GameWorld,
+    expected_name: &str,
+) -> Option<(Entity, Position)> {
+    let branch = world.dungeon().branch;
+    let depth = world.dungeon().depth;
+    world
+        .ecs()
+        .query::<&ObjectLocation>()
+        .iter()
+        .find_map(|(item, loc)| {
+            let pos = crate::dungeon::floor_position_on_level(loc, branch, depth)?;
+            covetous_item_matches_expected_name(world, item, expected_name).then_some((item, pos))
+        })
+}
+
+fn covetous_find_monster_named_item_in_inventory(
+    world: &GameWorld,
+    monster: Entity,
+    expected_name: &str,
+) -> Option<(Entity, Entity)> {
+    let excluded_carrier_id = monster.to_bits().get() as u32;
+    world
+        .ecs()
+        .query::<&ObjectLocation>()
+        .iter()
+        .find_map(|(item, loc)| {
+            let ObjectLocation::MonsterInventory { carrier_id } = *loc else {
+                return None;
+            };
+            if carrier_id == excluded_carrier_id
+                || !covetous_item_matches_expected_name(world, item, expected_name)
+            {
+                return None;
+            }
+            let carrier = covetous_monster_entity_with_runtime_id(world, carrier_id)?;
+            covetous_live_monster_entity(world, carrier).then_some((item, carrier))
+        })
+}
+
+fn covetous_find_named_item_target(
+    world: &GameWorld,
+    monster: Entity,
+    expected_name: &str,
+) -> Option<CovetousTarget> {
+    let player = world.player();
+    if let Some(item) = covetous_find_player_named_item(world, player, expected_name) {
+        return Some(CovetousTarget::Player(item));
+    }
+    if let Some((item, position)) =
+        covetous_find_ground_named_item_on_current_level(world, expected_name)
+    {
+        return Some(CovetousTarget::Ground { item, position });
+    }
+    covetous_find_monster_named_item_in_inventory(world, monster, expected_name)
+        .map(|(_item, carrier)| CovetousTarget::Monster { carrier })
+}
+
+fn covetous_player_role(world: &GameWorld) -> Option<crate::role::Role> {
+    world
+        .get_component::<PlayerIdentity>(world.player())
+        .and_then(|identity| crate::role::Role::from_id(identity.role))
+}
+
+fn find_covetous_target(
+    world: &GameWorld,
+    monster: Entity,
+    species_flags: MonsterFlags,
+) -> Option<CovetousTarget> {
+    let player_events = world
+        .get_component::<PlayerEvents>(world.player())
+        .map(|events| (*events).clone())
+        .unwrap_or_default();
+
+    if species_flags.contains(MonsterFlags::WANTSAMUL)
+        && let Some(target) = covetous_find_named_item_target(world, monster, "Amulet of Yendor")
+    {
+        return Some(target);
+    }
+
+    let quest_artifact = covetous_player_role(world).map(crate::quest::quest_artifact_for_role);
+    let priorities = if player_events.invoked {
+        [
+            (MonsterFlags::WANTSARTI, quest_artifact),
+            (MonsterFlags::WANTSBOOK, Some("Book of the Dead")),
+            (MonsterFlags::WANTSBELL, Some("Bell of Opening")),
+            (MonsterFlags::WANTSCAND, Some("Candelabrum of Invocation")),
+        ]
+    } else {
+        [
+            (MonsterFlags::WANTSBOOK, Some("Book of the Dead")),
+            (MonsterFlags::WANTSBELL, Some("Bell of Opening")),
+            (MonsterFlags::WANTSCAND, Some("Candelabrum of Invocation")),
+            (MonsterFlags::WANTSARTI, quest_artifact),
+        ]
+    };
+
+    priorities.iter().find_map(|(flag, expected_name)| {
+        if !species_flags.contains(*flag) {
+            return None;
+        }
+        expected_name.and_then(|name| covetous_find_named_item_target(world, monster, name))
+    })
+}
+
+fn covetous_adjacent_position(
+    world: &GameWorld,
+    monster: Entity,
+    target_pos: Position,
+) -> Option<Position> {
+    let from = world
+        .get_component::<Positioned>(monster)
+        .map(|pos| pos.0)?;
+    let mut best = None;
+    for dy in -1..=1 {
+        for dx in -1..=1 {
+            if dx == 0 && dy == 0 {
+                continue;
+            }
+            let candidate = Position::new(target_pos.x + dx, target_pos.y + dy);
+            if !world
+                .dungeon()
+                .current_level
+                .get(candidate)
+                .is_some_and(|cell| cell.terrain.is_walkable())
+            {
+                continue;
+            }
+            if world
+                .ecs()
+                .query::<&Positioned>()
+                .iter()
+                .any(|(entity, pos)| entity != monster && pos.0 == candidate)
+            {
+                continue;
+            }
+            let candidate_dist = chebyshev_distance(from, candidate);
+            if best.is_none_or(|(_, best_dist)| candidate_dist < best_dist) {
+                best = Some((candidate, candidate_dist));
+            }
+        }
+    }
+    best.map(|(candidate, _)| candidate)
+}
+
+fn covetous_move_item_into_inventory(world: &mut GameWorld, monster: Entity, item: Entity) {
+    if let Some(mut core) = world.get_component_mut::<ObjectCore>(item) {
+        core.inv_letter = None;
+    }
+    let carrier_id = monster.to_bits().get() as u32;
+    if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+        *loc = ObjectLocation::MonsterInventory { carrier_id };
+    }
+}
+
+fn covetous_teleport_to(
+    world: &mut GameWorld,
+    monster: Entity,
+    dest: Position,
+    events: &mut Vec<EngineEvent>,
+) -> bool {
+    let Some(mut pos) = world.get_component_mut::<Positioned>(monster) else {
+        return false;
+    };
+    let from = pos.0;
+    if from == dest {
+        return false;
+    }
+    pos.0 = dest;
+    events.push(EngineEvent::EntityTeleported {
+        entity: monster,
+        from,
+        to: dest,
+    });
+    true
+}
+
+fn covetous_teleport_adjacent_to_entity(
+    world: &mut GameWorld,
+    monster: Entity,
+    target: Entity,
+    events: &mut Vec<EngineEvent>,
+) -> bool {
+    let Some(target_pos) = world.get_component::<Positioned>(target).map(|pos| pos.0) else {
+        return false;
+    };
+    let Some(monster_pos) = world.get_component::<Positioned>(monster).map(|pos| pos.0) else {
+        return false;
+    };
+    if chebyshev_distance(monster_pos, target_pos) == 1 {
+        return false;
+    }
+    let Some(dest) = covetous_adjacent_position(world, monster, target_pos) else {
+        return false;
+    };
+    covetous_teleport_to(world, monster, dest, events)
+}
+
+fn covetous_take_ground_item(
+    world: &mut GameWorld,
+    monster: Entity,
+    item: Entity,
+    position: Position,
+    events: &mut Vec<EngineEvent>,
+) -> bool {
+    let player = world.player();
+    if world
+        .get_component::<Positioned>(player)
+        .is_some_and(|player_pos| player_pos.0 == position)
+    {
+        return covetous_teleport_adjacent_to_entity(world, monster, player, events);
+    }
+    let occupant = world
+        .ecs()
+        .query::<(&Monster, &Positioned)>()
+        .iter()
+        .find_map(|(entity, (_, pos))| (entity != monster && pos.0 == position).then_some(entity));
+    if let Some(occupant) = occupant {
+        return covetous_teleport_adjacent_to_entity(world, monster, occupant, events);
+    }
+    let _moved = covetous_teleport_to(world, monster, position, events);
+    covetous_move_item_into_inventory(world, monster, item);
+    events.push(EngineEvent::ItemPickedUp {
+        actor: monster,
+        item,
+        quantity: 1,
+    });
+    true
+}
+
+fn apply_covetous_target(
+    world: &mut GameWorld,
+    monster: Entity,
+    target: CovetousTarget,
+    events: &mut Vec<EngineEvent>,
+) -> bool {
+    match target {
+        CovetousTarget::Player(_item) => {
+            covetous_teleport_adjacent_to_entity(world, monster, world.player(), events)
+        }
+        CovetousTarget::Ground { item, position } => {
+            covetous_take_ground_item(world, monster, item, position, events)
+        }
+        CovetousTarget::Monster { carrier } => {
+            covetous_teleport_adjacent_to_entity(world, monster, carrier, events)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2363,6 +2694,7 @@ mod tests {
     use super::*;
     use crate::action::Position;
     use crate::dungeon::Terrain;
+    use crate::inventory::Inventory;
     use crate::world::{
         ArmorClass, Attributes, CreationOrder, ExperienceLevel, HitPoints, Monster, MovementPoints,
         NORMAL_SPEED, Name, Peaceful, Positioned, Speed, Tame,
@@ -2501,6 +2833,77 @@ mod tests {
             level: world.dungeon().current_data_dungeon_level(),
         };
         world.spawn((core, loc))
+    }
+
+    fn place_named_item_on_floor(world: &mut GameWorld, name: &str, pos: Position) -> Entity {
+        world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(400),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: pos.x as i16,
+                y: pos.y as i16,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
+            Name(name.to_string()),
+        ))
+    }
+
+    fn give_player_named_item(world: &mut GameWorld, name: &str) -> Entity {
+        let item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(401),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            Name(name.to_string()),
+        ));
+        world
+            .get_component_mut::<Inventory>(world.player())
+            .expect("player should have an inventory")
+            .items
+            .push(item);
+        item
+    }
+
+    fn give_monster_named_item(world: &mut GameWorld, monster: Entity, name: &str) -> Entity {
+        let carrier_id = monster.to_bits().get() as u32;
+        world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(402),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::MonsterInventory { carrier_id },
+            Name(name.to_string()),
+        ))
+    }
+
+    fn monster_carries_named_item(world: &GameWorld, monster: Entity, expected_name: &str) -> bool {
+        let carrier_id = monster.to_bits().get() as u32;
+        world
+            .ecs()
+            .query::<(&ObjectLocation, &Name)>()
+            .iter()
+            .any(|(_, (loc, name))| {
+                matches!(*loc, ObjectLocation::MonsterInventory { carrier_id: id } if id == carrier_id)
+                    && crate::turn::quest_name_matches(&name.0, expected_name)
+            })
     }
 
     // ── Existing tests (Phase 1) ──────────────────────────────────
@@ -3065,6 +3468,191 @@ mod tests {
                 EngineEvent::EntityTeleported { to, .. } if *to == Position::new(3, 3)
             )),
             "ratio=2 covetous monsters should still use the heal fallback and teleport to stairs"
+        );
+    }
+
+    #[test]
+    fn covetous_monster_ratio_two_picks_up_ground_target_before_healing() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+
+        let monster = spawn_intelligent_monster(
+            &mut world,
+            Position::new(12, 8),
+            20,
+            30,
+            MonsterIntelligence::Humanoid,
+        );
+        let _ = world
+            .ecs_mut()
+            .insert_one(monster, MonsterSpeciesFlags(MonsterFlags::WANTSAMUL));
+        let amulet = place_named_item_on_floor(&mut world, "Amulet of Yendor", Position::new(6, 8));
+
+        let events = resolve_monster_turn(&mut world, monster, &mut rng);
+
+        assert!(
+            events.iter().any(
+                |event| matches!(event, EngineEvent::ItemPickedUp { item, .. } if *item == amulet)
+            ),
+            "ratio=2 covetous monsters should prioritize a ground target over the heal fallback"
+        );
+        assert!(
+            monster_carries_named_item(&world, monster, "Amulet of Yendor"),
+            "ground covetous target should move into the pursuing monster inventory"
+        );
+        assert_eq!(
+            world.get_component::<Positioned>(monster).map(|pos| pos.0),
+            Some(Position::new(6, 8)),
+            "ground covetous target should pull the monster onto the item tile"
+        );
+    }
+
+    #[test]
+    fn covetous_monster_ratio_one_still_prefers_heal_over_ground_target() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+
+        let monster = spawn_intelligent_monster(
+            &mut world,
+            Position::new(12, 8),
+            10,
+            30,
+            MonsterIntelligence::Humanoid,
+        );
+        let _ = world
+            .ecs_mut()
+            .insert_one(monster, MonsterSpeciesFlags(MonsterFlags::WANTSAMUL));
+        place_named_item_on_floor(&mut world, "Amulet of Yendor", Position::new(6, 8));
+
+        let events = resolve_monster_turn(&mut world, monster, &mut rng);
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::EntityTeleported { to, .. } if *to == Position::new(3, 3)
+            )),
+            "ratio=1 non-Wizard covetous monsters should still choose the heal fallback first"
+        );
+        assert!(
+            !monster_carries_named_item(&world, monster, "Amulet of Yendor"),
+            "heal fallback should leave the ground target alone for now"
+        );
+    }
+
+    #[test]
+    fn covetous_monster_teleports_adjacent_to_player_holding_target() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+
+        let monster = spawn_intelligent_monster(
+            &mut world,
+            Position::new(14, 14),
+            30,
+            30,
+            MonsterIntelligence::Humanoid,
+        );
+        let _ = world
+            .ecs_mut()
+            .insert_one(monster, MonsterSpeciesFlags(MonsterFlags::WANTSAMUL));
+        let amulet = give_player_named_item(&mut world, "Amulet of Yendor");
+
+        let events = resolve_monster_turn(&mut world, monster, &mut rng);
+
+        let player_pos = world
+            .get_component::<Positioned>(world.player())
+            .expect("player should keep a position")
+            .0;
+        let monster_pos = world
+            .get_component::<Positioned>(monster)
+            .expect("monster should keep a position")
+            .0;
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::EntityTeleported { entity, .. } if *entity == monster)),
+            "covetous monster should teleport beside the player-held target"
+        );
+        assert_eq!(
+            chebyshev_distance(monster_pos, player_pos),
+            1,
+            "covetous monster should end adjacent to the player-held target"
+        );
+        assert!(
+            world
+                .get_component::<Inventory>(world.player())
+                .is_some_and(|inv| inv.items.contains(&amulet)),
+            "non-Wizard covetous targeting should not instantly steal from the player"
+        );
+    }
+
+    #[test]
+    fn covetous_monster_teleports_adjacent_to_monster_holding_target() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+
+        let pursuer = spawn_intelligent_monster(
+            &mut world,
+            Position::new(14, 14),
+            30,
+            30,
+            MonsterIntelligence::Humanoid,
+        );
+        let _ = world
+            .ecs_mut()
+            .insert_one(pursuer, MonsterSpeciesFlags(MonsterFlags::WANTSBOOK));
+        let carrier = spawn_intelligent_monster(
+            &mut world,
+            Position::new(6, 8),
+            12,
+            12,
+            MonsterIntelligence::Humanoid,
+        );
+        give_monster_named_item(&mut world, carrier, "Book of the Dead");
+
+        let events = resolve_monster_turn(&mut world, pursuer, &mut rng);
+
+        let pursuer_pos = world
+            .get_component::<Positioned>(pursuer)
+            .expect("pursuer should keep a position")
+            .0;
+        let carrier_pos = world
+            .get_component::<Positioned>(carrier)
+            .expect("carrier should keep a position")
+            .0;
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::EntityTeleported { entity, .. } if *entity == pursuer)),
+            "covetous monster should teleport beside another monster carrying the target"
+        );
+        assert_eq!(
+            chebyshev_distance(pursuer_pos, carrier_pos),
+            1,
+            "covetous monster should end adjacent to the carrier"
+        );
+        assert!(
+            monster_carries_named_item(&world, carrier, "Book of the Dead"),
+            "non-Wizard covetous targeting should not instantly strip another monster inventory"
         );
     }
 

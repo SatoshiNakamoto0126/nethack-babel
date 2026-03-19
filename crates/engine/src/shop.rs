@@ -10,7 +10,7 @@ use hecs::Entity;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use nethack_babel_data::{Enchantment, ObjectClass, ObjectCore, ObjectDef};
+use nethack_babel_data::{Enchantment, ObjectClass, ObjectCore, ObjectDef, ShopState};
 
 use crate::action::Position;
 use crate::event::EngineEvent;
@@ -920,7 +920,7 @@ fn mounted_steed_name(world: &GameWorld, player: Entity) -> Option<String> {
 /// is also marked via the returned events so the renderer can display
 /// "unpaid" status.
 pub fn pickup_in_shop(
-    world: &GameWorld,
+    world: &mut GameWorld,
     _player: Entity,
     item: Entity,
     shop: &mut ShopRoom,
@@ -928,19 +928,33 @@ pub fn pickup_in_shop(
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
-    let quote = match quoted_buy_details(world, _player, item, shop, obj_defs) {
-        Some(details) => details,
-        None => return events,
-    };
+    if item_has_no_charge(world, item) {
+        set_shop_state_recursive(world, item, false, false);
+        return events;
+    }
 
-    // Try to add to bill.
-    if shop.bill.add(item, quote.unit_price, quote.quantity) {
+    let mut quotes = Vec::new();
+    collect_pickup_quote_details(world, _player, item, shop, obj_defs, &mut quotes);
+    if quotes.is_empty() {
+        return events;
+    }
+
+    let outer_item_name = quotes[0].item_name.clone();
+    let mut billed_total = 0;
+    for quote in quotes {
+        if shop.bill.add(quote.item, quote.unit_price, quote.quantity) {
+            billed_total += quote.unit_price * quote.quantity;
+            set_item_shop_state(world, quote.item, true, false);
+        }
+    }
+
+    if billed_total > 0 {
         events.push(EngineEvent::msg_with(
-            quote.message_key,
+            quotes_message_key(world, item, shop, obj_defs),
             vec![
                 ("shopkeeper", shop.shopkeeper_name.clone()),
-                ("item", quote.item_name),
-                ("price", (quote.unit_price * quote.quantity).to_string()),
+                ("item", outer_item_name),
+                ("price", billed_total.to_string()),
             ],
         ));
     } else {
@@ -951,11 +965,108 @@ pub fn pickup_in_shop(
     events
 }
 
+#[derive(Debug, Clone)]
 struct ShopQuoteDetails {
+    item: Entity,
     item_name: String,
     unit_price: i32,
     quantity: i32,
     message_key: &'static str,
+}
+
+fn item_shop_state(world: &GameWorld, item: Entity) -> ShopState {
+    world
+        .get_component::<ShopState>(item)
+        .map(|state| (*state).clone())
+        .unwrap_or(ShopState {
+            unpaid: false,
+            no_charge: false,
+        })
+}
+
+fn item_has_no_charge(world: &GameWorld, item: Entity) -> bool {
+    item_shop_state(world, item).no_charge
+}
+
+fn set_item_shop_state(world: &mut GameWorld, item: Entity, unpaid: bool, no_charge: bool) {
+    if let Some(mut state) = world.get_component_mut::<ShopState>(item) {
+        state.unpaid = unpaid;
+        state.no_charge = no_charge;
+    } else if unpaid || no_charge {
+        let _ = world
+            .ecs_mut()
+            .insert_one(item, ShopState { unpaid, no_charge });
+    }
+
+    if !unpaid && !no_charge {
+        let _ = world.ecs_mut().remove_one::<ShopState>(item);
+    }
+}
+
+fn set_shop_state_recursive(world: &mut GameWorld, item: Entity, unpaid: bool, no_charge: bool) {
+    set_item_shop_state(world, item, unpaid, no_charge);
+    for (contained, _) in crate::environment::container_contents(world, item) {
+        set_shop_state_recursive(world, contained, unpaid, no_charge);
+    }
+}
+
+/// Reconcile per-item shop flags against the live bill state.
+///
+/// `ShopRoom.bill` remains the source of truth for unpaid merchandise.
+/// This helper keeps persisted object flags in sync so inventory merging
+/// and save/load both preserve shop semantics.
+pub fn sync_item_shop_states(world: &mut GameWorld) {
+    let billed_items: std::collections::HashSet<Entity> = world
+        .dungeon()
+        .shop_rooms
+        .iter()
+        .flat_map(|shop| shop.bill.entries().iter().map(|entry| entry.item))
+        .collect();
+
+    let item_entities: Vec<Entity> = world
+        .ecs()
+        .query::<&ObjectCore>()
+        .iter()
+        .map(|(entity, _)| entity)
+        .collect();
+
+    for item in item_entities {
+        let state = item_shop_state(world, item);
+        let unpaid = billed_items.contains(&item);
+        set_item_shop_state(world, item, unpaid, state.no_charge);
+    }
+}
+
+fn collect_pickup_quote_details(
+    world: &GameWorld,
+    player: Entity,
+    item: Entity,
+    shop: &ShopRoom,
+    obj_defs: &[ObjectDef],
+    quotes: &mut Vec<ShopQuoteDetails>,
+) {
+    if let Some(core) = world.get_component::<ObjectCore>(item)
+        && core.object_class != ObjectClass::Coin
+        && !item_has_no_charge(world, item)
+        && let Some(details) = quoted_buy_details(world, player, item, shop, obj_defs)
+    {
+        quotes.push(details);
+    }
+
+    for (contained, _) in crate::environment::container_contents(world, item) {
+        collect_pickup_quote_details(world, player, contained, shop, obj_defs, quotes);
+    }
+}
+
+fn quotes_message_key(
+    world: &GameWorld,
+    item: Entity,
+    shop: &ShopRoom,
+    obj_defs: &[ObjectDef],
+) -> &'static str {
+    quoted_buy_details(world, world.player(), item, shop, obj_defs)
+        .map(|details| details.message_key)
+        .unwrap_or("shop-price")
 }
 
 fn quoted_buy_details(
@@ -1029,6 +1140,7 @@ fn quoted_buy_details(
     let total_price = unit_price * quantity;
 
     Some(ShopQuoteDetails {
+        item,
         message_key: price_quote_message_key(
             item_class,
             is_magic,
@@ -1056,6 +1168,10 @@ pub fn quote_item_in_shop(
         return None;
     }
 
+    if item_has_no_charge(world, item) {
+        return None;
+    }
+
     if shop.angry || crate::status::is_blind(world, player) || crate::status::is_deaf(world, player)
     {
         return None;
@@ -1078,7 +1194,7 @@ pub fn quote_item_in_shop(
 /// to buy it at the sell price.  If the shopkeeper has no cash, the hero
 /// receives credit instead.
 pub fn drop_in_shop(
-    world: &GameWorld,
+    world: &mut GameWorld,
     _player: Entity,
     item: Entity,
     shop: &mut ShopRoom,
@@ -1103,12 +1219,12 @@ pub fn drop_in_shop(
 
     // If the item was on the bill, just remove it (returned merchandise).
     if let Some(entry) = shop.bill.remove(item) {
+        let _ = entry;
+        set_shop_state_recursive(world, item, false, false);
         events.push(EngineEvent::msg_with(
             "shop-return",
             vec![("shopkeeper", shop.shopkeeper_name.clone())],
         ));
-        // If item was returned, no further sell transaction.
-        let _ = entry;
         return events;
     }
 
@@ -1123,6 +1239,7 @@ pub fn drop_in_shop(
         .unwrap_or(ObjectClass::IllegalObject);
 
     if !shop.shop_type.sells_class(item_class) && base_cost <= 0 {
+        set_shop_state_recursive(world, item, false, true);
         events.push(EngineEvent::msg_with(
             "shop-not-interested",
             vec![("shopkeeper", shop.shopkeeper_name.clone())],
@@ -1134,6 +1251,7 @@ pub fn drop_in_shop(
     let sell_price = get_cost(base_cost, quantity, 10, false, false);
 
     if shop.robbed > 0 {
+        set_shop_state_recursive(world, item, false, false);
         shop.robbed = (shop.robbed - sell_price).max(0);
         events.push(EngineEvent::msg_with(
             "shop-restock",
@@ -1144,11 +1262,13 @@ pub fn drop_in_shop(
 
     // Angry shopkeeper takes without paying.
     if shop.angry {
+        set_shop_state_recursive(world, item, false, false);
         events.push(EngineEvent::msg("shop-angry-take"));
         return events;
     }
 
     // Sell transaction: shopkeeper pays gold or offers credit.
+    set_shop_state_recursive(world, item, false, false);
     if shop.shopkeeper_gold >= sell_price {
         // Shopkeeper has enough gold — pay directly.
         shop.shopkeeper_gold -= sell_price;
@@ -2097,8 +2217,9 @@ impl GameWorldShopExt for GameWorld {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::environment::{Container, ContainerType};
     use crate::world::Name;
-    use nethack_babel_data::{Color, Material, ObjectTypeId};
+    use nethack_babel_data::{Color, Material, ObjectTypeId, ShopState};
 
     /// Helper: build a minimal ObjectDef for testing.
     fn test_obj_def(id: u16, cost: i16) -> ObjectDef {
@@ -2269,7 +2390,7 @@ mod tests {
             None,
         );
 
-        let events = pickup_in_shop(&world, player, item, &mut shop, &defs);
+        let events = pickup_in_shop(&mut world, player, item, &mut shop, &defs);
         assert!(!events.is_empty());
         assert_eq!(shop.bill.len(), 1);
 
@@ -2277,6 +2398,130 @@ mod tests {
         // Default Attributes has CHA=10 => 4/3 multiplier.
         // 100 * 4 = 400, (400*10/3+5)/10 = (1333+5)/10 = 133.
         assert_eq!(entry.price, 133);
+    }
+
+    #[test]
+    fn pickup_container_adds_contents_to_bill() {
+        let mut world = GameWorld::new(Position::new(10, 5));
+        let player = world.player();
+        let mut shop = test_shop(&mut world);
+        let mut sack_def = test_obj_def(1, 60);
+        sack_def.class = ObjectClass::Tool;
+        sack_def.name = "sack".to_string();
+        let pick_axe_def = test_obj_def(2, 100);
+        let lock_pick_def = test_obj_def(3, 20);
+        let defs = vec![
+            sack_def.clone(),
+            pick_axe_def.clone(),
+            lock_pick_def.clone(),
+        ];
+
+        let sack = crate::items::spawn_item(
+            &mut world,
+            &sack_def,
+            crate::items::SpawnLocation::Floor(10, 5),
+            None,
+        );
+        world
+            .ecs_mut()
+            .insert_one(
+                sack,
+                Container {
+                    container_type: ContainerType::Sack,
+                    locked: false,
+                    trapped: false,
+                },
+            )
+            .expect("sack should accept container state");
+
+        let sack_id = sack.to_bits().get() as u32;
+        let pick_axe = world.spawn((
+            ObjectCore {
+                otyp: pick_axe_def.id,
+                object_class: pick_axe_def.class,
+                quantity: 1,
+                weight: pick_axe_def.weight as u32,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            nethack_babel_data::ObjectLocation::Contained {
+                container_id: sack_id,
+            },
+            Name("pick-axe".to_string()),
+        ));
+        let lock_pick = world.spawn((
+            ObjectCore {
+                otyp: lock_pick_def.id,
+                object_class: lock_pick_def.class,
+                quantity: 1,
+                weight: lock_pick_def.weight as u32,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            nethack_babel_data::ObjectLocation::Contained {
+                container_id: sack_id,
+            },
+            Name("lock pick".to_string()),
+        ));
+
+        let events = pickup_in_shop(&mut world, player, sack, &mut shop, &defs);
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key.starts_with("shop-price")
+        )));
+        assert_eq!(shop.bill.len(), 3);
+        assert!(shop.bill.find(sack).is_some());
+        assert!(shop.bill.find(pick_axe).is_some());
+        assert!(shop.bill.find(lock_pick).is_some());
+        assert!(
+            world
+                .get_component::<ShopState>(sack)
+                .is_some_and(|state| state.unpaid),
+            "outer container should be flagged unpaid once billed"
+        );
+        assert!(
+            world
+                .get_component::<ShopState>(pick_axe)
+                .is_some_and(|state| state.unpaid),
+            "contained merchandise should also be flagged unpaid"
+        );
+    }
+
+    #[test]
+    fn pickup_no_charge_item_skips_billing() {
+        let mut world = GameWorld::new(Position::new(10, 5));
+        let player = world.player();
+        let mut shop = test_shop(&mut world);
+        let def = test_obj_def(1, 100);
+        let defs = vec![def.clone()];
+
+        let item = crate::items::spawn_item(
+            &mut world,
+            &def,
+            crate::items::SpawnLocation::Floor(10, 5),
+            None,
+        );
+        world
+            .ecs_mut()
+            .insert_one(
+                item,
+                ShopState {
+                    unpaid: false,
+                    no_charge: true,
+                },
+            )
+            .expect("item should accept shop state");
+
+        let events = pickup_in_shop(&mut world, player, item, &mut shop, &defs);
+        assert!(events.is_empty());
+        assert!(shop.bill.is_empty());
+        assert!(
+            world.get_component::<ShopState>(item).is_none(),
+            "picking up a no-charge item should clear the floor-only flag"
+        );
     }
 
     #[test]
@@ -2294,7 +2539,7 @@ mod tests {
             None,
         );
 
-        pickup_in_shop(&world, player, item, &mut shop, &defs);
+        pickup_in_shop(&mut world, player, item, &mut shop, &defs);
         assert_eq!(shop.bill.len(), 1);
 
         // Pay the bill.
@@ -2329,7 +2574,7 @@ mod tests {
             None,
         );
 
-        pickup_in_shop(&world, player, item, &mut shop, &defs);
+        pickup_in_shop(&mut world, player, item, &mut shop, &defs);
         let full_bill = shop.bill.total();
         assert!(
             full_bill > 100,
@@ -2375,7 +2620,7 @@ mod tests {
             None,
         );
 
-        let events = drop_in_shop(&world, player, item, &mut shop, &defs);
+        let events = drop_in_shop(&mut world, player, item, &mut shop, &defs);
         assert!(!events.is_empty());
         // Sell price = 100/2 = 50.  Shopkeeper has no gold =>
         // credit_for_sale(50) = (50*9)/10 + 0 = 45.
@@ -2397,7 +2642,7 @@ mod tests {
             None,
         );
 
-        pickup_in_shop(&world, player, item, &mut shop, &defs);
+        pickup_in_shop(&mut world, player, item, &mut shop, &defs);
 
         // Rob the shop.
         let mut rng = rand::rng();
@@ -2473,7 +2718,7 @@ mod tests {
             None,
         );
 
-        pickup_in_shop(&world, player, item, &mut shop, &defs);
+        pickup_in_shop(&mut world, player, item, &mut shop, &defs);
 
         // Give enough credit to cover the bill.
         shop.add_credit(500);
@@ -2535,7 +2780,7 @@ mod tests {
             crate::items::SpawnLocation::Floor(10, 5),
             None,
         );
-        let events = pickup_in_shop(&world, player, item, &mut shop, &defs);
+        let events = pickup_in_shop(&mut world, player, item, &mut shop, &defs);
 
         let has_free_msg = events.iter().any(|e| {
             if let EngineEvent::Message { key, .. } = e {
@@ -3294,7 +3539,7 @@ mod tests {
             None,
         );
 
-        let events = drop_in_shop(&world, player, item, &mut shop, &defs);
+        let events = drop_in_shop(&mut world, player, item, &mut shop, &defs);
         // sell price = 100/2 = 50.  Shk has gold => pays directly.
         assert_eq!(shop.shopkeeper_gold, 1950);
         assert_eq!(shop.credit, 0);
@@ -3414,7 +3659,7 @@ mod tests {
             None,
         );
 
-        let events = drop_in_shop(&world, player, item, &mut shop, &defs);
+        let events = drop_in_shop(&mut world, player, item, &mut shop, &defs);
         // Angry shk takes item without paying.
         let has_angry = events.iter().any(|e| {
             if let EngineEvent::Message { key, .. } = e {
@@ -3446,7 +3691,7 @@ mod tests {
             None,
         );
 
-        let events = drop_in_shop(&world, player, item, &mut shop, &defs);
+        let events = drop_in_shop(&mut world, player, item, &mut shop, &defs);
         // Sell price = 50. Robbed was 200, now 200-50 = 150.
         assert_eq!(shop.robbed, 150);
         let has_restock = events.iter().any(|e| {
@@ -3477,10 +3722,10 @@ mod tests {
         );
 
         // Pick up then drop back.
-        pickup_in_shop(&world, player, item, &mut shop, &defs);
+        pickup_in_shop(&mut world, player, item, &mut shop, &defs);
         assert_eq!(shop.bill.len(), 1);
 
-        let events = drop_in_shop(&world, player, item, &mut shop, &defs);
+        let events = drop_in_shop(&mut world, player, item, &mut shop, &defs);
         assert_eq!(shop.bill.len(), 0);
         let has_return = events.iter().any(|e| {
             if let EngineEvent::Message { key, .. } = e {

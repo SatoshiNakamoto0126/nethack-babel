@@ -247,6 +247,7 @@ pub fn resolve_turn(
     sync_quest_state_from_world(world);
     sync_player_story_components(world, &events);
     sync_current_level_shopkeeper_state(world);
+    crate::shop::sync_item_shop_states(world);
 
     events
 }
@@ -336,6 +337,7 @@ pub fn turn_events<'a, R: Rng>(
     sync_quest_state_from_world(world);
     sync_player_story_components(world, &story_events);
     sync_current_level_shopkeeper_state(world);
+    crate::shop::sync_item_shop_states(world);
 
     // Chain the three phases into a single iterator that yields
     // events in the correct order, one at a time.
@@ -2746,9 +2748,9 @@ fn resolve_player_action(
             }
             events.extend(wipe_events);
         }
-        PlayerAction::Tip { item: _ } => {
-            // Simplified: assume empty container for now.
-            let (_result, tip_events) = crate::do_actions::do_tip(false, true, 0, true);
+        PlayerAction::Tip { item } => {
+            let player = world.player();
+            let tip_events = handle_player_tip(world, player, *item, rng);
             events.extend(tip_events);
         }
         PlayerAction::Rub { item } => {
@@ -8930,20 +8932,37 @@ fn handle_player_drop(
     item: hecs::Entity,
 ) -> Vec<EngineEvent> {
     let mut events = crate::inventory::drop_item(world, player, item);
+    let mut shop_events = handle_shop_consequences_for_floor_item(world, player, item);
+    events.append(&mut shop_events);
+    events
+}
+
+#[derive(Clone, Copy)]
+enum TipUsageFeeKind {
+    CheapCharged,
+    BagOfTricksEmptied,
+}
+
+fn handle_shop_consequences_for_floor_item(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    item: hecs::Entity,
+) -> Vec<EngineEvent> {
     let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
-        return events;
+        return Vec::new();
     };
     let Some(shop_idx) = find_shop_index_containing_position(world, player_pos) else {
-        return events;
+        return Vec::new();
     };
     let Some(item_core) = world
         .get_component::<ObjectCore>(item)
         .map(|core| (*core).clone())
     else {
-        return events;
+        return Vec::new();
     };
 
     if item_core.object_class == ObjectClass::Coin {
+        let mut events = Vec::new();
         let debit_before = world.dungeon().shop_rooms[shop_idx].debit;
         let shopkeeper_name = world.dungeon().shop_rooms[shop_idx].shopkeeper_name.clone();
         let credit_added = crate::shop::donate_gold(
@@ -8983,8 +9002,7 @@ fn handle_player_drop(
     let shop_before = world.dungeon().shop_rooms[shop_idx].clone();
     let object_defs = world.object_catalog().to_vec();
     let mut live_shop = shop_before.clone();
-    let mut shop_events =
-        crate::shop::drop_in_shop(world, player, item, &mut live_shop, &object_defs);
+    let events = crate::shop::drop_in_shop(world, player, item, &mut live_shop, &object_defs);
     let gold_paid = shop_before
         .shopkeeper_gold
         .saturating_sub(live_shop.shopkeeper_gold)
@@ -9000,8 +9018,243 @@ fn handle_player_drop(
     world.dungeon_mut().shop_rooms[shop_idx] = live_shop;
     pacify_shop_if_settled(world, shop_idx);
     sync_current_level_shopkeeper_state(world);
-    events.append(&mut shop_events);
     events
+}
+
+fn charge_unpaid_tip_usage_in_shop(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    item: hecs::Entity,
+    kind: TipUsageFeeKind,
+    events: &mut Vec<EngineEvent>,
+) {
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return;
+    };
+    let Some(shop_idx) = find_shop_index_containing_position(world, player_pos) else {
+        return;
+    };
+
+    let Some((shopkeeper, shopkeeper_name, fee)) =
+        world.dungeon().shop_rooms.get(shop_idx).and_then(|shop| {
+            let entry = shop.bill.find(item)?;
+            let owed = (entry.price * entry.original_quantity - entry.paid_amount).max(0);
+            if owed <= 0 {
+                return None;
+            }
+            let fee = match kind {
+                TipUsageFeeKind::CheapCharged => crate::shop::usage_fee(
+                    entry.price,
+                    false,
+                    false,
+                    false,
+                    true,
+                    false,
+                    false,
+                    false,
+                ),
+                TipUsageFeeKind::BagOfTricksEmptied => crate::shop::usage_fee(
+                    entry.price,
+                    false,
+                    true,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
+                ),
+            };
+            (fee > 0).then(|| (shop.shopkeeper, shop.shopkeeper_name.clone(), fee))
+        })
+    else {
+        return;
+    };
+
+    let Some(shopkeeper_pos) = world
+        .get_component::<Positioned>(shopkeeper)
+        .map(|pos| pos.0)
+    else {
+        return;
+    };
+    if !live_monster_entity(world, shopkeeper)
+        || !world.dungeon().shop_rooms[shop_idx].contains(shopkeeper_pos)
+    {
+        return;
+    }
+
+    world.dungeon_mut().shop_rooms[shop_idx].debit += fee;
+    if !crate::status::is_deaf(world, player) {
+        events.push(EngineEvent::msg_with(
+            "shop-usage-fee",
+            vec![("shopkeeper", shopkeeper_name), ("amount", fee.to_string())],
+        ));
+    }
+    record_player_exercise_action(
+        world,
+        player,
+        crate::attributes::ExerciseAction::ShopTransaction,
+    );
+    sync_current_level_shopkeeper_state(world);
+}
+
+const TIP_BAG_OF_TRICKS_MONSTERS: [&str; 8] = [
+    "jackal",
+    "newt",
+    "grid bug",
+    "kobold",
+    "goblin",
+    "orc",
+    "giant ant",
+    "coyote",
+];
+
+fn handle_player_tip(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    item: hecs::Entity,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    let item_name = world.entity_name(item).to_ascii_lowercase();
+    let can_reach_floor = crate::engrave::can_reach_floor(
+        crate::status::is_levitating(world, player),
+        false,
+        false,
+        world
+            .get_component::<crate::steed::MountedOn>(player)
+            .is_some(),
+    );
+    if !can_reach_floor {
+        return vec![EngineEvent::msg("tip-cannot-reach")];
+    }
+
+    if item_name.contains("bag of tricks") {
+        let charges_before = world
+            .get_component::<Enchantment>(item)
+            .map(|ench| ench.spe)
+            .unwrap_or(0);
+        if charges_before <= 0 {
+            return vec![EngineEvent::msg("tool-nothing-happens")];
+        }
+
+        if let Some(mut ench) = world.get_component_mut::<Enchantment>(item) {
+            ench.spe = 0;
+        }
+        if let Some(mut knowledge) =
+            world.get_component_mut::<nethack_babel_data::KnowledgeState>(item)
+        {
+            knowledge.cknown = true;
+        }
+
+        let mut spawn_count = 0usize;
+        let mut events = Vec::new();
+        for _ in 0..charges_before.max(0) as usize {
+            let monster_spec =
+                TIP_BAG_OF_TRICKS_MONSTERS[rng.random_range(0..TIP_BAG_OF_TRICKS_MONSTERS.len())];
+            if let Some((monster, position)) =
+                spawn_named_monster_near_entity(world, player, monster_spec, rng)
+            {
+                spawn_count += 1;
+                events.push(EngineEvent::MonsterGenerated {
+                    entity: monster,
+                    position,
+                });
+            }
+        }
+        if spawn_count > 0 {
+            events.insert(
+                0,
+                EngineEvent::msg_with(
+                    "tip-bag-of-tricks",
+                    vec![("count", spawn_count.to_string())],
+                ),
+            );
+        } else {
+            events.push(EngineEvent::msg("tool-nothing-happens"));
+        }
+        charge_unpaid_tip_usage_in_shop(
+            world,
+            player,
+            item,
+            TipUsageFeeKind::BagOfTricksEmptied,
+            &mut events,
+        );
+        return events;
+    }
+
+    if item_name.contains("can of grease") {
+        let charges_before = world
+            .get_component::<Enchantment>(item)
+            .map(|ench| ench.spe)
+            .unwrap_or(0);
+        if charges_before <= 0 {
+            return vec![EngineEvent::msg("tool-nothing-happens")];
+        }
+
+        if let Some(mut ench) = world.get_component_mut::<Enchantment>(item) {
+            ench.spe = ench.spe.saturating_sub(1);
+        }
+        let mut events = vec![EngineEvent::msg("tip-grease-spill")];
+        charge_unpaid_tip_usage_in_shop(
+            world,
+            player,
+            item,
+            TipUsageFeeKind::CheapCharged,
+            &mut events,
+        );
+        return events;
+    }
+
+    let looks_like_container = matches!(
+        item_name.as_str(),
+        "large box" | "chest" | "ice box" | "sack" | "oilskin sack" | "bag of holding"
+    );
+    let locked = world
+        .get_component::<crate::environment::Container>(item)
+        .map(|container| container.locked)
+        .unwrap_or(false);
+    if looks_like_container || locked {
+        if locked {
+            return vec![EngineEvent::msg("tip-locked")];
+        }
+
+        let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+            return Vec::new();
+        };
+        let contents = crate::environment::container_contents(world, item);
+        if contents.is_empty() {
+            return vec![EngineEvent::msg("tip-empty")];
+        }
+
+        if let Some(mut knowledge) =
+            world.get_component_mut::<nethack_babel_data::KnowledgeState>(item)
+        {
+            knowledge.cknown = true;
+        }
+
+        let mut events = vec![EngineEvent::msg_with(
+            "tip-dump",
+            vec![("count", contents.len().to_string())],
+        )];
+        let floor_loc = crate::dungeon::floor_object_location(
+            world.dungeon().branch,
+            world.dungeon().depth,
+            player_pos,
+        );
+        for (contained_item, _) in contents {
+            if let Some(mut core) = world.get_component_mut::<ObjectCore>(contained_item) {
+                core.inv_letter = None;
+            }
+            if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(contained_item) {
+                *loc = floor_loc.clone();
+            }
+            let mut shop_events =
+                handle_shop_consequences_for_floor_item(world, player, contained_item);
+            events.append(&mut shop_events);
+        }
+        return events;
+    }
+
+    vec![EngineEvent::msg("tool-nothing-happens")]
 }
 
 fn find_adjacent_sanctuary_priest_for_prayer(
@@ -9820,6 +10073,7 @@ mod tests {
         ShopTinningUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
+        ShopContainerPickup,
         DemonBribe,
         ShopRepair,
         ShopkeeperDeath,
@@ -9887,6 +10141,7 @@ mod tests {
                 StoryTraversalScenario::ShopTinningUsageFee => "shop-tinning-usage-fee",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
+                StoryTraversalScenario::ShopContainerPickup => "shop-container-pickup",
                 StoryTraversalScenario::DemonBribe => "demon-bribe",
                 StoryTraversalScenario::ShopRepair => "shop-repair",
                 StoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
@@ -10954,6 +11209,78 @@ mod tests {
                     },
                     &mut rng,
                 );
+                (world, events)
+            }
+            StoryTraversalScenario::ShopContainerPickup => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                let player_pos = world
+                    .get_component::<Positioned>(player)
+                    .map(|pos| pos.0)
+                    .expect("player should have a position");
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+
+                let sack = spawn_inventory_object_by_name(&mut world, "sack", 's');
+                let pick_axe = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+                let lock_pick = spawn_inventory_object_by_name(&mut world, "lock pick", 'q');
+                if let Some(mut inv) =
+                    world.get_component_mut::<crate::inventory::Inventory>(player)
+                {
+                    inv.items.retain(|entry| {
+                        *entry != sack && *entry != pick_axe && *entry != lock_pick
+                    });
+                }
+                if let Some(mut core) = world.get_component_mut::<ObjectCore>(sack) {
+                    core.inv_letter = None;
+                }
+                let current_level = world.dungeon().current_data_dungeon_level();
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(sack) {
+                    *loc = ObjectLocation::Floor {
+                        x: player_pos.x as i16,
+                        y: player_pos.y as i16,
+                        level: current_level,
+                    };
+                }
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        sack,
+                        crate::environment::Container {
+                            container_type: crate::environment::ContainerType::Sack,
+                            locked: false,
+                            trapped: false,
+                        },
+                    )
+                    .expect("sack should accept container state");
+                let sack_id = sack.to_bits().get() as u32;
+                for item in [pick_axe, lock_pick] {
+                    if let Some(mut core) = world.get_component_mut::<ObjectCore>(item) {
+                        core.inv_letter = None;
+                    }
+                    if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+                        *loc = ObjectLocation::Contained {
+                            container_id: sack_id,
+                        };
+                    }
+                }
+
+                let mut rng = test_rng();
+                let events = resolve_turn(&mut world, PlayerAction::PickUp, &mut rng);
                 (world, events)
             }
             StoryTraversalScenario::DemonBribe => {
@@ -15958,6 +16285,154 @@ mod tests {
         assert!(has_msg, "expected levitation blocking pickup message");
     }
 
+    #[test]
+    fn test_picking_up_no_charge_item_in_shop_does_not_add_bill() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .map(|pos| pos.0)
+            .expect("player should have a position");
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.retain(|entry| *entry != item);
+        }
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(item) {
+            core.inv_letter = None;
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+            *loc = ObjectLocation::Floor {
+                x: player_pos.x as i16,
+                y: player_pos.y as i16,
+                level: current_level,
+            };
+        }
+        world
+            .ecs_mut()
+            .insert_one(
+                item,
+                nethack_babel_data::ShopState {
+                    unpaid: false,
+                    no_charge: true,
+                },
+            )
+            .expect("item should accept shop state");
+
+        let mut rng = test_rng();
+        let events = resolve_turn(&mut world, PlayerAction::PickUp, &mut rng);
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::ItemPickedUp { item: picked, .. } if *picked == item
+        )));
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. } if key.starts_with("shop-price")
+            )),
+            "picking up a no-charge floor item in a shop should not quote or bill it"
+        );
+        assert!(world.dungeon().shop_rooms[0].bill.is_empty());
+    }
+
+    #[test]
+    fn test_picking_up_unpaid_shop_item_does_not_merge_into_paid_stack() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .map(|pos| pos.0)
+            .expect("player should have a position");
+        let existing = spawn_inventory_object_by_name(&mut world, "pick-axe", 'a');
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let floor_item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.retain(|entry| *entry != floor_item);
+        }
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(floor_item) {
+            core.inv_letter = None;
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(floor_item) {
+            *loc = ObjectLocation::Floor {
+                x: player_pos.x as i16,
+                y: player_pos.y as i16,
+                level: current_level,
+            };
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(&mut world, PlayerAction::PickUp, &mut rng);
+
+        let inventory_pickaxes = world
+            .get_component::<crate::inventory::Inventory>(player)
+            .map(|inv| {
+                inv.items
+                    .iter()
+                    .filter(|item| {
+                        world
+                            .get_component::<Name>(**item)
+                            .is_some_and(|name| name.0 == "pick-axe")
+                    })
+                    .count()
+            })
+            .unwrap_or(0);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key.starts_with("shop-price")
+        )));
+        assert_eq!(inventory_pickaxes, 2);
+        assert!(world.get_component::<ObjectCore>(floor_item).is_some());
+        assert!(
+            world
+                .get_component::<nethack_babel_data::ShopState>(floor_item)
+                .is_some_and(|state| state.unpaid),
+            "shop pickup should flag the picked item unpaid before inventory handling to prevent merges"
+        );
+        assert_eq!(world.dungeon().shop_rooms[0].bill.len(), 1);
+        assert!(
+            world.dungeon().shop_rooms[0]
+                .bill
+                .find(floor_item)
+                .is_some()
+        );
+        assert!(world.get_component::<ObjectCore>(existing).is_some());
+    }
+
     // ── Wizard mode tests ──────────────────────────────────────
 
     #[test]
@@ -19365,6 +19840,299 @@ mod tests {
             EngineEvent::Message { key, .. } if key == "shop-usage-fee"
         )));
         assert_eq!(world.dungeon().shop_rooms[0].debit, 10);
+    }
+
+    #[test]
+    fn test_tipping_container_dumps_contents_to_floor() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .expect("player should have a position")
+            .0;
+        let sack = spawn_inventory_object_by_name(&mut world, "sack", 's');
+        let content = spawn_inventory_object_by_name(&mut world, "long sword", 'a');
+        let container_id = sack.to_bits().get() as u32;
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.remove(content);
+        }
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(content) {
+            core.inv_letter = None;
+        }
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(content) {
+            *loc = ObjectLocation::Contained { container_id };
+        }
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Tip { item: sack },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tip-dump"
+        )));
+        assert!(
+            world
+                .get_component::<ObjectLocation>(content)
+                .is_some_and(|loc| {
+                    matches!(
+                        *loc,
+                        ObjectLocation::Floor { x, y, .. }
+                            if i32::from(x) == player_pos.x && i32::from(y) == player_pos.y
+                    )
+                })
+        );
+        assert!(
+            !world
+                .get_component::<crate::inventory::Inventory>(player)
+                .expect("player should still have inventory")
+                .items
+                .contains(&content),
+            "tipped-out contents should no longer be in inventory"
+        );
+    }
+
+    #[test]
+    fn test_tipping_container_in_shop_sells_dumped_contents() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .expect("player should have a position")
+            .0;
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        world.dungeon_mut().shop_rooms[0].shopkeeper_gold = 1_000;
+
+        let sack = spawn_inventory_object_by_name(&mut world, "sack", 's');
+        let content = spawn_inventory_object_by_name(&mut world, "long sword", 'a');
+        let container_id = sack.to_bits().get() as u32;
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.remove(content);
+        }
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(content) {
+            core.inv_letter = None;
+        }
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(content) {
+            *loc = ObjectLocation::Contained { container_id };
+        }
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Tip { item: sack },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-sell"
+        )));
+        assert!(
+            player_gold(&world, player) > 0,
+            "selling tipped-out merchandise should pay the player"
+        );
+        assert!(
+            world
+                .get_component::<ObjectLocation>(content)
+                .is_some_and(|loc| {
+                    matches!(
+                        *loc,
+                        ObjectLocation::Floor { x, y, .. }
+                            if i32::from(x) == player_pos.x && i32::from(y) == player_pos.y
+                    )
+                })
+        );
+    }
+
+    #[test]
+    fn test_tipping_gold_from_container_in_shop_pays_down_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        world.dungeon_mut().shop_rooms[0].debit = 50;
+
+        let sack = spawn_inventory_object_by_name(&mut world, "sack", 's');
+        let gold = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Coin,
+                quantity: 50,
+                weight: 1,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::Contained {
+                container_id: sack.to_bits().get() as u32,
+            },
+        ));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Tip { item: sack },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-pay-success"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 0);
+        assert!(
+            world.get_component::<ObjectCore>(gold).is_none(),
+            "tipped-out shop payment gold should be consumed"
+        );
+    }
+
+    #[test]
+    fn test_tipping_unpaid_can_of_grease_in_shop_adds_usage_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let grease = spawn_inventory_object_by_name(&mut world, "can of grease", 'g');
+        world
+            .ecs_mut()
+            .insert_one(grease, Enchantment { spe: 2 })
+            .expect("grease should accept charges");
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(grease, 100, 1),
+            "shop bill should accept unpaid grease"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Tip { item: grease },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tip-grease-spill"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(
+            world
+                .get_component::<Enchantment>(grease)
+                .map(|ench| ench.spe),
+            Some(1)
+        );
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 10);
+    }
+
+    #[test]
+    fn test_tipping_bag_of_tricks_spawns_monsters_and_empties_charges() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let bag = spawn_inventory_object_by_name(&mut world, "bag of tricks", 'b');
+        world
+            .ecs_mut()
+            .insert_one(bag, Enchantment { spe: 2 })
+            .expect("bag of tricks should accept charges");
+
+        let events = resolve_turn(&mut world, PlayerAction::Tip { item: bag }, &mut test_rng());
+
+        let generated = events
+            .iter()
+            .filter(|event| matches!(event, EngineEvent::MonsterGenerated { .. }))
+            .count();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tip-bag-of-tricks"
+        )));
+        assert!(
+            generated > 0,
+            "tipping a charged bag of tricks should generate monsters"
+        );
+        assert_eq!(
+            world.get_component::<Enchantment>(bag).map(|ench| ench.spe),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn test_tipping_unpaid_bag_of_tricks_in_shop_adds_full_usage_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let bag = spawn_inventory_object_by_name(&mut world, "bag of tricks", 'b');
+        world
+            .ecs_mut()
+            .insert_one(bag, Enchantment { spe: 2 })
+            .expect("bag of tricks should accept charges");
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(bag, 100, 1),
+            "shop bill should accept unpaid bag of tricks"
+        );
+
+        let events = resolve_turn(&mut world, PlayerAction::Tip { item: bag }, &mut test_rng());
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 100);
     }
 
     #[test]
@@ -26196,6 +26964,7 @@ mod tests {
             StoryTraversalScenario::ShopTinningUsageFee,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopChatPriceQuote,
+            StoryTraversalScenario::ShopContainerPickup,
             StoryTraversalScenario::DemonBribe,
             StoryTraversalScenario::ShopRepair,
             StoryTraversalScenario::ShopkeeperDeath,
@@ -26658,6 +27427,40 @@ mod tests {
                         quote_count,
                         2,
                         "{} should quote both floor items",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopContainerPickup => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    let sack = find_player_named_item(&world, player, "sack")
+                        .expect("picked up sack should now be in inventory");
+                    let contents = crate::environment::container_contents(&world, sack);
+                    assert!(
+                        final_events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::ItemPickedUp { .. }))
+                    );
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key.starts_with("shop-price")
+                    )));
+                    assert_eq!(
+                        contents.len(),
+                        2,
+                        "{} should preserve both contained items",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        shop.bill.len(),
+                        3,
+                        "{} should bill the sack and both contents",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_data::ShopState>(sack)
+                            .is_some_and(|state| state.unpaid),
+                        "{} should flag the picked-up sack as unpaid merchandise",
                         scenario.label()
                     );
                 }

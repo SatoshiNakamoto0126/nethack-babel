@@ -124,7 +124,7 @@ pub struct Erosion {
 
 /// Shop-related state for an object.
 /// Derived from `obj.unpaid` and `obj.no_charge` in C.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShopState {
     /// Whether the object is unpaid merchandise.  From `obj.unpaid`.
     pub unpaid: bool,

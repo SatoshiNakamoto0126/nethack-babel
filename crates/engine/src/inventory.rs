@@ -15,7 +15,9 @@ use hecs::Entity;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use nethack_babel_data::{BucStatus, ObjectClass, ObjectCore, ObjectDef, ObjectLocation};
+use nethack_babel_data::{
+    BucStatus, ObjectClass, ObjectCore, ObjectDef, ObjectLocation, ShopState,
+};
 
 use crate::action::Position;
 use crate::event::EngineEvent;
@@ -362,6 +364,13 @@ pub fn split_stack(
         let _ = world.ecs_mut().insert_one(child, erosion);
     }
 
+    let shop_state_copy = world
+        .get_component::<ShopState>(item)
+        .map(|state| (*state).clone());
+    if let Some(shop_state) = shop_state_copy {
+        let _ = world.ecs_mut().insert_one(child, shop_state);
+    }
+
     SplitResult {
         parent: item,
         child,
@@ -621,7 +630,42 @@ pub fn pickup_item(
     letter_state: &mut LetterState,
     obj_defs: &[ObjectDef],
 ) -> Vec<EngineEvent> {
-    let events = items::pickup_item(world, player, item_entity, letter_state, obj_defs);
+    let mut events = Vec::new();
+    let player_pos = world
+        .get_component::<Positioned>(player)
+        .map(|positioned| positioned.0);
+    let item_pos = world
+        .get_component::<ObjectLocation>(item_entity)
+        .and_then(|loc| {
+            crate::dungeon::floor_position_on_level(
+                &loc,
+                world.dungeon().branch,
+                world.dungeon().depth,
+            )
+        });
+
+    if let Some(pos) = player_pos
+        && item_pos == Some(pos)
+        && let Some(shop_idx) = world
+            .dungeon()
+            .shop_rooms
+            .iter()
+            .position(|shop| shop.contains(pos))
+    {
+        let mut shop = world.dungeon().shop_rooms[shop_idx].clone();
+        events.extend(crate::shop::pickup_in_shop(
+            world,
+            player,
+            item_entity,
+            &mut shop,
+            obj_defs,
+        ));
+        world.dungeon_mut().shop_rooms[shop_idx] = shop;
+    }
+
+    let pickup_events = items::pickup_item(world, player, item_entity, letter_state, obj_defs);
+    events.extend(pickup_events);
+    crate::shop::sync_item_shop_states(world);
 
     // If the pickup succeeded (ItemPickedUp event present), synchronize
     // the Inventory component.

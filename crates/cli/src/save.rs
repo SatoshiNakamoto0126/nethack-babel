@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use nethack_babel_data::components::{
-    BucStatus, Enchantment, Erosion, KnowledgeState, ObjectCore, ObjectLocation,
+    BucStatus, Enchantment, Erosion, KnowledgeState, ObjectCore, ObjectLocation, ShopState,
 };
 use nethack_babel_data::{
     GameData, MonsterId, PlayerEvents, PlayerIdentity, PlayerQuestItems, PlayerSkills,
@@ -205,6 +205,8 @@ pub struct SerializableMonster {
     #[serde(default)]
     pub monster_id: Option<MonsterId>,
     #[serde(default)]
+    pub species_flags: Option<nethack_babel_data::schema::MonsterFlags>,
+    #[serde(default)]
     pub is_tame: bool,
     #[serde(default)]
     pub is_peaceful: bool,
@@ -238,9 +240,13 @@ pub struct SerializableItem {
     pub enchantment: Option<i8>,
     pub erosion: Option<SerializableErosion>,
     #[serde(default)]
+    pub container: Option<nethack_babel_engine::environment::Container>,
+    #[serde(default)]
     pub wand_type: Option<nethack_babel_engine::wands::WandType>,
     #[serde(default)]
     pub wand_charges: Option<nethack_babel_engine::wands::WandCharges>,
+    #[serde(default)]
+    pub shop_state: Option<ShopState>,
 }
 
 /// Erosion data for serialization (avoids depending on Erosion's exact layout).
@@ -554,12 +560,18 @@ fn extract_items(
                 erodeproof: e.erodeproof,
                 greased: e.greased,
             });
+        let container = world
+            .get_component::<nethack_babel_engine::environment::Container>(entity)
+            .map(|container| (*container).clone());
         let wand_type = world
             .get_component::<nethack_babel_engine::monster_ai::WandTypeTag>(entity)
             .map(|tag| tag.0);
         let wand_charges = world
             .get_component::<nethack_babel_engine::wands::WandCharges>(entity)
             .map(|charges| *charges);
+        let shop_state = world
+            .get_component::<ShopState>(entity)
+            .map(|state| (*state).clone());
 
         items.push(SerializableItem {
             serial_id: entity.to_bits().get() as u32,
@@ -570,8 +582,10 @@ fn extract_items(
             location,
             enchantment,
             erosion,
+            container,
             wand_type,
             wand_charges,
+            shop_state,
         });
     }
 
@@ -609,6 +623,9 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
                     .find(|def| def.names.male.eq_ignore_ascii_case(&name))
                     .map(|def| def.id)
             });
+        let species_flags = world
+            .get_component::<nethack_babel_engine::monster_ai::MonsterSpeciesFlags>(entity)
+            .map(|flags| flags.0);
         let is_tame = world.get_component::<Tame>(entity).is_some();
         let is_peaceful = world
             .get_component::<nethack_babel_engine::world::Peaceful>(entity)
@@ -644,6 +661,7 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             movement_points,
             name,
             monster_id,
+            species_flags,
             is_tame,
             is_peaceful,
             creation_order,
@@ -862,11 +880,17 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
                 greased: ero.greased,
             });
         }
+        if let Some(container) = &item_data.container {
+            entity_builder.add(container.clone());
+        }
         if let Some(wand_type) = item_data.wand_type {
             entity_builder.add(nethack_babel_engine::monster_ai::WandTypeTag(wand_type));
         }
         if let Some(wand_charges) = item_data.wand_charges {
             entity_builder.add(wand_charges);
+        }
+        if let Some(shop_state) = &item_data.shop_state {
+            entity_builder.add(shop_state.clone());
         }
         let entity = world.ecs_mut().spawn(entity_builder.build());
         item_entities.push(entity);
@@ -937,6 +961,12 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
                 .ecs_mut()
                 .insert_one(entity, MonsterIdentity(monster_id));
         }
+        if let Some(species_flags) = m.species_flags {
+            let _ = world.ecs_mut().insert_one(
+                entity,
+                nethack_babel_engine::monster_ai::MonsterSpeciesFlags(species_flags),
+            );
+        }
 
         if m.is_tame {
             let _ = world.ecs_mut().insert_one(entity, Tame);
@@ -965,6 +995,15 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
     }
 
     for (idx, item_data) in data.items.iter().enumerate() {
+        if let ObjectLocation::Contained { container_id } = item_data.location
+            && let Some(&remapped_container) = item_id_map.get(&container_id)
+            && let Some(item) = item_entities.get(idx)
+            && let Some(mut loc) = world.get_component_mut::<ObjectLocation>(*item)
+        {
+            *loc = ObjectLocation::Contained {
+                container_id: remapped_container.to_bits().get() as u32,
+            };
+        }
         if let ObjectLocation::MonsterInventory { carrier_id } = item_data.location
             && let Some(&remapped_carrier_id) = monster_id_map.get(&carrier_id)
             && let Some(item) = item_entities.get(idx)
@@ -985,6 +1024,7 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
     }
 
     sync_current_level_npc_state(&mut world);
+    nethack_babel_engine::shop::sync_item_shop_states(&mut world);
 
     world
 }
@@ -1955,6 +1995,7 @@ mod tests {
         ShopTinningUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
+        ShopContainerPickup,
         DemonBribe,
         ShopRepair,
         ShopkeeperDeath,
@@ -2022,6 +2063,7 @@ mod tests {
                 SaveStoryTraversalScenario::ShopTinningUsageFee => "shop-tinning-usage-fee",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
+                SaveStoryTraversalScenario::ShopContainerPickup => "shop-container-pickup",
                 SaveStoryTraversalScenario::DemonBribe => "demon-bribe",
                 SaveStoryTraversalScenario::ShopRepair => "shop-repair",
                 SaveStoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
@@ -3221,6 +3263,68 @@ mod tests {
                     },
                     &mut rng,
                 );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopContainerPickup => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+
+                let sack = spawn_inventory_object_by_name(&mut world, "sack", 's');
+                let pick_axe = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+                let lock_pick = spawn_inventory_object_by_name(&mut world, "lock pick", 'q');
+                if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+                    inv.items.retain(|entry| !matches!(*entry, e if e == sack || e == pick_axe || e == lock_pick));
+                }
+                let current_level = world.dungeon().current_data_dungeon_level();
+                let sack_id = sack.to_bits().get() as u32;
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(sack) {
+                    *loc = ObjectLocation::Floor {
+                        x: 5,
+                        y: 5,
+                        level: current_level.clone(),
+                    };
+                }
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(pick_axe) {
+                    *loc = ObjectLocation::Contained {
+                        container_id: sack_id,
+                    };
+                }
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(lock_pick) {
+                    *loc = ObjectLocation::Contained {
+                        container_id: sack_id,
+                    };
+                }
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        sack,
+                        nethack_babel_engine::environment::Container {
+                            container_type: nethack_babel_engine::environment::ContainerType::Sack,
+                            locked: false,
+                            trapped: false,
+                        },
+                    )
+                    .expect("sack should accept container component");
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-container-pickup", &world, [66u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(&mut loaded, PlayerAction::PickUp, &mut rng);
                 (loaded, events)
             }
             SaveStoryTraversalScenario::DemonBribe => {
@@ -6372,6 +6476,86 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_non_wizard_covetous_monster_keeps_ground_target_priority() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+
+        let arch_lich = spawn_full_monster(&mut world, Position::new(14, 14), "arch-lich", 30);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(arch_lich) {
+            hp.current = 20;
+            hp.max = 30;
+        }
+        let arch_lich_flags = world
+            .monster_catalog()
+            .iter()
+            .find(|def| def.names.male.eq_ignore_ascii_case("arch-lich"))
+            .map(|def| def.flags)
+            .expect("arch-lich should exist in the monster catalog");
+        world
+            .ecs_mut()
+            .insert_one(
+                arch_lich,
+                nethack_babel_engine::monster_ai::MonsterSpeciesFlags(arch_lich_flags),
+            )
+            .expect("arch-lich should accept species flags");
+
+        let book_def = test_game_data()
+            .objects
+            .iter()
+            .find(|def| def.name.eq_ignore_ascii_case("Book of the Dead"))
+            .expect("Book of the Dead should exist in the object catalog");
+        let _book = world.spawn((
+            ObjectCore {
+                otyp: book_def.id,
+                object_class: book_def.class,
+                quantity: 1,
+                weight: book_def.weight as u32,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: 6,
+                y: 8,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
+            Name("Book of the Dead".to_string()),
+        ));
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("covetous-ground-target-round-trip", &world, [91u8; 32]);
+        let arch_lich = find_monster_named(&loaded, "arch-lich")
+            .expect("round-trip covetous test should keep the arch-lich");
+        let mut rng = Pcg64::from_seed(loaded_rng);
+        let events = nethack_babel_engine::monster_ai::resolve_monster_turn(
+            &mut loaded,
+            arch_lich,
+            &mut rng,
+        );
+
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::ItemPickedUp { .. })),
+            "after save/load, a non-Wizard covetous monster should still prioritize the ground target"
+        );
+        assert!(
+            monster_carries_named_item(&loaded, arch_lich, "Book of the Dead"),
+            "after save/load, the covetous monster should keep the stolen ground target in inventory"
+        );
+        assert_eq!(
+            loaded
+                .get_component::<Positioned>(arch_lich)
+                .map(|pos| pos.0),
+            Some(Position::new(6, 8)),
+            "after save/load, the covetous monster should still teleport onto the ground target tile"
+        );
+    }
+
+    #[test]
     fn round_trip_loaded_shop_damage_repairs_when_keeper_is_home() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
@@ -8217,6 +8401,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopTinningUsageFee,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopChatPriceQuote,
+            SaveStoryTraversalScenario::ShopContainerPickup,
             SaveStoryTraversalScenario::DemonBribe,
             SaveStoryTraversalScenario::ShopRepair,
             SaveStoryTraversalScenario::ShopkeeperDeath,
@@ -8586,6 +8771,39 @@ mod tests {
                         })
                         .count();
                     assert_eq!(quote_count, 2);
+                }
+                SaveStoryTraversalScenario::ShopContainerPickup => {
+                    assert!(
+                        final_events
+                            .iter()
+                            .any(|event| matches!(event, EngineEvent::ItemPickedUp { .. }))
+                    );
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key.starts_with("shop-price")
+                    )));
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert_eq!(shop.bill.len(), 3);
+                    let sack = world
+                        .get_component::<Inventory>(player)
+                        .and_then(|inv| {
+                            inv.items.iter().copied().find(|item| {
+                                world
+                                    .get_component::<Name>(*item)
+                                    .is_some_and(|name| name.0.as_str() == "sack")
+                            })
+                        })
+                        .expect("picked up sack should be in inventory");
+                    assert_eq!(
+                        nethack_babel_engine::environment::container_contents(&world, sack).len(),
+                        2
+                    );
+                    assert!(
+                        world
+                            .get_component::<ShopState>(sack)
+                            .is_some_and(|state| state.unpaid),
+                        "picked up sack should remain marked unpaid after save/load"
+                    );
                 }
                 SaveStoryTraversalScenario::DemonBribe => {
                     let demon_name = monster_name_and_id_matching(&world, |def| {

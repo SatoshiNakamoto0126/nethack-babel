@@ -7,7 +7,7 @@ use hecs::Entity;
 
 use nethack_babel_data::{
     BucStatus, Enchantment, Erosion, KnowledgeState, ObjectClass, ObjectCore, ObjectDef,
-    ObjectExtra, ObjectLocation,
+    ObjectExtra, ObjectLocation, ShopState,
 };
 
 use crate::action::Position;
@@ -484,6 +484,9 @@ fn find_merge_target(
     let item_extra: Option<ObjectExtra> = world
         .get_component::<ObjectExtra>(item_entity)
         .map(|r| (*r).clone());
+    let item_shop = world
+        .get_component::<ShopState>(item_entity)
+        .map(|state| (*state).clone());
 
     let obj_def = object_def_for_core(obj_defs, &item_core)?;
 
@@ -506,6 +509,15 @@ fn find_merge_target(
             let candidate_extra: Option<ObjectExtra> = world
                 .get_component::<ObjectExtra>(entity)
                 .map(|r| (*r).clone());
+            let candidate_shop = world
+                .get_component::<ShopState>(entity)
+                .map(|state| (*state).clone());
+
+            if item_shop.as_ref().is_some_and(|state| state.unpaid)
+                || candidate_shop.as_ref().is_some_and(|state| state.unpaid)
+            {
+                return false;
+            }
 
             can_merge(
                 &item_core,
