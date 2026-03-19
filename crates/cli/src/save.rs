@@ -194,6 +194,8 @@ pub struct SerializablePlayer {
 /// Flattened monster state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializableMonster {
+    #[serde(default)]
+    pub serial_id: u32,
     pub position: Position,
     pub hp_current: i32,
     pub hp_max: i32,
@@ -613,6 +615,7 @@ fn extract_monsters(world: &GameWorld) -> Vec<SerializableMonster> {
             .unwrap_or_default();
 
         monsters.push(SerializableMonster {
+            serial_id: entity.to_bits().get() as u32,
             position,
             hp_current,
             hp_max,
@@ -872,6 +875,8 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
         }
     }
 
+    let mut monster_id_map = std::collections::HashMap::new();
+
     // Spawn monsters.
     for m in &data.monsters {
         let entity = world.spawn((
@@ -886,6 +891,7 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
             Name(m.name.clone()),
             nethack_babel_engine::world::CreationOrder(m.creation_order),
         ));
+        monster_id_map.insert(m.serial_id, entity.to_bits().get() as u32);
 
         if let Some(monster_id) = m.monster_id {
             let _ = world
@@ -917,6 +923,18 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
             let _ = world.ecs_mut().insert_one(entity, trapped);
         }
         let _ = world.ecs_mut().insert_one(entity, m.status_effects.clone());
+    }
+
+    for (idx, item_data) in data.items.iter().enumerate() {
+        if let ObjectLocation::MonsterInventory { carrier_id } = item_data.location
+            && let Some(&remapped_carrier_id) = monster_id_map.get(&carrier_id)
+            && let Some(item) = item_entities.get(idx)
+            && let Some(mut loc) = world.get_component_mut::<ObjectLocation>(*item)
+        {
+            *loc = ObjectLocation::MonsterInventory {
+                carrier_id: remapped_carrier_id,
+            };
+        }
     }
 
     sync_current_level_npc_state(&mut world);
@@ -1574,6 +1592,25 @@ mod tests {
         )
     }
 
+    fn monster_carries_named_item(world: &GameWorld, monster: hecs::Entity, name: &str) -> bool {
+        let carrier_id = monster.to_bits().get() as u32;
+        let expected_artifact_id = nethack_babel_engine::artifacts::find_artifact_by_name(name)
+            .map(|artifact| artifact.id);
+        world
+            .ecs()
+            .query::<(&ObjectCore, &ObjectLocation)>()
+            .iter()
+            .any(|(item, (core, loc))| {
+                matches!(
+                    *loc,
+                    ObjectLocation::MonsterInventory { carrier_id: cid } if cid == carrier_id
+                ) && (nethack_babel_engine::turn::force_item_display_name(world, item)
+                    .is_some_and(|item_name| item_name.eq_ignore_ascii_case(name))
+                    || expected_artifact_id
+                        .is_some_and(|artifact_id| core.artifact == Some(artifact_id)))
+            })
+    }
+
     fn count_objects_with_artifact_name(world: &GameWorld, artifact_name: &str) -> usize {
         let artifact = find_artifact_by_name(artifact_name)
             .unwrap_or_else(|| panic!("missing artifact definition for {}", artifact_name));
@@ -1889,6 +1926,8 @@ mod tests {
         WizardIntervention,
         WizardAmuletWake,
         WizardBlackGlowBlind,
+        WizardCovetousGroundAmulet,
+        WizardCovetousMonsterTool,
         WizardCovetousQuestArtifact,
         WizardRetreatHeal,
         HumanoidAlohaChat,
@@ -1950,6 +1989,12 @@ mod tests {
                 SaveStoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 SaveStoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 SaveStoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
+                SaveStoryTraversalScenario::WizardCovetousGroundAmulet => {
+                    "wizard-covetous-ground-amulet"
+                }
+                SaveStoryTraversalScenario::WizardCovetousMonsterTool => {
+                    "wizard-covetous-monster-tool"
+                }
                 SaveStoryTraversalScenario::WizardCovetousQuestArtifact => {
                     "wizard-covetous-quest-artifact"
                 }
@@ -3578,7 +3623,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardTaunt => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
                 let player = world.player();
-                let wizard =
+                let _wizard =
                     spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
                 world
                     .ecs_mut()
@@ -3727,6 +3772,83 @@ mod tests {
                     "deterministic black-glow harness should still curse the tracked item"
                 );
                 (loaded, events)
+            }
+            SaveStoryTraversalScenario::WizardCovetousGroundAmulet => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+                if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+                    inv.remove(amulet);
+                }
+                let ground_pos = Position::new(12, 12);
+                let ground_level = (world.dungeon().branch, world.dungeon().depth);
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(amulet) {
+                    *loc = nethack_babel_engine::dungeon::floor_object_location(
+                        ground_level.0,
+                        ground_level.1,
+                        ground_pos,
+                    );
+                }
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-wizard-covetous-ground-amulet",
+                    &world,
+                    [66u8; 32],
+                );
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let loaded_player = loaded.player();
+                let wizard = find_monster_named(&loaded, "Wizard of Yendor")
+                    .expect("wizard ground-covetous save matrix should keep a live Wizard");
+                let action = nethack_babel_engine::npc::choose_wizard_action(
+                    &loaded, wizard, true, false, false, false, &mut rng,
+                );
+                let final_events = nethack_babel_engine::turn::force_wizard_harassment_action(
+                    &mut loaded,
+                    Some(wizard),
+                    loaded_player,
+                    action,
+                    &mut rng,
+                );
+                (loaded, final_events)
+            }
+            SaveStoryTraversalScenario::WizardCovetousMonsterTool => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let carrier = spawn_full_monster(&mut world, Position::new(12, 12), "goblin", 6);
+                let book = spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'a');
+                if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+                    inv.remove(book);
+                }
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(book) {
+                    *loc = ObjectLocation::MonsterInventory {
+                        carrier_id: carrier.to_bits().get() as u32,
+                    };
+                }
+                let _wizard =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-wizard-covetous-monster-tool",
+                    &world,
+                    [67u8; 32],
+                );
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let loaded_player = loaded.player();
+                let wizard = find_monster_named(&loaded, "Wizard of Yendor")
+                    .expect("wizard monster-covetous save matrix should keep a live Wizard");
+                let action = nethack_babel_engine::npc::choose_wizard_action(
+                    &loaded, wizard, false, true, false, false, &mut rng,
+                );
+                let final_events = nethack_babel_engine::turn::force_wizard_harassment_action(
+                    &mut loaded,
+                    Some(wizard),
+                    loaded_player,
+                    action,
+                    &mut rng,
+                );
+                (loaded, final_events)
             }
             SaveStoryTraversalScenario::WizardCovetousQuestArtifact => {
                 let mut world = make_stair_world(DungeonBranch::Quest, 6, Terrain::StairsDown);
@@ -5773,28 +5895,9 @@ mod tests {
         );
         let wizard = find_monster_named(&loaded, "Wizard of Yendor")
             .expect("save/load harassment test should keep a live wizard");
-        let wizard_pos = loaded
-            .get_component::<Positioned>(wizard)
-            .expect("wizard should keep a position")
-            .0;
         assert!(
-            resolve_object_type_by_spec(&loaded, "Amulet of Yendor").is_some_and(|amulet_type| {
-                loaded
-                    .ecs()
-                    .query::<(&ObjectCore, &ObjectLocation)>()
-                    .iter()
-                    .any(|(_, (core, loc))| {
-                        core.otyp == amulet_type
-                            && matches!(
-                                *loc,
-                                ObjectLocation::Floor { x, y, level }
-                                    if (x as i32 - wizard_pos.x).abs() <= 1
-                                        && (y as i32 - wizard_pos.y).abs() <= 1
-                                        && level == loaded.dungeon().current_data_dungeon_level()
-                            )
-                    })
-            }),
-            "save/load should leave the stolen Amulet near the Wizard"
+            monster_carries_named_item(&loaded, wizard, "Amulet of Yendor"),
+            "save/load should keep the stolen Amulet in the Wizard's inventory"
         );
         if saw_curse {
             assert!(
@@ -7591,6 +7694,8 @@ mod tests {
             SaveStoryTraversalScenario::WizardIntervention,
             SaveStoryTraversalScenario::WizardAmuletWake,
             SaveStoryTraversalScenario::WizardBlackGlowBlind,
+            SaveStoryTraversalScenario::WizardCovetousGroundAmulet,
+            SaveStoryTraversalScenario::WizardCovetousMonsterTool,
             SaveStoryTraversalScenario::WizardCovetousQuestArtifact,
             SaveStoryTraversalScenario::WizardRetreatHeal,
             SaveStoryTraversalScenario::HumanoidAlohaChat,
@@ -8292,28 +8397,9 @@ mod tests {
                     );
                     let wizard = find_monster_named(&world, "Wizard of Yendor")
                         .expect("save/load wizard matrix should keep a live Wizard");
-                    let wizard_pos = world
-                        .get_component::<Positioned>(wizard)
-                        .expect("wizard should keep a position")
-                        .0;
                     assert!(
-                        resolve_object_type_by_spec(&world, "Amulet of Yendor").is_some_and(
-                            |amulet_type| {
-                                world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter().any(
-                                    |(_, (core, loc))| {
-                                        core.otyp == amulet_type
-                                            && matches!(
-                                                *loc,
-                                                ObjectLocation::Floor { x, y, level }
-                                                    if (x as i32 - wizard_pos.x).abs() <= 1
-                                                        && (y as i32 - wizard_pos.y).abs() <= 1
-                                                        && level == world.dungeon().current_data_dungeon_level()
-                                            )
-                                    },
-                                )
-                            }
-                        ),
-                        "save/load wizard matrix should leave the stolen Amulet near the Wizard"
+                        monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+                        "save/load wizard matrix should keep the stolen Amulet in the Wizard inventory"
                     );
                     assert!(
                         world
@@ -8462,6 +8548,45 @@ mod tests {
                         "black-glow blind scenario should preserve blindness through round-trip"
                     );
                 }
+                SaveStoryTraversalScenario::WizardCovetousGroundAmulet => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
+                    )));
+                    assert!(
+                        !nethack_babel_engine::turn::force_player_has_named_item(
+                            &world,
+                            player,
+                            "Amulet of Yendor",
+                        ),
+                        "save/load ground-covetous matrix should keep the Amulet off the player"
+                    );
+                    let wizard = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("wizard ground-covetous save matrix should keep a live Wizard");
+                    assert!(
+                        monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+                        "save/load ground-covetous matrix should keep the Amulet in the Wizard inventory"
+                    );
+                }
+                SaveStoryTraversalScenario::WizardCovetousMonsterTool => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if key == "wizard-steal-invocation-tool"
+                    )));
+                    let wizard = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("wizard monster-covetous save matrix should keep a live Wizard");
+                    let carrier = find_monster_named(&world, "goblin")
+                        .expect("monster-covetous save matrix should keep the original carrier");
+                    assert!(
+                        monster_carries_named_item(&world, wizard, "Book of the Dead"),
+                        "save/load monster-covetous matrix should keep the invocation tool in the Wizard inventory"
+                    );
+                    assert!(
+                        !monster_carries_named_item(&world, carrier, "Book of the Dead"),
+                        "save/load monster-covetous matrix should strip the original carrier inventory"
+                    );
+                }
                 SaveStoryTraversalScenario::WizardCovetousQuestArtifact => {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
@@ -8503,30 +8628,10 @@ mod tests {
                     );
                     let wizard = find_monster_named(&world, "Wizard of Yendor")
                         .expect("wizard covetous save matrix should keep a live Wizard");
-                    let wizard_pos = world
-                        .get_component::<Positioned>(wizard)
-                        .expect("wizard should keep a position")
-                        .0;
-                    let eye = world
-                        .ecs()
-                        .query::<&ObjectCore>()
-                        .iter()
-                        .find_map(|(entity, core)| {
-                            (core.artifact == Some(eye_artifact.id)).then_some(entity)
-                        })
-                        .expect(
-                            "wizard covetous save matrix should keep the quest artifact entity",
-                        );
-                    let item_loc = world
-                        .get_component::<ObjectLocation>(eye)
-                        .expect("stolen quest artifact should stay in the world");
-                    assert!(matches!(
-                        *item_loc,
-                        ObjectLocation::Floor { x, y, level }
-                            if (x as i32 - wizard_pos.x).abs() <= 1
-                                && (y as i32 - wizard_pos.y).abs() <= 1
-                                && level == world.dungeon().current_data_dungeon_level()
-                    ));
+                    assert!(
+                        monster_carries_named_item(&world, wizard, "The Eye of the Aethiopica"),
+                        "save/load covetous matrix should keep the quest artifact in the Wizard inventory"
+                    );
                     assert!(
                         world
                             .get_component::<PlayerEvents>(player)

@@ -5971,21 +5971,25 @@ fn spawn_monster_inventory_object_by_name(
     )))
 }
 
+fn item_matches_expected_name(world: &GameWorld, item: hecs::Entity, expected_name: &str) -> bool {
+    let expected_artifact =
+        crate::artifacts::find_artifact_by_name(expected_name).map(|artifact| artifact.id);
+    world.get_component::<ObjectCore>(item).is_some_and(|core| {
+        expected_artifact.is_some_and(|artifact_id| core.artifact == Some(artifact_id))
+    }) || item_display_name(world, item)
+        .is_some_and(|name| quest_name_matches(&name, expected_name))
+}
+
 fn find_player_named_item(
     world: &GameWorld,
     player: hecs::Entity,
     expected_name: &str,
 ) -> Option<hecs::Entity> {
-    let expected_artifact =
-        crate::artifacts::find_artifact_by_name(expected_name).map(|artifact| artifact.id);
-    let item_matches = |item: hecs::Entity| {
-        world.get_component::<ObjectCore>(item).is_some_and(|core| {
-            expected_artifact.is_some_and(|artifact_id| core.artifact == Some(artifact_id))
-        }) || item_display_name(world, item)
-            .is_some_and(|name| quest_name_matches(&name, expected_name))
-    };
     if let Some(inv) = world.get_component::<crate::inventory::Inventory>(player)
-        && let Some(item) = inv.items.iter().find(|item| item_matches(**item))
+        && let Some(item) = inv
+            .items
+            .iter()
+            .find(|item| item_matches_expected_name(world, **item, expected_name))
     {
         return Some(*item);
     }
@@ -5993,11 +5997,124 @@ fn find_player_named_item(
     world
         .get_component::<crate::equipment::EquipmentSlots>(player)
         .and_then(|slots| {
-            slots
-                .all_worn()
-                .iter()
-                .find_map(|(_, item)| item_matches(*item).then_some(*item))
+            slots.all_worn().iter().find_map(|(_, item)| {
+                item_matches_expected_name(world, *item, expected_name).then_some(*item)
+            })
         })
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum WizardCovetTarget {
+    Player(hecs::Entity),
+    Ground {
+        item: hecs::Entity,
+        position: Position,
+    },
+    Monster {
+        item: hecs::Entity,
+        carrier: hecs::Entity,
+    },
+}
+
+fn monster_entity_with_runtime_id(world: &GameWorld, carrier_id: u32) -> Option<hecs::Entity> {
+    world
+        .ecs()
+        .query::<(&Monster,)>()
+        .iter()
+        .find_map(|(entity, _)| (entity.to_bits().get() as u32 == carrier_id).then_some(entity))
+}
+
+fn find_ground_named_item_on_current_level(
+    world: &GameWorld,
+    expected_name: &str,
+) -> Option<(hecs::Entity, Position)> {
+    let branch = world.dungeon().branch;
+    let depth = world.dungeon().depth;
+    let player_pos = world
+        .get_component::<Positioned>(world.player())
+        .map(|pos| pos.0);
+    world
+        .ecs()
+        .query::<&ObjectLocation>()
+        .iter()
+        .find_map(|(item, loc)| {
+            let pos = crate::dungeon::floor_position_on_level(loc, branch, depth)?;
+            if !item_matches_expected_name(world, item, expected_name) {
+                return None;
+            }
+            if player_pos == Some(pos) {
+                return None;
+            }
+            Some((item, pos))
+        })
+}
+
+fn find_monster_named_item_in_inventory(
+    world: &GameWorld,
+    wizard: Option<hecs::Entity>,
+    expected_name: &str,
+    exclude_special_amulet_carriers: bool,
+) -> Option<(hecs::Entity, hecs::Entity)> {
+    let excluded_carrier_id = wizard.map(|entity| entity.to_bits().get() as u32);
+    world
+        .ecs()
+        .query::<&ObjectLocation>()
+        .iter()
+        .find_map(|(item, loc)| {
+            let ObjectLocation::MonsterInventory { carrier_id } = *loc else {
+                return None;
+            };
+            if excluded_carrier_id == Some(carrier_id)
+                || !item_matches_expected_name(world, item, expected_name)
+            {
+                return None;
+            }
+            let carrier = monster_entity_with_runtime_id(world, carrier_id)?;
+            if !live_monster_entity(world, carrier) {
+                return None;
+            }
+            if exclude_special_amulet_carriers
+                && (world
+                    .get_component::<crate::npc::Priest>(carrier)
+                    .is_some_and(|priest| priest.is_high_priest)
+                    || world
+                        .get_component::<Name>(carrier)
+                        .is_some_and(|name| quest_name_matches(&name.0, "Wizard of Yendor")))
+            {
+                return None;
+            }
+            Some((item, carrier))
+        })
+}
+
+fn find_wizard_named_item_target(
+    world: &GameWorld,
+    wizard: Option<hecs::Entity>,
+    player: hecs::Entity,
+    expected_name: &str,
+    exclude_special_amulet_carriers: bool,
+) -> Option<WizardCovetTarget> {
+    if let Some(item) = find_player_named_item(world, player, expected_name) {
+        return Some(WizardCovetTarget::Player(item));
+    }
+    if let Some((item, position)) = find_ground_named_item_on_current_level(world, expected_name) {
+        return Some(WizardCovetTarget::Ground { item, position });
+    }
+    find_monster_named_item_in_inventory(
+        world,
+        wizard,
+        expected_name,
+        exclude_special_amulet_carriers,
+    )
+    .map(|(item, carrier)| WizardCovetTarget::Monster { item, carrier })
+}
+
+fn find_wizard_amulet_target(
+    world: &GameWorld,
+    wizard: Option<hecs::Entity>,
+    player: hecs::Entity,
+) -> Option<WizardCovetTarget> {
+    find_wizard_named_item_target(world, wizard, player, "Amulet of Yendor", true)
 }
 
 const WIZARD_COVETED_INVOCATION_ITEMS: [&str; 3] = [
@@ -6006,21 +6123,29 @@ const WIZARD_COVETED_INVOCATION_ITEMS: [&str; 3] = [
     "Candelabrum of Invocation",
 ];
 
-fn find_player_coveted_invocation_item(
+fn find_wizard_coveted_invocation_target(
     world: &GameWorld,
+    wizard: Option<hecs::Entity>,
     player: hecs::Entity,
-) -> Option<hecs::Entity> {
+) -> Option<WizardCovetTarget> {
     WIZARD_COVETED_INVOCATION_ITEMS
         .iter()
-        .find_map(|name| find_player_named_item(world, player, name))
+        .find_map(|name| find_wizard_named_item_target(world, wizard, player, name, false))
 }
 
-fn find_player_coveted_quest_artifact(
+fn find_wizard_coveted_quest_artifact_target(
     world: &GameWorld,
+    wizard: Option<hecs::Entity>,
     player: hecs::Entity,
-) -> Option<hecs::Entity> {
+) -> Option<WizardCovetTarget> {
     let role = current_player_role(world)?;
-    find_player_named_item(world, player, crate::quest::quest_artifact_for_role(role))
+    find_wizard_named_item_target(
+        world,
+        wizard,
+        player,
+        crate::quest::quest_artifact_for_role(role),
+        false,
+    )
 }
 
 fn player_has_worn_or_wielded_named_item(
@@ -6140,19 +6265,17 @@ fn process_wizard_of_yendor_turn(
     let player = world.player();
     let mut player_events = read_player_events(world, player);
     let player_has_amulet = player_has_named_item(world, player, "Amulet of Yendor");
-    let player_has_invocation_tool = find_player_coveted_invocation_item(world, player).is_some();
-    let player_has_quest_artifact = find_player_coveted_quest_artifact(world, player).is_some();
     let player_invoked = player_events.invoked;
     let wizard_times_killed = player_events
         .wizard_times_killed
         .max(u32::from(player_events.killed_wizard));
 
-    if !(player_has_amulet || player_events.invoked || player_events.killed_wizard) {
-        return;
-    }
-
     let live_wizards = wizard_of_yendor_entities(world);
     if live_wizards.is_empty() {
+        let has_amulet_target = find_wizard_amulet_target(world, None, player).is_some();
+        if !(has_amulet_target || player_events.invoked || player_events.killed_wizard) {
+            return;
+        }
         let wizard_state = crate::npc::WizardOfYendor {
             last_killed_turn: player_events.wizard_last_killed_turn,
             times_killed: wizard_times_killed,
@@ -6195,6 +6318,14 @@ fn process_wizard_of_yendor_turn(
     else {
         return;
     };
+    let has_amulet_target = find_wizard_amulet_target(world, Some(active_wizard), player).is_some();
+    let has_invocation_target =
+        find_wizard_coveted_invocation_target(world, Some(active_wizard), player).is_some();
+    let has_quest_artifact_target =
+        find_wizard_coveted_quest_artifact_target(world, Some(active_wizard), player).is_some();
+    if !(has_amulet_target || player_events.invoked || player_events.killed_wizard) {
+        return;
+    }
 
     let harassment_period = if player_has_amulet {
         4
@@ -6224,14 +6355,14 @@ fn process_wizard_of_yendor_turn(
     if wizard_should_fall_back_to_heal(
         world,
         wizard,
-        player_has_amulet,
-        player_has_invocation_tool,
-        player_has_quest_artifact,
+        has_amulet_target,
+        has_invocation_target,
+        has_quest_artifact_target,
     ) && apply_wizard_retreat_and_heal(world, wizard, player, rng, events)
     {
         return;
     }
-    if should_wizard_level_teleport_player(world, player_has_amulet, rng)
+    if should_wizard_level_teleport_player(world, has_amulet_target, rng)
         && apply_wizard_level_teleport(world, rng, events)
     {
         return;
@@ -6239,9 +6370,9 @@ fn process_wizard_of_yendor_turn(
     let action = crate::npc::choose_wizard_action(
         world,
         wizard,
-        player_has_amulet,
-        player_has_invocation_tool,
-        player_has_quest_artifact,
+        has_amulet_target,
+        has_invocation_target,
+        has_quest_artifact_target,
         player_invoked,
         rng,
     );
@@ -6565,17 +6696,17 @@ fn spawn_or_respawn_wizard_near_player(
         .map(|(wizard, pos)| (wizard, pos, WizardRespawnOrigin::New))
 }
 
-fn wizard_reposition_adjacent_to_player(
+fn wizard_reposition_adjacent_to_entity(
     world: &mut GameWorld,
     wizard: hecs::Entity,
-    player: hecs::Entity,
+    target: hecs::Entity,
 ) -> bool {
-    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+    let Some(target_pos) = world.get_component::<Positioned>(target).map(|pos| pos.0) else {
         return false;
     };
     if world
         .get_component::<Positioned>(wizard)
-        .is_some_and(|wizard_pos| crate::ball::chebyshev_distance(wizard_pos.0, player_pos) == 1)
+        .is_some_and(|wizard_pos| crate::ball::chebyshev_distance(wizard_pos.0, target_pos) == 1)
     {
         return true;
     }
@@ -6589,11 +6720,11 @@ fn wizard_reposition_adjacent_to_player(
     let Some(monster_def) = monster_defs.iter().find(|def| def.id == monster_id) else {
         return false;
     };
-    let Some(target_pos) = enexto(world, player_pos, monster_def) else {
+    let Some(adjacent_pos) = enexto(world, target_pos, monster_def) else {
         return false;
     };
     if let Some(mut wizard_pos) = world.get_component_mut::<Positioned>(wizard) {
-        wizard_pos.0 = target_pos;
+        wizard_pos.0 = adjacent_pos;
         return true;
     }
     false
@@ -6720,6 +6851,108 @@ fn apply_wizard_retreat_and_heal(
     false
 }
 
+fn wizard_move_item_into_inventory(
+    world: &mut GameWorld,
+    wizard: hecs::Entity,
+    item: hecs::Entity,
+) {
+    if let Some(mut core) = world.get_component_mut::<ObjectCore>(item) {
+        core.inv_letter = None;
+    }
+    let carrier_id = wizard.to_bits().get() as u32;
+    if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+        *loc = ObjectLocation::MonsterInventory { carrier_id };
+    }
+}
+
+fn wizard_take_ground_item(
+    world: &mut GameWorld,
+    wizard: hecs::Entity,
+    item: hecs::Entity,
+    position: Position,
+) -> bool {
+    if world
+        .get_component::<Positioned>(world.player())
+        .is_some_and(|player_pos| player_pos.0 == position)
+    {
+        return false;
+    }
+    if let Some(occupant) = find_monster_entity_at(world, position)
+        && occupant != wizard
+    {
+        let player_pos = world
+            .get_component::<Positioned>(world.player())
+            .map(|pos| pos.0);
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                let candidate = Position::new(position.x + dx, position.y + dy);
+                if player_pos == Some(candidate)
+                    || find_monster_entity_at(world, candidate).is_some()
+                    || !world
+                        .dungeon()
+                        .current_level
+                        .get(candidate)
+                        .is_some_and(|cell| cell.terrain.is_walkable())
+                {
+                    continue;
+                }
+                if let Some(mut wizard_pos) = world.get_component_mut::<Positioned>(wizard) {
+                    wizard_pos.0 = candidate;
+                    return true;
+                }
+                return false;
+            }
+        }
+        return false;
+    }
+    if let Some(mut wizard_pos) = world.get_component_mut::<Positioned>(wizard) {
+        wizard_pos.0 = position;
+    } else {
+        return false;
+    }
+    wizard_move_item_into_inventory(world, wizard, item);
+    true
+}
+
+fn wizard_steal_monster_item(
+    world: &mut GameWorld,
+    wizard: hecs::Entity,
+    carrier: hecs::Entity,
+    item: hecs::Entity,
+) -> bool {
+    if !wizard_reposition_adjacent_to_entity(world, wizard, carrier) {
+        return false;
+    }
+    wizard_move_item_into_inventory(world, wizard, item);
+    true
+}
+
+fn apply_wizard_covetous_target(
+    world: &mut GameWorld,
+    wizard: hecs::Entity,
+    player: hecs::Entity,
+    target: WizardCovetTarget,
+) -> bool {
+    match target {
+        WizardCovetTarget::Player(item) => {
+            if !wizard_reposition_adjacent_to_entity(world, wizard, player) {
+                return false;
+            }
+            wizard_steal_player_item(world, wizard, player, item);
+            true
+        }
+        WizardCovetTarget::Ground { item, position } => {
+            wizard_take_ground_item(world, wizard, item, position)
+        }
+        WizardCovetTarget::Monster { item, carrier } => {
+            wizard_steal_monster_item(world, wizard, carrier, item)
+        }
+    }
+}
+
 fn apply_wizard_harassment_action(
     world: &mut GameWorld,
     wizard: Option<hecs::Entity>,
@@ -6731,26 +6964,25 @@ fn apply_wizard_harassment_action(
     match action {
         crate::npc::WizardAction::StealAmulet => {
             if let Some(wizard) = wizard
-                && wizard_reposition_adjacent_to_player(world, wizard, player)
-                && let Some(amulet) = find_player_named_item(world, player, "Amulet of Yendor")
+                && let Some(target) = find_wizard_amulet_target(world, Some(wizard), player)
             {
-                wizard_steal_player_item(world, wizard, player, amulet);
+                let _ = apply_wizard_covetous_target(world, wizard, player, target);
             }
         }
         crate::npc::WizardAction::StealInvocationTool => {
             if let Some(wizard) = wizard
-                && wizard_reposition_adjacent_to_player(world, wizard, player)
-                && let Some(item) = find_player_coveted_invocation_item(world, player)
+                && let Some(target) =
+                    find_wizard_coveted_invocation_target(world, Some(wizard), player)
             {
-                wizard_steal_player_item(world, wizard, player, item);
+                let _ = apply_wizard_covetous_target(world, wizard, player, target);
             }
         }
         crate::npc::WizardAction::StealQuestArtifact => {
             if let Some(wizard) = wizard
-                && wizard_reposition_adjacent_to_player(world, wizard, player)
-                && let Some(item) = find_player_coveted_quest_artifact(world, player)
+                && let Some(target) =
+                    find_wizard_coveted_quest_artifact_target(world, Some(wizard), player)
             {
-                wizard_steal_player_item(world, wizard, player, item);
+                let _ = apply_wizard_covetous_target(world, wizard, player, target);
             }
         }
         crate::npc::WizardAction::DoubleTrouble => {
@@ -7158,22 +7390,7 @@ fn wizard_steal_player_item(
     if !detach_item_from_player_possessions(world, player, item) {
         return;
     }
-
-    let drop_origin = world
-        .get_component::<Positioned>(wizard)
-        .map(|pos| pos.0)
-        .or_else(|| world.get_component::<Positioned>(player).map(|pos| pos.0))
-        .unwrap_or(Position::new(0, 0));
-    let drop_pos = nearest_walkable_drop_pos(world, drop_origin);
-
-    if let Some(mut core) = world.get_component_mut::<ObjectCore>(item) {
-        core.inv_letter = None;
-    }
-    let branch = world.dungeon().branch;
-    let depth = world.dungeon().depth;
-    if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
-        *loc = crate::dungeon::floor_object_location(branch, depth, drop_pos);
-    }
+    wizard_move_item_into_inventory(world, wizard, item);
 }
 
 fn curse_random_player_items(world: &mut GameWorld, player: hecs::Entity, rng: &mut impl Rng) {
@@ -7455,12 +7672,7 @@ fn player_is_demon(world: &GameWorld, player: hecs::Entity) -> bool {
 }
 
 fn monster_has_real_amulet_of_yendor(world: &GameWorld, monster: hecs::Entity) -> bool {
-    let Some(carrier_id) = world
-        .get_component::<CreationOrder>(monster)
-        .map(|order| order.0 as u32)
-    else {
-        return false;
-    };
+    let carrier_id = monster.to_bits().get() as u32;
     world
         .ecs()
         .query::<(&ObjectCore, &ObjectLocation)>()
@@ -9045,6 +9257,8 @@ mod tests {
         WizardIntervention,
         WizardAmuletWake,
         WizardBlackGlowBlind,
+        WizardCovetousGroundAmulet,
+        WizardCovetousMonsterTool,
         WizardCovetousQuestArtifact,
         WizardRetreatHeal,
         HumanoidAlohaChat,
@@ -9104,6 +9318,10 @@ mod tests {
                 StoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 StoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 StoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
+                StoryTraversalScenario::WizardCovetousGroundAmulet => {
+                    "wizard-covetous-ground-amulet"
+                }
+                StoryTraversalScenario::WizardCovetousMonsterTool => "wizard-covetous-monster-tool",
                 StoryTraversalScenario::WizardCovetousQuestArtifact => {
                     "wizard-covetous-quest-artifact"
                 }
@@ -10819,6 +11037,64 @@ mod tests {
                 );
 
                 (world, events)
+            }
+            StoryTraversalScenario::WizardCovetousGroundAmulet => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+                if let Some(mut inv) =
+                    world.get_component_mut::<crate::inventory::Inventory>(player)
+                {
+                    inv.remove(amulet);
+                }
+                let ground_level = (world.dungeon().branch, world.dungeon().depth);
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(amulet) {
+                    *loc = crate::dungeon::floor_object_location(
+                        ground_level.0,
+                        ground_level.1,
+                        Position::new(12, 12),
+                    );
+                }
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+                let mut rng = test_rng();
+                let action = crate::npc::choose_wizard_action(
+                    &world, wizard, true, false, false, false, &mut rng,
+                );
+                let final_events = force_wizard_harassment_action(
+                    &mut world,
+                    Some(wizard),
+                    player,
+                    action,
+                    &mut rng,
+                );
+                (world, final_events)
+            }
+            StoryTraversalScenario::WizardCovetousMonsterTool => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+                let carrier = spawn_full_monster(&mut world, Position::new(12, 12), "goblin", 6);
+                let _book =
+                    spawn_monster_inventory_object_by_name(&mut world, carrier, "Book of the Dead")
+                        .expect(
+                            "monster-covetous story matrix should seed a carried invocation tool",
+                        );
+                let mut rng = test_rng();
+                let action = crate::npc::choose_wizard_action(
+                    &world, wizard, false, true, false, false, &mut rng,
+                );
+                let final_events = force_wizard_harassment_action(
+                    &mut world,
+                    Some(wizard),
+                    player,
+                    action,
+                    &mut rng,
+                );
+                (world, final_events)
             }
             StoryTraversalScenario::WizardCovetousQuestArtifact => {
                 let mut world = make_test_world();
@@ -15156,7 +15432,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wizard_steal_amulet_drops_it_off_player() {
+    fn test_wizard_steal_amulet_moves_it_into_wizard_inventory() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         let player = world.player();
@@ -15178,24 +15454,14 @@ mod tests {
             !player_carries_item(&world, player, amulet),
             "wizard harassment should remove the real amulet from the player's possessions"
         );
-        let wizard_pos = world
-            .get_component::<Positioned>(wizard)
-            .expect("wizard should still exist")
-            .0;
-        let item_loc = world
-            .get_component::<ObjectLocation>(amulet)
-            .expect("stolen amulet should stay in the world");
-        assert!(matches!(
-            *item_loc,
-            ObjectLocation::Floor { x, y, level }
-                if (x as i32 - wizard_pos.x).abs() <= 1
-                    && (y as i32 - wizard_pos.y).abs() <= 1
-                    && level == world.dungeon().current_data_dungeon_level()
-        ));
+        assert!(
+            monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+            "wizard harassment should put the stolen Amulet into the Wizard's inventory"
+        );
     }
 
     #[test]
-    fn test_wizard_steal_invocation_tool_drops_it_off_player() {
+    fn test_wizard_steal_invocation_tool_moves_it_into_wizard_inventory() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         let player = world.player();
@@ -15217,24 +15483,149 @@ mod tests {
             !player_carries_item(&world, player, book),
             "wizard harassment should remove the invocation tool from the player's possessions"
         );
-        let wizard_pos = world
-            .get_component::<Positioned>(wizard)
-            .expect("wizard should still exist")
-            .0;
-        let item_loc = world
-            .get_component::<ObjectLocation>(book)
-            .expect("stolen invocation tool should stay in the world");
-        assert!(matches!(
-            *item_loc,
-            ObjectLocation::Floor { x, y, level }
-                if (x as i32 - wizard_pos.x).abs() <= 1
-                    && (y as i32 - wizard_pos.y).abs() <= 1
-                    && level == world.dungeon().current_data_dungeon_level()
-        ));
+        assert!(
+            monster_carries_named_item(&world, wizard, "Book of the Dead"),
+            "wizard harassment should put the stolen invocation tool into the Wizard's inventory"
+        );
     }
 
     #[test]
-    fn test_wizard_steal_quest_artifact_drops_it_off_player() {
+    fn test_wizard_steal_invocation_tool_from_monster_inventory() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let carrier = spawn_full_monster(&mut world, Position::new(12, 12), "goblin", 6);
+        let book = spawn_monster_inventory_object_by_name(&mut world, carrier, "Book of the Dead")
+            .expect("carrier should receive the Book of the Dead");
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::StealInvocationTool,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            monster_carries_named_item(&world, wizard, "Book of the Dead"),
+            "wizard harassment should steal invocation tools from another monster inventory"
+        );
+        assert!(
+            !monster_carries_named_item(&world, carrier, "Book of the Dead"),
+            "carrier should lose the covetous invocation tool to the Wizard"
+        );
+        assert!(
+            world
+                .get_component::<ObjectLocation>(book)
+                .is_some_and(|loc| matches!(
+                    *loc,
+                    ObjectLocation::MonsterInventory { carrier_id }
+                        if carrier_id == wizard.to_bits().get() as u32
+                )),
+            "stolen monster inventory items should be remapped onto the Wizard carrier id"
+        );
+    }
+
+    #[test]
+    fn test_wizard_covetous_ground_item_under_monster_repositions_without_stealing() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.remove(amulet);
+        }
+        let wizard_start = Position::new(6, 5);
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .map(|pos| pos.0)
+            .expect("player should have a position");
+        let blocker_pos = (0..world.dungeon().current_level.height)
+            .find_map(|y| {
+                (0..world.dungeon().current_level.width).find_map(|x| {
+                    let pos = Position::new(x as i32, y as i32);
+                    if pos == player_pos
+                        || pos == wizard_start
+                        || crate::ball::chebyshev_distance(pos, wizard_start) <= 1
+                        || !world
+                            .dungeon()
+                            .current_level
+                            .get(pos)
+                            .is_some_and(|cell| cell.terrain.is_walkable())
+                    {
+                        return None;
+                    }
+                    let has_adjacent_open_tile = (-1..=1).any(|dy| {
+                        (-1..=1).any(|dx| {
+                            if dx == 0 && dy == 0 {
+                                return false;
+                            }
+                            let adjacent = Position::new(pos.x + dx, pos.y + dy);
+                            adjacent != player_pos
+                                && adjacent != wizard_start
+                                && world
+                                    .dungeon()
+                                    .current_level
+                                    .get(adjacent)
+                                    .is_some_and(|cell| cell.terrain.is_walkable())
+                        })
+                    });
+                    has_adjacent_open_tile.then_some(pos)
+                })
+            })
+            .expect("test map should provide a blocker tile with adjacent open ground");
+        let ground_level = (world.dungeon().branch, world.dungeon().depth);
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(amulet) {
+            *loc =
+                crate::dungeon::floor_object_location(ground_level.0, ground_level.1, blocker_pos);
+        }
+        let wizard = spawn_full_monster(&mut world, wizard_start, "Wizard of Yendor", 12);
+        let _blocker = spawn_full_monster(&mut world, blocker_pos, "goblin", 6);
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::StealAmulet,
+            &mut rng,
+            &mut events,
+        );
+
+        let wizard_pos = world
+            .get_component::<Positioned>(wizard)
+            .map(|pos| pos.0)
+            .expect("wizard should keep a position after covetous movement");
+        assert!(
+            crate::ball::chebyshev_distance(wizard_pos, blocker_pos) <= 1
+                && wizard_pos != blocker_pos,
+            "wizard should move adjacent to the blocking monster instead of overlapping it: got {:?} vs blocker {:?}",
+            wizard_pos,
+            blocker_pos
+        );
+        assert!(
+            !monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+            "wizard should not steal a floor item from under another monster in the same turn"
+        );
+        assert!(
+            world
+                .get_component::<ObjectLocation>(amulet)
+                .is_some_and(|loc| matches!(
+                    *loc,
+                    ObjectLocation::Floor { x, y, .. }
+                        if Position::new(i32::from(x), i32::from(y)) == blocker_pos
+                )),
+            "blocked covetous theft should leave the Amulet on the ground for now"
+        );
+    }
+
+    #[test]
+    fn test_wizard_steal_quest_artifact_moves_it_into_wizard_inventory() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         let player = world.player();
@@ -15292,20 +15683,54 @@ mod tests {
             !player_carries_item(&world, player, eye),
             "wizard harassment should remove the quest artifact from the player's possessions"
         );
-        let wizard_pos = world
-            .get_component::<Positioned>(wizard)
-            .expect("wizard should still exist")
-            .0;
-        let item_loc = world
-            .get_component::<ObjectLocation>(eye)
-            .expect("stolen quest artifact should stay in the world");
-        assert!(matches!(
-            *item_loc,
-            ObjectLocation::Floor { x, y, level }
-                if (x as i32 - wizard_pos.x).abs() <= 1
-                    && (y as i32 - wizard_pos.y).abs() <= 1
-                    && level == world.dungeon().current_data_dungeon_level()
-        ));
+        assert!(
+            monster_carries_named_item(&world, wizard, "The Eye of the Aethiopica"),
+            "wizard harassment should put the stolen quest artifact into the Wizard's inventory"
+        );
+    }
+
+    #[test]
+    fn test_wizard_does_not_steal_amulet_from_high_priest_inventory() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let priest = spawn_full_monster(&mut world, Position::new(12, 12), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: nethack_babel_data::Alignment::Chaotic,
+                    has_shrine: true,
+                    is_high_priest: true,
+                    angry: false,
+                },
+            )
+            .expect("high priest test carrier should accept Priest data");
+        let _amulet =
+            spawn_monster_inventory_object_by_name(&mut world, priest, "Amulet of Yendor")
+                .expect("high priest should receive the Amulet");
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::StealAmulet,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            monster_carries_named_item(&world, priest, "Amulet of Yendor"),
+            "wizard harassment should not target a true Amulet carried by the high priest"
+        );
+        assert!(
+            !monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+            "wizard harassment should leave the high priest's Amulet untouched"
+        );
     }
 
     #[test]
@@ -15344,16 +15769,107 @@ mod tests {
             1,
             "covetous Wizard should end adjacent to the player before stealing"
         );
-        let item_loc = world
-            .get_component::<ObjectLocation>(amulet)
-            .expect("stolen Amulet should stay in the world");
-        assert!(matches!(
-            *item_loc,
-            ObjectLocation::Floor { x, y, level }
-                if (x as i32 - wizard_pos.x).abs() <= 1
-                    && (y as i32 - wizard_pos.y).abs() <= 1
-                    && level == world.dungeon().current_data_dungeon_level()
-        ));
+        assert!(
+            monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+            "covetous Wizard should carry the stolen Amulet after repositioning"
+        );
+    }
+
+    #[test]
+    fn test_wizard_steal_ground_amulet_moves_it_into_wizard_inventory() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.remove(amulet);
+        }
+        let ground_pos = Position::new(12, 12);
+        let ground_level = (world.dungeon().branch, world.dungeon().depth);
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(amulet) {
+            *loc =
+                crate::dungeon::floor_object_location(ground_level.0, ground_level.1, ground_pos);
+        }
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::StealAmulet,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+            "wizard harassment should move the ground Amulet into the Wizard's inventory"
+        );
+        let wizard_pos = world
+            .get_component::<Positioned>(wizard)
+            .expect("wizard should keep a position")
+            .0;
+        assert_eq!(
+            wizard_pos, ground_pos,
+            "wizard should relocate onto the target tile before picking up the ground Amulet"
+        );
+    }
+
+    #[test]
+    fn test_wounded_wizard_prefers_ground_amulet_over_heal_fallback() {
+        let mut world = make_stair_world(Terrain::Floor, 1);
+        for y in 3..=21 {
+            for x in 3..=21 {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(x, y), Terrain::Floor);
+            }
+        }
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        set_player_position(&mut world, Position::new(20, 20));
+        let wizard = spawn_full_monster(&mut world, Position::new(7, 7), "Wizard of Yendor", 20);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+            hp.current = 12;
+            hp.max = 20;
+        }
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.remove(amulet);
+        }
+        let ground_pos = Position::new(12, 12);
+        let ground_level = (world.dungeon().branch, world.dungeon().depth);
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(amulet) {
+            *loc =
+                crate::dungeon::floor_object_location(ground_level.0, ground_level.1, ground_pos);
+        }
+        let mut rng = test_rng();
+        let mut saw_steal = false;
+        for _ in 0..256 {
+            let events = resolve_turn(&mut world, PlayerAction::Rest, &mut rng);
+            assert!(
+                !events.iter().any(|event| matches!(
+                    event,
+                    EngineEvent::HpChange { entity, source: HpSource::Regeneration, .. } if *entity == wizard
+                )),
+                "wounded Wizard should not heal while a covetous ground Amulet target exists"
+            );
+            if monster_carries_named_item(&world, wizard, "Amulet of Yendor") {
+                saw_steal = true;
+                break;
+            }
+        }
+        assert!(
+            saw_steal,
+            "wounded Wizard should eventually prioritize a ground Amulet over heal fallback"
+        );
     }
 
     #[test]
@@ -23453,6 +23969,8 @@ mod tests {
             StoryTraversalScenario::WizardIntervention,
             StoryTraversalScenario::WizardAmuletWake,
             StoryTraversalScenario::WizardBlackGlowBlind,
+            StoryTraversalScenario::WizardCovetousGroundAmulet,
+            StoryTraversalScenario::WizardCovetousMonsterTool,
             StoryTraversalScenario::WizardCovetousQuestArtifact,
             StoryTraversalScenario::WizardRetreatHeal,
             StoryTraversalScenario::HumanoidAlohaChat,
@@ -24220,27 +24738,9 @@ mod tests {
                     );
                     let wizard = find_monster_named(&world, "Wizard of Yendor")
                         .expect("wizard harassment story matrix should keep the live Wizard");
-                    let wizard_pos = world
-                        .get_component::<Positioned>(wizard)
-                        .expect("wizard should keep a position")
-                        .0;
                     assert!(
-                        resolve_object_type_by_spec(&test_game_data().objects, "Amulet of Yendor")
-                            .is_some_and(|amulet_type| {
-                                world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter().any(
-                                    |(_, (core, loc))| {
-                                        core.otyp == amulet_type
-                                            && matches!(
-                                                *loc,
-                                                ObjectLocation::Floor { x, y, level }
-                                                    if (x as i32 - wizard_pos.x).abs() <= 1
-                                                        && (y as i32 - wizard_pos.y).abs() <= 1
-                                                        && level == world.dungeon().current_data_dungeon_level()
-                                            )
-                                    },
-                                )
-                            }),
-                        "{} should leave the stolen Amulet on the floor near the Wizard",
+                        monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+                        "{} should leave the stolen Amulet in the Wizard's inventory",
                         scenario.label()
                     );
                     assert!(
@@ -24395,6 +24895,45 @@ mod tests {
                         scenario.label()
                     );
                 }
+                StoryTraversalScenario::WizardCovetousGroundAmulet => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
+                    )));
+                    assert!(
+                        find_player_named_item(&world, player, "Amulet of Yendor").is_none(),
+                        "{} should remove the ground Amulet from the player inventory state",
+                        scenario.label()
+                    );
+                    let wizard = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("wizard ground-covetous scenario should keep the live Wizard");
+                    assert!(
+                        monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+                        "{} should move the ground Amulet into the Wizard's inventory",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::WizardCovetousMonsterTool => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. }
+                            if key == "wizard-steal-invocation-tool"
+                    )));
+                    let wizard = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("wizard monster-covetous scenario should keep the live Wizard");
+                    let carrier = find_monster_named(&world, "goblin")
+                        .expect("monster-covetous scenario should keep the live carrier");
+                    assert!(
+                        monster_carries_named_item(&world, wizard, "Book of the Dead"),
+                        "{} should move the monster-carried invocation tool into the Wizard inventory",
+                        scenario.label()
+                    );
+                    assert!(
+                        !monster_carries_named_item(&world, carrier, "Book of the Dead"),
+                        "{} should strip the carried invocation tool from the original monster",
+                        scenario.label()
+                    );
+                }
                 StoryTraversalScenario::WizardCovetousQuestArtifact => {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
@@ -24413,29 +24952,11 @@ mod tests {
                     );
                     let wizard = find_monster_named(&world, "Wizard of Yendor")
                         .expect("wizard covetous scenario should keep the live Wizard");
-                    let wizard_pos = world
-                        .get_component::<Positioned>(wizard)
-                        .expect("wizard should keep a position")
-                        .0;
-                    let eye = world
-                        .ecs()
-                        .query::<&Name>()
-                        .iter()
-                        .find_map(|(entity, name)| {
-                            quest_name_matches(&name.0, "The Eye of the Aethiopica")
-                                .then_some(entity)
-                        })
-                        .expect("wizard covetous scenario should keep the quest artifact entity");
-                    let item_loc = world
-                        .get_component::<ObjectLocation>(eye)
-                        .expect("stolen quest artifact should stay in the world");
-                    assert!(matches!(
-                        *item_loc,
-                        ObjectLocation::Floor { x, y, level }
-                            if (x as i32 - wizard_pos.x).abs() <= 1
-                                && (y as i32 - wizard_pos.y).abs() <= 1
-                                && level == world.dungeon().current_data_dungeon_level()
-                    ));
+                    assert!(
+                        monster_carries_named_item(&world, wizard, "The Eye of the Aethiopica"),
+                        "{} should move the stolen quest artifact into the Wizard's inventory",
+                        scenario.label()
+                    );
                     assert!(
                         world
                             .get_component::<PlayerEvents>(player)
