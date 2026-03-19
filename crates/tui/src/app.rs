@@ -89,6 +89,7 @@ impl MessageLog {
 #[derive(Debug, Clone)]
 pub struct TuiMessages {
     pub command_descriptions: HashMap<String, String>,
+    pub count_prefix: String,
     pub empty_handed: String,
     pub never_mind: String,
     pub no_such_item: String,
@@ -149,6 +150,7 @@ impl Default for TuiMessages {
     fn default() -> Self {
         Self {
             command_descriptions: HashMap::new(),
+            count_prefix: "Count".to_string(),
             empty_handed: "You are empty handed.".to_string(),
             never_mind: "Never mind.".to_string(),
             no_such_item: "You don't have that item.".to_string(),
@@ -1172,7 +1174,11 @@ impl App {
                         // Show the accumulated count in the message
                         // area so the player has feedback.
                         port.show_message(
-                            &format!("Count: {}", self.count_prefix.unwrap_or(0)),
+                            &format!(
+                                "{}: {}",
+                                self.messages_i18n.count_prefix,
+                                self.count_prefix.unwrap_or(0)
+                            ),
                             MessageUrgency::Normal,
                         );
                         continue;

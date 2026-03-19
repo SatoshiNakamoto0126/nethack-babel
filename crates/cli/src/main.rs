@@ -2352,6 +2352,40 @@ mod text_input_tests {
     }
 
     #[test]
+    fn load_runtime_assets_falls_back_to_embedded_when_data_dir_is_missing() {
+        let assets = load_runtime_assets("/definitely/missing/nethack-babel-data", "zh-CN")
+            .expect("embedded runtime assets");
+        assert_eq!(assets.source, ResourceSource::Embedded);
+        assert_eq!(assets.locale.current_language(), "zh-CN");
+        assert!(assets.data_dir.is_none());
+        assert!(!assets.data.monsters.is_empty());
+        assert!(!assets.data.objects.is_empty());
+        assert!(!assets.content.oracles.is_empty());
+    }
+
+    #[test]
+    fn zh_cn_game_option_labels_are_translated() {
+        let locale = init_embedded_locale_manager("zh-CN").expect("locale");
+        let cfg = config::Config::default();
+
+        for (name, _) in config::options_menu_items(&cfg) {
+            assert_ne!(
+                option_label(&locale, &name),
+                name.replace('_', " "),
+                "missing translation for option label: {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn zh_cn_option_values_are_translated() {
+        let locale = init_embedded_locale_manager("zh-CN").expect("locale");
+        assert_eq!(option_value(&locale, "traditional"), "传统");
+        assert_eq!(option_value(&locale, "teleport"), "传送");
+        assert_eq!(option_value(&locale, "loot"), "仅战利品");
+    }
+
+    #[test]
     fn parse_prompted_position_line_parses_two_numbers() {
         assert_eq!(
             parse_prompted_position_line("10 11\n"),
@@ -2771,7 +2805,11 @@ fn ensure_save_dir(save_path: &Path) -> Result<()> {
 /// Try to load an existing save file for the given player name.
 /// Returns `Some((world, turn, depth, rng_state))` if a save was found and
 /// successfully loaded; `None` if no save file exists.
-fn try_load_save(player_name: &str, data: &GameData) -> Option<(GameWorld, u32, i32, [u8; 32])> {
+fn try_load_save(
+    player_name: &str,
+    data: &GameData,
+    locale: &LocaleManager,
+) -> Option<(GameWorld, u32, i32, [u8; 32])> {
     let save_path = save::save_file_path(player_name);
     if !save::save_file_exists(&save_path) {
         return None;
@@ -2779,8 +2817,10 @@ fn try_load_save(player_name: &str, data: &GameData) -> Option<(GameWorld, u32, 
     match save::load_game_with_data(&save_path, data) {
         Ok(result) => Some(result),
         Err(e) => {
-            eprintln!("Warning: failed to load save file: {e}");
-            eprintln!("Starting a new game.");
+            let mut args = fluent::FluentArgs::new();
+            args.set("error", e.to_string());
+            eprintln!("{}", locale.translate("ui-save-load-warning", Some(&args)));
+            eprintln!("{}", locale.translate("ui-save-load-new-game", None));
             None
         }
     }
@@ -3079,7 +3119,10 @@ fn show_sound_options(
                 match indices[0] {
                     0 => cfg.sound.enabled = !cfg.sound.enabled,
                     1 => {
-                        let prompt = format!("{} (0-100): ", locale.translate("opt-volume", None));
+                        let mut prompt_args = fluent::FluentArgs::new();
+                        prompt_args.set("option", locale.translate("opt-volume", None));
+                        let prompt =
+                            locale.translate("ui-options-volume-prompt", Some(&prompt_args));
                         if let Some(val) = port.get_line(&prompt)
                             && let Ok(v) = val.trim().parse::<u8>()
                             && v <= 100
@@ -3472,6 +3515,7 @@ fn run_tui_mode(
     app.set_wizard_mode(wizard_mode);
     app.messages_i18n = TuiMessages {
         command_descriptions: localized_extended_command_descriptions(locale),
+        count_prefix: locale.translate("ui-count-prefix", None),
         empty_handed: locale.translate("ui-empty-handed", None),
         never_mind: locale.translate("ui-never-mind", None),
         no_such_item: locale.translate("ui-no-such-item", None),
@@ -4180,15 +4224,6 @@ fn main() -> Result<()> {
         }
     }
 
-    // -- Prepare optional recorder ----------------------------------------
-    let mut recorder = cli.record.as_ref().map(|path| {
-        let r = recording::GameRecorder::new(path);
-        if cli.text {
-            println!("Recording session to: {path}");
-        }
-        r
-    });
-
     // 2. Initialize tracing.
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::WARN)
@@ -4247,6 +4282,17 @@ fn main() -> Result<()> {
         );
     }
 
+    // -- Prepare optional recorder ----------------------------------------
+    let mut recorder = cli.record.as_ref().map(|path| {
+        let r = recording::GameRecorder::new(path);
+        if cli.text {
+            let mut args = fluent::FluentArgs::new();
+            args.set("path", path.clone());
+            println!("{}", locale.translate("ui-recording-start", Some(&args)));
+        }
+        r
+    });
+
     // 6. Create RNG.
     let mut rng = Pcg64::from_os_rng();
 
@@ -4268,7 +4314,7 @@ fn main() -> Result<()> {
         }
     };
     let (mut world, legacy_info) = if let Some((restored_world, turn, depth, rng_state)) =
-        recovered.or_else(|| try_load_save(player_name_for_save, &data))
+        recovered.or_else(|| try_load_save(player_name_for_save, &data, &locale))
     {
         // Re-seed the RNG from the saved state.
         rng = Pcg64::from_seed(rng_state);
@@ -4415,10 +4461,19 @@ fn main() -> Result<()> {
         match rec.save() {
             Ok(()) => {
                 if cli.text {
-                    println!("Session recorded to: {}", rec.output_path().display());
+                    let mut args = fluent::FluentArgs::new();
+                    args.set("path", rec.output_path().display().to_string());
+                    println!("{}", locale.translate("ui-recording-saved", Some(&args)));
                 }
             }
-            Err(e) => eprintln!("Warning: failed to save recording: {e}"),
+            Err(e) => {
+                let mut args = fluent::FluentArgs::new();
+                args.set("error", e.to_string());
+                eprintln!(
+                    "{}",
+                    locale.translate("ui-recording-save-warning", Some(&args))
+                );
+            }
         }
     }
 
