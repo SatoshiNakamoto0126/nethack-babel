@@ -838,6 +838,38 @@ npc-gurgle-gurgles = { $monster } gurgles.
 npc-burble-burbles = { $monster } burbles.
 npc-trumpet-trumpets = { $monster } trumpets.
 npc-groan-groans = { $monster } groans.
+shop-price = „Für Euch kostet { $item } nur { $price } Goldstück{ $price ->
+    [one] {""}
+   *[other] e
+    }.“
+shop-price-bargain = „Für Euch kostet { $item } nur { $price } Goldstück{ $price ->
+    [one] {""}
+   *[other] e
+    }, ein echtes Schnäppchen.“
+shop-price-excellent-choice = „Für Euch kostet { $item } nur { $price } Goldstück{ $price ->
+    [one] {""}
+   *[other] e
+    }, eine ausgezeichnete Wahl.“
+shop-price-finest-quality = „Für Euch kostet { $item } nur { $price } Goldstück{ $price ->
+    [one] {""}
+   *[other] e
+    }, feinste Qualität.“
+shop-price-gourmets-delight = „Für Euch kostet { $item } nur { $price } Goldstück{ $price ->
+    [one] {""}
+   *[other] e
+    }, ein Genuss für Feinschmecker!“
+shop-price-painstakingly-developed = „Für Euch kostet { $item } nur { $price } Goldstück{ $price ->
+    [one] {""}
+   *[other] e
+    }, mit größter Sorgfalt entwickelt!“
+shop-price-superb-craftsmanship = „Für Euch kostet { $item } nur { $price } Goldstück{ $price ->
+    [one] {""}
+   *[other] e
+    }, meisterhafte Handwerkskunst!“
+shop-price-one-of-a-kind = „Für Euch kostet { $item } nur { $price } Goldstück{ $price ->
+    [one] {""}
+   *[other] e
+    }, ein Unikat!“
 shop-enter-digging-tool = Eine Stimme aus dem Laden warnt Euch, Euer Grabwerkzeug draußen zu lassen.
 shop-enter-steed = Eine Stimme aus dem Laden besteht darauf, dass Ihr { $steed } draußen lasst.
 shop-enter-invisible = Eine misstrauische Stimme warnt, dass unsichtbare Kunden nicht willkommen sind.

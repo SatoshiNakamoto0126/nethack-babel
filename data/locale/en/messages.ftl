@@ -813,6 +813,34 @@ shop-price = "For you, { $item } only { $price } gold piece{ $price ->
     [one] {""}
    *[other] s
     }."
+shop-price-bargain = "For you, { $item } only { $price } gold piece{ $price ->
+    [one] {""}
+   *[other] s
+    }, a real bargain."
+shop-price-excellent-choice = "For you, { $item } only { $price } gold piece{ $price ->
+    [one] {""}
+   *[other] s
+    }, an excellent choice."
+shop-price-finest-quality = "For you, { $item } only { $price } gold piece{ $price ->
+    [one] {""}
+   *[other] s
+    }, finest quality."
+shop-price-gourmets-delight = "For you, { $item } only { $price } gold piece{ $price ->
+    [one] {""}
+   *[other] s
+    }, gourmets' delight!"
+shop-price-painstakingly-developed = "For you, { $item } only { $price } gold piece{ $price ->
+    [one] {""}
+   *[other] s
+    }, painstakingly developed!"
+shop-price-superb-craftsmanship = "For you, { $item } only { $price } gold piece{ $price ->
+    [one] {""}
+   *[other] s
+    }, superb craftsmanship!"
+shop-price-one-of-a-kind = "For you, { $item } only { $price } gold piece{ $price ->
+    [one] {""}
+   *[other] s
+    }, one of a kind!"
 shop-stolen = You have unpaid merchandise!
 shop-enter-digging-tool = A voice from the shop warns you to leave your digging tool outside.
 shop-enter-steed = A voice from the shop insists that you leave { $steed } outside.

@@ -845,20 +845,19 @@ pub fn pickup_in_shop(
 ) -> Vec<EngineEvent> {
     let mut events = Vec::new();
 
-    let (item_name, unit_price, quantity) =
-        match quoted_buy_details(world, _player, item, shop, obj_defs) {
-            Some(details) => details,
-            None => return events,
-        };
+    let quote = match quoted_buy_details(world, _player, item, shop, obj_defs) {
+        Some(details) => details,
+        None => return events,
+    };
 
     // Try to add to bill.
-    if shop.bill.add(item, unit_price, quantity) {
+    if shop.bill.add(item, quote.unit_price, quote.quantity) {
         events.push(EngineEvent::msg_with(
-            "shop-price",
+            quote.message_key,
             vec![
                 ("shopkeeper", shop.shopkeeper_name.clone()),
-                ("item", item_name),
-                ("price", (unit_price * quantity).to_string()),
+                ("item", quote.item_name),
+                ("price", (quote.unit_price * quote.quantity).to_string()),
             ],
         ));
     } else {
@@ -869,13 +868,20 @@ pub fn pickup_in_shop(
     events
 }
 
+struct ShopQuoteDetails {
+    item_name: String,
+    unit_price: i32,
+    quantity: i32,
+    message_key: &'static str,
+}
+
 fn quoted_buy_details(
     world: &GameWorld,
     player: Entity,
     item: Entity,
     shop: &ShopRoom,
     obj_defs: &[ObjectDef],
-) -> Option<(String, i32, i32)> {
+) -> Option<ShopQuoteDetails> {
     let (item_otyp, quantity, item_class) = {
         let core = world.get_component::<ObjectCore>(item)?;
         (core.otyp, core.quantity, core.object_class)
@@ -888,6 +894,7 @@ fn quoted_buy_details(
         .or_else(|| world.get_component::<Name>(item).map(|name| name.0.clone()))
         .unwrap_or_else(|| "item".to_string());
     let base_cost = obj_def.map(|d| d.cost as i32).unwrap_or(0);
+    let is_magic = obj_def.map(|d| d.is_magic).unwrap_or(false);
 
     // Get enchantment if present.
     let spe = world
@@ -933,7 +940,23 @@ fn quoted_buy_details(
         unit_price
     };
 
-    Some((item_name, unit_price, quantity))
+    let identified = world
+        .get_component::<nethack_babel_data::KnowledgeState>(item)
+        .is_some_and(|knowledge| knowledge.known);
+    let total_price = unit_price * quantity;
+
+    Some(ShopQuoteDetails {
+        message_key: price_quote_message_key(
+            item_class,
+            is_magic,
+            identified,
+            is_artifact,
+            total_price,
+        ),
+        item_name,
+        unit_price,
+        quantity,
+    })
 }
 
 pub fn quote_item_in_shop(
@@ -955,14 +978,13 @@ pub fn quote_item_in_shop(
         return None;
     }
 
-    let (item_name, unit_price, quantity) =
-        quoted_buy_details(world, player, item, shop, obj_defs)?;
+    let quote = quoted_buy_details(world, player, item, shop, obj_defs)?;
     Some(EngineEvent::msg_with(
-        "shop-price",
+        quote.message_key,
         vec![
             ("shopkeeper", shop.shopkeeper_name.clone()),
-            ("item", item_name),
-            ("price", (unit_price * quantity).to_string()),
+            ("item", quote.item_name),
+            ("price", (quote.unit_price * quote.quantity).to_string()),
         ],
     ))
 }
@@ -1906,21 +1928,48 @@ pub fn container_sale_value(
 // Shop embellishment
 // ---------------------------------------------------------------------------
 
-/// Get a shopkeeper embellishment phrase for displaying item prices.
+/// Choose the quoted-price message variant for a shop item.
 ///
-/// Mirrors `shk_embellish()` from `shk.c`.
-pub fn price_embellishment(price: i32) -> &'static str {
-    if price > 1000 {
-        "exquisite"
-    } else if price > 500 {
-        "fine"
-    } else if price > 200 {
-        "quality"
-    } else if price > 100 {
-        "nice"
-    } else {
-        "modest"
+/// This is a deterministic approximation of `shk_embellish()` from `shk.c`.
+pub fn price_quote_message_key(
+    item_class: ObjectClass,
+    is_magic: bool,
+    identified: bool,
+    is_artifact: bool,
+    total_price: i32,
+) -> &'static str {
+    if is_artifact {
+        return "shop-price-one-of-a-kind";
     }
+    if total_price < 10 {
+        return "shop-price";
+    }
+    if item_class == ObjectClass::Food {
+        return "shop-price-gourmets-delight";
+    }
+    if (identified && is_magic)
+        || matches!(
+            item_class,
+            ObjectClass::Amulet
+                | ObjectClass::Ring
+                | ObjectClass::Wand
+                | ObjectClass::Potion
+                | ObjectClass::Scroll
+                | ObjectClass::Spellbook
+        )
+    {
+        return "shop-price-painstakingly-developed";
+    }
+    if total_price >= 500 {
+        return "shop-price-finest-quality";
+    }
+    if total_price >= 250 {
+        return "shop-price-superb-craftsmanship";
+    }
+    if total_price >= 100 {
+        return "shop-price-excellent-choice";
+    }
+    "shop-price-bargain"
 }
 
 // ---------------------------------------------------------------------------
@@ -3487,12 +3536,39 @@ mod tests {
     // ── Price embellishment tests ────────────────────────────────
 
     #[test]
-    fn test_price_embellishment() {
-        assert_eq!(price_embellishment(1500), "exquisite");
-        assert_eq!(price_embellishment(700), "fine");
-        assert_eq!(price_embellishment(300), "quality");
-        assert_eq!(price_embellishment(150), "nice");
-        assert_eq!(price_embellishment(50), "modest");
+    fn test_price_quote_message_key() {
+        assert_eq!(
+            price_quote_message_key(ObjectClass::Food, false, false, false, 50),
+            "shop-price-gourmets-delight"
+        );
+        assert_eq!(
+            price_quote_message_key(ObjectClass::Wand, false, false, false, 50),
+            "shop-price-painstakingly-developed"
+        );
+        assert_eq!(
+            price_quote_message_key(ObjectClass::Tool, false, false, true, 50),
+            "shop-price-one-of-a-kind"
+        );
+        assert_eq!(
+            price_quote_message_key(ObjectClass::Weapon, false, false, false, 600),
+            "shop-price-finest-quality"
+        );
+        assert_eq!(
+            price_quote_message_key(ObjectClass::Weapon, false, false, false, 300),
+            "shop-price-superb-craftsmanship"
+        );
+        assert_eq!(
+            price_quote_message_key(ObjectClass::Weapon, false, false, false, 150),
+            "shop-price-excellent-choice"
+        );
+        assert_eq!(
+            price_quote_message_key(ObjectClass::Weapon, false, false, false, 50),
+            "shop-price-bargain"
+        );
+        assert_eq!(
+            price_quote_message_key(ObjectClass::Weapon, false, false, false, 5),
+            "shop-price"
+        );
     }
 
     // ── Deserted shop tests ──────────────────────────────────────

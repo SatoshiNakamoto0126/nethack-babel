@@ -3776,17 +3776,20 @@ mod tests {
             SaveStoryTraversalScenario::WizardCovetousGroundAmulet => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
                 let player = world.player();
+                let player_pos = world
+                    .get_component::<Positioned>(player)
+                    .expect("player should keep a position")
+                    .0;
                 let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
                 if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
                     inv.remove(amulet);
                 }
-                let ground_pos = Position::new(12, 12);
                 let ground_level = (world.dungeon().branch, world.dungeon().depth);
                 if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(amulet) {
                     *loc = nethack_babel_engine::dungeon::floor_object_location(
                         ground_level.0,
                         ground_level.1,
-                        ground_pos,
+                        player_pos,
                     );
                 }
                 let _wizard =
@@ -7938,7 +7941,10 @@ mod tests {
                     let quote_count = final_events
                         .iter()
                         .filter(|event| {
-                            matches!(event, EngineEvent::Message { key, .. } if key == "shop-price")
+                            matches!(
+                                event,
+                                EngineEvent::Message { key, .. } if key.starts_with("shop-price")
+                            )
                         })
                         .count();
                     assert_eq!(quote_count, 2);
@@ -8566,6 +8572,23 @@ mod tests {
                     assert!(
                         monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
                         "save/load ground-covetous matrix should keep the Amulet in the Wizard inventory"
+                    );
+                    let wizard_pos = world
+                        .get_component::<Positioned>(wizard)
+                        .expect(
+                            "wizard should keep a position after save/load ground-covetous replay",
+                        )
+                        .0;
+                    let player_pos = world
+                        .get_component::<Positioned>(player)
+                        .expect(
+                            "player should keep a position after save/load ground-covetous replay",
+                        )
+                        .0;
+                    assert_eq!(
+                        nethack_babel_engine::ball::chebyshev_distance(wizard_pos, player_pos),
+                        1,
+                        "save/load ground-covetous matrix should leave the Wizard adjacent to the player after stealing from the hero tile"
                     );
                 }
                 SaveStoryTraversalScenario::WizardCovetousMonsterTool => {

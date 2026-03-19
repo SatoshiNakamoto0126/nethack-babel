@@ -751,6 +751,38 @@ npc-gurgle-gurgles = { $monster } gurgles.
 npc-burble-burbles = { $monster } burbles.
 npc-trumpet-trumpets = { $monster } trumpets.
 npc-groan-groans = { $monster } groans.
+shop-price = « Pour vous, { $item } ne coûte que { $price } pièce{ $price ->
+    [one] {""}
+   *[other] s
+    } d’or. »
+shop-price-bargain = « Pour vous, { $item } ne coûte que { $price } pièce{ $price ->
+    [one] {""}
+   *[other] s
+    } d’or, une vraie affaire. »
+shop-price-excellent-choice = « Pour vous, { $item } ne coûte que { $price } pièce{ $price ->
+    [one] {""}
+   *[other] s
+    } d’or, un excellent choix. »
+shop-price-finest-quality = « Pour vous, { $item } ne coûte que { $price } pièce{ $price ->
+    [one] {""}
+   *[other] s
+    } d’or, de la plus fine qualité. »
+shop-price-gourmets-delight = « Pour vous, { $item } ne coûte que { $price } pièce{ $price ->
+    [one] {""}
+   *[other] s
+    } d’or, un délice de gourmet ! »
+shop-price-painstakingly-developed = « Pour vous, { $item } ne coûte que { $price } pièce{ $price ->
+    [one] {""}
+   *[other] s
+    } d’or, mis au point avec un soin extrême ! »
+shop-price-superb-craftsmanship = « Pour vous, { $item } ne coûte que { $price } pièce{ $price ->
+    [one] {""}
+   *[other] s
+    } d’or, d’une superbe facture ! »
+shop-price-one-of-a-kind = « Pour vous, { $item } ne coûte que { $price } pièce{ $price ->
+    [one] {""}
+   *[other] s
+    } d’or, une pièce unique ! »
 shop-enter-digging-tool = Une voix venue de la boutique vous avertit de laisser votre outil de creusement dehors.
 shop-enter-steed = Une voix venue de la boutique exige que vous laissiez { $steed } dehors.
 shop-enter-invisible = Une voix soupçonneuse avertit que les clients invisibles ne sont pas les bienvenus.

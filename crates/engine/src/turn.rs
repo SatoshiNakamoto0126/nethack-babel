@@ -6030,9 +6030,6 @@ fn find_ground_named_item_on_current_level(
 ) -> Option<(hecs::Entity, Position)> {
     let branch = world.dungeon().branch;
     let depth = world.dungeon().depth;
-    let player_pos = world
-        .get_component::<Positioned>(world.player())
-        .map(|pos| pos.0);
     world
         .ecs()
         .query::<&ObjectLocation>()
@@ -6040,9 +6037,6 @@ fn find_ground_named_item_on_current_level(
         .find_map(|(item, loc)| {
             let pos = crate::dungeon::floor_position_on_level(loc, branch, depth)?;
             if !item_matches_expected_name(world, item, expected_name) {
-                return None;
-            }
-            if player_pos == Some(pos) {
                 return None;
             }
             Some((item, pos))
@@ -6076,7 +6070,7 @@ fn find_monster_named_item_in_inventory(
             if exclude_special_amulet_carriers
                 && (world
                     .get_component::<crate::npc::Priest>(carrier)
-                    .is_some_and(|priest| priest.is_high_priest)
+                    .is_some_and(|priest| priest.has_shrine)
                     || world
                         .get_component::<Name>(carrier)
                         .is_some_and(|name| quest_name_matches(&name.0, "Wizard of Yendor")))
@@ -6945,7 +6939,18 @@ fn apply_wizard_covetous_target(
             true
         }
         WizardCovetTarget::Ground { item, position } => {
-            wizard_take_ground_item(world, wizard, item, position)
+            if world
+                .get_component::<Positioned>(player)
+                .is_some_and(|player_pos| player_pos.0 == position)
+            {
+                if !wizard_reposition_adjacent_to_entity(world, wizard, player) {
+                    return false;
+                }
+                wizard_move_item_into_inventory(world, wizard, item);
+                true
+            } else {
+                wizard_take_ground_item(world, wizard, item, position)
+            }
         }
         WizardCovetTarget::Monster { item, carrier } => {
             wizard_steal_monster_item(world, wizard, carrier, item)
@@ -11042,6 +11047,10 @@ mod tests {
                 let mut world = make_test_world();
                 install_test_catalogs(&mut world);
                 let player = world.player();
+                let player_pos = world
+                    .get_component::<Positioned>(player)
+                    .expect("player should keep a position")
+                    .0;
                 let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
                 if let Some(mut inv) =
                     world.get_component_mut::<crate::inventory::Inventory>(player)
@@ -11053,7 +11062,7 @@ mod tests {
                     *loc = crate::dungeon::floor_object_location(
                         ground_level.0,
                         ground_level.1,
-                        Position::new(12, 12),
+                        player_pos,
                     );
                 }
                 let wizard =
@@ -15734,6 +15743,50 @@ mod tests {
     }
 
     #[test]
+    fn test_wizard_does_not_steal_amulet_from_temple_priest_inventory() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let priest = spawn_full_monster(&mut world, Position::new(12, 12), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: nethack_babel_data::Alignment::Lawful,
+                    has_shrine: true,
+                    is_high_priest: false,
+                    angry: false,
+                },
+            )
+            .expect("temple priest test carrier should accept Priest data");
+        let _amulet =
+            spawn_monster_inventory_object_by_name(&mut world, priest, "Amulet of Yendor")
+                .expect("temple priest should receive the Amulet");
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::StealAmulet,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            monster_carries_named_item(&world, priest, "Amulet of Yendor"),
+            "wizard harassment should not target a true Amulet carried by a tended temple priest"
+        );
+        assert!(
+            !monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+            "wizard harassment should leave the temple priest's Amulet untouched"
+        );
+    }
+
+    #[test]
     fn test_wizard_covetously_repositions_before_stealing_amulet() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -15814,6 +15867,52 @@ mod tests {
         assert_eq!(
             wizard_pos, ground_pos,
             "wizard should relocate onto the target tile before picking up the ground Amulet"
+        );
+    }
+
+    #[test]
+    fn test_wizard_steals_ground_amulet_from_player_tile() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .expect("player should keep a position")
+            .0;
+        let wizard = spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 12);
+        let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.remove(amulet);
+        }
+        let ground_level = (world.dungeon().branch, world.dungeon().depth);
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(amulet) {
+            *loc =
+                crate::dungeon::floor_object_location(ground_level.0, ground_level.1, player_pos);
+        }
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::StealAmulet,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
+            "wizard harassment should steal a true Amulet dropped on the player's tile"
+        );
+        let wizard_pos = world
+            .get_component::<Positioned>(wizard)
+            .expect("wizard should keep a position")
+            .0;
+        assert_eq!(
+            crate::ball::chebyshev_distance(wizard_pos, player_pos),
+            1,
+            "wizard should end adjacent to the player before snatching a ground Amulet from the hero's tile"
         );
     }
 
@@ -20117,7 +20216,126 @@ mod tests {
 
         assert!(events.iter().any(|event| matches!(
             event,
-            EngineEvent::Message { key, .. } if key == "shop-price"
+            EngineEvent::Message { key, .. } if key.starts_with("shop-price")
+        )));
+    }
+
+    #[test]
+    fn test_chatting_on_shop_food_uses_gourmet_quote_texture() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Food,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let object_def = test_game_data()
+            .objects
+            .iter()
+            .find(|def| def.name.eq_ignore_ascii_case("food ration"))
+            .expect("food ration should exist in the test catalog");
+        let item = world.spawn((
+            ObjectCore {
+                otyp: object_def.id,
+                object_class: object_def.class,
+                quantity: 1,
+                weight: object_def.weight as u32,
+                age: 0,
+                inv_letter: Some('f'),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            Name("food ration".to_string()),
+        ));
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.push(item);
+            inv.items.retain(|entry| *entry != item);
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+            *loc = ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: current_level,
+            };
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-price-gourmets-delight"
+        )));
+    }
+
+    #[test]
+    fn test_chatting_on_artifact_shop_item_uses_one_of_a_kind_quote_texture() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+
+        let item = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.retain(|entry| *entry != item);
+        }
+        if let Some(mut core) = world.get_component_mut::<ObjectCore>(item) {
+            core.artifact = Some(nethack_babel_data::ArtifactId(1));
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
+            *loc = ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: current_level,
+            };
+        }
+
+        let mut rng = test_rng();
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::North,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-price-one-of-a-kind"
         )));
     }
 
@@ -20171,7 +20389,9 @@ mod tests {
         let quote_count = events
             .iter()
             .filter(
-                |event| matches!(event, EngineEvent::Message { key, .. } if key == "shop-price"),
+                |event| {
+                    matches!(event, EngineEvent::Message { key, .. } if key.starts_with("shop-price"))
+                },
             )
             .count();
         assert_eq!(quote_count, 2);
@@ -20334,7 +20554,7 @@ mod tests {
 
         assert!(!events.iter().any(|event| matches!(
             event,
-            EngineEvent::Message { key, .. } if key == "shop-price"
+            EngineEvent::Message { key, .. } if key.starts_with("shop-price")
         )));
         assert!(events.iter().any(|event| matches!(
             event,
@@ -20401,7 +20621,7 @@ mod tests {
 
         assert!(!events.iter().any(|event| matches!(
             event,
-            EngineEvent::Message { key, .. } if key == "shop-price"
+            EngineEvent::Message { key, .. } if key.starts_with("shop-price")
         )));
         assert!(events.iter().any(|event| matches!(
             event,
@@ -20455,7 +20675,7 @@ mod tests {
 
         assert!(!events.iter().any(|event| matches!(
             event,
-            EngineEvent::Message { key, .. } if key == "shop-price"
+            EngineEvent::Message { key, .. } if key.starts_with("shop-price")
         )));
         assert!(events.iter().any(|event| matches!(
             event,
@@ -20509,7 +20729,7 @@ mod tests {
 
         assert!(!events.iter().any(|event| matches!(
             event,
-            EngineEvent::Message { key, .. } if key == "shop-price"
+            EngineEvent::Message { key, .. } if key.starts_with("shop-price")
         )));
         assert!(events.iter().any(|event| matches!(
             event,
@@ -20549,7 +20769,7 @@ mod tests {
 
         assert!(!events.iter().any(|event| matches!(
             event,
-            EngineEvent::Message { key, .. } if key == "shop-price"
+            EngineEvent::Message { key, .. } if key.starts_with("shop-price")
         )));
         assert!(events.iter().any(|event| matches!(
             event,
@@ -24238,7 +24458,10 @@ mod tests {
                     let quote_count = final_events
                         .iter()
                         .filter(|event| {
-                            matches!(event, EngineEvent::Message { key, .. } if key == "shop-price")
+                            matches!(
+                                event,
+                                EngineEvent::Message { key, .. } if key.starts_with("shop-price")
+                            )
                         })
                         .count();
                     assert_eq!(
@@ -24910,6 +25133,20 @@ mod tests {
                     assert!(
                         monster_carries_named_item(&world, wizard, "Amulet of Yendor"),
                         "{} should move the ground Amulet into the Wizard's inventory",
+                        scenario.label()
+                    );
+                    let player_pos = world
+                        .get_component::<Positioned>(player)
+                        .expect("player should keep a position")
+                        .0;
+                    let wizard_pos = world
+                        .get_component::<Positioned>(wizard)
+                        .expect("wizard should keep a position")
+                        .0;
+                    assert_eq!(
+                        crate::ball::chebyshev_distance(wizard_pos, player_pos),
+                        1,
+                        "{} should leave the covetous Wizard adjacent to the player after stealing from the hero's tile",
                         scenario.label()
                     );
                 }
