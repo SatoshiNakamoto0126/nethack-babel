@@ -1642,6 +1642,19 @@ fn resolve_player_action(
                         state.literate = state.literate.saturating_add(1);
                     });
                     events.extend(read_events);
+                } else if let Some(spell_type) = infer_spell_type_from_item(world, *item_entity) {
+                    let (_result, mut read_events) =
+                        crate::spells::learn_spell(world, player, spell_type);
+                    increment_conduct(world, player, |state| {
+                        state.literate = state.literate.saturating_add(1);
+                    });
+                    charge_unpaid_spellbook_read_in_shop(
+                        world,
+                        player,
+                        *item_entity,
+                        &mut read_events,
+                    );
+                    events.extend(read_events);
                 } else {
                     events.push(EngineEvent::msg("read-generic"));
                 }
@@ -5590,6 +5603,26 @@ fn infer_scroll_type_from_item(
     })
 }
 
+fn infer_spell_type_from_item(
+    world: &GameWorld,
+    item: hecs::Entity,
+) -> Option<crate::spells::SpellType> {
+    if let Some(core) = world.get_component::<ObjectCore>(item)
+        && let Some(def) = crate::items::object_def_for_core(world.object_catalog(), &core)
+        && def.class == ObjectClass::Spellbook
+        && let Some(spell_type) = crate::spells::SpellType::from_name(&def.name)
+    {
+        return Some(spell_type);
+    }
+
+    let name = item_name_lower(world, item)?;
+    let normalized = name
+        .strip_prefix("spellbook of ")
+        .or_else(|| name.strip_prefix("spellbook "))
+        .unwrap_or(name.as_str());
+    crate::spells::SpellType::from_name(normalized)
+}
+
 fn item_name_lower(world: &GameWorld, item: hecs::Entity) -> Option<String> {
     world
         .get_component::<Name>(item)
@@ -8624,6 +8657,61 @@ fn charge_unpaid_apply_usage_in_shop(
     sync_current_level_shopkeeper_state(world);
 }
 
+fn charge_unpaid_spellbook_read_in_shop(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    item: hecs::Entity,
+    events: &mut Vec<EngineEvent>,
+) {
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return;
+    };
+    let Some(shop_idx) = find_shop_index_containing_position(world, player_pos) else {
+        return;
+    };
+
+    let Some((shopkeeper, shopkeeper_name, fee)) =
+        world.dungeon().shop_rooms.get(shop_idx).and_then(|shop| {
+            let entry = shop.bill.find(item)?;
+            let owed = (entry.price * entry.original_quantity - entry.paid_amount).max(0);
+            if owed <= 0 {
+                return None;
+            }
+            let fee =
+                crate::shop::usage_fee(entry.price, false, false, true, false, false, false, false);
+            (fee > 0).then(|| (shop.shopkeeper, shop.shopkeeper_name.clone(), fee))
+        })
+    else {
+        return;
+    };
+
+    let Some(shopkeeper_pos) = world
+        .get_component::<Positioned>(shopkeeper)
+        .map(|pos| pos.0)
+    else {
+        return;
+    };
+    if !live_monster_entity(world, shopkeeper)
+        || !world.dungeon().shop_rooms[shop_idx].contains(shopkeeper_pos)
+    {
+        return;
+    }
+
+    world.dungeon_mut().shop_rooms[shop_idx].debit += fee;
+    if !crate::status::is_deaf(world, player) {
+        events.push(EngineEvent::msg_with(
+            "shop-usage-fee",
+            vec![("shopkeeper", shopkeeper_name), ("amount", fee.to_string())],
+        ));
+    }
+    record_player_exercise_action(
+        world,
+        player,
+        crate::attributes::ExerciseAction::ShopTransaction,
+    );
+    sync_current_level_shopkeeper_state(world);
+}
+
 fn add_player_gold(world: &mut GameWorld, player: hecs::Entity, amount: u32) {
     if amount == 0 {
         return;
@@ -10071,6 +10159,7 @@ mod tests {
         ShopLampUsageFee,
         ShopCameraUsageFee,
         ShopTinningUsageFee,
+        ShopSpellbookUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         ShopContainerPickup,
@@ -10139,6 +10228,7 @@ mod tests {
                 StoryTraversalScenario::ShopLampUsageFee => "shop-lamp-usage-fee",
                 StoryTraversalScenario::ShopCameraUsageFee => "shop-camera-usage-fee",
                 StoryTraversalScenario::ShopTinningUsageFee => "shop-tinning-usage-fee",
+                StoryTraversalScenario::ShopSpellbookUsageFee => "shop-spellbook-usage-fee",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 StoryTraversalScenario::ShopContainerPickup => "shop-container-pickup",
@@ -11125,6 +11215,38 @@ mod tests {
                     &mut rng,
                 );
                 (world, apply_events)
+            }
+            StoryTraversalScenario::ShopSpellbookUsageFee => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Book,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let book = spawn_inventory_object_by_name(&mut world, "spellbook of light", 'b');
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(book, 100, 1),
+                    "shop bill should accept unpaid spellbook"
+                );
+
+                let mut rng = test_rng();
+                let read_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Read { item: Some(book) },
+                    &mut rng,
+                );
+                (world, read_events)
             }
             StoryTraversalScenario::ShopkeeperSell => {
                 let mut world = make_test_world();
@@ -18943,6 +19065,115 @@ mod tests {
             e,
             EngineEvent::Message { key, .. } if key == "scroll-cant-read-blind"
         )));
+    }
+
+    #[test]
+    fn test_reading_spellbook_learns_spell() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let book = spawn_inventory_object_by_name(&mut world, "spellbook of light", 'b');
+        assert_eq!(
+            infer_spell_type_from_item(&world, book),
+            Some(crate::spells::SpellType::Light)
+        );
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Read { item: Some(book) },
+            &mut rng,
+        );
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "spell-learned"
+            )),
+            "expected spell-learned, got {events:?}"
+        );
+        let learned = world
+            .get_component::<crate::spells::SpellBook>(player)
+            .expect("reading a spellbook should create a spellbook component");
+        assert_eq!(
+            learned.find(crate::spells::SpellType::Light),
+            Some(crate::action::SpellId(0))
+        );
+    }
+
+    #[test]
+    fn test_reading_known_spellbook_refreshes_memory() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let book = spawn_inventory_object_by_name(&mut world, "spellbook of light", 'b');
+        let (_result, _events) =
+            crate::spells::learn_spell(&mut world, player, crate::spells::SpellType::Light);
+        {
+            let mut known = world
+                .get_component_mut::<crate::spells::SpellBook>(player)
+                .expect("player should know light before refresh");
+            known.spells[0].memory = 1;
+        }
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Read { item: Some(book) },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "spell-refreshed"
+        )));
+        let known = world
+            .get_component::<crate::spells::SpellBook>(player)
+            .expect("player should still have a spellbook component");
+        assert_eq!(known.spells[0].memory, crate::spells::KEEN + 1);
+    }
+
+    #[test]
+    fn test_reading_unpaid_spellbook_in_shop_adds_usage_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Book,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let book = spawn_inventory_object_by_name(&mut world, "spellbook of light", 'b');
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(book, 100, 1),
+            "shop bill should accept unpaid spellbook"
+        );
+        let mut rng = test_rng();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Read { item: Some(book) },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "spell-learned"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 80);
     }
 
     // ── Stunned/confused wand direction randomization ─────────────────
@@ -26962,6 +27193,7 @@ mod tests {
             StoryTraversalScenario::ShopLampUsageFee,
             StoryTraversalScenario::ShopCameraUsageFee,
             StoryTraversalScenario::ShopTinningUsageFee,
+            StoryTraversalScenario::ShopSpellbookUsageFee,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopChatPriceQuote,
             StoryTraversalScenario::ShopContainerPickup,
@@ -27391,6 +27623,29 @@ mod tests {
                         shop.debit,
                         10,
                         "{} should add the tinning kit usage fee as debit",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopSpellbookUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "spell-learned"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(
+                        shop.bill.total(),
+                        100,
+                        "{} should preserve the billed spellbook price",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        shop.debit,
+                        80,
+                        "{} should add the spellbook usage fee as debit",
                         scenario.label()
                     );
                 }

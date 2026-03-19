@@ -1762,11 +1762,24 @@ mod tests {
         letter: char,
     ) -> hecs::Entity {
         let data = test_game_data();
+        let normalized = name.trim().to_ascii_lowercase();
         let object_def = data
             .objects
             .iter()
-            .find(|def| def.name.eq_ignore_ascii_case(name))
-            .unwrap_or_else(|| panic!("{name} should exist in the object catalog"));
+            .find_map(|def| {
+                let canonical = def.name.to_ascii_lowercase();
+                let prefixed = match def.class {
+                    ObjectClass::Wand => format!("wand of {canonical}"),
+                    ObjectClass::Scroll => format!("scroll of {canonical}"),
+                    ObjectClass::Potion => format!("potion of {canonical}"),
+                    ObjectClass::Ring => format!("ring of {canonical}"),
+                    ObjectClass::Spellbook => format!("spellbook of {canonical}"),
+                    ObjectClass::Amulet => format!("amulet of {canonical}"),
+                    _ => canonical.clone(),
+                };
+                (normalized == canonical || normalized == prefixed).then_some(def)
+            })
+            .unwrap_or_else(|| panic!("{name} should resolve against the object catalog"));
         let item = world.spawn((
             ObjectCore {
                 otyp: object_def.id,
@@ -1993,6 +2006,7 @@ mod tests {
         ShopLampUsageFee,
         ShopCameraUsageFee,
         ShopTinningUsageFee,
+        ShopSpellbookUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         ShopContainerPickup,
@@ -2061,6 +2075,7 @@ mod tests {
                 SaveStoryTraversalScenario::ShopLampUsageFee => "shop-lamp-usage-fee",
                 SaveStoryTraversalScenario::ShopCameraUsageFee => "shop-camera-usage-fee",
                 SaveStoryTraversalScenario::ShopTinningUsageFee => "shop-tinning-usage-fee",
+                SaveStoryTraversalScenario::ShopSpellbookUsageFee => "shop-spellbook-usage-fee",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 SaveStoryTraversalScenario::ShopContainerPickup => "shop-container-pickup",
@@ -3178,6 +3193,58 @@ mod tests {
                     &mut loaded,
                     PlayerAction::Apply {
                         item: loaded_tinning_kit,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopSpellbookUsageFee => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Book,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let book = spawn_inventory_object_by_name(&mut world, "spellbook of light", 'b');
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(book, 100, 1),
+                    "shop bill should accept unpaid spellbook"
+                );
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-shop-spellbook-usage-fee",
+                    &world,
+                    [69u8; 32],
+                );
+                let loaded_book = loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .and_then(|inv| {
+                        inv.items.iter().copied().find(|item| {
+                            loaded
+                                .get_component::<ObjectCore>(*item)
+                                .is_some_and(|core| {
+                                    core.object_class == ObjectClass::Spellbook
+                                        && core.inv_letter == Some('b')
+                                })
+                        })
+                    })
+                    .expect("reloaded inventory should preserve the unpaid spellbook");
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Read {
+                        item: Some(loaded_book),
                     },
                     &mut rng,
                 );
@@ -6610,7 +6677,9 @@ mod tests {
             "after save/load, a non-Wizard covetous monster should keep the original directional retreat stair choice"
         );
         assert_eq!(
-            loaded.get_component::<Positioned>(arch_lich).map(|pos| pos.0),
+            loaded
+                .get_component::<Positioned>(arch_lich)
+                .map(|pos| pos.0),
             Some(expected),
             "after save/load, the covetous monster should still land on the preferred retreat stair"
         );
@@ -8460,6 +8529,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopLampUsageFee,
             SaveStoryTraversalScenario::ShopCameraUsageFee,
             SaveStoryTraversalScenario::ShopTinningUsageFee,
+            SaveStoryTraversalScenario::ShopSpellbookUsageFee,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopChatPriceQuote,
             SaveStoryTraversalScenario::ShopContainerPickup,
@@ -8800,6 +8870,19 @@ mod tests {
                     )));
                     assert_eq!(shop.bill.total(), 100);
                     assert_eq!(shop.debit, 10);
+                }
+                SaveStoryTraversalScenario::ShopSpellbookUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "spell-learned"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(shop.bill.total(), 100);
+                    assert_eq!(shop.debit, 80);
                 }
                 SaveStoryTraversalScenario::ShopkeeperSell => {
                     let shop = &world.dungeon().shop_rooms[0];

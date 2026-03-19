@@ -106,6 +106,54 @@ pub enum SpellDirection {
 }
 
 impl SpellType {
+    /// Resolve a spell type from its canonical object/spell name.
+    pub fn from_name(name: &str) -> Option<Self> {
+        let normalized = name.trim().to_ascii_lowercase();
+        Some(match normalized.as_str() {
+            "force bolt" => SpellType::ForceBolt,
+            "magic missile" => SpellType::MagicMissile,
+            "fireball" => SpellType::Fireball,
+            "cone of cold" => SpellType::ConeOfCold,
+            "drain life" => SpellType::DrainLife,
+            "finger of death" => SpellType::FingerOfDeath,
+            "healing" => SpellType::HealingSpell,
+            "extra healing" => SpellType::ExtraHealing,
+            "cure blindness" => SpellType::CureBlindness,
+            "cure sickness" => SpellType::CureSickness,
+            "restore ability" => SpellType::RestoreAbility,
+            "stone to flesh" => SpellType::StoneToFlesh,
+            "light" => SpellType::Light,
+            "detect monsters" => SpellType::DetectMonsters,
+            "detect food" => SpellType::DetectFood,
+            "detect unseen" => SpellType::DetectUnseen,
+            "clairvoyance" => SpellType::Clairvoyance,
+            "detect treasure" => SpellType::DetectTreasure,
+            "magic mapping" => SpellType::MagicMapping,
+            "identify" => SpellType::Identify,
+            "confuse monster" => SpellType::ConfuseMonster,
+            "sleep" => SpellType::Sleep,
+            "slow monster" => SpellType::SlowMonster,
+            "cause fear" => SpellType::CauseFear,
+            "charm monster" => SpellType::CharmMonster,
+            "protection" => SpellType::Protection,
+            "remove curse" => SpellType::RemoveCurse,
+            "create monster" => SpellType::CreateMonster,
+            "turn undead" => SpellType::TurnUndead,
+            "create familiar" => SpellType::CreateFamiliar,
+            "haste self" => SpellType::HasteSelf,
+            "levitation" => SpellType::Levitation,
+            "invisibility" => SpellType::Invisibility,
+            "teleport away" => SpellType::TeleportAway,
+            "jumping" => SpellType::Jumping,
+            "knock" => SpellType::Knock,
+            "wizard lock" => SpellType::WizardLock,
+            "dig" => SpellType::Dig,
+            "polymorph" => SpellType::Polymorph,
+            "cancellation" => SpellType::Cancellation,
+            _ => return None,
+        })
+    }
+
     /// Spell level (1-7) as defined in the NetHack objects table.
     pub fn level(self) -> u8 {
         match self {
