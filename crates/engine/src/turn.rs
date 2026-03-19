@@ -6699,6 +6699,14 @@ fn wizard_nasty_weight(
     weight
 }
 
+fn wizard_nasty_is_high_spellcaster(monster: &MonsterDef, difficulty_cap: u8) -> bool {
+    monster.difficulty >= difficulty_cap
+        && monster
+            .attacks
+            .iter()
+            .any(|attack| attack.method == nethack_babel_data::AttackMethod::MagicMissile)
+}
+
 fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Vec<String> {
     let branch = world.dungeon().branch;
     let depth = world.dungeon().depth.max(1) as u8;
@@ -6750,6 +6758,7 @@ fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Ve
     }
 
     let mut picks = Vec::new();
+    let mut high_spellcaster_seen = false;
     if branch == DungeonBranch::Gehennom && rng.random_range(0..10) == 0 {
         let demon_surge_pool = candidates
             .iter()
@@ -6772,7 +6781,11 @@ fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Ve
                 }
             }
             let idx = rng.random_range(0..weighted_demon_pool.len());
-            picks.push(weighted_demon_pool[idx].names.male.clone());
+            let demon_pick = weighted_demon_pool[idx];
+            if wizard_nasty_is_high_spellcaster(demon_pick, desired_difficulty) {
+                high_spellcaster_seen = true;
+            }
+            picks.push(demon_pick.names.male.clone());
         }
     }
 
@@ -6792,6 +6805,10 @@ fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Ve
     while picks.len() < desired_count && !weighted_pool.is_empty() && attempts < max_attempts {
         let idx = rng.random_range(0..weighted_pool.len());
         let monster = weighted_pool[idx];
+        if high_spellcaster_seen && wizard_nasty_is_high_spellcaster(monster, desired_difficulty) {
+            attempts += 1;
+            continue;
+        }
         let already_picked = picks
             .iter()
             .any(|name: &String| quest_name_matches(name, &monster.names.male));
@@ -6800,12 +6817,32 @@ fn choose_wizard_nasty_summon_specs(world: &GameWorld, rng: &mut impl Rng) -> Ve
             continue;
         }
         picks.push(monster.names.male.clone());
+        if wizard_nasty_is_high_spellcaster(monster, desired_difficulty) {
+            high_spellcaster_seen = true;
+        }
         attempts += 1;
     }
 
-    while picks.len() < desired_count {
+    let fallback_attempt_limit = max_attempts.saturating_add(desired_count.saturating_mul(16));
+    while picks.len() < desired_count && attempts < fallback_attempt_limit {
         let idx = rng.random_range(0..candidates.len());
-        picks.push(candidates[idx].names.male.clone());
+        let monster = candidates[idx];
+        if high_spellcaster_seen && wizard_nasty_is_high_spellcaster(monster, desired_difficulty) {
+            attempts += 1;
+            continue;
+        }
+        let already_picked = picks
+            .iter()
+            .any(|name: &String| quest_name_matches(name, &monster.names.male));
+        if already_picked && picks.len() < unique_cap {
+            attempts += 1;
+            continue;
+        }
+        picks.push(monster.names.male.clone());
+        if wizard_nasty_is_high_spellcaster(monster, desired_difficulty) {
+            high_spellcaster_seen = true;
+        }
+        attempts += 1;
     }
 
     if picks.is_empty() {
@@ -15887,6 +15924,76 @@ mod tests {
         }
 
         panic!("high-level players should eventually trigger larger nasty swarms");
+    }
+
+    #[test]
+    fn test_endgame_wizard_nasties_limit_high_spellcasters() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = DungeonBranch::Endgame;
+        world.dungeon_mut().depth = 3;
+        let player = world.player();
+        let mut player_events = read_player_events(&world, player);
+        player_events.invoked = true;
+        persist_player_events(&mut world, player, player_events);
+
+        let desired_difficulty = 20u8;
+        for seed in 0..512u64 {
+            let mut rng = Pcg64::seed_from_u64(seed);
+            let picks = choose_wizard_nasty_summon_specs(&world, &mut rng);
+            let high_spellcasters = picks
+                .iter()
+                .filter(|name| {
+                    resolve_monster_id_by_spec(&test_game_data().monsters, name)
+                        .and_then(|id| {
+                            test_game_data()
+                                .monsters
+                                .iter()
+                                .find(|monster| monster.id == id)
+                        })
+                        .is_some_and(|monster| {
+                            wizard_nasty_is_high_spellcaster(monster, desired_difficulty)
+                        })
+                })
+                .count();
+            assert!(
+                high_spellcasters <= 1,
+                "seed {seed} produced too many high-level spellcasters: {picks:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_gehennom_wizard_nasties_limit_high_spellcasters_even_with_demon_surge() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.dungeon_mut().branch = DungeonBranch::Gehennom;
+        world.dungeon_mut().depth = 20;
+
+        let desired_difficulty = 28u8;
+        for seed in 0..1024u64 {
+            let mut rng = Pcg64::seed_from_u64(seed);
+            let picks = choose_wizard_nasty_summon_specs(&world, &mut rng);
+            let high_spellcasters = picks
+                .iter()
+                .filter(|name| {
+                    resolve_monster_id_by_spec(&test_game_data().monsters, name)
+                        .and_then(|id| {
+                            test_game_data()
+                                .monsters
+                                .iter()
+                                .find(|monster| monster.id == id)
+                        })
+                        .is_some_and(|monster| {
+                            wizard_nasty_is_high_spellcaster(monster, desired_difficulty)
+                        })
+                })
+                .count();
+            assert!(
+                high_spellcasters <= 1,
+                "seed {seed} produced too many Gehennom spellcasters: {picks:?}"
+            );
+        }
     }
 
     #[test]
