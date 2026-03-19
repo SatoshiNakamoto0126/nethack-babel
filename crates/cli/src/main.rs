@@ -785,6 +785,159 @@ fn parse_prompted_position_line(line: &str) -> Option<Position> {
     parse_position_tokens(x_token, y_token)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TextDirectionCommand {
+    Open,
+    Close,
+    Kick,
+    Chat,
+    Fight,
+    Run,
+    Rush,
+    Untrap,
+    MoveNoPickup,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PromptedDirectionLine {
+    Cancel,
+    Help,
+    Direction(Direction),
+    Invalid,
+}
+
+fn parse_prompted_direction_line(line: &str) -> PromptedDirectionLine {
+    let trimmed = line.trim();
+    if trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("esc")
+        || trimmed.eq_ignore_ascii_case("cancel")
+    {
+        return PromptedDirectionLine::Cancel;
+    }
+    if trimmed == "?" || trimmed.eq_ignore_ascii_case("help") {
+        return PromptedDirectionLine::Help;
+    }
+    parse_direction_token(trimmed)
+        .map(PromptedDirectionLine::Direction)
+        .unwrap_or(PromptedDirectionLine::Invalid)
+}
+
+fn parse_text_mode_direction_prompt_request(input: &str) -> Option<TextDirectionCommand> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let lower = trimmed.to_ascii_lowercase();
+    if let Some(rest) = lower.strip_prefix('m') {
+        let rest = rest.trim();
+        if rest.is_empty() || parse_direction_token(rest).is_none() {
+            return Some(TextDirectionCommand::MoveNoPickup);
+        }
+        return None;
+    }
+
+    let mut parts = trimmed.split_whitespace();
+    let cmd = parts.next()?.to_ascii_lowercase();
+    let direction_token = parts.next();
+    let command = match cmd.as_str() {
+        "open" => TextDirectionCommand::Open,
+        "close" => TextDirectionCommand::Close,
+        "kick" => TextDirectionCommand::Kick,
+        "chat" => TextDirectionCommand::Chat,
+        "fight" => TextDirectionCommand::Fight,
+        "run" => TextDirectionCommand::Run,
+        "rush" => TextDirectionCommand::Rush,
+        "untrap" => TextDirectionCommand::Untrap,
+        _ => return None,
+    };
+
+    if direction_token.is_none_or(|token| parse_direction_token(token).is_none()) {
+        Some(command)
+    } else {
+        None
+    }
+}
+
+fn text_direction_command_prompt(locale: &LocaleManager, command: TextDirectionCommand) -> String {
+    match command {
+        TextDirectionCommand::Run => locale.translate("ui-direction-prompt-run", None),
+        TextDirectionCommand::Rush => locale.translate("ui-direction-prompt-rush", None),
+        TextDirectionCommand::Open
+        | TextDirectionCommand::Close
+        | TextDirectionCommand::Kick
+        | TextDirectionCommand::Chat
+        | TextDirectionCommand::Fight
+        | TextDirectionCommand::Untrap
+        | TextDirectionCommand::MoveNoPickup => locale.translate("ui-direction-prompt", None),
+    }
+}
+
+fn text_direction_command_action(
+    command: TextDirectionCommand,
+    direction: Direction,
+) -> Option<PlayerAction> {
+    match command {
+        TextDirectionCommand::Open => Some(PlayerAction::Open { direction }),
+        TextDirectionCommand::Close => Some(PlayerAction::Close { direction }),
+        TextDirectionCommand::Kick => Some(PlayerAction::Kick { direction }),
+        TextDirectionCommand::Chat => Some(PlayerAction::Chat { direction }),
+        TextDirectionCommand::Fight => Some(PlayerAction::FightDirection { direction }),
+        TextDirectionCommand::Run => Some(PlayerAction::RunDirection { direction }),
+        TextDirectionCommand::Rush => Some(PlayerAction::RushDirection { direction }),
+        TextDirectionCommand::Untrap => Some(PlayerAction::Untrap { direction }),
+        TextDirectionCommand::MoveNoPickup => match direction {
+            Direction::Up => Some(PlayerAction::GoUp),
+            Direction::Down => Some(PlayerAction::GoDown),
+            Direction::Self_ => None,
+            _ => Some(PlayerAction::MoveNoPickup { direction }),
+        },
+    }
+}
+
+fn prompt_text_direction(
+    stdin: &io::Stdin,
+    stdout: &io::Stdout,
+    locale: &LocaleManager,
+    prompt: &str,
+    command: TextDirectionCommand,
+) -> Result<Option<PlayerAction>> {
+    loop {
+        print!("  {} ", prompt);
+        stdout.lock().flush()?;
+
+        let mut line = String::new();
+        let bytes_read = stdin.lock().read_line(&mut line)?;
+        if bytes_read == 0 {
+            return Ok(None);
+        }
+
+        match parse_prompted_direction_line(&line) {
+            PromptedDirectionLine::Cancel => return Ok(None),
+            PromptedDirectionLine::Help => {
+                println!();
+                println!(
+                    "=== {} ===",
+                    locale.translate("ui-direction-help-title", None)
+                );
+                for help_line in locale.translate("ui-direction-help-body", None).lines() {
+                    println!("{help_line}");
+                }
+                println!();
+            }
+            PromptedDirectionLine::Direction(direction) => {
+                if let Some(action) = text_direction_command_action(command, direction) {
+                    return Ok(Some(action));
+                }
+                println!("  {}", locale.translate("ui-direction-invalid", None));
+            }
+            PromptedDirectionLine::Invalid => {
+                println!("  {}", locale.translate("ui-direction-invalid", None));
+            }
+        }
+    }
+}
+
 fn command_menu_kind_for_position(player_pos: Position, position: Position) -> CommandMenuKind {
     if player_pos == position {
         CommandMenuKind::Here
@@ -2272,6 +2425,82 @@ mod text_input_tests {
         assert_eq!(parse_direction_token(">"), Some(Direction::Down));
         assert_eq!(parse_direction_token("."), Some(Direction::Self_));
         assert_eq!(parse_direction_token("bogus"), None);
+    }
+
+    #[test]
+    fn parse_prompted_direction_line_recognizes_help_cancel_and_dirs() {
+        assert_eq!(
+            parse_prompted_direction_line("?\n"),
+            PromptedDirectionLine::Help
+        );
+        assert_eq!(
+            parse_prompted_direction_line("help\n"),
+            PromptedDirectionLine::Help
+        );
+        assert_eq!(
+            parse_prompted_direction_line("\n"),
+            PromptedDirectionLine::Cancel
+        );
+        assert_eq!(
+            parse_prompted_direction_line("esc\n"),
+            PromptedDirectionLine::Cancel
+        );
+        assert_eq!(
+            parse_prompted_direction_line("l\n"),
+            PromptedDirectionLine::Direction(Direction::East)
+        );
+        assert_eq!(
+            parse_prompted_direction_line("bogus\n"),
+            PromptedDirectionLine::Invalid
+        );
+    }
+
+    #[test]
+    fn parse_text_mode_direction_prompt_request_detects_missing_or_invalid_dirs() {
+        assert_eq!(
+            parse_text_mode_direction_prompt_request("open"),
+            Some(TextDirectionCommand::Open)
+        );
+        assert_eq!(
+            parse_text_mode_direction_prompt_request("run"),
+            Some(TextDirectionCommand::Run)
+        );
+        assert_eq!(
+            parse_text_mode_direction_prompt_request("kick bogus"),
+            Some(TextDirectionCommand::Kick)
+        );
+        assert_eq!(
+            parse_text_mode_direction_prompt_request("m"),
+            Some(TextDirectionCommand::MoveNoPickup)
+        );
+        assert_eq!(
+            parse_text_mode_direction_prompt_request("m bogus"),
+            Some(TextDirectionCommand::MoveNoPickup)
+        );
+        assert_eq!(parse_text_mode_direction_prompt_request("open h"), None);
+        assert_eq!(parse_text_mode_direction_prompt_request("mh"), None);
+    }
+
+    #[test]
+    fn text_direction_command_action_maps_reqmenu_prefix_stairs() {
+        assert!(matches!(
+            text_direction_command_action(TextDirectionCommand::MoveNoPickup, Direction::Up),
+            Some(PlayerAction::GoUp)
+        ));
+        assert!(matches!(
+            text_direction_command_action(TextDirectionCommand::MoveNoPickup, Direction::Down),
+            Some(PlayerAction::GoDown)
+        ));
+        assert!(matches!(
+            text_direction_command_action(TextDirectionCommand::MoveNoPickup, Direction::West),
+            Some(PlayerAction::MoveNoPickup {
+                direction: Direction::West
+            })
+        ));
+        assert!(matches!(
+            text_direction_command_action(TextDirectionCommand::MoveNoPickup, Direction::Self_),
+            None
+        ));
     }
 
     #[test]
@@ -3764,6 +3993,13 @@ fn run_text_mode(
 
         let action = if let Some(a) = parse_text_mode_contextual_command(command_input, world) {
             a
+        } else if let Some(command) = parse_text_mode_direction_prompt_request(command_input) {
+            let prompt = text_direction_command_prompt(locale, command);
+            let Some(action) = prompt_text_direction(&stdin, &stdout, locale, &prompt, command)?
+            else {
+                continue;
+            };
+            action
         } else if command_input == "repeat" {
             if let Some(prev) = &last_repeatable_action {
                 prev.clone()
