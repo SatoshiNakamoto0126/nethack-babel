@@ -1881,6 +1881,7 @@ fn resolve_player_action(
                         current_player_level(world, player),
                         hallucinating,
                     );
+                    let player_is_deaf = crate::status::is_deaf(world, player);
                     let following = world
                         .get_component::<crate::npc::Shopkeeper>(monster_entity)
                         .map(|state| state.following)
@@ -1890,7 +1891,13 @@ fn resolve_player_action(
                             &shop.shopkeeper_name,
                         ));
                     } else {
-                        events.push(crate::npc::shopkeeper_chat(shop, following, honorific));
+                        events.push(crate::npc::shopkeeper_chat(
+                            shop,
+                            following,
+                            honorific,
+                            player_is_deaf,
+                            rng.random(),
+                        ));
                     }
                     return;
                 }
@@ -6399,14 +6406,14 @@ fn apply_wizard_harassment_action(
             }
         }
         crate::npc::WizardAction::DoubleTrouble => {
-            let Some(wizard) = wizard else {
+            let Some(_wizard) = wizard else {
                 return;
             };
             if wizard_of_yendor_entities(world).len() >= 2 {
                 return;
             }
             if let Some((clone, pos)) =
-                spawn_named_monster_near_entity(world, wizard, "Wizard of Yendor", rng)
+                spawn_named_monster_near_entity(world, player, "Wizard of Yendor", rng)
             {
                 seed_wizard_runtime_state(world, clone);
                 if !player_has_named_item(world, player, "Amulet of Yendor")
@@ -14658,6 +14665,44 @@ mod tests {
     }
 
     #[test]
+    fn test_wizard_double_trouble_spawns_clone_near_player_anchor() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .map(|pos| pos.0)
+            .expect("player should be positioned");
+        let wizard = spawn_full_monster(&mut world, Position::new(18, 18), "Wizard of Yendor", 12);
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::DoubleTrouble,
+            &mut rng,
+            &mut events,
+        );
+
+        let clone_pos = world
+            .ecs()
+            .query::<(&Monster, &Name, &Positioned)>()
+            .iter()
+            .find_map(|(entity, (_monster, name, pos))| {
+                (entity != wizard && name.0.eq_ignore_ascii_case("Wizard of Yendor"))
+                    .then_some(pos.0)
+            })
+            .expect("Double Trouble should spawn a second Wizard");
+
+        assert!(
+            crate::ball::chebyshev_distance(player_pos, clone_pos) <= 1,
+            "Double Trouble should clone near the player like original clonewiz()"
+        );
+    }
+
+    #[test]
     fn test_wizard_double_trouble_can_give_clone_fake_amulet() {
         for seed in 0..512u64 {
             let mut world = make_test_world();
@@ -17060,7 +17105,9 @@ mod tests {
         );
         assert!(greet_events.iter().any(|event| matches!(
             event,
-            EngineEvent::Message { key, .. } if key == "shk-shoplifters"
+            EngineEvent::Message { key, .. }
+                if key == "shk-shoplifters"
+                    || key.starts_with("shk-izchak-")
         )));
 
         let _ = resolve_turn(
@@ -17217,6 +17264,74 @@ mod tests {
                 EngineEvent::Message { key, .. } if key.starts_with("wizard-taunt-")
             )
         }));
+    }
+
+    #[test]
+    fn test_chatting_with_hostile_wizard_wakes_nearby_sleepers() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 6);
+        let _ = crate::status::make_sleeping(&mut world, sleeper, 20);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key.starts_with("wizard-taunt-")
+        )));
+        assert!(
+            !crate::status::is_sleeping(&world, sleeper),
+            "hostile Wizard cussing through #chat should wake nearby monsters"
+        );
+        assert!(
+            world.get_component::<Positioned>(wizard).is_some(),
+            "Wizard should still exist after emitting the taunt"
+        );
+    }
+
+    #[test]
+    fn test_deaf_player_chatting_with_shopkeeper_gets_tap_feedback() {
+        let mut world = make_test_world();
+        let player = world.player();
+        if let Some(mut status) = world.get_component_mut::<crate::status::StatusEffects>(player) {
+            status.deaf = 20;
+        }
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(6, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        world.dungeon_mut().shop_rooms[0].shopkeeper_gold = 500;
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shk-izchak-malls" || key == "shk-shoplifters"
+        )) == false);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shk-shoplifters-indicates"
+        )));
     }
 
     #[test]

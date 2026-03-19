@@ -3558,31 +3558,85 @@ shk-angry-greeting = { $shopkeeper } glares at you angrily.
 shk-follow-reminder = { $shopkeeper } says: "Hello, { $honorific }! Didn't you forget to pay?"
 
 # TODO: translate
+shk-follow-tap = { $shopkeeper } taps you on the arm.
+
+# TODO: translate
 shk-bill-total = { $shopkeeper } says that your bill comes to { $amount } gold.
+
+# TODO: translate
+shk-bill-indicates = { $shopkeeper } indicates that your bill comes to { $amount } gold.
 
 # TODO: translate
 shk-debit-reminder = { $shopkeeper } reminds you that you owe { $amount } gold.
 
 # TODO: translate
+shk-debit-indicates = { $shopkeeper } indicates that you owe { $amount } gold.
+
+# TODO: translate
 shk-credit-reminder = { $shopkeeper } encourages you to use your { $amount } gold of credit.
+
+# TODO: translate
+shk-credit-indicates = { $shopkeeper } indicates that you have { $amount } gold of credit.
 
 # TODO: translate
 shk-robbed-greeting = { $shopkeeper } says: "I still remember that robbery, { $honorific }."
 
 # TODO: translate
+shk-robbed-indicates = { $shopkeeper } indicates concern about a recent robbery.
+
+# TODO: translate
 shk-surcharge-greeting = { $shopkeeper } says: "Prices are higher for you now, { $honorific }."
+
+# TODO: translate
+shk-surcharge-indicates = { $shopkeeper } indicates that prices are higher for you now.
 
 # TODO: translate
 shk-business-bad = { $shopkeeper } complains that business is bad.
 
 # TODO: translate
+shk-business-bad-indicates = { $shopkeeper } indicates that business is bad.
+
+# TODO: translate
 shk-business-good = { $shopkeeper } says that business is good.
+
+# TODO: translate
+shk-business-good-indicates = { $shopkeeper } indicates that business is good.
 
 # TODO: translate
 shk-shoplifters = { $shopkeeper } talks about the problem of shoplifters.
 
 # TODO: translate
+shk-shoplifters-indicates = { $shopkeeper } indicates concern about shoplifters.
+
+# TODO: translate
 shk-geico-pitch = { $shopkeeper } says: "Fifteen minutes could save you fifteen zorkmids."
+
+# TODO: translate
+shk-izchak-malls = { $shopkeeper } says: "These shopping malls give me a headache."
+
+# TODO: translate
+shk-izchak-slow-down = { $shopkeeper } says: "Slow down. Think clearly."
+
+# TODO: translate
+shk-izchak-one-at-a-time = { $shopkeeper } says: "You need to take things one at a time."
+
+# TODO: translate
+shk-izchak-coffee = { $shopkeeper } says: "I don't like poofy coffee... give me Colombian Supremo."
+
+# TODO: translate
+shk-izchak-devteam = { $shopkeeper } says that getting the devteam's agreement on anything is difficult.
+
+# TODO: translate
+shk-izchak-deity = { $shopkeeper } says that those who serve their deity will prosper.
+
+# TODO: translate
+shk-izchak-high-places = { $shopkeeper } says: "Don't try to steal from me - I have friends in high places!"
+
+# TODO: translate
+shk-izchak-future = { $shopkeeper } says: "You may well need something from this shop in the future."
+
+# TODO: translate
+shk-izchak-valley = { $shopkeeper } comments that the Valley of the Dead is a gateway.
 
 # TODO: translate
 npc-laugh-giggles = { $monster } giggles.

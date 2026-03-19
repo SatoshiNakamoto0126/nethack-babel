@@ -521,6 +521,8 @@ pub fn shopkeeper_chat(
     shop: &crate::shop::ShopRoom,
     following: bool,
     honorific: &str,
+    is_deaf: bool,
+    chat_roll: u32,
 ) -> EngineEvent {
     if shop.angry {
         EngineEvent::msg_with(
@@ -528,68 +530,107 @@ pub fn shopkeeper_chat(
             vec![("shopkeeper", shop.shopkeeper_name.clone())],
         )
     } else if following {
-        EngineEvent::msg_with(
-            "shk-follow-reminder",
-            vec![
-                ("shopkeeper", shop.shopkeeper_name.clone()),
-                ("honorific", honorific.to_string()),
-            ],
-        )
+        let key = if is_deaf {
+            "shk-follow-tap"
+        } else {
+            "shk-follow-reminder"
+        };
+        let mut args = vec![("shopkeeper", shop.shopkeeper_name.clone())];
+        if !is_deaf {
+            args.push(("honorific", honorific.to_string()));
+        }
+        EngineEvent::msg_with(key, args)
     } else if !shop.bill.is_empty() {
+        let key = if is_deaf {
+            "shk-bill-indicates"
+        } else {
+            "shk-bill-total"
+        };
         EngineEvent::msg_with(
-            "shk-bill-total",
+            key,
             vec![
                 ("shopkeeper", shop.shopkeeper_name.clone()),
                 ("amount", (shop.bill.total() + shop.debit).to_string()),
             ],
         )
     } else if shop.debit > 0 {
+        let key = if is_deaf {
+            "shk-debit-indicates"
+        } else {
+            "shk-debit-reminder"
+        };
         EngineEvent::msg_with(
-            "shk-debit-reminder",
+            key,
             vec![
                 ("shopkeeper", shop.shopkeeper_name.clone()),
                 ("amount", shop.debit.to_string()),
             ],
         )
     } else if shop.credit > 0 {
+        let key = if is_deaf {
+            "shk-credit-indicates"
+        } else {
+            "shk-credit-reminder"
+        };
         EngineEvent::msg_with(
-            "shk-credit-reminder",
+            key,
             vec![
                 ("shopkeeper", shop.shopkeeper_name.clone()),
                 ("amount", shop.credit.to_string()),
             ],
         )
     } else if shop.robbed > 0 {
+        let key = if is_deaf {
+            "shk-robbed-indicates"
+        } else {
+            "shk-robbed-greeting"
+        };
         EngineEvent::msg_with(
-            "shk-robbed-greeting",
+            key,
             vec![
                 ("shopkeeper", shop.shopkeeper_name.clone()),
                 ("honorific", honorific.to_string()),
             ],
         )
     } else if shop.surcharge {
+        let key = if is_deaf {
+            "shk-surcharge-indicates"
+        } else {
+            "shk-surcharge-greeting"
+        };
         EngineEvent::msg_with(
-            "shk-surcharge-greeting",
+            key,
             vec![
                 ("shopkeeper", shop.shopkeeper_name.clone()),
                 ("honorific", honorific.to_string()),
             ],
         )
     } else if shop.shopkeeper_gold < 50 {
-        EngineEvent::msg_with(
-            "shk-business-bad",
-            vec![("shopkeeper", shop.shopkeeper_name.clone())],
-        )
+        let key = if is_deaf {
+            "shk-business-bad-indicates"
+        } else {
+            "shk-business-bad"
+        };
+        EngineEvent::msg_with(key, vec![("shopkeeper", shop.shopkeeper_name.clone())])
     } else if shop.shopkeeper_gold > 4000 {
+        let key = if is_deaf {
+            "shk-business-good-indicates"
+        } else {
+            "shk-business-good"
+        };
+        EngineEvent::msg_with(key, vec![("shopkeeper", shop.shopkeeper_name.clone())])
+    } else if shop.shopkeeper_name.eq_ignore_ascii_case("Izchak") && !is_deaf {
         EngineEvent::msg_with(
-            "shk-business-good",
+            IZCHAK_SPEECH_KEYS[(chat_roll as usize) % IZCHAK_SPEECH_KEYS.len()],
             vec![("shopkeeper", shop.shopkeeper_name.clone())],
         )
     } else {
-        EngineEvent::msg_with(
-            "shk-shoplifters",
-            vec![("shopkeeper", shop.shopkeeper_name.clone())],
-        )
+        let key = if is_deaf {
+            "shk-shoplifters-indicates"
+        } else {
+            "shk-shoplifters"
+        };
+        EngineEvent::msg_with(key, vec![("shopkeeper", shop.shopkeeper_name.clone())])
     }
 }
 
@@ -682,13 +723,14 @@ fn chat_outcome(key: &str, monster_name: &str) -> MonsterChatOutcome {
 }
 
 fn wizard_chat_outcome(monster_name: &str, state: MonsterChatState) -> MonsterChatOutcome {
+    let wake_radius = Some(5);
     if state.chat_roll.is_multiple_of(5) {
         return MonsterChatOutcome {
             event: EngineEvent::msg_with(
                 "wizard-taunt-laughs",
                 vec![("wizard", monster_name.to_string())],
             ),
-            wake_radius: None,
+            wake_radius,
         };
     }
 
@@ -701,7 +743,7 @@ fn wizard_chat_outcome(monster_name: &str, state: MonsterChatState) -> MonsterCh
                     WIZARD_INSULTS[(state.chat_roll as usize) % WIZARD_INSULTS.len()].to_string(),
                 )],
             ),
-            wake_radius: None,
+            wake_radius,
         };
     }
 
@@ -719,7 +761,7 @@ fn wizard_chat_outcome(monster_name: &str, state: MonsterChatState) -> MonsterCh
                     WIZARD_INSULTS[(state.chat_roll as usize) % WIZARD_INSULTS.len()].to_string(),
                 )],
             ),
-            wake_radius: None,
+            wake_radius,
         };
     }
 
@@ -749,9 +791,21 @@ fn wizard_chat_outcome(monster_name: &str, state: MonsterChatState) -> MonsterCh
                 ),
             ],
         ),
-        wake_radius: None,
+        wake_radius,
     }
 }
+
+const IZCHAK_SPEECH_KEYS: [&str; 9] = [
+    "shk-izchak-malls",
+    "shk-izchak-slow-down",
+    "shk-izchak-one-at-a-time",
+    "shk-izchak-coffee",
+    "shk-izchak-devteam",
+    "shk-izchak-deity",
+    "shk-izchak-high-places",
+    "shk-izchak-future",
+    "shk-izchak-valley",
+];
 
 pub fn contextual_monster_chat(
     monster_def: &MonsterDef,
@@ -893,7 +947,9 @@ pub fn contextual_monster_chat(
                         _ => "npc-cuss-doomed",
                     }
                 };
-                Some(chat_outcome(key, monster_name))
+                let mut outcome = chat_outcome(key, monster_name);
+                outcome.wake_radius = Some(5);
+                Some(outcome)
             } else if crate::mondata::is_minion(monster_def) {
                 Some(chat_outcome("npc-cuss-not-too-late", monster_name))
             } else {
@@ -2669,35 +2725,100 @@ mod tests {
             hecs::Entity::DANGLING,
             "Bob".to_string(),
         );
-        let evt = shopkeeper_chat(&shop, true, "sir");
+        let evt = shopkeeper_chat(&shop, true, "sir", false, 0);
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-follow-reminder"));
 
         assert!(shop.bill.add(hecs::Entity::DANGLING, 40, 2));
-        let evt = shopkeeper_chat(&shop, false, "sir");
+        let evt = shopkeeper_chat(&shop, false, "sir", false, 0);
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-bill-total"));
 
         shop.bill.clear();
         shop.debit = 15;
-        let evt = shopkeeper_chat(&shop, false, "sir");
+        let evt = shopkeeper_chat(&shop, false, "sir", false, 0);
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-debit-reminder"));
 
         shop.debit = 0;
         shop.credit = 25;
-        let evt = shopkeeper_chat(&shop, false, "sir");
+        let evt = shopkeeper_chat(&shop, false, "sir", false, 0);
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-credit-reminder"));
 
         shop.credit = 0;
         shop.shopkeeper_gold = 25;
-        let evt = shopkeeper_chat(&shop, false, "sir");
+        let evt = shopkeeper_chat(&shop, false, "sir", false, 0);
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-business-bad"));
 
         shop.shopkeeper_gold = 4500;
-        let evt = shopkeeper_chat(&shop, false, "sir");
+        let evt = shopkeeper_chat(&shop, false, "sir", false, 0);
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-business-good"));
 
         shop.shopkeeper_gold = 500;
-        let evt = shopkeeper_chat(&shop, false, "sir");
+        let evt = shopkeeper_chat(&shop, false, "sir", false, 0);
         assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-shoplifters"));
+    }
+
+    #[test]
+    fn test_shopkeeper_chat_uses_indication_variants_for_deaf_player() {
+        let mut shop = crate::shop::ShopRoom::new(
+            Position::new(1, 1),
+            Position::new(3, 3),
+            crate::shop::ShopType::Tool,
+            hecs::Entity::DANGLING,
+            "Bob".to_string(),
+        );
+
+        let evt = shopkeeper_chat(&shop, true, "sir", true, 0);
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-follow-tap"));
+
+        assert!(shop.bill.add(hecs::Entity::DANGLING, 40, 2));
+        let evt = shopkeeper_chat(&shop, false, "sir", true, 0);
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-bill-indicates"));
+
+        shop.bill.clear();
+        shop.credit = 25;
+        let evt = shopkeeper_chat(&shop, false, "sir", true, 0);
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "shk-credit-indicates"));
+    }
+
+    #[test]
+    fn test_shopkeeper_chat_can_emit_izchak_special_line() {
+        let mut shop = crate::shop::ShopRoom::new(
+            Position::new(1, 1),
+            Position::new(3, 3),
+            crate::shop::ShopType::Tool,
+            hecs::Entity::DANGLING,
+            "Izchak".to_string(),
+        );
+        shop.shopkeeper_gold = 500;
+
+        let evt = shopkeeper_chat(&shop, false, "sir", false, 3);
+        assert!(matches!(
+            evt,
+            EngineEvent::Message { key, .. } if key == "shk-izchak-coffee"
+        ));
+    }
+
+    #[test]
+    fn test_hostile_wizard_chat_wakes_nearby_monsters() {
+        let outcome = contextual_monster_chat(
+            &MonsterDef {
+                sound: MonsterSound::Cuss,
+                ..fake_monster(
+                    MonsterSound::Cuss,
+                    "Wizard of Yendor",
+                    'W',
+                    MonsterFlags::empty(),
+                )
+            },
+            "Wizard of Yendor",
+            MonsterChatState {
+                chat_roll: 1,
+                ..Default::default()
+            },
+            false,
+        )
+        .expect("hostile Wizard should produce taunt output");
+
+        assert_eq!(outcome.wake_radius, Some(5));
     }
 
     #[test]
