@@ -1851,11 +1851,9 @@ discoveries-empty = 你還沒有發現任何東西。
 
 ## ═══ Untranslated (English fallback) ═══
 
-# TODO: translate
-already-mounted = You are already riding.
+already-mounted = 你已經騎在坐騎上了。
 
-# TODO: translate
-already-punished = You are already being punished.
+already-punished = 你已經在受罰中了。
 
 attack-acid-hit = 酸液濺了你一身！
 
@@ -1902,38 +1900,29 @@ attack-slowed = 你覺得自己動作變慢了。
 
 attack-stoning-start = 你開始變成石頭了！
 
-# TODO: translate
-boulder-blocked = The boulder is wedged in.
+boulder-blocked = 這塊巨石被卡住了。
 
-# TODO: translate
-boulder-fills-pit = The boulder fills a pit!
+boulder-fills-pit = 巨石填平了陷坑！
 
-# TODO: translate
-boulder-push = You push the boulder.
+boulder-push = 你推動了巨石。
 
-# TODO: translate
-call-empty-name = You didn't give a name.
+call-empty-name = 你沒有取名字。
 
-# TODO: translate
-cannot-do-that = You can't do that.
+cannot-do-that = 你不能那麼做。
 
-# TODO: translate
-choke-blood-trouble = You find it hard to breathe.
+choke-blood-trouble = 你感到呼吸困難。
 
-# TODO: translate
-choke-consciousness-fading = Your consciousness is fading...
+choke-consciousness-fading = 你的意識正在消退……
 
 # TODO: translate
 choke-gasping-for-air = 你正大口喘著氣！
 
-# TODO: translate
-choke-hard-to-breathe = You find it hard to breathe.
+choke-hard-to-breathe = 你感到呼吸困難。
 
 # TODO: translate
 choke-neck-constricted = 你的脖子被勒住了！
 
-# TODO: translate
-choke-neck-pressure = You feel pressure on your neck.
+choke-neck-pressure = 你感到脖子上有股壓力。
 
 # TODO: translate
 choke-no-longer-breathe = 你再也無法呼吸了。
@@ -1941,14 +1930,11 @@ choke-no-longer-breathe = 你再也無法呼吸了。
 # TODO: translate
 choke-suffocate = 你窒息而亡。
 
-# TODO: translate
-choke-turning-blue = You're turning blue.
+choke-turning-blue = 你的臉都發青了。
 
-# TODO: translate
-chronicle-empty = Your chronicle is empty.
+chronicle-empty = 你的編年史是空的。
 
-# TODO: translate
-clairvoyance-nothing-new = You sense nothing new.
+clairvoyance-nothing-new = 你沒有感知到什麼新東西。
 
 # TODO: translate
 container-put-in = 你把 { $item } 放進了 { $container }。
@@ -1956,26 +1942,20 @@ container-put-in = 你把 { $item } 放進了 { $container }。
 # TODO: translate
 container-take-out = 你從 { $container } 中取出了 { $item }。
 
-# TODO: translate
-crystal-ball-cloudy = All you see is a swirling mess.
+crystal-ball-cloudy = 你只看到一團翻騰旋轉的混沌。
 
-# TODO: translate
-crystal-ball-nothing-new = You see nothing new.
+crystal-ball-nothing-new = 你沒有看到什麼新東西。
 
-# TODO: translate
-cursed-cannot-remove = You can't remove it, it's cursed!
+cursed-cannot-remove = 你拿不下來，它被詛咒了！
 
-# TODO: translate
-detect-food-none = You don't sense any food.
+detect-food-none = 你沒有感知到任何食物。
 
-# TODO: translate
-detect-gold-none = You don't sense any gold.
+detect-gold-none = 你沒有感知到任何黃金。
 
 # TODO: translate
 detect-monsters-none = 你沒有感知到任何怪物。
 
-# TODO: translate
-detect-objects-none = You don't sense any objects.
+detect-objects-none = 你沒有感知到任何物品。
 
 # TODO: translate
 detect-traps-none = 你沒有感知到任何陷阱。
@@ -1983,83 +1963,57 @@ detect-traps-none = 你沒有感知到任何陷阱。
 # TODO: translate
 dig-blocked = 這裡太硬了，挖不動。
 
-# TODO: translate
-dig-floor-blocked = The floor here is too hard to dig in.
+dig-floor-blocked = 這裡的地板太硬，挖不動。
 
-# TODO: translate
-dig-floor-hole = You dig a hole through the floor!
+dig-floor-hole = 你在地板上挖出了一個洞！
 
-# TODO: translate
-dig-ray-nothing = The digging ray has no effect.
+dig-ray-nothing = 挖掘射線沒有作用。
 
-# TODO: translate
-dig-wall-done = You finish digging through the wall.
+dig-wall-done = 你挖穿了這面牆。
 
-# TODO: translate
-dip-acid-nothing = Nothing happens.
+dip-acid-nothing = 什麼也沒有發生。
 
-# TODO: translate
-dip-acid-repair = Your { $item } looks as good as new!
+dip-acid-repair = 你的 { $item } 看起來完好如新！
 
-# TODO: translate
-dip-amethyst-cure = You feel less confused.
+dip-amethyst-cure = 你感到不那麼困惑了。
 
-# TODO: translate
-dip-diluted = Your { $item } is diluted.
+dip-diluted = 你的 { $item } 被稀釋了。
 
-# TODO: translate
-dip-excalibur = As you dip the sword, a strange light plays over it! Your sword is now named Excalibur!
+dip-excalibur = 當你把劍浸入其中時，一道奇異的光芒掠過劍身！你的劍現在名為 Excalibur！
 
-# TODO: translate
-dip-fountain-cursed = The water glows for a moment.
+dip-fountain-cursed = 水面短暫地發出微光。
 
-# TODO: translate
-dip-fountain-nothing = Nothing seems to happen.
+dip-fountain-nothing = 看起來什麼也沒有發生。
 
-# TODO: translate
-dip-fountain-rust = Your { $item } rusts!
+dip-fountain-rust = 你的 { $item } 生鏽了！
 
-# TODO: translate
-dip-holy-water = You dip your { $item } in the holy water.
+dip-holy-water = 你把 { $item } 浸入了聖水中。
 
-# TODO: translate
-dip-no-fountain = There is no fountain here to dip into.
+dip-no-fountain = 這裡沒有可供浸泡的噴泉。
 
-# TODO: translate
-dip-not-a-potion = That's not a potion!
+dip-not-a-potion = 那不是藥水！
 
-# TODO: translate
-dip-nothing-happens = Nothing seems to happen.
+dip-nothing-happens = 看起來什麼也沒有發生。
 
-# TODO: translate
-dip-poison-weapon = You coat your { $item } with poison.
+dip-poison-weapon = 你給 { $item } 塗上了毒藥。
 
-# TODO: translate
-dip-unholy-water = You dip your { $item } in the unholy water.
+dip-unholy-water = 你把 { $item } 浸入了不潔之水中。
 
-# TODO: translate
-dip-unicorn-horn-cure = You feel better.
+dip-unicorn-horn-cure = 你感覺好多了。
 
-# TODO: translate
-djinni-from-bottle = An enormous djinni emerges from the bottle!
+djinni-from-bottle = 一個巨大的燈神從瓶中現身！
 
-# TODO: translate
-drawbridge-destroyed = The drawbridge is destroyed!
+drawbridge-destroyed = 吊橋被毀掉了！
 
-# TODO: translate
-drawbridge-lowers = The drawbridge lowers!
+drawbridge-lowers = 吊橋放下來了！
 
-# TODO: translate
-drawbridge-raises = The drawbridge raises!
+drawbridge-raises = 吊橋升起來了！
 
-# TODO: translate
-drawbridge-resists = The drawbridge resists!
+drawbridge-resists = 吊橋沒有反應！
 
-# TODO: translate
-end-ascension-offering = You offer the Amulet of Yendor to { $god }...
+end-ascension-offering = 你向 { $god } 獻上了 Yendor 護符……
 
-# TODO: translate
-end-do-not-pass-go = Do not pass go. Do not collect 200 zorkmids.
+end-do-not-pass-go = 不要經過起點，也不要領取 200 佐克幣。
 
 # TODO: translate
 engrave-elbereth = You engrave "Elbereth" into the floor.
@@ -2205,20 +2159,15 @@ invoke-no-power = Nothing seems to happen.
 # TODO: translate
 invoke-not-wielded = You must be wielding it to invoke its power.
 
-# TODO: translate
-jump-no-ability = You don't know how to jump.
+jump-no-ability = 你不知道怎麼跳躍。
 
-# TODO: translate
-jump-out-of-range = That spot is too far away!
+jump-out-of-range = 那個地方太遠了！
 
-# TODO: translate
-jump-success = You jump!
+jump-success = 你跳了起來！
 
-# TODO: translate
-jump-too-burdened = You are carrying too much to jump!
+jump-too-burdened = 你負重太大，跳不起來！
 
-# TODO: translate
-kick-door-held = The door is held shut!
+kick-door-held = 門被頂住了！
 
 # TODO: translate
 kick-door-open = 門被你一腳踹開了！
@@ -2226,152 +2175,105 @@ kick-door-open = 門被你一腳踹開了！
 # TODO: translate
 kick-hurt-foot = 哎喲！好痛！
 
-# TODO: translate
-kick-item-blocked = Something blocks your kick.
+kick-item-blocked = 有東西擋住了你的踢擊。
 
-# TODO: translate
-kick-item-moved = You kick something.
+kick-item-moved = 你踢到了什麼東西。
 
-# TODO: translate
-kick-nothing = You kick at empty space.
+kick-nothing = 你朝空處踢了一腳。
 
-# TODO: translate
-kick-sink-ring = Something rattles around in the sink.
+kick-sink-ring = 水槽裡有什麼東西叮噹作響。
 
-# TODO: translate
-known-nothing = You don't know anything yet.
+known-nothing = 你現在還什麼都不知道。
 
-# TODO: translate
-levitating-cant-go-down = You are floating high above the floor.
+levitating-cant-go-down = 你漂浮在地板上方很高的地方。
 
-# TODO: translate
-levitating-cant-pickup = You cannot reach the floor.
+levitating-cant-pickup = 你夠不到地面。
 
-# TODO: translate
-levitation-float-lower = You float gently to the floor.
+levitation-float-lower = 你輕輕飄回到了地面上。
 
-# TODO: translate
-levitation-wobble = You wobble in midair.
+levitation-wobble = 你在半空中搖搖晃晃。
 
-# TODO: translate
-light-extinguished = Your { $item } goes out.
+light-extinguished = 你的 { $item } 熄滅了。
 
-# TODO: translate
-light-lit = Your { $item } is now lit.
+light-lit = 你的 { $item } 現在點亮了。
 
-# TODO: translate
-light-no-fuel = Your { $item } has no fuel.
+light-no-fuel = 你的 { $item } 沒有燃料了。
 
-# TODO: translate
-light-not-a-source = That is not a light source.
+light-not-a-source = 那不是光源。
 
-# TODO: translate
-lizard-cures-confusion = You feel less confused.
+lizard-cures-confusion = 你感到不那麼困惑了。
 
-# TODO: translate
-lizard-cures-stoning = You feel limber!
+lizard-cures-stoning = 你感覺身體靈活多了！
 
-# TODO: translate
-lock-already-locked = It is already locked.
+lock-already-locked = 它已經鎖上了。
 
-# TODO: translate
-lock-door-locked = The door is locked.
+lock-door-locked = 門鎖上了。
 
-# TODO: translate
-lock-force-container-success = You force the lock open!
+lock-force-container-success = 你強行撬開了鎖！
 
-# TODO: translate
-lock-force-fail = You fail to force the lock.
+lock-force-fail = 你沒能強行打開鎖。
 
-# TODO: translate
-lock-force-success = You force the lock open!
+lock-force-success = 你強行撬開了鎖！
 
-# TODO: translate
-lock-lockpick-breaks = Your lockpick breaks!
+lock-lockpick-breaks = 你的開鎖器斷掉了！
 
-# TODO: translate
-lock-need-key = You need a key to lock this.
+lock-need-key = 你需要一把鑰匙來鎖上它。
 
-# TODO: translate
-lock-no-door = There is no door here.
+lock-no-door = 這裡沒有門。
 
 # TODO: translate
 lock-no-target = 這裡沒有可供上鎖或開鎖的東西。
 
-# TODO: translate
-lock-pick-container-success = You succeed in picking the lock.
+lock-pick-container-success = 你成功撬開了鎖。
 
 # TODO: translate
 lock-pick-fail = 你沒能撬開這把鎖。
 
-# TODO: translate
-lock-pick-success = You succeed in picking the lock.
+lock-pick-success = 你成功撬開了鎖。
 
-# TODO: translate
-lycanthropy-cured = You feel purified.
+lycanthropy-cured = 你感到自己被淨化了。
 
-# TODO: translate
-lycanthropy-full-moon-transform = You feel feverish tonight.
+lycanthropy-full-moon-transform = 今晚你覺得渾身發熱。
 
-# TODO: translate
-lycanthropy-infected = You feel feverish.
+lycanthropy-infected = 你覺得渾身發熱。
 
-# TODO: translate
-magic-mapping-nothing-new = You are already aware of your surroundings.
+magic-mapping-nothing-new = 你已經清楚周圍的環境了。
 
-# TODO: translate
-mhitm-passive-stoning = { $monster } turns to stone!
+mhitm-passive-stoning = { $monster } 變成了石頭！
 
-# TODO: translate
-monster-ability-used = { $monster } uses a special ability!
+monster-ability-used = { $monster } 使用了特殊能力！
 
-# TODO: translate
-monster-no-ability = You don't have that ability in your current form.
+monster-no-ability = 你目前的形態沒有那種能力。
 
-# TODO: translate
-monster-not-polymorphed = You are not polymorphed.
+monster-not-polymorphed = 你沒有發生變形。
 
-# TODO: translate
-monster-scared-elbereth = { $monster } is scared by the Elbereth engraving!
+monster-scared-elbereth = { $monster } 被 Elbereth 雕刻嚇住了！
 
-# TODO: translate
-monster-teleport-near = { $monster } appears from thin air!
+monster-teleport-near = { $monster } 憑空出現了！
 
-# TODO: translate
-mount-not-monster = That is not a creature you can ride.
+mount-not-monster = 那不是你能騎乘的生物。
 
-# TODO: translate
-mount-not-tame = That creature is not tame enough to ride.
+mount-not-tame = 那隻生物還不夠溫順，不能騎。
 
-# TODO: translate
-mount-too-far = That creature is too far away.
+mount-too-far = 那隻生物離得太遠了。
 
-# TODO: translate
-mount-too-weak = You are too weak to ride.
+mount-too-weak = 你太虛弱了，騎不上去。
 
-# TODO: translate
-no-fountain-here = There is no fountain here.
+no-fountain-here = 這裡沒有噴泉。
 
-# TODO: translate
-not-a-drawbridge = That is not a drawbridge.
+not-a-drawbridge = 那不是吊橋。
 
-# TODO: translate
-not-a-raised-drawbridge = That drawbridge is not raised.
+not-a-raised-drawbridge = 那座吊橋沒有升起。
 
-# TODO: translate
-not-carrying-anything = You are not carrying anything.
+not-carrying-anything = 你什麼都沒帶。
 
-# TODO: translate
-not-mounted = You are not riding anything.
+not-mounted = 你沒有騎著任何東西。
 
-# TODO: translate
-not-punished = You are not being punished.
+not-punished = 你沒有受罰。
 
-# TODO: translate
-not-wearing-that = You are not wearing that.
+not-wearing-that = 你沒有穿戴那個。
 
-# TODO: translate
-phaze-feeling-bloated = You feel bloated.
+phaze-feeling-bloated = 你感到腹脹。
 
 # TODO: translate
 phaze-feeling-flabby = You feel flabby.
@@ -2769,7 +2671,7 @@ spell-light = A lit field surrounds you!
 spell-magic-mapping = A map of your surroundings appears!
 
 # TODO: translate
-spell-need-direction = In what direction?
+spell-need-direction = 往哪個方向？
 
 # TODO: translate
 spell-no-spellbook = You don't have any spellbooks to study.
