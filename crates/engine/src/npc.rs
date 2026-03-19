@@ -649,8 +649,10 @@ pub struct MonsterChatState {
     pub midnight: bool,
     pub blinded: bool,
     pub trapped: bool,
+    pub wounded: bool,
     pub hurt: bool,
     pub badly_hurt: bool,
+    pub player_hallucinating: bool,
     pub chat_roll: u32,
     pub player_has_gold: bool,
     pub player_armed: bool,
@@ -714,9 +716,19 @@ pub fn contextual_monster_chat(
             } else if monster_def.symbol == 'C' {
                 Some(chat_outcome("npc-humanoid-hunting", monster_name))
             } else if crate::mondata::is_gnome(monster_def) {
-                Some(chat_outcome("npc-humanoid-gnome", monster_name))
+                let key = match (state.player_hallucinating, state.chat_roll % 4) {
+                    (true, 1) => "npc-humanoid-gnome-phase-one",
+                    (true, 3) => "npc-humanoid-gnome-phase-three",
+                    _ => "npc-humanoid-gnome",
+                };
+                Some(chat_outcome(key, monster_name))
             } else if monster_name.eq_ignore_ascii_case("hobbit") {
-                Some(chat_outcome("npc-humanoid-one-ring", monster_name))
+                let key = if state.wounded {
+                    "npc-humanoid-hobbit-complains"
+                } else {
+                    "npc-humanoid-one-ring"
+                };
+                Some(chat_outcome(key, monster_name))
             } else if monster_name.eq_ignore_ascii_case("tourist") {
                 Some(chat_outcome("npc-humanoid-aloha", monster_name))
             } else if monster_name.eq_ignore_ascii_case("archaeologist") {
@@ -3135,6 +3147,57 @@ mod tests {
         assert!(matches!(
             outcome.event,
             EngineEvent::Message { key, .. } if key == "npc-vampire-peaceful-nightchild"
+        ));
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_hallucinating_gnome_uses_underpants_gag() {
+        let monster = fake_monster(
+            MonsterSound::Humanoid,
+            "gnome",
+            '@',
+            MonsterFlags::HUMANOID | MonsterFlags::GNOME,
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "gnome",
+            MonsterChatState {
+                is_peaceful: true,
+                player_hallucinating: true,
+                chat_roll: 1,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("hallucinating gnome should speak");
+        assert!(matches!(
+            outcome.event,
+            EngineEvent::Message { key, .. } if key == "npc-humanoid-gnome-phase-one"
+        ));
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_wounded_hobbit_complains() {
+        let monster = fake_monster(
+            MonsterSound::Humanoid,
+            "hobbit",
+            '@',
+            MonsterFlags::HUMANOID,
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "hobbit",
+            MonsterChatState {
+                is_peaceful: true,
+                wounded: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("wounded hobbit should complain");
+        assert!(matches!(
+            outcome.event,
+            EngineEvent::Message { key, .. } if key == "npc-humanoid-hobbit-complains"
         ));
     }
 

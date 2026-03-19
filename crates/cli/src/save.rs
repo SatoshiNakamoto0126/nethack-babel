@@ -1890,6 +1890,7 @@ mod tests {
         WizardAmuletWake,
         WizardBlackGlowBlind,
         HumanoidAlohaChat,
+        HobbitComplaintChat,
         VampireKindredChat,
         VampireNightChat,
         VampireMidnightChat,
@@ -1947,6 +1948,7 @@ mod tests {
                 SaveStoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 SaveStoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 SaveStoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
+                SaveStoryTraversalScenario::HobbitComplaintChat => "hobbit-complaint-chat",
                 SaveStoryTraversalScenario::VampireKindredChat => "vampire-kindred-chat",
                 SaveStoryTraversalScenario::VampireNightChat => "vampire-night-chat",
                 SaveStoryTraversalScenario::VampireMidnightChat => "vampire-midnight-chat",
@@ -3738,6 +3740,29 @@ mod tests {
 
                 let (mut loaded, loaded_rng) =
                     save_and_reload_world("story-matrix-humanoid-aloha-chat", &world, [67u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::HobbitComplaintChat => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let hobbit = spawn_full_monster(&mut world, Position::new(6, 5), "hobbit", 10);
+                world
+                    .ecs_mut()
+                    .insert_one(hobbit, nethack_babel_engine::world::Peaceful)
+                    .expect("hobbit should accept peaceful marker");
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(hobbit) {
+                    hp.current = (hp.max - 1).max(1);
+                }
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-hobbit-complaint-chat", &world, [68u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(
                     &mut loaded,
@@ -7326,6 +7351,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardAmuletWake,
             SaveStoryTraversalScenario::WizardBlackGlowBlind,
             SaveStoryTraversalScenario::HumanoidAlohaChat,
+            SaveStoryTraversalScenario::HobbitComplaintChat,
             SaveStoryTraversalScenario::VampireKindredChat,
             SaveStoryTraversalScenario::VampireNightChat,
             SaveStoryTraversalScenario::VampireMidnightChat,
@@ -8235,6 +8261,12 @@ mod tests {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
                         EngineEvent::Message { key, .. } if key == "npc-humanoid-aloha"
+                    )));
+                }
+                SaveStoryTraversalScenario::HobbitComplaintChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-humanoid-hobbit-complains"
                     )));
                 }
                 SaveStoryTraversalScenario::WizardLevelTeleport => {

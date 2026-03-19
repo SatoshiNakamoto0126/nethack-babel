@@ -3354,6 +3354,12 @@ npc-humanoid-hunting = { $monster } discusses hunting.
 # TODO: translate
 npc-humanoid-gnome = { $monster } says: "Many enter the dungeon, and few return to the sunlit lands."
 # TODO: translate
+npc-humanoid-gnome-phase-one = { $monster } says: "Phase one, collect underpants."
+# TODO: translate
+npc-humanoid-gnome-phase-three = { $monster } says: "Phase three, profit!"
+# TODO: translate
+npc-humanoid-hobbit-complains = { $monster } complains about unpleasant dungeon conditions.
+# TODO: translate
 npc-humanoid-one-ring = { $monster } asks you about the One Ring.
 # TODO: translate
 npc-humanoid-aloha = { $monster } says: "Aloha."

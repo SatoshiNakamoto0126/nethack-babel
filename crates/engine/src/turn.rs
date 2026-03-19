@@ -1926,13 +1926,13 @@ fn resolve_player_action(
                     let trapped = world
                         .get_component::<crate::traps::Trapped>(monster_entity)
                         .is_some();
-                    let (hurt, badly_hurt) = world
+                    let (wounded, hurt, badly_hurt) = world
                         .get_component::<HitPoints>(monster_entity)
                         .map(|hp| {
                             let max = hp.max.max(1);
-                            (hp.current < max / 2, hp.current < max / 4)
+                            (hp.current < max, hp.current < max / 2, hp.current < max / 4)
                         })
-                        .unwrap_or((false, false));
+                        .unwrap_or((false, false, false));
                     let monster_name = world
                         .get_component::<Name>(monster_entity)
                         .map(|name| name.0.clone())
@@ -1987,8 +1987,10 @@ fn resolve_player_action(
                         midnight: crate::were::is_midnight(world.turn()),
                         blinded,
                         trapped,
+                        wounded,
                         hurt,
                         badly_hurt,
+                        player_hallucinating: crate::status::is_hallucinating(world, player),
                         chat_roll: rng.random_range(0..4),
                         player_has_gold: player_gold(world, player) > 0,
                         player_armed: player_equipment.weapon.is_some(),
@@ -8570,6 +8572,7 @@ mod tests {
         WizardAmuletWake,
         WizardBlackGlowBlind,
         HumanoidAlohaChat,
+        HobbitComplaintChat,
         VampireKindredChat,
         VampireNightChat,
         VampireMidnightChat,
@@ -8625,6 +8628,7 @@ mod tests {
                 StoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 StoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 StoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
+                StoryTraversalScenario::HobbitComplaintChat => "hobbit-complaint-chat",
                 StoryTraversalScenario::VampireKindredChat => "vampire-kindred-chat",
                 StoryTraversalScenario::VampireNightChat => "vampire-night-chat",
                 StoryTraversalScenario::VampireMidnightChat => "vampire-midnight-chat",
@@ -10340,6 +10344,27 @@ mod tests {
                     .ecs_mut()
                     .insert_one(tourist, Peaceful)
                     .expect("tourist should accept peaceful marker");
+
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
+                );
+                (world, events)
+            }
+            StoryTraversalScenario::HobbitComplaintChat => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let hobbit = spawn_full_monster(&mut world, Position::new(6, 5), "hobbit", 10);
+                world
+                    .ecs_mut()
+                    .insert_one(hobbit, Peaceful)
+                    .expect("hobbit should accept peaceful marker");
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(hobbit) {
+                    hp.current = (hp.max - 1).max(1);
+                }
 
                 let events = resolve_turn(
                     &mut world,
@@ -17601,6 +17626,32 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_wounded_peaceful_hobbit_complains() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let hobbit = spawn_full_monster(&mut world, Position::new(6, 5), "hobbit", 10);
+        world
+            .ecs_mut()
+            .insert_one(hobbit, Peaceful)
+            .expect("hobbit should accept peaceful marker");
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(hobbit) {
+            hp.current = (hp.max - 1).max(1);
+        }
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-humanoid-hobbit-complains")
+        }));
+    }
+
+    #[test]
     fn test_chatting_with_peaceful_watchman_uses_facts_line() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -21906,6 +21957,7 @@ mod tests {
             StoryTraversalScenario::WizardAmuletWake,
             StoryTraversalScenario::WizardBlackGlowBlind,
             StoryTraversalScenario::HumanoidAlohaChat,
+            StoryTraversalScenario::HobbitComplaintChat,
             StoryTraversalScenario::VampireKindredChat,
             StoryTraversalScenario::VampireNightChat,
             StoryTraversalScenario::VampireMidnightChat,
@@ -22834,6 +22886,12 @@ mod tests {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
                         EngineEvent::Message { key, .. } if key == "npc-humanoid-aloha"
+                    )));
+                }
+                StoryTraversalScenario::HobbitComplaintChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-humanoid-hobbit-complains"
                     )));
                 }
                 StoryTraversalScenario::VampireKindredChat => {
