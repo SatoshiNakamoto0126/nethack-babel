@@ -403,6 +403,7 @@ wizard-respawned-boom = Une voix retentit...
 wizard-respawned-taunt = Tu pensais donc pouvoir me {$verb}, imbécile.
 wizard-steal-amulet = Le Magicien de Yendor vole l'Amulette !
 wizard-steal-invocation-tool = The Wizard of Yendor steals one of the invocation tools!
+wizard-steal-quest-artifact = The Wizard of Yendor steals the quest artifact!
 wizard-summon-nasties = De nouvelles horreurs apparaissent de nulle part !
 wizard-taunt-laughs = { $wizard } éclate d'un rire démoniaque.
 wizard-taunt-relinquish = Abandonne l'Amulette, { $insult } !

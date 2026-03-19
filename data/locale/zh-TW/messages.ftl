@@ -3266,6 +3266,9 @@ wizard-steal-amulet = The Wizard of Yendor steals the Amulet!
 wizard-steal-invocation-tool = The Wizard of Yendor steals one of the invocation tools!
 
 # TODO: translate
+wizard-steal-quest-artifact = The Wizard of Yendor steals the quest artifact!
+
+# TODO: translate
 wizard-summon-nasties = New nasties appear from thin air!
 
 # TODO: translate

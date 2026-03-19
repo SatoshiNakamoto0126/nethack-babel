@@ -1331,6 +1331,8 @@ pub enum WizardAction {
     StealAmulet,
     /// Steal one of the invocation tools from the player.
     StealInvocationTool,
+    /// Steal the player's quest artifact.
+    StealQuestArtifact,
     /// Summon hostile monsters around the player.
     SummonNasties,
     /// Curse random items in the player's inventory.
@@ -1416,6 +1418,9 @@ pub fn wizard_harass_events(action: WizardAction) -> Vec<EngineEvent> {
         WizardAction::StealInvocationTool => {
             vec![EngineEvent::msg("wizard-steal-invocation-tool")]
         }
+        WizardAction::StealQuestArtifact => {
+            vec![EngineEvent::msg("wizard-steal-quest-artifact")]
+        }
         WizardAction::DoubleTrouble => vec![EngineEvent::msg("wizard-double-trouble")],
         WizardAction::SummonNasties => vec![EngineEvent::msg("wizard-summon-nasties")],
         WizardAction::CurseItems => vec![EngineEvent::msg("wizard-curse-items")],
@@ -1456,6 +1461,8 @@ pub fn choose_wizard_action(
     wizard: Entity,
     player_has_amulet: bool,
     player_has_invocation_tool: bool,
+    player_has_quest_artifact: bool,
+    player_invoked: bool,
     rng: &mut impl Rng,
 ) -> WizardAction {
     let wizard_hp = world
@@ -1466,8 +1473,22 @@ pub fn choose_wizard_action(
     if wizard_is_adjacent_to_player(world, wizard, world.player()) {
         if player_has_amulet {
             WizardAction::StealAmulet
+        } else if player_invoked {
+            if player_has_quest_artifact {
+                WizardAction::StealQuestArtifact
+            } else if player_has_invocation_tool {
+                WizardAction::StealInvocationTool
+            } else if wizard_hp.0 >= wizard_hp.1 {
+                WizardAction::DoubleTrouble
+            } else if rng.random_range(0..2) == 0 {
+                WizardAction::SummonNasties
+            } else {
+                WizardAction::CurseItems
+            }
         } else if player_has_invocation_tool {
             WizardAction::StealInvocationTool
+        } else if player_has_quest_artifact {
+            WizardAction::StealQuestArtifact
         } else if wizard_hp.0 >= wizard_hp.1 {
             WizardAction::DoubleTrouble
         } else if rng.random_range(0..2) == 0 {
@@ -1603,9 +1624,10 @@ fn wizard_can_taunt_player(world: &GameWorld, wizard: Entity, player: Entity) ->
 pub fn wizard_harass(
     world: &mut GameWorld,
     wizard: Entity,
-    _player: Entity,
     player_has_amulet: bool,
     player_has_invocation_tool: bool,
+    player_has_quest_artifact: bool,
+    player_invoked: bool,
     rng: &mut impl Rng,
 ) -> Vec<EngineEvent> {
     let action = choose_wizard_action(
@@ -1613,6 +1635,8 @@ pub fn wizard_harass(
         wizard,
         player_has_amulet,
         player_has_invocation_tool,
+        player_has_quest_artifact,
+        player_invoked,
         rng,
     );
     // The actual side-effects are handled by the caller, since harassment can
@@ -1957,7 +1981,6 @@ mod tests {
     #[test]
     fn test_wizard_steal_amulet() {
         let mut world = make_test_world();
-        let player = world.player();
         let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
         let _ = world.ecs_mut().insert_one(
             wizard,
@@ -1969,8 +1992,10 @@ mod tests {
 
         let mut rng = test_rng();
         let events = wizard_harass(
-            &mut world, wizard, player, true,  // player has amulet
+            &mut world, wizard, true,  // player has amulet
             false, // no invocation tool required
+            false, // no quest artifact
+            false, // not invoked
             &mut rng,
         );
 
@@ -1983,7 +2008,6 @@ mod tests {
     #[test]
     fn test_wizard_steal_invocation_tool() {
         let mut world = make_test_world();
-        let player = world.player();
         let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
         let _ = world.ecs_mut().insert_one(
             wizard,
@@ -1995,8 +2019,10 @@ mod tests {
 
         let mut rng = test_rng();
         let events = wizard_harass(
-            &mut world, wizard, player, false, // no amulet
+            &mut world, wizard, false, // no amulet
             true,  // has invocation tool
+            false, // no quest artifact
+            false, // not invoked
             &mut rng,
         );
 
@@ -2009,7 +2035,6 @@ mod tests {
     #[test]
     fn test_wizard_prefers_amulet_over_invocation_tool() {
         let mut world = make_test_world();
-        let player = world.player();
         let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
         let _ = world.ecs_mut().insert_one(
             wizard,
@@ -2021,8 +2046,10 @@ mod tests {
 
         let mut rng = test_rng();
         let events = wizard_harass(
-            &mut world, wizard, player, true, // has amulet
-            true, // also has invocation tool
+            &mut world, wizard, true,  // has amulet
+            true,  // also has invocation tool
+            false, // no quest artifact
+            false, // not invoked
             &mut rng,
         );
 
@@ -2039,9 +2066,69 @@ mod tests {
     }
 
     #[test]
+    fn test_wizard_steals_quest_artifact_after_invocation() {
+        let mut world = make_test_world();
+        let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
+        let _ = world.ecs_mut().insert_one(
+            wizard,
+            WizardOfYendor {
+                last_killed_turn: 0,
+                times_killed: 1,
+            },
+        );
+
+        let mut rng = test_rng();
+        let events = wizard_harass(
+            &mut world, wizard, false, // no amulet
+            false, // no invocation tool
+            true,  // has quest artifact
+            true,  // invoked
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "wizard-steal-quest-artifact"
+        )));
+    }
+
+    #[test]
+    fn test_wizard_prefers_quest_artifact_over_invocation_tool_after_invocation() {
+        let mut world = make_test_world();
+        let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
+        let _ = world.ecs_mut().insert_one(
+            wizard,
+            WizardOfYendor {
+                last_killed_turn: 0,
+                times_killed: 1,
+            },
+        );
+
+        let mut rng = test_rng();
+        let events = wizard_harass(
+            &mut world, wizard, false, // no amulet
+            true,  // has invocation tool
+            true,  // has quest artifact
+            true,  // invoked
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Message { key, .. } if key == "wizard-steal-quest-artifact"
+        )));
+        assert!(
+            !events.iter().any(|e| matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "wizard-steal-invocation-tool"
+            )),
+            "after invocation the quest artifact should outrank the invocation tools"
+        );
+    }
+
+    #[test]
     fn test_wizard_double_trouble() {
         let mut world = make_test_world();
-        let player = world.player();
         let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
         // Wizard at full HP, player does not have amulet.
         let _ = world.ecs_mut().insert_one(
@@ -2053,7 +2140,7 @@ mod tests {
         );
 
         let mut rng = test_rng();
-        let events = wizard_harass(&mut world, wizard, player, false, false, &mut rng);
+        let events = wizard_harass(&mut world, wizard, false, false, false, false, &mut rng);
 
         let double = events.iter().any(
             |e| matches!(e, EngineEvent::Message { key, .. } if key == "wizard-double-trouble"),
@@ -2064,7 +2151,6 @@ mod tests {
     #[test]
     fn test_wizard_summon_or_curse_at_low_hp() {
         let mut world = make_test_world();
-        let player = world.player();
         let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
         let _ = world.ecs_mut().insert_one(
             wizard,
@@ -2081,8 +2167,10 @@ mod tests {
 
         let mut rng = test_rng();
         let events = wizard_harass(
-            &mut world, wizard, player, false, // no amulet
+            &mut world, wizard, false, // no amulet
             false, // no invocation tool
+            false, // no quest artifact
+            false, // not invoked
             &mut rng,
         );
 

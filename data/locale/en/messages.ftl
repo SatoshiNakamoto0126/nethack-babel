@@ -2833,6 +2833,7 @@ wizard-respawned-boom = A voice booms out...
 wizard-respawned-taunt = So thou thought thou couldst {$verb} me, fool.
 wizard-steal-amulet = The Wizard of Yendor steals the Amulet!
 wizard-steal-invocation-tool = The Wizard of Yendor steals one of the invocation tools!
+wizard-steal-quest-artifact = The Wizard of Yendor steals the quest artifact!
 wizard-summon-nasties = New nasties appear from thin air!
 wizard-taunt-laughs = {$wizard} laughs fiendishly.
 wizard-taunt-relinquish = Relinquish the Amulet, {$insult}!

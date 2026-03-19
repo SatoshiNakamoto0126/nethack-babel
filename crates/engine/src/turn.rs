@@ -6011,6 +6011,14 @@ fn find_player_coveted_invocation_item(
         .find_map(|name| find_player_named_item(world, player, name))
 }
 
+fn find_player_coveted_quest_artifact(
+    world: &GameWorld,
+    player: hecs::Entity,
+) -> Option<hecs::Entity> {
+    let role = current_player_role(world)?;
+    find_player_named_item(world, player, crate::quest::quest_artifact_for_role(role))
+}
+
 fn player_has_worn_or_wielded_named_item(
     world: &GameWorld,
     player: hecs::Entity,
@@ -6129,6 +6137,8 @@ fn process_wizard_of_yendor_turn(
     let mut player_events = read_player_events(world, player);
     let player_has_amulet = player_has_named_item(world, player, "Amulet of Yendor");
     let player_has_invocation_tool = find_player_coveted_invocation_item(world, player).is_some();
+    let player_has_quest_artifact = find_player_coveted_quest_artifact(world, player).is_some();
+    let player_invoked = player_events.invoked;
     let wizard_times_killed = player_events
         .wizard_times_killed
         .max(u32::from(player_events.killed_wizard));
@@ -6217,6 +6227,8 @@ fn process_wizard_of_yendor_turn(
         wizard,
         player_has_amulet,
         player_has_invocation_tool,
+        player_has_quest_artifact,
+        player_invoked,
         rng,
     );
     events.extend(wizard_harassment_messages(world, player, action));
@@ -6558,6 +6570,19 @@ fn apply_wizard_harassment_action(
                         crate::ball::chebyshev_distance(wizard_pos.0, player_pos.0) == 1
                     })
                 && let Some(item) = find_player_coveted_invocation_item(world, player)
+            {
+                wizard_steal_player_item(world, wizard, player, item);
+            }
+        }
+        crate::npc::WizardAction::StealQuestArtifact => {
+            if let Some(wizard) = wizard
+                && world
+                    .get_component::<Positioned>(wizard)
+                    .zip(world.get_component::<Positioned>(player))
+                    .is_some_and(|(wizard_pos, player_pos)| {
+                        crate::ball::chebyshev_distance(wizard_pos.0, player_pos.0) == 1
+                    })
+                && let Some(item) = find_player_coveted_quest_artifact(world, player)
             {
                 wizard_steal_player_item(world, wizard, player, item);
             }
@@ -14932,6 +14957,64 @@ mod tests {
         let item_loc = world
             .get_component::<ObjectLocation>(book)
             .expect("stolen invocation tool should stay in the world");
+        assert!(matches!(
+            *item_loc,
+            ObjectLocation::Floor { x, y, level }
+                if (x as i32 - wizard_pos.x).abs() <= 1
+                    && (y as i32 - wizard_pos.y).abs() <= 1
+                    && level == world.dungeon().current_data_dungeon_level()
+        ));
+    }
+
+    #[test]
+    fn test_wizard_steal_quest_artifact_drops_it_off_player() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, wizard_identity())
+            .expect("player should accept wizard identity");
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let eye = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('q'),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            Name("The Eye of the Aethiopica".to_string()),
+        ));
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.push(eye);
+        }
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::StealQuestArtifact,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            !player_carries_item(&world, player, eye),
+            "wizard harassment should remove the quest artifact from the player's possessions"
+        );
+        let wizard_pos = world
+            .get_component::<Positioned>(wizard)
+            .expect("wizard should still exist")
+            .0;
+        let item_loc = world
+            .get_component::<ObjectLocation>(eye)
+            .expect("stolen quest artifact should stay in the world");
         assert!(matches!(
             *item_loc,
             ObjectLocation::Floor { x, y, level }
