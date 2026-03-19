@@ -1034,3 +1034,20 @@ ui-game-over-score-line = Score: { $score }
 ui-game-over-cause-line = Cause: { $cause }
 ui-game-over-turns-line = Turns: { $turns }
 tool-tinning-no-charges = Dir scheinen die Dosen auszugehen.
+ui-loot-menu-title = Pluendere { $container }
+ui-loot-option-take-out = Herausnehmen: { $item }
+ui-loot-option-take-all = Alles herausnehmen
+ui-loot-option-put-in = Hineinlegen: { $item }
+ui-loot-option-put-all = Alles hineinlegen
+tip-cannot-reach = Du kannst das nicht erreichen.
+tip-empty = Dieser Behälter ist leer.
+tip-locked = Dieser Behälter ist verschlossen.
+tip-dump = { $count ->
+    [one] Ein Gegenstand fällt heraus.
+   *[other] Mehrere Gegenstände fallen heraus.
+}
+tip-grease-spill = Etwas Fett verschüttet sich auf dem Boden.
+tip-bag-of-tricks = { $count ->
+    [one] Ein Monster fällt aus dem Beutel!
+   *[other] Monster fallen aus dem Beutel!
+}

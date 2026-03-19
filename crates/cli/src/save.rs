@@ -1756,6 +1756,20 @@ mod tests {
             .count()
     }
 
+    fn player_gold(world: &GameWorld, player: hecs::Entity) -> i32 {
+        world
+            .get_component::<Inventory>(player)
+            .map(|inv| {
+                inv.items
+                    .iter()
+                    .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                    .filter(|core| core.object_class == ObjectClass::Coin)
+                    .map(|core| core.quantity)
+                    .sum()
+            })
+            .unwrap_or(0)
+    }
+
     fn spawn_inventory_object_by_name(
         world: &mut GameWorld,
         name: &str,
@@ -2010,6 +2024,8 @@ mod tests {
         ShopkeeperSell,
         ShopChatPriceQuote,
         ShopContainerPickup,
+        ShopContainerTakeOut,
+        ShopContainerPutIn,
         DemonBribe,
         ShopRepair,
         ShopkeeperDeath,
@@ -2079,6 +2095,8 @@ mod tests {
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 SaveStoryTraversalScenario::ShopContainerPickup => "shop-container-pickup",
+                SaveStoryTraversalScenario::ShopContainerTakeOut => "shop-container-take-out",
+                SaveStoryTraversalScenario::ShopContainerPutIn => "shop-container-put-in",
                 SaveStoryTraversalScenario::DemonBribe => "demon-bribe",
                 SaveStoryTraversalScenario::ShopRepair => "shop-repair",
                 SaveStoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
@@ -3350,6 +3368,7 @@ mod tests {
                         shopkeeper,
                         "Izchak".to_string(),
                     ));
+                world.dungeon_mut().shop_rooms[0].shopkeeper_gold = 80;
 
                 let sack = spawn_inventory_object_by_name(&mut world, "sack", 's');
                 let pick_axe = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
@@ -3392,6 +3411,167 @@ mod tests {
                     save_and_reload_world("story-matrix-shop-container-pickup", &world, [66u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(&mut loaded, PlayerAction::PickUp, &mut rng);
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopContainerTakeOut => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+
+                let sack = spawn_inventory_object_by_name(&mut world, "sack", 's');
+                let pick_axe = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+                let lock_pick = spawn_inventory_object_by_name(&mut world, "lock pick", 'q');
+                if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+                    inv.items.retain(|entry| !matches!(*entry, e if e == sack || e == pick_axe || e == lock_pick));
+                }
+                let current_level = world.dungeon().current_data_dungeon_level();
+                let sack_id = sack.to_bits().get() as u32;
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(sack) {
+                    *loc = ObjectLocation::Floor {
+                        x: 5,
+                        y: 5,
+                        level: current_level.clone(),
+                    };
+                }
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(pick_axe) {
+                    *loc = ObjectLocation::Contained {
+                        container_id: sack_id,
+                    };
+                }
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(lock_pick) {
+                    *loc = ObjectLocation::Contained {
+                        container_id: sack_id,
+                    };
+                }
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        sack,
+                        nethack_babel_engine::environment::Container {
+                            container_type: nethack_babel_engine::environment::ContainerType::Sack,
+                            locked: false,
+                            trapped: false,
+                        },
+                    )
+                    .expect("sack should accept container component");
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-shop-container-take-out",
+                    &world,
+                    [67u8; 32],
+                );
+                let sack = loaded
+                    .ecs()
+                    .query::<(&Name, &nethack_babel_engine::environment::Container)>()
+                    .iter()
+                    .find_map(|(entity, (name, _))| (name.0 == "sack").then_some(entity))
+                    .expect("loaded sack should exist");
+                let pick_axe = nethack_babel_engine::environment::container_contents(&loaded, sack)
+                    .into_iter()
+                    .find_map(|(entity, core)| {
+                        (resolve_object_type_by_spec(&loaded, "pick-axe") == Some(core.otyp))
+                            .then_some(entity)
+                    })
+                    .expect("loaded pick-axe should still be inside the sack");
+
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::LootTake {
+                        container: sack,
+                        items: vec![pick_axe],
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopContainerPutIn => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                world.dungeon_mut().shop_rooms[0].shopkeeper_gold = 80;
+
+                let sack = spawn_inventory_object_by_name(&mut world, "sack", 's');
+                let _pick_axe = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+                if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+                    inv.items.retain(|entry| *entry != sack);
+                }
+                let current_level = world.dungeon().current_data_dungeon_level();
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(sack) {
+                    *loc = ObjectLocation::Floor {
+                        x: 5,
+                        y: 5,
+                        level: current_level,
+                    };
+                }
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        sack,
+                        nethack_babel_engine::environment::Container {
+                            container_type: nethack_babel_engine::environment::ContainerType::Sack,
+                            locked: false,
+                            trapped: false,
+                        },
+                    )
+                    .expect("sack should accept container component");
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-container-put-in", &world, [68u8; 32]);
+                let sack = loaded
+                    .ecs()
+                    .query::<(&Name, &nethack_babel_engine::environment::Container)>()
+                    .iter()
+                    .find_map(|(entity, (name, _))| (name.0 == "sack").then_some(entity))
+                    .expect("loaded sack should exist");
+                let pick_axe = loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .and_then(|inv| {
+                        inv.items.iter().copied().find(|item| {
+                            loaded
+                                .get_component::<Name>(*item)
+                                .is_some_and(|name| name.0.as_str() == "pick-axe")
+                        })
+                    })
+                    .expect("loaded pick-axe should remain in inventory");
+
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::LootPut {
+                        container: sack,
+                        items: vec![pick_axe],
+                    },
+                    &mut rng,
+                );
                 (loaded, events)
             }
             SaveStoryTraversalScenario::DemonBribe => {
@@ -8232,6 +8412,155 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_shop_container_loot_preserves_bill_and_containment() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 6), "Izchak", 20);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(nethack_babel_engine::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                nethack_babel_engine::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        world.dungeon_mut().shop_rooms[0].shopkeeper_gold = 80;
+
+        let sack = spawn_inventory_object_by_name(&mut world, "sack", 's');
+        let pick_axe = spawn_inventory_object_by_name(&mut world, "pick-axe", 'p');
+        let _lock_pick = spawn_inventory_object_by_name(&mut world, "lock pick", 'q');
+        if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+            inv.items
+                .retain(|entry| !matches!(*entry, e if e == sack || e == pick_axe));
+        }
+        let current_level = world.dungeon().current_data_dungeon_level();
+        let sack_id = sack.to_bits().get() as u32;
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(sack) {
+            *loc = ObjectLocation::Floor {
+                x: 5,
+                y: 5,
+                level: current_level.clone(),
+            };
+        }
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(pick_axe) {
+            *loc = ObjectLocation::Contained {
+                container_id: sack_id,
+            };
+        }
+        world
+            .ecs_mut()
+            .insert_one(
+                sack,
+                nethack_babel_engine::environment::Container {
+                    container_type: nethack_babel_engine::environment::ContainerType::Sack,
+                    locked: false,
+                    trapped: false,
+                },
+            )
+            .expect("sack should accept container state");
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("shop-container-loot-first-round-trip", &world, [93u8; 32]);
+        let sack = loaded
+            .ecs()
+            .query::<(&Name, &nethack_babel_engine::environment::Container)>()
+            .iter()
+            .find_map(|(entity, (name, _))| (name.0 == "sack").then_some(entity))
+            .expect("loaded sack should exist");
+        let pick_axe = nethack_babel_engine::environment::container_contents(&loaded, sack)
+            .into_iter()
+            .find_map(|(entity, core)| {
+                (resolve_object_type_by_spec(&loaded, "pick-axe") == Some(core.otyp))
+                    .then_some(entity)
+            })
+            .expect("loaded pick-axe should remain in the sack");
+        let lock_pick = loaded
+            .get_component::<Inventory>(loaded.player())
+            .and_then(|inv| {
+                inv.items.iter().copied().find(|item| {
+                    loaded
+                        .get_component::<Name>(*item)
+                        .is_some_and(|name| name.0.as_str() == "lock pick")
+                })
+            })
+            .expect("loaded lock pick should remain in inventory");
+
+        let mut rng = Pcg64::from_seed(loaded_rng);
+        let take_events = resolve_turn(
+            &mut loaded,
+            PlayerAction::LootTake {
+                container: sack,
+                items: vec![pick_axe],
+            },
+            &mut rng,
+        );
+        assert!(take_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "container-take-out"
+        )));
+        let put_events = resolve_turn(
+            &mut loaded,
+            PlayerAction::LootPut {
+                container: sack,
+                items: vec![lock_pick],
+            },
+            &mut rng,
+        );
+        assert!(put_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "container-put-in"
+        )));
+
+        let (loaded_again, _) =
+            save_and_reload_world("shop-container-loot-second-round-trip", &loaded, [94u8; 32]);
+        let player = loaded_again.player();
+        let pick_axe = loaded_again
+            .get_component::<Inventory>(player)
+            .and_then(|inv| {
+                inv.items.iter().copied().find(|item| {
+                    loaded_again
+                        .get_component::<Name>(*item)
+                        .is_some_and(|name| name.0.as_str() == "pick-axe")
+                })
+            })
+            .expect("taken pick-axe should survive the second reload");
+        let sack = loaded_again
+            .ecs()
+            .query::<(&Name, &nethack_babel_engine::environment::Container)>()
+            .iter()
+            .find_map(|(entity, (name, _))| (name.0 == "sack").then_some(entity))
+            .expect("sack should survive the second reload");
+        let lock_pick_inside =
+            nethack_babel_engine::environment::container_contents(&loaded_again, sack)
+                .into_iter()
+                .find_map(|(entity, core)| {
+                    (resolve_object_type_by_spec(&loaded_again, "lock pick") == Some(core.otyp))
+                        .then_some(entity)
+                })
+                .expect("put-in lock pick should remain inside the sack after reload");
+
+        let shop = &loaded_again.dungeon().shop_rooms[0];
+        assert!(shop.bill.find(pick_axe).is_some());
+        assert!(
+            loaded_again
+                .get_component::<ShopState>(pick_axe)
+                .is_some_and(|state| state.unpaid)
+        );
+        assert!(
+            loaded_again
+                .get_component::<ShopState>(lock_pick_inside)
+                .is_none(),
+            "sold lock pick should not return as unpaid after reload"
+        );
+    }
+
+    #[test]
     fn round_trip_loaded_restores_explicit_npc_components_on_current_level() {
         let mut world = make_stair_world(DungeonBranch::Quest, 1, Terrain::Floor);
         let player = world.player();
@@ -8533,6 +8862,8 @@ mod tests {
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopChatPriceQuote,
             SaveStoryTraversalScenario::ShopContainerPickup,
+            SaveStoryTraversalScenario::ShopContainerTakeOut,
+            SaveStoryTraversalScenario::ShopContainerPutIn,
             SaveStoryTraversalScenario::DemonBribe,
             SaveStoryTraversalScenario::ShopRepair,
             SaveStoryTraversalScenario::ShopkeeperDeath,
@@ -8948,6 +9279,67 @@ mod tests {
                             .is_some_and(|state| state.unpaid),
                         "picked up sack should remain marked unpaid after save/load"
                     );
+                }
+                SaveStoryTraversalScenario::ShopContainerTakeOut => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    let pick_axe = world
+                        .get_component::<Inventory>(player)
+                        .and_then(|inv| {
+                            inv.items.iter().copied().find(|item| {
+                                world
+                                    .get_component::<Name>(*item)
+                                    .is_some_and(|name| name.0.as_str() == "pick-axe")
+                            })
+                        })
+                        .expect("taken pick-axe should be in inventory after reload");
+                    let sack = world
+                        .ecs()
+                        .query::<(&Name, &nethack_babel_engine::environment::Container)>()
+                        .iter()
+                        .find_map(|(entity, (name, _))| (name.0 == "sack").then_some(entity))
+                        .expect("sack should still exist after take-out");
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "container-take-out"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key.starts_with("shop-price")
+                    )));
+                    assert_eq!(shop.bill.len(), 1);
+                    assert!(shop.bill.find(pick_axe).is_some());
+                    assert_eq!(
+                        nethack_babel_engine::environment::container_contents(&world, sack).len(),
+                        1
+                    );
+                    assert!(
+                        world
+                            .get_component::<ShopState>(pick_axe)
+                            .is_some_and(|state| state.unpaid),
+                        "taken item should remain marked unpaid after save/load"
+                    );
+                }
+                SaveStoryTraversalScenario::ShopContainerPutIn => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    let sack = world
+                        .ecs()
+                        .query::<(&Name, &nethack_babel_engine::environment::Container)>()
+                        .iter()
+                        .find_map(|(entity, (name, _))| (name.0 == "sack").then_some(entity))
+                        .expect("sack should still exist after put-in");
+                    let contents =
+                        nethack_babel_engine::environment::container_contents(&world, sack);
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "container-put-in"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-sell"
+                    )));
+                    assert_eq!(contents.len(), 1);
+                    assert_eq!(player_gold(&world, player), 5);
+                    assert!(shop.bill.is_empty());
                 }
                 SaveStoryTraversalScenario::DemonBribe => {
                     let demon_name = monster_name_and_id_matching(&world, |def| {

@@ -1684,6 +1684,11 @@ ui-oracle-minor-option = 小型諮詢（50 金幣）
 ui-oracle-major-option = 大型諮詢（{ $amount } 金幣）
 ui-cancel = 取消
 ui-choice-prompt = 選擇>
+ui-loot-menu-title = 搜刮 { $container }
+ui-loot-option-take-out = 取出：{ $item }
+ui-loot-option-take-all = 全部取出
+ui-loot-option-put-in = 放入：{ $item }
+ui-loot-option-put-all = 全部放入
 ui-demon-bribe-prompt = 你要出價多少？[0..{ $amount }]（留空表示拒絕，Esc 取消）
 ui-demon-bribe-text-title = 你要出價多少？[0..{ $amount }]
 ui-demon-bribe-help = 留空或非法輸入都會視為拒絕
@@ -2696,6 +2701,15 @@ throne-wish = 一個聲音迴盪著：「汝之願望已被應允！」
 tip-cannot-reach = 你夠不到那個。
 tip-empty = 那個容器是空的。
 tip-locked = 那個容器上鎖了。
+tip-dump = { $count ->
+    [one] 一件物品從容器裡倒了出來。
+   *[other] 多件物品從容器裡倒了出來。
+}
+tip-grease-spill = 一些油脂灑到了地面上。
+tip-bag-of-tricks = { $count ->
+    [one] 一個怪物從袋子裡冒了出來！
+   *[other] 多個怪物從袋子裡冒了出來！
+}
 
 tool-bell-cursed-summon = 鈴聲召來了敵對生物！
 

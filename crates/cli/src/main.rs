@@ -17,7 +17,7 @@ use rand_pcg::Pcg64;
 
 use nethack_babel_data::{
     BucStatus, Color as NhColor, GameData, MonsterDef, ObjectClass, ObjectCore, ObjectDef,
-    load_embedded_game_data, load_game_data,
+    ObjectLocation, load_embedded_game_data, load_game_data,
 };
 use nethack_babel_engine::action::{Direction, PlayerAction, Position};
 use nethack_babel_engine::conduct::ConductState;
@@ -667,6 +667,245 @@ fn prompt_tui_demon_bribe(
     Some(PlayerAction::BribeDemon { direction, amount })
 }
 
+struct LootPromptContext {
+    container: hecs::Entity,
+    contents: Vec<(hecs::Entity, String)>,
+    inventory: Vec<(hecs::Entity, String)>,
+}
+
+fn localized_loot_menu_title(
+    locale: &LocaleManager,
+    world: &GameWorld,
+    container: hecs::Entity,
+) -> String {
+    let mut args = fluent::FluentArgs::new();
+    args.set("container", world.entity_name(container));
+    locale.translate("ui-loot-menu-title", Some(&args))
+}
+
+fn localized_loot_menu_options(
+    locale: &LocaleManager,
+    context: &LootPromptContext,
+) -> Vec<(String, nethack_babel_engine::pickup::LootAction)> {
+    let mut items = Vec::new();
+
+    for (i, (_, name)) in context.contents.iter().enumerate() {
+        let mut args = fluent::FluentArgs::new();
+        args.set("item", name.clone());
+        items.push((
+            locale.translate("ui-loot-option-take-out", Some(&args)),
+            nethack_babel_engine::pickup::LootAction::TakeOut { item_index: i },
+        ));
+    }
+    if !context.contents.is_empty() {
+        items.push((
+            locale.translate("ui-loot-option-take-all", None),
+            nethack_babel_engine::pickup::LootAction::TakeAll,
+        ));
+    }
+
+    for (i, (_, name)) in context.inventory.iter().enumerate() {
+        let mut args = fluent::FluentArgs::new();
+        args.set("item", name.clone());
+        items.push((
+            locale.translate("ui-loot-option-put-in", Some(&args)),
+            nethack_babel_engine::pickup::LootAction::PutIn { item_index: i },
+        ));
+    }
+    if !context.inventory.is_empty() {
+        items.push((
+            locale.translate("ui-loot-option-put-all", None),
+            nethack_babel_engine::pickup::LootAction::PutAll,
+        ));
+    }
+
+    items
+}
+
+fn loot_menu_accelerator(index: usize) -> Option<char> {
+    match index {
+        0..=25 => Some((b'a' + index as u8) as char),
+        26..=51 => Some((b'A' + (index - 26) as u8) as char),
+        52..=61 => Some((b'0' + (index - 52) as u8) as char),
+        _ => None,
+    }
+}
+
+fn build_loot_prompt_context(world: &GameWorld) -> Option<LootPromptContext> {
+    let player = world.player();
+    let player_pos = world.get_component::<Positioned>(player).map(|p| p.0)?;
+    let mut container = None;
+    for (entity, loc) in world.ecs().query::<&ObjectLocation>().iter() {
+        if nethack_babel_engine::dungeon::floor_position_on_level(
+            loc,
+            world.dungeon().branch,
+            world.dungeon().depth,
+        )
+        .is_some_and(|pos| pos == player_pos)
+            && world
+                .get_component::<nethack_babel_engine::environment::Container>(entity)
+                .is_some()
+        {
+            container = Some(entity);
+            break;
+        }
+    }
+    let container = container?;
+    if world
+        .get_component::<nethack_babel_engine::environment::Container>(container)
+        .is_some_and(|state| state.locked)
+    {
+        return None;
+    }
+
+    let obj_defs = world.object_catalog();
+    let contents = nethack_babel_engine::environment::container_contents(world, container)
+        .into_iter()
+        .map(|(entity, core)| {
+            (
+                entity,
+                inventory_display_name(world, entity, &core, obj_defs),
+            )
+        })
+        .collect();
+    let inventory = nethack_babel_engine::items::get_inventory(world, player)
+        .into_iter()
+        .map(|(entity, core)| {
+            (
+                entity,
+                inventory_display_name(world, entity, &core, obj_defs),
+            )
+        })
+        .collect();
+
+    Some(LootPromptContext {
+        container,
+        contents,
+        inventory,
+    })
+}
+
+fn loot_action_from_menu_action(
+    context: &LootPromptContext,
+    action: &nethack_babel_engine::pickup::LootAction,
+) -> Option<PlayerAction> {
+    match action {
+        nethack_babel_engine::pickup::LootAction::TakeOut { item_index } => {
+            Some(PlayerAction::LootTake {
+                container: context.container,
+                items: vec![context.contents.get(*item_index)?.0],
+            })
+        }
+        nethack_babel_engine::pickup::LootAction::PutIn { item_index } => {
+            Some(PlayerAction::LootPut {
+                container: context.container,
+                items: vec![context.inventory.get(*item_index)?.0],
+            })
+        }
+        nethack_babel_engine::pickup::LootAction::TakeAll => Some(PlayerAction::LootTake {
+            container: context.container,
+            items: context.contents.iter().map(|(entity, _)| *entity).collect(),
+        }),
+        nethack_babel_engine::pickup::LootAction::PutAll => Some(PlayerAction::LootPut {
+            container: context.container,
+            items: context
+                .inventory
+                .iter()
+                .map(|(entity, _)| *entity)
+                .collect(),
+        }),
+        nethack_babel_engine::pickup::LootAction::Nothing => Some(PlayerAction::Loot),
+    }
+}
+
+fn prompt_tui_loot_menu(
+    port: &mut impl WindowPort,
+    locale: &LocaleManager,
+    world: &GameWorld,
+) -> Option<PlayerAction> {
+    let Some(context) = build_loot_prompt_context(world) else {
+        return Some(PlayerAction::Loot);
+    };
+    let options = localized_loot_menu_options(locale, &context);
+    if options.is_empty() {
+        return Some(PlayerAction::Loot);
+    }
+
+    let items: Vec<MenuItem> = options
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (label, _))| {
+            Some(MenuItem {
+                accelerator: loot_menu_accelerator(index)?,
+                text: label.clone(),
+                selected: false,
+                selectable: true,
+                group: None,
+            })
+        })
+        .collect();
+    let menu = Menu {
+        title: localized_loot_menu_title(locale, world, context.container),
+        items,
+        how: MenuHow::PickOne,
+    };
+
+    match port.show_menu(&menu) {
+        MenuResult::Selected(indices) if !indices.is_empty() => options
+            .get(indices[0])
+            .and_then(|(_, action)| loot_action_from_menu_action(&context, action)),
+        _ => None,
+    }
+}
+
+fn prompt_text_loot_menu(
+    stdin: &io::Stdin,
+    stdout: &io::Stdout,
+    locale: &LocaleManager,
+    world: &GameWorld,
+) -> Result<Option<PlayerAction>> {
+    let Some(context) = build_loot_prompt_context(world) else {
+        return Ok(Some(PlayerAction::Loot));
+    };
+    let options = localized_loot_menu_options(locale, &context);
+    if options.is_empty() {
+        return Ok(Some(PlayerAction::Loot));
+    }
+
+    println!(
+        "  {}",
+        localized_loot_menu_title(locale, world, context.container)
+    );
+    for (index, (label, _)) in options.iter().enumerate() {
+        if let Some(accel) = loot_menu_accelerator(index) {
+            println!("    {accel} - {label}");
+        }
+    }
+    println!("    q - {}", locale.translate("ui-cancel", None));
+    print!("  {} ", locale.translate("ui-choice-prompt", None));
+    stdout.lock().flush()?;
+
+    let mut line = String::new();
+    let bytes_read = stdin.lock().read_line(&mut line)?;
+    if bytes_read == 0 {
+        return Ok(None);
+    }
+    let choice = line.trim().chars().next().unwrap_or('q');
+    if matches!(choice, 'q' | 'Q') {
+        return Ok(None);
+    }
+
+    let selection = options
+        .iter()
+        .enumerate()
+        .find_map(|(index, _)| (loot_menu_accelerator(index) == Some(choice)).then_some(index));
+    Ok(selection.and_then(|index| {
+        options
+            .get(index)
+            .and_then(|(_, action)| loot_action_from_menu_action(&context, action))
+    }))
+}
+
 fn contextualize_tui_action(
     port: &mut impl WindowPort,
     locale: &LocaleManager,
@@ -680,6 +919,7 @@ fn contextualize_tui_action(
         PlayerAction::Chat { direction } if is_peaceful_demon_bribe_chat(world, direction) => {
             prompt_tui_demon_bribe(port, locale, world, direction)
         }
+        PlayerAction::Loot => prompt_tui_loot_menu(port, locale, world),
         _ => Some(action),
     }
 }
@@ -968,6 +1208,7 @@ fn contextualize_text_action(
         PlayerAction::Chat { direction } if is_peaceful_demon_bribe_chat(world, direction) => {
             prompt_text_demon_bribe(stdin, stdout, locale, world, direction)
         }
+        PlayerAction::Loot => prompt_text_loot_menu(stdin, stdout, locale, world),
         _ => Ok(Some(action)),
     }
 }
@@ -3001,6 +3242,72 @@ mod text_input_tests {
             Some(PlayerAction::CastSpell { spell, direction: Some(Direction::West) })
                 if spell.0 == 1
         ));
+    }
+
+    #[test]
+    fn loot_menu_selection_maps_take_put_and_all_actions() {
+        let mut world = GameWorld::new(Position::new(1, 1));
+        let container = world.spawn(());
+        let content_a = world.spawn(());
+        let content_b = world.spawn(());
+        let inv_a = world.spawn(());
+        let inv_b = world.spawn(());
+        let context = LootPromptContext {
+            container,
+            contents: vec![
+                (content_a, "pick-axe".to_string()),
+                (content_b, "lock pick".to_string()),
+            ],
+            inventory: vec![(inv_a, "oil lamp".to_string()), (inv_b, "sack".to_string())],
+        };
+
+        assert!(matches!(
+            loot_action_from_menu_action(
+                &context,
+                &nethack_babel_engine::pickup::LootAction::TakeOut { item_index: 0 }
+            ),
+            Some(PlayerAction::LootTake { container: c, items })
+                if c == container && items == vec![content_a]
+        ));
+        assert!(matches!(
+            loot_action_from_menu_action(&context, &nethack_babel_engine::pickup::LootAction::TakeAll),
+            Some(PlayerAction::LootTake { container: c, items })
+                if c == container && items == vec![content_a, content_b]
+        ));
+        assert!(matches!(
+            loot_action_from_menu_action(
+                &context,
+                &nethack_babel_engine::pickup::LootAction::PutIn { item_index: 0 }
+            ),
+            Some(PlayerAction::LootPut { container: c, items })
+                if c == container && items == vec![inv_a]
+        ));
+        assert!(matches!(
+            loot_action_from_menu_action(&context, &nethack_babel_engine::pickup::LootAction::PutAll),
+            Some(PlayerAction::LootPut { container: c, items })
+                if c == container && items == vec![inv_a, inv_b]
+        ));
+    }
+
+    #[test]
+    fn zh_cn_loot_menu_options_are_localized() {
+        let locale = init_embedded_locale_manager("zh-CN").expect("locale");
+        let mut world = GameWorld::new(Position::new(1, 1));
+        let container = world.spawn(());
+        let context = LootPromptContext {
+            container,
+            contents: vec![(world.spawn(()), "鹤嘴锄".to_string())],
+            inventory: vec![(world.spawn(()), "油灯".to_string())],
+        };
+
+        let options = localized_loot_menu_options(&locale, &context);
+        let labels: Vec<&str> = options.iter().map(|(label, _)| label.as_str()).collect();
+        assert!(labels.contains(&"取出：鹤嘴锄"));
+        assert!(labels.contains(&"全部取出"));
+        assert!(labels.contains(&"放入：油灯"));
+        assert!(labels.contains(&"全部放入"));
+        assert!(!labels.iter().any(|label| label.contains("Take out")));
+        assert!(!labels.iter().any(|label| label.contains("Put in")));
     }
 }
 

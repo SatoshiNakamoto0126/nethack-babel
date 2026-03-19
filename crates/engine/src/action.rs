@@ -215,6 +215,14 @@ pub enum PlayerAction {
         major: bool,
     },
     Loot,
+    LootTake {
+        container: Entity,
+        items: Vec<Entity>,
+    },
+    LootPut {
+        container: Entity,
+        items: Vec<Entity>,
+    },
     EnhanceSkill,
     Dip {
         item: Entity,

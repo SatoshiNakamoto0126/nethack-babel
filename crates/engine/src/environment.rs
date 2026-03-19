@@ -520,22 +520,32 @@ pub fn container_contents(
 
 /// Open a container: list its contents and emit events.
 pub fn open_container(world: &GameWorld, container_entity: Entity) -> Vec<EngineEvent> {
+    let container_name = world.entity_name(container_entity);
     // Check if locked.
     if let Some(container) = world.get_component::<Container>(container_entity)
         && container.locked
     {
-        return vec![EngineEvent::msg("container-locked")];
+        return vec![EngineEvent::msg_with(
+            "container-locked",
+            vec![("container", container_name)],
+        )];
     }
 
     let contents = container_contents(world, container_entity);
     let mut events = Vec::new();
 
     if contents.is_empty() {
-        events.push(EngineEvent::msg("container-empty"));
+        events.push(EngineEvent::msg_with(
+            "container-empty",
+            vec![("container", container_name)],
+        ));
     } else {
         events.push(EngineEvent::msg_with(
             "container-contents",
-            vec![("count", contents.len().to_string())],
+            vec![
+                ("container", container_name),
+                ("count", contents.len().to_string()),
+            ],
         ));
     }
 
@@ -551,12 +561,18 @@ pub fn put_in_container(
     item_entity: Entity,
     container_entity: Entity,
 ) -> Vec<EngineEvent> {
+    let container_name = world.entity_name(container_entity);
     // Verify the container is not locked.
     if let Some(container) = world.get_component::<Container>(container_entity)
         && container.locked
     {
-        return vec![EngineEvent::msg("container-locked")];
+        return vec![EngineEvent::msg_with(
+            "container-locked",
+            vec![("container", container_name)],
+        )];
     }
+
+    let item_name = world.entity_name(item_entity);
 
     // Update item location.
     let container_id = container_entity.to_bits().get() as u32;
@@ -570,7 +586,10 @@ pub fn put_in_container(
         inv.remove(item_entity);
     }
 
-    vec![EngineEvent::msg("container-put-in")]
+    vec![EngineEvent::msg_with(
+        "container-put-in",
+        vec![("item", item_name), ("container", container_name)],
+    )]
 }
 
 /// Take an item from a container into the player's inventory.
@@ -579,8 +598,19 @@ pub fn put_in_container(
 pub fn take_from_container(
     world: &mut GameWorld,
     item_entity: Entity,
-    _container_entity: Entity,
+    container_entity: Entity,
 ) -> Vec<EngineEvent> {
+    let container_name = world.entity_name(container_entity);
+    if let Some(container) = world.get_component::<Container>(container_entity)
+        && container.locked
+    {
+        return vec![EngineEvent::msg_with(
+            "container-locked",
+            vec![("container", container_name)],
+        )];
+    }
+
+    let item_name = world.entity_name(item_entity);
     // Update item location.
     if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item_entity) {
         *loc = ObjectLocation::Inventory;
@@ -592,7 +622,10 @@ pub fn take_from_container(
         inv.add(item_entity);
     }
 
-    vec![EngineEvent::msg("container-take-out")]
+    vec![EngineEvent::msg_with(
+        "container-take-out",
+        vec![("item", item_name), ("container", container_name)],
+    )]
 }
 
 /// Calculate the total weight of a container including its contents.

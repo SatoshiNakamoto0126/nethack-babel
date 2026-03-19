@@ -947,3 +947,20 @@ ui-game-over-score-line = Score: { $score }
 ui-game-over-cause-line = Cause: { $cause }
 ui-game-over-turns-line = Turns: { $turns }
 tool-tinning-no-charges = Vous semblez être à court de boîtes.
+ui-loot-menu-title = Fouiller { $container }
+ui-loot-option-take-out = Sortir : { $item }
+ui-loot-option-take-all = Tout sortir
+ui-loot-option-put-in = Ranger : { $item }
+ui-loot-option-put-all = Tout ranger
+tip-cannot-reach = Vous ne pouvez pas atteindre cela.
+tip-empty = Ce conteneur est vide.
+tip-locked = Ce conteneur est verrouille.
+tip-dump = { $count ->
+    [one] Un objet se renverse hors du conteneur.
+   *[other] Des objets se renversent hors du conteneur.
+}
+tip-grease-spill = Un peu de graisse se répand sur le sol.
+tip-bag-of-tricks = { $count ->
+    [one] Un monstre sort du sac !
+   *[other] Des monstres sortent du sac !
+}

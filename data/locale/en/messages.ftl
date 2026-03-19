@@ -1757,6 +1757,11 @@ ui-oracle-minor-option = Minor consultation (50 zorkmids)
 ui-oracle-major-option = Major consultation ({ $amount } zorkmids)
 ui-cancel = Cancel
 ui-choice-prompt = Choice>
+ui-loot-menu-title = Loot { $container }
+ui-loot-option-take-out = Take out: { $item }
+ui-loot-option-take-all = Take out everything
+ui-loot-option-put-in = Put in: { $item }
+ui-loot-option-put-all = Put in everything
 ui-demon-bribe-prompt = How much will you offer? [0..{ $amount }] (blank to refuse, Esc to cancel)
 ui-demon-bribe-text-title = How much will you offer? [0..{ $amount }]
 ui-demon-bribe-help = blank or invalid input counts as refusing
@@ -2898,6 +2903,15 @@ throne-wish = A voice echoes: "Thy wish is granted!"
 tip-cannot-reach = You can't reach that.
 tip-empty = That container is empty.
 tip-locked = That container is locked.
+tip-dump = { $count ->
+    [one] An object spills out.
+   *[other] Objects spill out.
+}
+tip-grease-spill = Some grease spills onto the floor.
+tip-bag-of-tricks = { $count ->
+    [one] A monster spills out of the bag!
+   *[other] Monsters spill out of the bag!
+}
 
 ## ============================================================================
 ## Tool messages (additional)
