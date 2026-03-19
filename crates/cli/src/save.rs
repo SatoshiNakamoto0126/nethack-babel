@@ -3569,18 +3569,6 @@ mod tests {
                         break;
                     }
                 }
-                assert!(
-                    resolve_object_type_by_spec(&loaded, "Amulet of Yendor").is_some_and(
-                        |amulet_type| loaded.get_component::<Inventory>(player).is_some_and(
-                            |inv| inv.items.iter().any(|item| {
-                                loaded
-                                    .get_component::<ObjectCore>(*item)
-                                    .is_some_and(|core| core.otyp == amulet_type)
-                            })
-                        )
-                    ),
-                    "save/load wizard harassment setup should keep the Amulet on the player"
-                );
                 (loaded, final_events)
             }
             SaveStoryTraversalScenario::WizardTaunt => {
@@ -5644,48 +5632,48 @@ mod tests {
 
         for _ in 0..256 {
             let events = resolve_turn(&mut loaded, PlayerAction::Rest, &mut rng);
-            if events.iter().any(|event| {
+            let turn_saw_theft = events.iter().any(|event| {
                 matches!(
                     event,
-                    EngineEvent::Message { key, .. }
-                        if key == "wizard-curse-items"
-                            || key == "wizard-summon-nasties"
-                            || key == "wizard-level-teleport"
+                    EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
                 )
-            }) {
-                saw_harassment = true;
-                saw_remote_theft = events.iter().any(|event| {
-                    matches!(
-                        event,
-                        EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
-                    )
-                });
-                saw_curse = events.iter().any(|event| {
-                    matches!(
-                        event,
-                        EngineEvent::Message { key, .. } if key == "wizard-curse-items"
-                    )
-                });
-                saw_summon = events.iter().any(|event| {
-                    matches!(
-                        event,
-                        EngineEvent::Message { key, .. } if key == "wizard-summon-nasties"
-                    )
-                });
-                saw_level_teleport = events.iter().any(|event| {
-                    matches!(
-                        event,
-                        EngineEvent::Message { key, .. } if key == "wizard-level-teleport"
-                    )
-                });
-                if saw_level_teleport {
-                    assert!(
-                        events
-                            .iter()
-                            .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
-                        "wizard level teleport after reload should really move the player"
-                    );
-                }
+            });
+            let turn_saw_curse = events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "wizard-curse-items"
+                )
+            });
+            let turn_saw_summon = events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "wizard-summon-nasties"
+                )
+            });
+            let turn_saw_level_teleport = events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "wizard-level-teleport"
+                )
+            });
+
+            saw_remote_theft |= turn_saw_theft;
+            saw_curse |= turn_saw_curse;
+            saw_summon |= turn_saw_summon;
+            saw_level_teleport |= turn_saw_level_teleport;
+            saw_harassment |=
+                turn_saw_theft || turn_saw_curse || turn_saw_summon || turn_saw_level_teleport;
+
+            if turn_saw_level_teleport {
+                assert!(
+                    events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "wizard level teleport after reload should really move the player"
+                );
+            }
+
+            if saw_remote_theft && (saw_curse || saw_summon || saw_level_teleport) {
                 break;
             }
         }
@@ -5695,22 +5683,54 @@ mod tests {
             "a live wizard should eventually keep harassing the player after save/load"
         );
         assert!(
-            !saw_remote_theft,
-            "a distant live wizard should not remotely steal the Amulet after save/load"
+            saw_remote_theft,
+            "a distant live wizard should eventually covetously steal the Amulet after save/load"
+        );
+        assert!(
+            saw_curse || saw_summon || saw_level_teleport,
+            "a live wizard should keep applying non-theft harassment after the covetous steal"
         );
         assert!(
             resolve_object_type_by_spec(&loaded, "Amulet of Yendor").is_some_and(|amulet_type| {
                 loaded
                     .get_component::<Inventory>(loaded.player())
                     .is_some_and(|inv| {
-                        inv.items.iter().any(|item| {
+                        !inv.items.iter().any(|item| {
                             loaded
                                 .get_component::<ObjectCore>(*item)
                                 .is_some_and(|core| core.otyp == amulet_type)
+                                && loaded
+                                    .get_component::<ObjectLocation>(*item)
+                                    .is_some_and(|loc| matches!(*loc, ObjectLocation::Inventory))
                         })
                     })
             }),
-            "save/load should keep the Amulet on the player when the wizard stays distant"
+            "save/load should let the wizard remove the Amulet from the player"
+        );
+        let wizard = find_monster_named(&loaded, "Wizard of Yendor")
+            .expect("save/load harassment test should keep a live wizard");
+        let wizard_pos = loaded
+            .get_component::<Positioned>(wizard)
+            .expect("wizard should keep a position")
+            .0;
+        assert!(
+            resolve_object_type_by_spec(&loaded, "Amulet of Yendor").is_some_and(|amulet_type| {
+                loaded
+                    .ecs()
+                    .query::<(&ObjectCore, &ObjectLocation)>()
+                    .iter()
+                    .any(|(_, (core, loc))| {
+                        core.otyp == amulet_type
+                            && matches!(
+                                *loc,
+                                ObjectLocation::Floor { x, y, level }
+                                    if (x as i32 - wizard_pos.x).abs() <= 1
+                                        && (y as i32 - wizard_pos.y).abs() <= 1
+                                        && level == loaded.dungeon().current_data_dungeon_level()
+                            )
+                    })
+            }),
+            "save/load should leave the stolen Amulet near the Wizard"
         );
         if saw_curse {
             assert!(
@@ -8189,23 +8209,44 @@ mod tests {
                         .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }));
                     assert!(cursed || summoned);
                     assert!(
-                        !final_events.iter().any(|event| matches!(
-                            event,
-                            EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
-                        )),
-                        "save/load wizard matrix should not allow remote amulet theft"
-                    );
-                    assert!(
                         resolve_object_type_by_spec(&world, "Amulet of Yendor").is_some_and(
                             |amulet_type| world.get_component::<Inventory>(player).is_some_and(
-                                |inv| inv.items.iter().any(|item| {
+                                |inv| !inv.items.iter().any(|item| {
                                     world
                                         .get_component::<ObjectCore>(*item)
                                         .is_some_and(|core| core.otyp == amulet_type)
+                                        && world.get_component::<ObjectLocation>(*item).is_some_and(
+                                            |loc| matches!(*loc, ObjectLocation::Inventory),
+                                        )
                                 })
                             )
                         ),
-                        "save/load wizard matrix should keep the Amulet on the player"
+                        "save/load wizard matrix should let a covetous wizard remove the Amulet from the player"
+                    );
+                    let wizard = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("save/load wizard matrix should keep a live Wizard");
+                    let wizard_pos = world
+                        .get_component::<Positioned>(wizard)
+                        .expect("wizard should keep a position")
+                        .0;
+                    assert!(
+                        resolve_object_type_by_spec(&world, "Amulet of Yendor").is_some_and(
+                            |amulet_type| {
+                                world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter().any(
+                                    |(_, (core, loc))| {
+                                        core.otyp == amulet_type
+                                            && matches!(
+                                                *loc,
+                                                ObjectLocation::Floor { x, y, level }
+                                                    if (x as i32 - wizard_pos.x).abs() <= 1
+                                                        && (y as i32 - wizard_pos.y).abs() <= 1
+                                                        && level == world.dungeon().current_data_dungeon_level()
+                                            )
+                                    },
+                                )
+                            }
+                        ),
+                        "save/load wizard matrix should leave the stolen Amulet near the Wizard"
                     );
                     assert!(
                         world
@@ -8359,23 +8400,19 @@ mod tests {
                         event,
                         EngineEvent::Message { key, .. } if key == "wizard-steal-quest-artifact"
                     )));
-                    let player_keeps_book =
-                        resolve_object_type_by_spec(&world, "Book of the Dead").is_some_and(
-                            |book_type| {
-                                world.get_component::<Inventory>(player).is_some_and(|inv| {
-                                    inv.items.iter().any(|item| {
-                                        world
-                                            .get_component::<ObjectCore>(*item)
-                                            .is_some_and(|core| core.otyp == book_type)
-                                            && world
-                                                .get_component::<ObjectLocation>(*item)
-                                                .is_some_and(|loc| {
-                                                    matches!(*loc, ObjectLocation::Inventory)
-                                                })
-                                    })
+                    let player_keeps_book = resolve_object_type_by_spec(&world, "Book of the Dead")
+                        .is_some_and(|book_type| {
+                            world.get_component::<Inventory>(player).is_some_and(|inv| {
+                                inv.items.iter().any(|item| {
+                                    world
+                                        .get_component::<ObjectCore>(*item)
+                                        .is_some_and(|core| core.otyp == book_type)
+                                        && world.get_component::<ObjectLocation>(*item).is_some_and(
+                                            |loc| matches!(*loc, ObjectLocation::Inventory),
+                                        )
                                 })
-                            },
-                        );
+                            })
+                        });
                     assert!(
                         player_keeps_book,
                         "save/load covetous matrix should leave lower-priority invocation tools on the player"
@@ -8388,11 +8425,9 @@ mod tests {
                                 world
                                     .get_component::<ObjectCore>(*item)
                                     .is_some_and(|core| core.artifact == Some(eye_artifact.id))
-                                    && world
-                                        .get_component::<ObjectLocation>(*item)
-                                        .is_some_and(|loc| {
-                                            matches!(*loc, ObjectLocation::Inventory)
-                                        })
+                                    && world.get_component::<ObjectLocation>(*item).is_some_and(
+                                        |loc| matches!(*loc, ObjectLocation::Inventory),
+                                    )
                             })
                         });
                     assert!(

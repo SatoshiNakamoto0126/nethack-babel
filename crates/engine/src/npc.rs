@@ -1470,32 +1470,26 @@ pub fn choose_wizard_action(
         .map(|hp| (hp.current, hp.max))
         .unwrap_or((1, 1));
 
-    if wizard_is_adjacent_to_player(world, wizard, world.player()) {
-        if player_has_amulet {
-            WizardAction::StealAmulet
-        } else if player_invoked {
-            if player_has_quest_artifact {
-                WizardAction::StealQuestArtifact
-            } else if player_has_invocation_tool {
-                WizardAction::StealInvocationTool
-            } else if wizard_hp.0 >= wizard_hp.1 {
-                WizardAction::DoubleTrouble
-            } else if rng.random_range(0..2) == 0 {
-                WizardAction::SummonNasties
-            } else {
-                WizardAction::CurseItems
-            }
+    if player_has_amulet {
+        WizardAction::StealAmulet
+    } else if player_invoked {
+        if player_has_quest_artifact {
+            WizardAction::StealQuestArtifact
         } else if player_has_invocation_tool {
             WizardAction::StealInvocationTool
-        } else if player_has_quest_artifact {
-            WizardAction::StealQuestArtifact
-        } else if wizard_hp.0 >= wizard_hp.1 {
+        } else if wizard_is_adjacent_to_player(world, wizard, world.player())
+            && wizard_hp.0 >= wizard_hp.1
+        {
             WizardAction::DoubleTrouble
         } else if rng.random_range(0..2) == 0 {
             WizardAction::SummonNasties
         } else {
             WizardAction::CurseItems
         }
+    } else if player_has_invocation_tool {
+        WizardAction::StealInvocationTool
+    } else if player_has_quest_artifact {
+        WizardAction::StealQuestArtifact
     } else if wizard_hp.0 >= wizard_hp.1 {
         WizardAction::DoubleTrouble
     } else if rng.random_range(0..2) == 0 {

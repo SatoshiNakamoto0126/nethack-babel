@@ -28,9 +28,9 @@ use crate::special_levels::{dispatch_special_level, identify_special_level};
 use crate::traps::{TrapEntityInfo, detect_trap, trigger_trap_at};
 use crate::world::{
     Attributes, Boulder, CreationOrder, DisplaySymbol, Encumbrance, EncumbranceLevel,
-    ExperienceLevel, GameWorld, HeroSpeed, HeroSpeedBonus, HitPoints, Monster, MonsterSpeedMod,
-    MovementPoints, NORMAL_SPEED, Name, Nutrition, Peaceful, PlayerCombat, Positioned, Power,
-    Speed, SpeedModifier, Tame,
+    ExperienceLevel, GameWorld, HeroSpeed, HeroSpeedBonus, HitPoints, Monster, MonsterIdentity,
+    MonsterSpeedMod, MovementPoints, NORMAL_SPEED, Name, Nutrition, Peaceful, PlayerCombat,
+    Positioned, Power, Speed, SpeedModifier, Tame,
 };
 
 // ── Movement point calculations ──────────────────────────────────────
@@ -5979,11 +5979,10 @@ fn find_player_named_item(
     let expected_artifact =
         crate::artifacts::find_artifact_by_name(expected_name).map(|artifact| artifact.id);
     let item_matches = |item: hecs::Entity| {
-        world
-            .get_component::<ObjectCore>(item)
-            .is_some_and(|core| expected_artifact.is_some_and(|artifact_id| core.artifact == Some(artifact_id)))
-            || item_display_name(world, item)
-                .is_some_and(|name| quest_name_matches(&name, expected_name))
+        world.get_component::<ObjectCore>(item).is_some_and(|core| {
+            expected_artifact.is_some_and(|artifact_id| core.artifact == Some(artifact_id))
+        }) || item_display_name(world, item)
+            .is_some_and(|name| quest_name_matches(&name, expected_name))
     };
     if let Some(inv) = world.get_component::<crate::inventory::Inventory>(player)
         && let Some(item) = inv.items.iter().find(|item| item_matches(**item))
@@ -5994,9 +5993,10 @@ fn find_player_named_item(
     world
         .get_component::<crate::equipment::EquipmentSlots>(player)
         .and_then(|slots| {
-            slots.all_worn().iter().find_map(|(_, item)| {
-                item_matches(*item).then_some(*item)
-            })
+            slots
+                .all_worn()
+                .iter()
+                .find_map(|(_, item)| item_matches(*item).then_some(*item))
         })
 }
 
@@ -6543,6 +6543,40 @@ fn spawn_or_respawn_wizard_near_player(
         .map(|(wizard, pos)| (wizard, pos, WizardRespawnOrigin::New))
 }
 
+fn wizard_reposition_adjacent_to_player(
+    world: &mut GameWorld,
+    wizard: hecs::Entity,
+    player: hecs::Entity,
+) -> bool {
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return false;
+    };
+    if world
+        .get_component::<Positioned>(wizard)
+        .is_some_and(|wizard_pos| crate::ball::chebyshev_distance(wizard_pos.0, player_pos) == 1)
+    {
+        return true;
+    }
+    let Some(monster_id) = world
+        .get_component::<MonsterIdentity>(wizard)
+        .map(|id| id.0)
+    else {
+        return false;
+    };
+    let monster_defs = world.monster_catalog().to_vec();
+    let Some(monster_def) = monster_defs.iter().find(|def| def.id == monster_id) else {
+        return false;
+    };
+    let Some(target_pos) = enexto(world, player_pos, monster_def) else {
+        return false;
+    };
+    if let Some(mut wizard_pos) = world.get_component_mut::<Positioned>(wizard) {
+        wizard_pos.0 = target_pos;
+        return true;
+    }
+    false
+}
+
 fn apply_wizard_harassment_action(
     world: &mut GameWorld,
     wizard: Option<hecs::Entity>,
@@ -6554,12 +6588,7 @@ fn apply_wizard_harassment_action(
     match action {
         crate::npc::WizardAction::StealAmulet => {
             if let Some(wizard) = wizard
-                && world
-                    .get_component::<Positioned>(wizard)
-                    .zip(world.get_component::<Positioned>(player))
-                    .is_some_and(|(wizard_pos, player_pos)| {
-                        crate::ball::chebyshev_distance(wizard_pos.0, player_pos.0) == 1
-                    })
+                && wizard_reposition_adjacent_to_player(world, wizard, player)
                 && let Some(amulet) = find_player_named_item(world, player, "Amulet of Yendor")
             {
                 wizard_steal_player_item(world, wizard, player, amulet);
@@ -6567,12 +6596,7 @@ fn apply_wizard_harassment_action(
         }
         crate::npc::WizardAction::StealInvocationTool => {
             if let Some(wizard) = wizard
-                && world
-                    .get_component::<Positioned>(wizard)
-                    .zip(world.get_component::<Positioned>(player))
-                    .is_some_and(|(wizard_pos, player_pos)| {
-                        crate::ball::chebyshev_distance(wizard_pos.0, player_pos.0) == 1
-                    })
+                && wizard_reposition_adjacent_to_player(world, wizard, player)
                 && let Some(item) = find_player_coveted_invocation_item(world, player)
             {
                 wizard_steal_player_item(world, wizard, player, item);
@@ -6580,12 +6604,7 @@ fn apply_wizard_harassment_action(
         }
         crate::npc::WizardAction::StealQuestArtifact => {
             if let Some(wizard) = wizard
-                && world
-                    .get_component::<Positioned>(wizard)
-                    .zip(world.get_component::<Positioned>(player))
-                    .is_some_and(|(wizard_pos, player_pos)| {
-                        crate::ball::chebyshev_distance(wizard_pos.0, player_pos.0) == 1
-                    })
+                && wizard_reposition_adjacent_to_player(world, wizard, player)
                 && let Some(item) = find_player_coveted_quest_artifact(world, player)
             {
                 wizard_steal_player_item(world, wizard, player, item);
@@ -15111,7 +15130,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wizard_cannot_steal_amulet_from_range() {
+    fn test_wizard_covetously_repositions_before_stealing_amulet() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         let player = world.player();
@@ -15130,16 +15149,32 @@ mod tests {
         );
 
         assert!(
-            player_carries_item(&world, player, amulet),
-            "Wizard harassment should not steal the Amulet from across the level"
+            !player_carries_item(&world, player, amulet),
+            "Wizard harassment should covetously reposition and steal the Amulet"
         );
-        assert!(
-            !events.iter().any(|event| matches!(
-                event,
-                EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
-            )),
-            "ranged amulet theft should stay silent because nothing was stolen"
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .expect("player should still exist")
+            .0;
+        let wizard_pos = world
+            .get_component::<Positioned>(wizard)
+            .expect("wizard should still exist")
+            .0;
+        assert_eq!(
+            crate::ball::chebyshev_distance(player_pos, wizard_pos),
+            1,
+            "covetous Wizard should end adjacent to the player before stealing"
         );
+        let item_loc = world
+            .get_component::<ObjectLocation>(amulet)
+            .expect("stolen Amulet should stay in the world");
+        assert!(matches!(
+            *item_loc,
+            ObjectLocation::Floor { x, y, level }
+                if (x as i32 - wizard_pos.x).abs() <= 1
+                    && (y as i32 - wizard_pos.y).abs() <= 1
+                    && level == world.dungeon().current_data_dungeon_level()
+        ));
     }
 
     #[test]
@@ -16374,59 +16409,46 @@ mod tests {
     }
 
     #[test]
-    fn test_far_wizard_harasses_without_remote_amulet_theft() {
+    fn test_far_wizard_can_covetously_teleport_and_steal_amulet() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         let player = world.player();
         let wizard = spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 12);
-        if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
-            hp.current = 10;
-            hp.max = 20;
-        }
         let amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
-        let item = spawn_inventory_object_by_name(&mut world, "long sword", 'b');
-        world
-            .ecs_mut()
-            .insert_one(
-                item,
-                BucStatus {
-                    cursed: false,
-                    blessed: false,
-                    bknown: false,
-                },
-            )
-            .expect("inventory item should accept a BUC component");
         let mut rng = test_rng();
 
         for _ in 0..256 {
             let mut events = Vec::new();
             process_wizard_of_yendor_turn(&mut world, &mut rng, &mut events);
-            let cursed = world
-                .get_component::<BucStatus>(item)
-                .is_some_and(|status| status.cursed);
-            let summoned = events
-                .iter()
-                .any(|event| matches!(event, EngineEvent::MonsterGenerated { .. }));
-            let remote_theft = events.iter().any(|event| {
+            let stole_amulet = events.iter().any(|event| {
                 matches!(
                     event,
                     EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
                 )
             });
-            assert!(
-                !remote_theft,
-                "far Wizard pressure should not use remote amulet theft"
-            );
-            assert!(
-                player_carries_item(&world, player, amulet),
-                "far Wizard pressure should leave the Amulet on the player"
-            );
-            if cursed || summoned {
+            if stole_amulet {
+                assert!(
+                    !player_carries_item(&world, player, amulet),
+                    "covetous Wizard should remove the Amulet from the player"
+                );
+                let player_pos = world
+                    .get_component::<Positioned>(player)
+                    .expect("player should keep a position")
+                    .0;
+                let wizard_pos = world
+                    .get_component::<Positioned>(wizard)
+                    .expect("wizard should keep a position")
+                    .0;
+                assert_eq!(
+                    crate::ball::chebyshev_distance(player_pos, wizard_pos),
+                    1,
+                    "covetous Wizard should end adjacent before stealing"
+                );
                 return;
             }
         }
 
-        panic!("far Wizard should still produce non-theft harassment");
+        panic!("far Wizard should eventually covetously teleport and steal the Amulet");
     }
 
     // ── Cross-system wiring tests ──────────────────────────────
@@ -23935,22 +23957,33 @@ mod tests {
                         scenario.label()
                     );
                     assert!(
-                        world
-                            .get_component::<Inventory>(player)
-                            .is_some_and(|inv| inv.items.iter().any(|item| {
-                                world
-                                    .get_component::<Name>(*item)
-                                    .is_some_and(|name| name.0 == "Amulet of Yendor")
-                            })),
-                        "{} should not let a distant wizard steal the Amulet",
+                        find_player_named_item(&world, player, "Amulet of Yendor").is_none(),
+                        "{} should let a covetous wizard steal the Amulet before follow-up harassment",
                         scenario.label()
                     );
+                    let wizard = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("wizard harassment story matrix should keep the live Wizard");
+                    let wizard_pos = world
+                        .get_component::<Positioned>(wizard)
+                        .expect("wizard should keep a position")
+                        .0;
                     assert!(
-                        !final_events.iter().any(|event| matches!(
-                            event,
-                            EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"
-                        )),
-                        "{} should not emit remote amulet theft",
+                        resolve_object_type_by_spec(&test_game_data().objects, "Amulet of Yendor")
+                            .is_some_and(|amulet_type| {
+                                world.ecs().query::<(&ObjectCore, &ObjectLocation)>().iter().any(
+                                    |(_, (core, loc))| {
+                                        core.otyp == amulet_type
+                                            && matches!(
+                                                *loc,
+                                                ObjectLocation::Floor { x, y, level }
+                                                    if (x as i32 - wizard_pos.x).abs() <= 1
+                                                        && (y as i32 - wizard_pos.y).abs() <= 1
+                                                        && level == world.dungeon().current_data_dungeon_level()
+                                            )
+                                    },
+                                )
+                            }),
+                        "{} should leave the stolen Amulet on the floor near the Wizard",
                         scenario.label()
                     );
                     assert!(
