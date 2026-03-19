@@ -2145,57 +2145,41 @@ fountain-water-nymph = A wisp of vapor escapes the fountain...
 # TODO: translate
 ghost-from-bottle = As you open the bottle, something emerges.
 
-# TODO: translate
-god-lightning-bolt = Suddenly, a bolt of lightning strikes you!
+god-lightning-bolt = 突然，一道閃電擊中了你！
 
-# TODO: translate
-grave-corpse = You find a corpse in the grave.
+grave-corpse = 你在墳墓裡發現了一具屍體。
 
-# TODO: translate
-grave-empty = The grave is unoccupied. Strange...
+grave-empty = 這座墳墓裡空無一物。真奇怪……
 
-# TODO: translate
-guard-halt = "Halt, thief! You're under arrest!"
+guard-halt = "站住，小偷！你被捕了！"
 
-# TODO: translate
-guard-no-gold = The guard finds no gold on you.
+guard-no-gold = 衛兵沒在你身上搜到金幣。
 
 # TODO: translate
 guardian-angel-appears = 一位守護天使出現在你身旁！
-guardian-angel-rebukes = Your guardian angel rebukes you!
+guardian-angel-rebukes = 你的守護天使斥責了你！
 
-# TODO: translate
-hunger-faint = You faint from lack of food.
+hunger-faint = 你因缺乏食物而昏倒了。
 
-# TODO: translate
-hunger-starvation = You die from starvation.
+hunger-starvation = 你因飢餓而死。
 
-# TODO: translate
-instrument-no-charges = The instrument is out of charges.
+instrument-no-charges = 這件樂器已經沒有充能了。
 
-# TODO: translate
-intrinsic-acid-res-temp = You feel a momentary tingle.
+intrinsic-acid-res-temp = 你感到一陣短暫的刺痛。
 
-# TODO: translate
-intrinsic-cold-res = You feel full of hot air.
+intrinsic-cold-res = 你感覺自己滿肚子熱氣。
 
-# TODO: translate
-intrinsic-disint-res = You feel very firm.
+intrinsic-disint-res = 你覺得自己非常堅實。
 
-# TODO: translate
-intrinsic-fire-res = You feel a momentary chill.
+intrinsic-fire-res = 你感到一陣短暫的寒意。
 
-# TODO: translate
-intrinsic-invisibility = You feel rather airy.
+intrinsic-invisibility = 你覺得自己輕飄飄的。
 
-# TODO: translate
-intrinsic-poison-res = You feel healthy.
+intrinsic-poison-res = 你感覺很健康。
 
-# TODO: translate
-intrinsic-see-invisible = You feel perceptive!
+intrinsic-see-invisible = 你覺得自己洞察敏銳！
 
-# TODO: translate
-intrinsic-shock-res = Your health currently feels amplified!
+intrinsic-shock-res = 你感覺自己的生命力被放大了！
 
 # TODO: translate
 intrinsic-sleep-res = You feel wide awake.
@@ -2579,44 +2563,31 @@ sacrifice-altar-reject = { $god } rejects your sacrifice!
 # TODO: translate
 sacrifice-conversion-rejected = You hear a thunderclap!
 
-# TODO: translate
-sacrifice-nothing = Your sacrifice disappears!
+sacrifice-nothing = 你的祭品消失了！
 
-# TODO: translate
-sacrifice-unicorn-insult = { $god } finds your sacrifice insulting.
+sacrifice-unicorn-insult = { $god } 認為你的祭品是在冒犯祂。
 
-# TODO: translate
-sanctum-be-gone = "Be gone, mortal!"
+sanctum-be-gone = "滾開，凡人！"
 
-# TODO: translate
-sanctum-desecrate = You desecrate the high altar!
+sanctum-desecrate = 你褻瀆了至高祭壇！
 
-# TODO: translate
-sanctum-infidel = "You dare enter the sanctum, infidel!"
+sanctum-infidel = "你竟敢闖入聖所，異教徒！"
 
-# TODO: translate
-scroll-confuse-cure = You feel less confused.
+scroll-confuse-cure = 你覺得自己不那麼混亂了。
 
-# TODO: translate
-scroll-confuse-self = You feel confused.
+scroll-confuse-self = 你感到一陣混亂。
 
-# TODO: translate
-scroll-destroy-armor-disenchant = Your armor is less effective!
+scroll-destroy-armor-disenchant = 你的護甲變得沒那麼有效了！
 
-# TODO: translate
-scroll-destroy-armor-id = Your armor glows then fades.
+scroll-destroy-armor-id = 你的護甲閃了一下光，然後黯淡下去。
 
-# TODO: translate
-scroll-fire-confused = Your scroll erupts in flame!
+scroll-fire-confused = 你的卷軸猛然燃燒起來！
 
-# TODO: translate
-scroll-genocide-reverse = You create a swarm of monsters!
+scroll-genocide-reverse = 你製造出了一大群怪物！
 
-# TODO: translate
-scroll-genocide-reverse-self = You feel a change coming over you.
+scroll-genocide-reverse-self = 你感覺某種變化正降臨到自己身上。
 
-# TODO: translate
-scroll-identify-self = You feel self-knowledgeable...
+scroll-identify-self = 你覺得自己對自己瞭若指掌……
 
 # TODO: translate
 see-item-here = You see an item here.
@@ -3293,23 +3264,17 @@ wizard-detect-objects = 你感知到附近有物體存在。
 # TODO: translate
 wizard-detect-traps = 你感到附近的陷阱正在向你發出警告。
 
-# TODO: translate
-wizard-double-trouble = "Double Trouble..."
+wizard-double-trouble = "雙重麻煩……"
 
-# TODO: translate
-wizard-identify-all = You feel self-knowledgeable...
+wizard-identify-all = 你覺得自己對自己瞭若指掌……
 
-# TODO: translate
-wizard-genesis = A { $monster } appears beside you.
+wizard-genesis = 一隻{ $monster }出現在你身旁。
 
-# TODO: translate
-wizard-genesis-failed = Nothing answers your request for { $monster }.
+wizard-genesis-failed = 沒有什麼回應你對{ $monster }的請求。
 
-# TODO: translate
-wizard-kill = You wipe out { $count } monster(s) on this level.
+wizard-kill = 你抹除了本層中的{ $count }隻怪物。
 
-# TODO: translate
-wizard-kill-none = There are no monsters here to wipe out.
+wizard-kill-none = 這裡沒有怪物可供抹除。
 
 # TODO: translate
 wizard-map-revealed = 你周圍環境的景象在腦海中浮現！
