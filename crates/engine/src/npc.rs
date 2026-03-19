@@ -657,6 +657,10 @@ pub struct MonsterChatState {
     pub player_armored: bool,
     pub player_has_shirt: bool,
     pub player_is_healer: bool,
+    pub player_is_vampire_kindred: bool,
+    pub player_is_nightchild: bool,
+    pub player_is_silver_dragon: bool,
+    pub player_is_baby_silver_dragon: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -858,15 +862,41 @@ pub fn contextual_monster_chat(
         }
         MonsterSound::Vampire => {
             let key = if state.is_tame {
-                if state.hungry && state.midnight {
+                if state.player_is_vampire_kindred {
+                    if state.night {
+                        "npc-vampire-tame-kindred-evening"
+                    } else {
+                        "npc-vampire-tame-kindred-day"
+                    }
+                } else if state.player_is_nightchild && state.hungry && state.midnight {
+                    "npc-vampire-tame-nightchild-craving"
+                } else if state.player_is_nightchild && state.hungry && state.night {
+                    "npc-vampire-tame-nightchild-night-craving"
+                } else if state.player_is_nightchild {
+                    "npc-vampire-tame-nightchild-weary"
+                } else if state.hungry && state.midnight {
                     "npc-vampire-tame-craving"
                 } else if state.hungry && state.night {
                     "npc-vampire-tame-night-craving"
                 } else {
                     "npc-vampire-tame-weary"
                 }
+            } else if state.is_peaceful && state.player_is_vampire_kindred && state.night {
+                if player_is_female {
+                    "npc-vampire-peaceful-kindred-sister"
+                } else {
+                    "npc-vampire-peaceful-kindred-brother"
+                }
+            } else if state.is_peaceful && state.player_is_nightchild && state.night {
+                "npc-vampire-peaceful-nightchild"
             } else if state.is_peaceful {
                 "npc-vampire-peaceful"
+            } else if state.player_is_vampire_kindred {
+                "npc-vampire-hostile-hunting-ground"
+            } else if state.player_is_silver_dragon {
+                "npc-vampire-hostile-silver-dragon"
+            } else if state.player_is_baby_silver_dragon {
+                "npc-vampire-hostile-baby-silver-dragon"
             } else if state.chat_roll.is_multiple_of(2) {
                 "npc-vampire-hostile-blood"
             } else {
@@ -3057,6 +3087,58 @@ mod tests {
     }
 
     #[test]
+    fn test_contextual_monster_chat_tame_vampire_kindred_at_night_greets_master() {
+        let monster = fake_monster(
+            MonsterSound::Vampire,
+            "vampire",
+            'V',
+            MonsterFlags::HUMANOID,
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "vampire",
+            MonsterChatState {
+                is_tame: true,
+                night: true,
+                player_is_vampire_kindred: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("tame vampire should greet vampire kindred");
+        assert!(matches!(
+            outcome.event,
+            EngineEvent::Message { key, .. } if key == "npc-vampire-tame-kindred-evening"
+        ));
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_peaceful_vampire_nightchild_at_night_greets_child() {
+        let monster = fake_monster(
+            MonsterSound::Vampire,
+            "vampire",
+            'V',
+            MonsterFlags::HUMANOID,
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "vampire",
+            MonsterChatState {
+                is_peaceful: true,
+                night: true,
+                player_is_nightchild: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("peaceful vampire should greet nightchild");
+        assert!(matches!(
+            outcome.event,
+            EngineEvent::Message { key, .. } if key == "npc-vampire-peaceful-nightchild"
+        ));
+    }
+
+    #[test]
     fn test_contextual_monster_chat_hostile_vampire_threatens_blood() {
         let monster = fake_monster(
             MonsterSound::Vampire,
@@ -3077,6 +3159,30 @@ mod tests {
         assert!(
             matches!(outcome.event, EngineEvent::Message { key, .. } if key == "npc-vampire-hostile-blood")
         );
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_hostile_vampire_silver_dragon_sheen_branch() {
+        let monster = fake_monster(
+            MonsterSound::Vampire,
+            "vampire",
+            'V',
+            MonsterFlags::HUMANOID,
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "vampire",
+            MonsterChatState {
+                player_is_silver_dragon: true,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("hostile vampire should react to silver dragon sheen");
+        assert!(matches!(
+            outcome.event,
+            EngineEvent::Message { key, .. } if key == "npc-vampire-hostile-silver-dragon"
+        ));
     }
 
     #[test]

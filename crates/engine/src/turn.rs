@@ -1968,6 +1968,12 @@ fn resolve_player_action(
                         .get_component::<crate::equipment::EquipmentSlots>(player)
                         .map(|slots| (*slots).clone())
                         .unwrap_or_default();
+                    let (
+                        player_is_vampire_kindred,
+                        player_is_nightchild,
+                        player_is_silver_dragon,
+                        player_is_baby_silver_dragon,
+                    ) = current_player_polymorph_chat_flags(world, player);
                     let chat_state = crate::npc::MonsterChatState {
                         is_peaceful,
                         is_tame,
@@ -1994,6 +2000,10 @@ fn resolve_player_action(
                             || player_equipment.boots.is_some(),
                         player_has_shirt: player_equipment.shirt.is_some(),
                         player_is_healer: matches!(current_player_role(world), Some(Role::Healer)),
+                        player_is_vampire_kindred,
+                        player_is_nightchild,
+                        player_is_silver_dragon,
+                        player_is_baby_silver_dragon,
                     };
                     if let Some(outcome) = crate::npc::contextual_monster_chat(
                         monster_def,
@@ -5577,6 +5587,40 @@ fn current_player_is_female(world: &GameWorld, player: hecs::Entity) -> bool {
         .is_some_and(|identity| identity.gender == nethack_babel_data::Gender::Female)
 }
 
+fn current_player_polymorph_chat_flags(
+    world: &GameWorld,
+    player: hecs::Entity,
+) -> (bool, bool, bool, bool) {
+    let monster_form_id = world
+        .get_component::<crate::polyself::PolymorphState>(player)
+        .map(|state| state.monster_form_id)
+        .or_else(|| {
+            world
+                .get_component::<crate::polyself::OriginalForm>(player)
+                .map(|state| state.monster_id)
+        });
+    let Some(monster_form_id) = monster_form_id else {
+        return (false, false, false, false);
+    };
+    let Some(monster_def) = world
+        .monster_catalog()
+        .iter()
+        .find(|monster| monster.id == monster_form_id)
+    else {
+        return (false, false, false, false);
+    };
+    let form_name = monster_def.names.male.to_ascii_lowercase();
+    (
+        matches!(form_name.as_str(), "vampire" | "vampire leader"),
+        matches!(
+            form_name.as_str(),
+            "wolf" | "winter wolf" | "winter wolf cub"
+        ),
+        form_name == "silver dragon",
+        form_name == "baby silver dragon",
+    )
+}
+
 fn mark_angry_quest_leader_from_targets(
     world: &mut GameWorld,
     targets: &std::collections::HashSet<hecs::Entity>,
@@ -8526,6 +8570,7 @@ mod tests {
         WizardAmuletWake,
         WizardBlackGlowBlind,
         HumanoidAlohaChat,
+        VampireKindredChat,
         VampireNightChat,
         VampireMidnightChat,
         WereFullMoonChat,
@@ -8580,6 +8625,7 @@ mod tests {
                 StoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 StoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 StoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
+                StoryTraversalScenario::VampireKindredChat => "vampire-kindred-chat",
                 StoryTraversalScenario::VampireNightChat => "vampire-night-chat",
                 StoryTraversalScenario::VampireMidnightChat => "vampire-midnight-chat",
                 StoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
@@ -10294,6 +10340,42 @@ mod tests {
                     .ecs_mut()
                     .insert_one(tourist, Peaceful)
                     .expect("tourist should accept peaceful marker");
+
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
+                );
+                (world, events)
+            }
+            StoryTraversalScenario::VampireKindredChat => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                while world.turn() < 313 {
+                    world.advance_turn();
+                }
+                let player = world.player();
+                let vampire_form_id =
+                    resolve_monster_id_by_spec(world.monster_catalog(), "vampire")
+                        .expect("vampire should resolve for kindred chat");
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        player,
+                        crate::polyself::PolymorphState {
+                            original_hp: 12,
+                            original_max_hp: 12,
+                            original_level: 1,
+                            monster_form_id: vampire_form_id,
+                            timer: 500,
+                        },
+                    )
+                    .expect("player should accept polymorph state");
+                let vampire = spawn_full_monster(&mut world, Position::new(6, 5), "vampire", 10);
+                let current_turn = world.turn();
+                make_tame_pet_state(&mut world, vampire, 10, current_turn.saturating_add(100));
 
                 let events = resolve_turn(
                     &mut world,
@@ -17381,6 +17463,46 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_tame_vampire_as_vampire_kindred_uses_kindred_greeting() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        while world.turn() < 313 {
+            world.advance_turn();
+        }
+        let player = world.player();
+        let vampire_form_id = resolve_monster_id_by_spec(world.monster_catalog(), "vampire")
+            .expect("vampire should resolve");
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                crate::polyself::PolymorphState {
+                    original_hp: 12,
+                    original_max_hp: 12,
+                    original_level: 1,
+                    monster_form_id: vampire_form_id,
+                    timer: 500,
+                },
+            )
+            .expect("player should accept polymorph state");
+        let vampire = spawn_full_monster(&mut world, Position::new(6, 5), "vampire", 10);
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, vampire, 10, current_turn.saturating_add(100));
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-vampire-tame-kindred-evening")
+        }));
+    }
+
+    #[test]
     fn test_chatting_with_trapped_tame_cat_yowls() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -21784,6 +21906,7 @@ mod tests {
             StoryTraversalScenario::WizardAmuletWake,
             StoryTraversalScenario::WizardBlackGlowBlind,
             StoryTraversalScenario::HumanoidAlohaChat,
+            StoryTraversalScenario::VampireKindredChat,
             StoryTraversalScenario::VampireNightChat,
             StoryTraversalScenario::VampireMidnightChat,
             StoryTraversalScenario::WereFullMoonChat,
@@ -22711,6 +22834,12 @@ mod tests {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
                         EngineEvent::Message { key, .. } if key == "npc-humanoid-aloha"
+                    )));
+                }
+                StoryTraversalScenario::VampireKindredChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-vampire-tame-kindred-evening"
                     )));
                 }
                 StoryTraversalScenario::VampireNightChat => {

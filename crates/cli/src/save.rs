@@ -17,6 +17,9 @@ use nethack_babel_engine::equipment::EquipmentSlots;
 use nethack_babel_engine::inventory::Inventory;
 use nethack_babel_engine::o_init::AppearanceTable;
 use nethack_babel_engine::pets::PetState;
+use nethack_babel_engine::polyself::{
+    OriginalForm, PolymorphAbilities, PolymorphState, PolymorphTimer,
+};
 use nethack_babel_engine::quest::{QuestNpcRole, QuestState};
 use nethack_babel_engine::religion::ReligionState;
 use nethack_babel_engine::spells::SpellBook;
@@ -146,6 +149,14 @@ pub struct SerializablePlayer {
     pub status_effects: StatusEffects,
     #[serde(default)]
     pub spell_protection: Option<SpellProtection>,
+    #[serde(default)]
+    pub original_form: Option<OriginalForm>,
+    #[serde(default)]
+    pub polymorph_timer: Option<PolymorphTimer>,
+    #[serde(default)]
+    pub polymorph_abilities: Option<PolymorphAbilities>,
+    #[serde(default)]
+    pub polymorph_state: Option<PolymorphState>,
     pub intrinsics: Intrinsics,
     pub combat: PlayerCombat,
     pub attribute_exercise: AttributeExercise,
@@ -339,6 +350,18 @@ fn extract_player(
         .get_component::<StatusEffects>(entity)
         .map(|s| (*s).clone())
         .unwrap_or_default();
+    let original_form = world
+        .get_component::<OriginalForm>(entity)
+        .map(|state| (*state).clone());
+    let polymorph_timer = world
+        .get_component::<PolymorphTimer>(entity)
+        .map(|timer| *timer);
+    let polymorph_abilities = world
+        .get_component::<PolymorphAbilities>(entity)
+        .map(|abilities| *abilities);
+    let polymorph_state = world
+        .get_component::<PolymorphState>(entity)
+        .map(|state| *state);
     let intrinsics = world
         .get_component::<Intrinsics>(entity)
         .map(|i| (*i).clone())
@@ -445,6 +468,10 @@ fn extract_player(
         name,
         status_effects,
         spell_protection,
+        original_form,
+        polymorph_timer,
+        polymorph_abilities,
+        polymorph_state,
         intrinsics,
         combat,
         attribute_exercise,
@@ -670,6 +697,55 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
         }
         None => {
             let _ = world.ecs_mut().remove_one::<SpellProtection>(player);
+        }
+    }
+    match &p.original_form {
+        Some(original_form) => {
+            if let Some(mut live_original) = world.get_component_mut::<OriginalForm>(player) {
+                *live_original = original_form.clone();
+            } else {
+                let _ = world.ecs_mut().insert_one(player, original_form.clone());
+            }
+        }
+        None => {
+            let _ = world.ecs_mut().remove_one::<OriginalForm>(player);
+        }
+    }
+    match p.polymorph_timer {
+        Some(polymorph_timer) => {
+            if let Some(mut live_timer) = world.get_component_mut::<PolymorphTimer>(player) {
+                *live_timer = polymorph_timer;
+            } else {
+                let _ = world.ecs_mut().insert_one(player, polymorph_timer);
+            }
+        }
+        None => {
+            let _ = world.ecs_mut().remove_one::<PolymorphTimer>(player);
+        }
+    }
+    match p.polymorph_abilities {
+        Some(polymorph_abilities) => {
+            if let Some(mut live_abilities) = world.get_component_mut::<PolymorphAbilities>(player)
+            {
+                *live_abilities = polymorph_abilities;
+            } else {
+                let _ = world.ecs_mut().insert_one(player, polymorph_abilities);
+            }
+        }
+        None => {
+            let _ = world.ecs_mut().remove_one::<PolymorphAbilities>(player);
+        }
+    }
+    match p.polymorph_state {
+        Some(polymorph_state) => {
+            if let Some(mut live_state) = world.get_component_mut::<PolymorphState>(player) {
+                *live_state = polymorph_state;
+            } else {
+                let _ = world.ecs_mut().insert_one(player, polymorph_state);
+            }
+        }
+        None => {
+            let _ = world.ecs_mut().remove_one::<PolymorphState>(player);
         }
     }
     if let Some(mut intr) = world.get_component_mut::<Intrinsics>(player) {
@@ -1814,6 +1890,7 @@ mod tests {
         WizardAmuletWake,
         WizardBlackGlowBlind,
         HumanoidAlohaChat,
+        VampireKindredChat,
         VampireNightChat,
         VampireMidnightChat,
         WereFullMoonChat,
@@ -1870,6 +1947,7 @@ mod tests {
                 SaveStoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 SaveStoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 SaveStoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
+                SaveStoryTraversalScenario::VampireKindredChat => "vampire-kindred-chat",
                 SaveStoryTraversalScenario::VampireNightChat => "vampire-night-chat",
                 SaveStoryTraversalScenario::VampireMidnightChat => "vampire-midnight-chat",
                 SaveStoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
@@ -3660,6 +3738,76 @@ mod tests {
 
                 let (mut loaded, loaded_rng) =
                     save_and_reload_world("story-matrix-humanoid-aloha-chat", &world, [67u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::VampireKindredChat => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                install_test_catalogs(&mut world);
+                while world.turn() < 313 {
+                    world.advance_turn();
+                }
+                let player = world.player();
+                let vampire_form_id = world
+                    .monster_catalog()
+                    .iter()
+                    .find(|monster| monster.names.male == "vampire")
+                    .map(|monster| monster.id)
+                    .expect("vampire should resolve");
+                let player_attributes = *world
+                    .get_component::<nethack_babel_engine::world::Attributes>(player)
+                    .expect("player should have attributes");
+                let player_hp = *world
+                    .get_component::<HitPoints>(player)
+                    .expect("player should have hp");
+                let player_speed = world
+                    .get_component::<Speed>(player)
+                    .map(|speed| speed.0)
+                    .unwrap_or(12);
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        player,
+                        nethack_babel_engine::polyself::OriginalForm {
+                            attributes: player_attributes,
+                            hp: player_hp,
+                            speed: player_speed,
+                            display_symbol: '@',
+                            display_color: nethack_babel_data::Color::White,
+                            monster_id: vampire_form_id,
+                        },
+                    )
+                    .expect("player should accept original form");
+                world
+                    .ecs_mut()
+                    .insert_one(player, nethack_babel_engine::polyself::PolymorphTimer(500))
+                    .expect("player should accept polymorph timer");
+                world
+                    .ecs_mut()
+                    .insert_one(
+                        player,
+                        nethack_babel_engine::polyself::PolymorphState {
+                            original_hp: 12,
+                            original_max_hp: 12,
+                            original_level: 1,
+                            monster_form_id: vampire_form_id,
+                            timer: 500,
+                        },
+                    )
+                    .expect("player should accept polymorph state");
+                let vampire = spawn_full_monster(&mut world, Position::new(6, 5), "vampire", 10);
+                let current_turn = world.turn();
+                make_tame_pet_state(&mut world, vampire, 10, current_turn.saturating_add(100));
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-vampire-kindred-chat", &world, [170u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(
                     &mut loaded,
@@ -6277,6 +6425,98 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_tame_vampire_kindred_chat_preserves_polymorph_state() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        install_test_catalogs(&mut world);
+        while world.turn() < 313 {
+            world.advance_turn();
+        }
+        let player = world.player();
+        let vampire_form_id = world
+            .monster_catalog()
+            .iter()
+            .find(|monster| monster.names.male == "vampire")
+            .map(|monster| monster.id)
+            .expect("vampire should resolve");
+        let player_attributes = *world
+            .get_component::<nethack_babel_engine::world::Attributes>(player)
+            .expect("player should have attributes");
+        let player_hp = *world
+            .get_component::<HitPoints>(player)
+            .expect("player should have hp");
+        let player_speed = world
+            .get_component::<Speed>(player)
+            .map(|speed| speed.0)
+            .unwrap_or(12);
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                nethack_babel_engine::polyself::OriginalForm {
+                    attributes: player_attributes,
+                    hp: player_hp,
+                    speed: player_speed,
+                    display_symbol: '@',
+                    display_color: nethack_babel_data::Color::White,
+                    monster_id: vampire_form_id,
+                },
+            )
+            .expect("player should accept original form");
+        world
+            .ecs_mut()
+            .insert_one(player, nethack_babel_engine::polyself::PolymorphTimer(500))
+            .expect("player should accept polymorph timer");
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                nethack_babel_engine::polyself::PolymorphState {
+                    original_hp: 12,
+                    original_max_hp: 12,
+                    original_level: 1,
+                    monster_form_id: vampire_form_id,
+                    timer: 500,
+                },
+            )
+            .expect("player should accept polymorph state");
+        let vampire = spawn_full_monster(&mut world, Position::new(6, 5), "vampire", 8);
+        let current_turn = world.turn();
+        make_tame_pet_state(&mut world, vampire, 10, current_turn.saturating_add(100));
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("tame-vampire-kindred-chat-round-trip", &world, [191u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        assert!(
+            loaded
+                .get_component::<nethack_babel_engine::polyself::PolymorphState>(loaded.player())
+                .is_some_and(|state| {
+                    loaded
+                        .monster_catalog()
+                        .iter()
+                        .find(|monster| monster.names.male == "vampire")
+                        .map(|monster| monster.id)
+                        .is_some_and(|vampire_id| state.monster_form_id == vampire_id)
+                })
+        );
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-vampire-tame-kindred-evening"
+            )
+        }));
+    }
+
+    #[test]
     fn round_trip_loaded_chatting_with_trumpeting_monster_keeps_wake_effect() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         let trumpet_name = monster_name_with_sound(&world, MonsterSound::Trumpet);
@@ -7086,6 +7326,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardAmuletWake,
             SaveStoryTraversalScenario::WizardBlackGlowBlind,
             SaveStoryTraversalScenario::HumanoidAlohaChat,
+            SaveStoryTraversalScenario::VampireKindredChat,
             SaveStoryTraversalScenario::VampireNightChat,
             SaveStoryTraversalScenario::VampireMidnightChat,
             SaveStoryTraversalScenario::WereFullMoonChat,
@@ -7933,6 +8174,18 @@ mod tests {
                         event,
                         EngineEvent::Message { key, .. } if key == "npc-vampire-tame-night-craving"
                     )));
+                }
+                SaveStoryTraversalScenario::VampireKindredChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-vampire-tame-kindred-evening"
+                    )));
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_engine::polyself::PolymorphState>(player)
+                            .is_some(),
+                        "vampire kindred round-trip should preserve polymorph state"
+                    );
                 }
                 SaveStoryTraversalScenario::VampireMidnightChat => {
                     assert!(final_events.iter().any(|event| matches!(

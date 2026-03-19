@@ -3452,7 +3452,29 @@ npc-vampire-tame-night-craving = { $monster } says: "I beg you, help me satisfy 
 # TODO: translate
 npc-vampire-tame-weary = { $monster } says: "I find myself growing a little weary."
 # TODO: translate
+npc-vampire-tame-kindred-evening = { $monster } says: "Good evening to you Master!"
+# TODO: translate
+npc-vampire-tame-kindred-day = { $monster } says: "Good day to you Master. Why do we not rest?"
+# TODO: translate
+npc-vampire-tame-nightchild-craving = { $monster } says: "Child of the night, I can stand this craving no longer!"
+# TODO: translate
+npc-vampire-tame-nightchild-night-craving = { $monster } says: "Child of the night, I beg you, help me satisfy this growing craving!"
+# TODO: translate
+npc-vampire-tame-nightchild-weary = { $monster } says: "Child of the night, I find myself growing a little weary."
+# TODO: translate
+npc-vampire-peaceful-kindred-sister = { $monster } says: "Good feeding sister!"
+# TODO: translate
+npc-vampire-peaceful-kindred-brother = { $monster } says: "Good feeding brother!"
+# TODO: translate
+npc-vampire-peaceful-nightchild = { $monster } says: "How nice to hear you, child of the night!"
+# TODO: translate
 npc-vampire-peaceful = { $monster } says: "I only drink... potions."
+# TODO: translate
+npc-vampire-hostile-hunting-ground = { $monster } says: "This is my hunting ground that you dare to prowl!"
+# TODO: translate
+npc-vampire-hostile-silver-dragon = { $monster } says: "Fool! Your silver sheen does not frighten me!"
+# TODO: translate
+npc-vampire-hostile-baby-silver-dragon = { $monster } says: "Young Fool! Your silver sheen does not frighten me!"
 # TODO: translate
 npc-vampire-hostile-blood = { $monster } says: "I vant to suck your blood!"
 # TODO: translate
