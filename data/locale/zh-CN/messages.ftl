@@ -1773,14 +1773,10 @@ offer-what = 献上什么？
 npc-chat-no-response = 这个生物似乎不想聊天。
 npc-chat-sleeping = 这个生物似乎根本没注意到你。
 chat-nobody-there = 那里没有人可以交谈。
-# TODO: translate
-chat-cannot-speak = As { $form }, you cannot speak.
-# TODO: translate
-chat-strangled = You can't speak. You're choking!
-# TODO: translate
-chat-swallowed = They won't hear you out there.
-# TODO: translate
-chat-underwater = Your speech is unintelligible underwater.
+chat-cannot-speak = 以 { $form } 的形态，你无法说话。
+chat-strangled = 你说不出话来。你快窒息了！
+chat-swallowed = 外面的人听不见你说话。
+chat-underwater = 在水下，你的话谁也听不清。
 
 ## 移动/旅行
 peaceful-monster-blocks = 你停了下来。{ $monster } 挡住了去路。
@@ -1858,47 +1854,35 @@ already-mounted = You are already riding.
 # TODO: translate
 already-punished = You are already being punished.
 
-# TODO: translate
-attack-acid-hit = You are splashed by acid!
+attack-acid-hit = 酸液溅了你一身！
 
-# TODO: translate
-attack-acid-resisted = The acid doesn't seem to affect you.
+attack-acid-resisted = 酸液似乎伤不到你。
 
-# TODO: translate
-attack-breath = { $monster } breathes at you!
+attack-breath = { $monster } 朝你喷吐！
 
 # TODO: translate
 attack-cold-hit = 你浑身覆满寒霜！
 
-# TODO: translate
-attack-cold-resisted = You feel mildly chilly.
+attack-cold-resisted = 你只是觉得微微发冷。
 
-# TODO: translate
-attack-disease = You feel very sick.
+attack-disease = 你觉得病得厉害。
 
-# TODO: translate
-attack-disintegrate = You are disintegrated!
+attack-disintegrate = 你被解离了！
 
-# TODO: translate
-attack-disintegrate-resisted = You are not disintegrated.
+attack-disintegrate-resisted = 你没有被解离。
 
-# TODO: translate
-attack-drain-level = You feel your life force draining away!
+attack-drain-level = 你感到生命力正从体内流失！
 
-# TODO: translate
-attack-engulf = { $monster } engulfs you!
+attack-engulf = { $monster } 把你吞没了！
 
 # TODO: translate
 attack-fire-hit = 火焰吞没了你！
 
-# TODO: translate
-attack-fire-resisted = You feel mildly warm.
+attack-fire-resisted = 你只是觉得微微发热。
 
-# TODO: translate
-attack-hug-crush = You are being crushed!
+attack-hug-crush = 你正被越勒越紧！
 
-# TODO: translate
-attack-paralyze = You are frozen in place!
+attack-paralyze = 你僵在原地，动弹不得！
 
 # TODO: translate
 attack-poisoned = 你觉得恶心得厉害！
@@ -1906,17 +1890,14 @@ attack-poisoned = 你觉得恶心得厉害！
 # TODO: translate
 attack-shock-hit = 电流猛地击中了你！
 
-# TODO: translate
-attack-shock-resisted = You are only mildly tingled.
+attack-shock-resisted = 你只是感到一阵轻微麻刺。
 
 # TODO: translate
 attack-sleep = 你感到昏昏欲睡……
 
-# TODO: translate
-attack-slowed = You feel yourself moving more slowly.
+attack-slowed = 你觉得自己动作变慢了。
 
-# TODO: translate
-attack-stoning-start = You are starting to turn to stone!
+attack-stoning-start = 你开始变成石头了！
 
 # TODO: translate
 boulder-blocked = The boulder is wedged in.
@@ -2933,8 +2914,7 @@ status-blindness-end = 你又能看见了。
 # TODO: translate
 status-confusion-end = 你感觉不那么混乱了。
 
-# TODO: translate
-status-fall-asleep = You fall asleep.
+status-fall-asleep = 你睡着了。
 
 # TODO: translate
 status-fumble-trip = You trip over something.
@@ -2942,14 +2922,12 @@ status-fumble-trip = You trip over something.
 # TODO: translate
 status-fumbling-end = You feel less clumsy.
 
-# TODO: translate
-status-fumbling-start = You feel clumsy.
+status-fumbling-start = 你觉得自己笨手笨脚。
 
 # TODO: translate
 status-hallucination-end = Everything looks SO boring now.
 
-# TODO: translate
-status-invisibility-end = You are no longer invisible.
+status-invisibility-end = 你不再隐形了。
 
 # TODO: translate
 status-levitation-end = You float gently to the floor.
@@ -2981,8 +2959,7 @@ status-stun-end = You feel less stunned now.
 # TODO: translate
 status-vomiting-end = You feel less nauseated now.
 
-# TODO: translate
-status-vomiting-start = You feel nauseated.
+status-vomiting-start = 你觉得一阵恶心。
 
 # TODO: translate
 status-wounded-legs-healed = Your legs feel better.
@@ -3340,11 +3317,9 @@ wizard-vague-nervous = 你隐约感到不安。
 # TODO: translate
 wizard-black-glow = 你注意到一阵黑色光芒笼罩着你。
 
-# TODO: translate
-wizard-aggravate = Distant noises echo as the dungeon suddenly awakens.
+wizard-aggravate = 远处回荡起噪音，整座地城仿佛突然苏醒了。
 
-# TODO: translate
-wizard-respawned = The Wizard of Yendor rises again!
+wizard-respawned = 延德之巫再次站了起来！
 
 # TODO: translate
 wizard-respawned-boom = A voice booms out...
@@ -3352,35 +3327,25 @@ wizard-respawned-boom = A voice booms out...
 # TODO: translate
 wizard-respawned-taunt = So thou thought thou couldst {$verb} me, fool.
 
-# TODO: translate
-wizard-steal-amulet = The Wizard of Yendor steals the Amulet!
+wizard-steal-amulet = 延德之巫偷走了护符！
 
-# TODO: translate
-wizard-steal-invocation-tool = The Wizard of Yendor steals one of the invocation tools!
+wizard-steal-invocation-tool = 延德之巫偷走了其中一件祈唤道具！
 
-# TODO: translate
-wizard-steal-quest-artifact = The Wizard of Yendor steals the quest artifact!
+wizard-steal-quest-artifact = 延德之巫偷走了任务神器！
 
-# TODO: translate
 wizard-summon-nasties = 新的恶物凭空出现了！
 
-# TODO: translate
-wizard-taunt-laughs = {$wizard} laughs fiendishly.
+wizard-taunt-laughs = {$wizard} 发出阴森的狂笑。
 
-# TODO: translate
-wizard-taunt-relinquish = Relinquish the Amulet, {$insult}!
+wizard-taunt-relinquish = 交出护符吧，{$insult}！
 
-# TODO: translate
-wizard-taunt-panic = Even now thy life force ebbs, {$insult}!
+wizard-taunt-panic = 即便此刻，你的生命力仍在流逝，{$insult}！
 
-# TODO: translate
-wizard-taunt-last-breath = Savor thy breath, {$insult}, it be thy last!
+wizard-taunt-last-breath = 好好珍惜你的呼吸吧，{$insult}，那会是你最后一口气！
 
-# TODO: translate
-wizard-taunt-return = I shall return.
+wizard-taunt-return = 我还会回来的。
 
-# TODO: translate
-wizard-taunt-back = I'll be back.
+wizard-taunt-back = 我会回来的。
 
 # TODO: translate
 wizard-taunt-general = {$malediction}，{$insult}！
@@ -3655,8 +3620,7 @@ priest-not-enough-gold = The priest asks for { $cost } gold.
 # TODO: translate
 priest-protection-granted = The priest grants you protection for { $cost } gold.
 
-# TODO: translate
-shk-welcome = { $shopkeeper } says: "Welcome to my shop, { $honorific }."
+shk-welcome = { $shopkeeper } 说道：“欢迎光临我的店，{ $honorific }。”
 
 # TODO: translate
 shk-angry-greeting = { $shopkeeper } glares at you angrily.
@@ -3673,29 +3637,21 @@ shk-angry-non-paying = { $shopkeeper } indicates how much non-paying customers a
 # TODO: translate
 shk-angry-non-paying-indicates = { $shopkeeper } indicates how much non-paying customers are disliked.
 
-# TODO: translate
-shk-follow-reminder = { $shopkeeper } says: "Hello, { $honorific }! Didn't you forget to pay?"
+shk-follow-reminder = { $shopkeeper } 说道：“您好，{ $honorific }！您是不是忘了付账？”
 
-# TODO: translate
-shk-follow-tap = { $shopkeeper } taps you on the arm.
+shk-follow-tap = { $shopkeeper } 轻轻拍了拍你的手臂。
 
-# TODO: translate
-shk-bill-total = { $shopkeeper } says that your bill comes to { $amount } gold.
+shk-bill-total = { $shopkeeper } 说你的账单一共是 { $amount } 枚金币。
 
-# TODO: translate
-shk-bill-indicates = { $shopkeeper } indicates that your bill comes to { $amount } gold.
+shk-bill-indicates = { $shopkeeper } 示意你的账单一共是 { $amount } 枚金币。
 
-# TODO: translate
-shk-debit-reminder = { $shopkeeper } reminds you that you owe { $amount } gold.
+shk-debit-reminder = { $shopkeeper } 提醒你还欠 { $amount } 枚金币。
 
-# TODO: translate
-shk-debit-indicates = { $shopkeeper } indicates that you owe { $amount } gold.
+shk-debit-indicates = { $shopkeeper } 示意你还欠 { $amount } 枚金币。
 
-# TODO: translate
-shk-credit-reminder = { $shopkeeper } encourages you to use your { $amount } gold of credit.
+shk-credit-reminder = { $shopkeeper } 提醒你可以使用你那 { $amount } 枚金币的赊账额度。
 
-# TODO: translate
-shk-credit-indicates = { $shopkeeper } indicates that you have { $amount } gold of credit.
+shk-credit-indicates = { $shopkeeper } 示意你还有 { $amount } 枚金币的信用额度。
 
 # TODO: translate
 shk-robbed-greeting = { $shopkeeper } says: "I still remember that robbery, { $honorific }."
@@ -3721,11 +3677,9 @@ shk-business-good = { $shopkeeper } says that business is good.
 # TODO: translate
 shk-business-good-indicates = { $shopkeeper } indicates that business is good.
 
-# TODO: translate
-shk-shoplifters = { $shopkeeper } talks about the problem of shoplifters.
+shk-shoplifters = { $shopkeeper } 抱怨商店扒手的问题。
 
-# TODO: translate
-shk-shoplifters-indicates = { $shopkeeper } indicates concern about shoplifters.
+shk-shoplifters-indicates = { $shopkeeper } 示意自己很担心店里的扒手。
 
 # TODO: translate
 shk-geico-pitch = { $shopkeeper } says: "Fifteen minutes could save you fifteen zorkmids."
@@ -3885,40 +3839,26 @@ god-how-dare-harm-servant = A booming voice roars: "How darest thou harm my serv
 
 # TODO: translate
 god-profane-shrine = A booming voice roars: "Thou hast profaned my shrine!"
-# TODO: translate
-ambient-gehennom-damned = You hear the howling of the damned!
+ambient-gehennom-damned = 你听到被诅咒者的哀嚎！
 # TODO: translate
 ambient-gehennom-groans = You hear groans and moans!
 # TODO: translate
 ambient-gehennom-laughter = You hear diabolical laughter!
 # TODO: translate
 ambient-gehennom-brimstone = You smell brimstone!
-# TODO: translate
-ambient-mines-money = You hear someone counting money.
-# TODO: translate
-ambient-mines-register = You hear the chime of a cash register.
-# TODO: translate
-ambient-mines-cart = You hear a sound reminiscent of a straining mine cart.
-# TODO: translate
-ambient-shop-shoplifters = You hear someone cursing shoplifters.
-# TODO: translate
+ambient-mines-money = 你听到有人在数钱。
+ambient-mines-register = 你听到收银机的叮当声。
+ambient-mines-cart = 你听到仿佛吃力矿车发出的声响。
+ambient-shop-shoplifters = 你听到有人在咒骂商店扒手。
 ambient-shop-register = 你听到收银机的叮当声。
-# TODO: translate
 ambient-shop-prices = 你听到有人在小声嘟囔价格。
-# TODO: translate
-ambient-temple-praise = You hear someone praising { $deity }.
-# TODO: translate
-ambient-temple-beseech = You hear someone beseeching { $deity }.
-# TODO: translate
-ambient-temple-sacrifice = You hear an animal carcass being offered in sacrifice.
-# TODO: translate
-ambient-temple-donations = You hear a strident plea for donations.
-# TODO: translate
-ambient-oracle-wind = You hear a strange wind.
-# TODO: translate
-ambient-oracle-ravings = You hear convulsive ravings.
-# TODO: translate
-ambient-oracle-snakes = You hear snoring snakes.
+ambient-temple-praise = 你听到有人在赞颂 { $deity }。
+ambient-temple-beseech = 你听到有人在恳求 { $deity }。
+ambient-temple-sacrifice = 你听到有人献上动物尸体作为祭品。
+ambient-temple-donations = 你听到有人高声乞求捐献。
+ambient-oracle-wind = 你听到一阵诡异的风声。
+ambient-oracle-ravings = 你听到一阵痉挛般的胡言乱语。
+ambient-oracle-snakes = 你听到蛇的鼾声。
 # TODO: translate
 ambient-barracks-honed = You hear blades being honed.
 # TODO: translate
@@ -3933,8 +3873,7 @@ ambient-swamp-mosquitoes = You hear mosquitoes!
 ambient-swamp-marsh-gas = You smell marsh gas!
 # TODO: translate
 ambient-swamp-donald-duck = You hear Donald Duck!
-# TODO: translate
-ambient-fountain-bubbling = You hear bubbling water.
+ambient-fountain-bubbling = 你听到汩汩的水声。
 # TODO: translate
 ambient-fountain-coins = You hear water falling on coins.
 # TODO: translate
