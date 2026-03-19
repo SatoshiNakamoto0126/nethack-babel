@@ -230,6 +230,8 @@ pub struct SerializableItem {
     #[serde(default)]
     pub serial_id: u32,
     pub core: ObjectCore,
+    #[serde(default)]
+    pub name: Option<String>,
     pub buc: BucStatus,
     pub knowledge: KnowledgeState,
     pub location: ObjectLocation,
@@ -538,6 +540,9 @@ fn extract_items(
             .get_component::<ObjectLocation>(entity)
             .map(|l| (*l).clone())
             .unwrap_or(ObjectLocation::Free);
+        let name = world
+            .get_component::<Name>(entity)
+            .map(|name| name.0.clone());
 
         let enchantment = world.get_component::<Enchantment>(entity).map(|e| e.spe);
 
@@ -559,6 +564,7 @@ fn extract_items(
         items.push(SerializableItem {
             serial_id: entity.to_bits().get() as u32,
             core: core.clone(),
+            name,
             buc,
             knowledge,
             location,
@@ -839,6 +845,9 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
     for item_data in &data.items {
         let mut entity_builder = hecs::EntityBuilder::new();
         entity_builder.add(item_data.core.clone());
+        if let Some(name) = &item_data.name {
+            entity_builder.add(Name(name.clone()));
+        }
         entity_builder.add(item_data.buc.clone());
         entity_builder.add(item_data.knowledge.clone());
         entity_builder.add(item_data.location.clone());
@@ -1940,6 +1949,7 @@ mod tests {
         ShopPartialPayment,
         ShopNoMoney,
         ShopWandUsageFee,
+        ShopGreaseUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         DemonBribe,
@@ -2003,6 +2013,7 @@ mod tests {
                 SaveStoryTraversalScenario::ShopPartialPayment => "shop-partial-payment",
                 SaveStoryTraversalScenario::ShopNoMoney => "shop-no-money",
                 SaveStoryTraversalScenario::ShopWandUsageFee => "shop-wand-usage-fee",
+                SaveStoryTraversalScenario::ShopGreaseUsageFee => "shop-grease-usage-fee",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 SaveStoryTraversalScenario::DemonBribe => "demon-bribe",
@@ -2876,6 +2887,58 @@ mod tests {
                     PlayerAction::ZapWand {
                         item: loaded_wand,
                         direction: None,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopGreaseUsageFee => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let grease = spawn_inventory_object_by_name(&mut world, "can of grease", 'g');
+                world
+                    .ecs_mut()
+                    .insert_one(grease, Enchantment { spe: 2 })
+                    .expect("grease should accept charges");
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(grease, 100, 1),
+                    "shop bill should accept unpaid grease"
+                );
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-grease-usage-fee", &world, [65u8; 32]);
+                let loaded_grease = loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .and_then(|inv| {
+                        inv.items.iter().copied().find(|item| {
+                            loaded
+                                .get_component::<ObjectCore>(*item)
+                                .is_some_and(|core| {
+                                    core.object_class == ObjectClass::Tool
+                                        && core.inv_letter == Some('g')
+                                })
+                        })
+                    })
+                    .expect("reloaded inventory should preserve the unpaid grease");
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Apply {
+                        item: loaded_grease,
                     },
                     &mut rng,
                 );
@@ -7951,6 +8014,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopPartialPayment,
             SaveStoryTraversalScenario::ShopNoMoney,
             SaveStoryTraversalScenario::ShopWandUsageFee,
+            SaveStoryTraversalScenario::ShopGreaseUsageFee,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopChatPriceQuote,
             SaveStoryTraversalScenario::DemonBribe,
@@ -8242,6 +8306,15 @@ mod tests {
                     )));
                     assert_eq!(shop.bill.total(), 100);
                     assert_eq!(shop.debit, 25);
+                }
+                SaveStoryTraversalScenario::ShopGreaseUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(shop.bill.total(), 100);
+                    assert_eq!(shop.debit, 10);
                 }
                 SaveStoryTraversalScenario::ShopkeeperSell => {
                     let shop = &world.dungeon().shop_rooms[0];

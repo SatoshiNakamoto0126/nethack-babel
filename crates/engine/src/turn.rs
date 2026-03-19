@@ -1513,8 +1513,12 @@ fn resolve_player_action(
         }
         PlayerAction::Apply { item } => {
             let player = world.player();
-            let tool_events = crate::tools::apply_tool(world, player, *item, rng);
+            let usage_snapshot = snapshot_apply_usage_fee(world, *item);
+            let tool_events = crate::apply::apply_tool(world, player, *item, None, rng);
             events.extend(tool_events);
+            if let Some(snapshot) = usage_snapshot {
+                charge_unpaid_apply_usage_in_shop(world, player, *item, snapshot, events);
+            }
         }
         PlayerAction::Engrave { text } => {
             let player = world.player();
@@ -8431,6 +8435,128 @@ fn charge_unpaid_wand_usage_in_shop(
     sync_current_level_shopkeeper_state(world);
 }
 
+#[derive(Clone, Copy)]
+enum ApplyUsageFeeKind {
+    DefaultCharged,
+    CheapCharged,
+}
+
+#[derive(Clone, Copy)]
+struct ApplyUsageFeeSnapshot {
+    charges_before_use: i32,
+    kind: ApplyUsageFeeKind,
+}
+
+fn snapshot_apply_usage_fee(
+    world: &GameWorld,
+    item: hecs::Entity,
+) -> Option<ApplyUsageFeeSnapshot> {
+    let charges_before_use = world.get_component::<Enchantment>(item)?.spe as i32;
+    if charges_before_use <= 0 {
+        return None;
+    }
+
+    let kind = match crate::apply::classify_ext_tool_entity(world, item) {
+        Some(crate::apply::ExtToolType::CanOfGrease) => ApplyUsageFeeKind::CheapCharged,
+        Some(
+            crate::apply::ExtToolType::BellOfOpening
+            | crate::apply::ExtToolType::FrostHorn
+            | crate::apply::ExtToolType::FireHorn
+            | crate::apply::ExtToolType::DrumOfEarthquake,
+        ) => ApplyUsageFeeKind::DefaultCharged,
+        _ => return None,
+    };
+
+    Some(ApplyUsageFeeSnapshot {
+        charges_before_use,
+        kind,
+    })
+}
+
+fn charge_unpaid_apply_usage_in_shop(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    item: hecs::Entity,
+    snapshot: ApplyUsageFeeSnapshot,
+    events: &mut Vec<EngineEvent>,
+) {
+    let charges_after_use = world
+        .get_component::<Enchantment>(item)
+        .map(|ench| ench.spe as i32)
+        .unwrap_or(snapshot.charges_before_use);
+    if charges_after_use >= snapshot.charges_before_use {
+        return;
+    }
+
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return;
+    };
+    let Some(shop_idx) = find_shop_index_containing_position(world, player_pos) else {
+        return;
+    };
+
+    let Some((shopkeeper, shopkeeper_name, fee)) =
+        world.dungeon().shop_rooms.get(shop_idx).and_then(|shop| {
+            let entry = shop.bill.find(item)?;
+            let owed = (entry.price * entry.original_quantity - entry.paid_amount).max(0);
+            if owed <= 0 {
+                return None;
+            }
+            let fee = match snapshot.kind {
+                ApplyUsageFeeKind::CheapCharged => crate::shop::usage_fee(
+                    entry.price,
+                    false,
+                    false,
+                    false,
+                    true,
+                    false,
+                    false,
+                    false,
+                ),
+                ApplyUsageFeeKind::DefaultCharged => crate::shop::usage_fee(
+                    entry.price,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                ),
+            };
+            (fee > 0).then(|| (shop.shopkeeper, shop.shopkeeper_name.clone(), fee))
+        })
+    else {
+        return;
+    };
+
+    let Some(shopkeeper_pos) = world
+        .get_component::<Positioned>(shopkeeper)
+        .map(|pos| pos.0)
+    else {
+        return;
+    };
+    if !live_monster_entity(world, shopkeeper)
+        || !world.dungeon().shop_rooms[shop_idx].contains(shopkeeper_pos)
+    {
+        return;
+    }
+
+    world.dungeon_mut().shop_rooms[shop_idx].debit += fee;
+    if !crate::status::is_deaf(world, player) {
+        events.push(EngineEvent::msg_with(
+            "shop-usage-fee",
+            vec![("shopkeeper", shopkeeper_name), ("amount", fee.to_string())],
+        ));
+    }
+    record_player_exercise_action(
+        world,
+        player,
+        crate::attributes::ExerciseAction::ShopTransaction,
+    );
+    sync_current_level_shopkeeper_state(world);
+}
+
 fn add_player_gold(world: &mut GameWorld, player: hecs::Entity, amount: u32) {
     if amount == 0 {
         return;
@@ -9623,6 +9749,7 @@ mod tests {
         ShopPartialPayment,
         ShopNoMoney,
         ShopWandUsageFee,
+        ShopGreaseUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         DemonBribe,
@@ -9686,6 +9813,7 @@ mod tests {
                 StoryTraversalScenario::ShopPartialPayment => "shop-partial-payment",
                 StoryTraversalScenario::ShopNoMoney => "shop-no-money",
                 StoryTraversalScenario::ShopWandUsageFee => "shop-wand-usage-fee",
+                StoryTraversalScenario::ShopGreaseUsageFee => "shop-grease-usage-fee",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 StoryTraversalScenario::DemonBribe => "demon-bribe",
@@ -10502,6 +10630,39 @@ mod tests {
                     &mut rng,
                 );
                 (world, wand_events)
+            }
+            StoryTraversalScenario::ShopGreaseUsageFee => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let grease = spawn_inventory_object_by_name(&mut world, "can of grease", 'g');
+                world
+                    .ecs_mut()
+                    .insert_one(grease, Enchantment { spe: 2 })
+                    .expect("grease should accept charges");
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(grease, 100, 1),
+                    "shop bill should accept unpaid grease"
+                );
+
+                let mut rng = test_rng();
+                let apply_events =
+                    resolve_turn(&mut world, PlayerAction::Apply { item: grease }, &mut rng);
+                (world, apply_events)
             }
             StoryTraversalScenario::ShopkeeperSell => {
                 let mut world = make_test_world();
@@ -18387,6 +18548,125 @@ mod tests {
     }
 
     #[test]
+    fn test_applying_can_of_grease_uses_extended_apply_runtime() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let grease = spawn_inventory_object_by_name(&mut world, "can of grease", 'g');
+        world
+            .ecs_mut()
+            .insert_one(grease, Enchantment { spe: 2 })
+            .expect("grease should accept charges");
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Apply { item: grease },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tool-grease-hands"
+        )));
+        assert_eq!(
+            world
+                .get_component::<Enchantment>(grease)
+                .expect("grease should keep enchantment")
+                .spe,
+            1,
+            "applying grease should consume a charge through the live apply runtime"
+        );
+    }
+
+    #[test]
+    fn test_applying_unpaid_grease_in_shop_adds_usage_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let grease = spawn_inventory_object_by_name(&mut world, "can of grease", 'g');
+        world
+            .ecs_mut()
+            .insert_one(grease, Enchantment { spe: 2 })
+            .expect("grease should accept charges");
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(grease, 100, 1),
+            "shop bill should accept unpaid grease"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Apply { item: grease },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].bill.total(), 100);
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 10);
+    }
+
+    #[test]
+    fn test_applying_unpaid_bell_of_opening_in_shop_adds_usage_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let bell = spawn_inventory_object_by_name(&mut world, "Bell of Opening", 'b');
+        world
+            .ecs_mut()
+            .insert_one(bell, Enchantment { spe: 2 })
+            .expect("bell should accept charges");
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(bell, 100, 1),
+            "shop bill should accept unpaid bell"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Apply { item: bell },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tool-bell-reveal" || key == "tool-bell-opens"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 25);
+    }
+
+    #[test]
     fn test_striking_wand_on_peaceful_monster_removes_peaceful() {
         use crate::monster_ai::WandTypeTag;
         use crate::wands::{WandCharges, WandType};
@@ -25209,6 +25489,7 @@ mod tests {
             StoryTraversalScenario::ShopPartialPayment,
             StoryTraversalScenario::ShopNoMoney,
             StoryTraversalScenario::ShopWandUsageFee,
+            StoryTraversalScenario::ShopGreaseUsageFee,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopChatPriceQuote,
             StoryTraversalScenario::DemonBribe,
@@ -25546,6 +25827,29 @@ mod tests {
                         shop.debit,
                         25,
                         "{} should add the wand usage fee as debit",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopGreaseUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "tool-grease-hands"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(
+                        shop.bill.total(),
+                        100,
+                        "{} should preserve the billed grease price",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        shop.debit,
+                        10,
+                        "{} should add the grease usage fee as debit",
                         scenario.label()
                     );
                 }
