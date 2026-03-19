@@ -1805,6 +1805,7 @@ mod tests {
         TempleSelflessGenerosity,
         TempleWrath,
         TempleCalm,
+        OracleConsultation,
         UntendedTempleGhost,
         SanctumRevisit,
         WizardHarassment,
@@ -1857,6 +1858,7 @@ mod tests {
                 }
                 SaveStoryTraversalScenario::TempleWrath => "temple-wrath",
                 SaveStoryTraversalScenario::TempleCalm => "temple-calm",
+                SaveStoryTraversalScenario::OracleConsultation => "oracle-consultation",
                 SaveStoryTraversalScenario::UntendedTempleGhost => "untended-temple-ghost",
                 SaveStoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 SaveStoryTraversalScenario::WizardHarassment => "wizard-harassment",
@@ -3351,6 +3353,33 @@ mod tests {
                     save_and_reload_world("story-matrix-temple-calm", &world, [30u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(&mut loaded, PlayerAction::Pray, &mut rng);
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::OracleConsultation => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                world.set_game_content(nethack_babel_engine::rumors::GameContent {
+                    oracles: vec!["The first consultation.".to_string()],
+                    ..nethack_babel_engine::rumors::GameContent::default()
+                });
+                let oracle = spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(oracle, nethack_babel_engine::world::Peaceful)
+                    .expect("oracle should accept peaceful marker");
+                spawn_inventory_gold(&mut world, 200, '$');
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-oracle-consultation", &world, [67u8; 32]);
+                loaded.set_game_content(world.game_content().clone());
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::ConsultOracle {
+                        direction: Direction::East,
+                        major: true,
+                    },
+                    &mut rng,
+                );
                 (loaded, events)
             }
             SaveStoryTraversalScenario::UntendedTempleGhost => {
@@ -6870,6 +6899,7 @@ mod tests {
             SaveStoryTraversalScenario::TempleSelflessGenerosity,
             SaveStoryTraversalScenario::TempleWrath,
             SaveStoryTraversalScenario::TempleCalm,
+            SaveStoryTraversalScenario::OracleConsultation,
             SaveStoryTraversalScenario::UntendedTempleGhost,
             SaveStoryTraversalScenario::SanctumRevisit,
             SaveStoryTraversalScenario::WizardHarassment,
@@ -7470,6 +7500,34 @@ mod tests {
                         event,
                         EngineEvent::Message { key, .. } if key == "priest-calmed"
                     )));
+                }
+                SaveStoryTraversalScenario::OracleConsultation => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, args }
+                            if key == "oracle-consultation"
+                                && args
+                                    .iter()
+                                    .any(|(arg_key, value)| arg_key == "text"
+                                        && value == "The first consultation.")
+                    )));
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|flags| flags.major_oracle)
+                    );
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 0);
                 }
                 SaveStoryTraversalScenario::UntendedTempleGhost => {
                     assert_eq!(

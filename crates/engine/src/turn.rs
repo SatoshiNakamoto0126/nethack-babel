@@ -8514,6 +8514,7 @@ mod tests {
         TempleSelflessGenerosity,
         TempleWrath,
         TempleCalm,
+        OracleConsultation,
         UntendedTempleGhost,
         SanctumRevisit,
         WizardHarassment,
@@ -8564,6 +8565,7 @@ mod tests {
                 StoryTraversalScenario::TempleSelflessGenerosity => "temple-selfless-generosity",
                 StoryTraversalScenario::TempleWrath => "temple-wrath",
                 StoryTraversalScenario::TempleCalm => "temple-calm",
+                StoryTraversalScenario::OracleConsultation => "oracle-consultation",
                 StoryTraversalScenario::UntendedTempleGhost => "untended-temple-ghost",
                 StoryTraversalScenario::SanctumRevisit => "sanctum-revisit",
                 StoryTraversalScenario::WizardHarassment => "wizard-harassment",
@@ -9997,6 +9999,31 @@ mod tests {
                 let mut rng = test_rng();
                 let pray_events = resolve_turn(&mut world, PlayerAction::Pray, &mut rng);
                 (world, pray_events)
+            }
+            StoryTraversalScenario::OracleConsultation => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                world.set_game_content(crate::rumors::GameContent {
+                    oracles: vec!["The first consultation.".to_string()],
+                    ..crate::rumors::GameContent::default()
+                });
+                let oracle = spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(oracle, Peaceful)
+                    .expect("oracle should accept peaceful marker");
+                let _gold = spawn_inventory_gold(&mut world, 200, '$');
+
+                let mut rng = test_rng();
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::ConsultOracle {
+                        direction: Direction::East,
+                        major: true,
+                    },
+                    &mut rng,
+                );
+                (world, events)
             }
             StoryTraversalScenario::UntendedTempleGhost => {
                 for seed in 0_u64..256 {
@@ -21590,6 +21617,7 @@ mod tests {
             StoryTraversalScenario::TempleSelflessGenerosity,
             StoryTraversalScenario::TempleWrath,
             StoryTraversalScenario::TempleCalm,
+            StoryTraversalScenario::OracleConsultation,
             StoryTraversalScenario::UntendedTempleGhost,
             StoryTraversalScenario::SanctumRevisit,
             StoryTraversalScenario::WizardHarassment,
@@ -22260,6 +22288,30 @@ mod tests {
                         event,
                         EngineEvent::Message { key, .. } if key == "priest-calmed"
                     )));
+                }
+                StoryTraversalScenario::OracleConsultation => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, args }
+                            if key == "oracle-consultation"
+                                && args
+                                    .iter()
+                                    .any(|(arg_key, value)| arg_key == "text"
+                                        && value == "The first consultation.")
+                    )));
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|flags| flags.major_oracle),
+                        "{} should set the major oracle flag",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        player_gold(&world, player),
+                        0,
+                        "{} should allow the Oracle to take all available gold",
+                        scenario.label()
+                    );
                 }
                 StoryTraversalScenario::UntendedTempleGhost => {
                     assert!(final_events.iter().any(|event| matches!(
