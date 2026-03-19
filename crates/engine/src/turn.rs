@@ -6449,7 +6449,7 @@ fn process_wizard_of_yendor_turn(
 }
 
 fn wizard_intervention_delay(rng: &mut impl Rng) -> u32 {
-    rng.random_range(50..=249)
+    rng.random_range(50..=299)
 }
 
 fn wizard_invocation_delay(rng: &mut impl Rng) -> u32 {
@@ -16527,6 +16527,18 @@ mod tests {
             count_monsters_named(&world, "Wizard of Yendor"),
             if respawned { 1 } else { 0 }
         );
+    }
+
+    #[test]
+    fn test_wizard_intervention_delay_matches_original_range() {
+        for seed in 0..1024u64 {
+            let mut rng = Pcg64::seed_from_u64(seed);
+            let delay = wizard_intervention_delay(&mut rng);
+            assert!(
+                (50..=299).contains(&delay),
+                "seed {seed} produced out-of-range intervention delay {delay}"
+            );
+        }
     }
 
     #[test]
