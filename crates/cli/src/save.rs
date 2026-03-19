@@ -6556,6 +6556,67 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_non_wizard_covetous_monster_keeps_directional_retreat_choice() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(2, 2), Terrain::StairsUp);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(8, 8), Terrain::StairsDown);
+
+        let arch_lich = spawn_full_monster(&mut world, Position::new(7, 7), "arch-lich", 20);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(arch_lich) {
+            hp.current = 10;
+            hp.max = 30;
+        }
+        let arch_lich_flags = world
+            .monster_catalog()
+            .iter()
+            .find(|def| def.names.male.eq_ignore_ascii_case("arch-lich"))
+            .map(|def| def.flags)
+            .expect("arch-lich should exist in the monster catalog");
+        world
+            .ecs_mut()
+            .insert_one(
+                arch_lich,
+                nethack_babel_engine::monster_ai::MonsterSpeciesFlags(arch_lich_flags),
+            )
+            .expect("arch-lich should accept species flags");
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("covetous-retreat-direction-round-trip", &world, [92u8; 32]);
+        let arch_lich = find_monster_named(&loaded, "arch-lich")
+            .expect("round-trip covetous retreat test should keep the arch-lich");
+        let expected = if arch_lich.to_bits().get().is_multiple_of(2) {
+            Position::new(8, 8)
+        } else {
+            Position::new(2, 2)
+        };
+        let mut rng = Pcg64::from_seed(loaded_rng);
+        let events = nethack_babel_engine::monster_ai::resolve_monster_turn(
+            &mut loaded,
+            arch_lich,
+            &mut rng,
+        );
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::EntityTeleported { to, .. } if *to == expected
+            )),
+            "after save/load, a non-Wizard covetous monster should keep the original directional retreat stair choice"
+        );
+        assert_eq!(
+            loaded.get_component::<Positioned>(arch_lich).map(|pos| pos.0),
+            Some(expected),
+            "after save/load, the covetous monster should still land on the preferred retreat stair"
+        );
+    }
+
+    #[test]
     fn round_trip_loaded_shop_damage_repairs_when_keeper_is_home() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);

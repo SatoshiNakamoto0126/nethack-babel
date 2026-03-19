@@ -27,7 +27,7 @@ use crate::action::{Direction, Position};
 use crate::combat::{
     MonsterAttacks, monster_ranged_attack_dispatch, resolve_melee_attack, resolve_monster_attacks,
 };
-use crate::dungeon::Terrain;
+use crate::dungeon::{DungeonBranch, Terrain};
 use crate::equipment::EquipmentSlots;
 use crate::event::{EngineEvent, HpSource, StatusEffect};
 use crate::inventory::Inventory;
@@ -841,7 +841,7 @@ fn covetous_behavior(
 
     if ratio < 3 {
         // STRAT_HEAL: teleport to stairs and heal.
-        if let Some(stairs_pos) = find_stairs(world) {
+        if let Some(stairs_pos) = find_covetous_retreat_stairs(world, monster, player_pos) {
             if monster_pos != stairs_pos {
                 // Teleport to stairs.
                 if let Some(mut pos) = world.get_component_mut::<Positioned>(monster) {
@@ -909,6 +909,74 @@ fn covetous_behavior(
     }
 
     events
+}
+
+fn branch_builds_up(branch: DungeonBranch) -> bool {
+    matches!(branch, DungeonBranch::VladsTower)
+}
+
+fn find_positions_with_terrain(world: &GameWorld, terrain: Terrain) -> Vec<Position> {
+    let map = &world.dungeon().current_level;
+    let mut positions = Vec::new();
+    for y in 0..map.height {
+        for x in 0..map.width {
+            let pos = Position::new(x as i32, y as i32);
+            if map.get(pos).is_some_and(|cell| cell.terrain == terrain) {
+                positions.push(pos);
+            }
+        }
+    }
+    positions
+}
+
+fn choose_retreat_position_farthest_from_player(
+    positions: &[Position],
+    player_pos: Position,
+) -> Option<Position> {
+    positions
+        .iter()
+        .copied()
+        .max_by_key(|pos| dist2_positions(*pos, player_pos))
+}
+
+fn find_covetous_retreat_stairs(
+    world: &GameWorld,
+    monster: Entity,
+    player_pos: Position,
+) -> Option<Position> {
+    let forward = monster.to_bits().get().is_multiple_of(2);
+    let preferred_is_up = if branch_builds_up(world.dungeon().branch) {
+        forward
+    } else {
+        !forward
+    };
+    let preferred_terrain = if preferred_is_up {
+        Terrain::StairsUp
+    } else {
+        Terrain::StairsDown
+    };
+    let opposite_terrain = if preferred_is_up {
+        Terrain::StairsDown
+    } else {
+        Terrain::StairsUp
+    };
+
+    choose_retreat_position_farthest_from_player(
+        &find_positions_with_terrain(world, preferred_terrain),
+        player_pos,
+    )
+    .or_else(|| {
+        choose_retreat_position_farthest_from_player(
+            &find_positions_with_terrain(world, Terrain::MagicPortal),
+            player_pos,
+        )
+    })
+    .or_else(|| {
+        choose_retreat_position_farthest_from_player(
+            &find_positions_with_terrain(world, opposite_terrain),
+            player_pos,
+        )
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1755,22 +1823,6 @@ fn find_wand_in_list(items: &[Entity], world: &GameWorld, wand_type: WandType) -
                 .get_component::<WandTypeTag>(item)
                 .is_some_and(|tag| tag.0 == wand_type)
     })
-}
-
-/// Find stairs on the current level (first found).
-fn find_stairs(world: &GameWorld) -> Option<Position> {
-    let map = &world.dungeon().current_level;
-    for y in 0..map.height {
-        for x in 0..map.width {
-            let pos = Position::new(x as i32, y as i32);
-            if let Some(cell) = map.get(pos)
-                && matches!(cell.terrain, Terrain::StairsUp | Terrain::StairsDown)
-            {
-                return Some(pos);
-            }
-        }
-    }
-    None
 }
 
 /// Squared Euclidean distance between two positions.
@@ -3546,6 +3598,91 @@ mod tests {
         assert!(
             !monster_carries_named_item(&world, monster, "Amulet of Yendor"),
             "heal fallback should leave the ground target alone for now"
+        );
+    }
+
+    #[test]
+    fn covetous_monster_ratio_one_prefers_directional_stair_type() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(2, 2), Terrain::StairsUp);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(13, 13), Terrain::StairsDown);
+
+        let monster = spawn_intelligent_monster(
+            &mut world,
+            Position::new(12, 8),
+            10,
+            30,
+            MonsterIntelligence::Humanoid,
+        );
+        let _ = world
+            .ecs_mut()
+            .insert_one(monster, MonsterSpeciesFlags(MonsterFlags::WANTSAMUL));
+
+        let expected = if monster.to_bits().get().is_multiple_of(2) {
+            Position::new(13, 13)
+        } else {
+            Position::new(2, 2)
+        };
+
+        let events = resolve_monster_turn(&mut world, monster, &mut rng);
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::EntityTeleported { to, .. } if *to == expected
+            )),
+            "ratio=1 non-Wizard covetous monsters should retreat to the stair type chosen by the original directional heuristic"
+        );
+    }
+
+    #[test]
+    fn covetous_monster_vlad_branch_flips_directional_stair_preference() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+        world.dungeon_mut().branch = DungeonBranch::VladsTower;
+
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(2, 2), Terrain::StairsUp);
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(13, 13), Terrain::StairsDown);
+
+        let monster = spawn_intelligent_monster(
+            &mut world,
+            Position::new(12, 8),
+            10,
+            30,
+            MonsterIntelligence::Humanoid,
+        );
+        let _ = world
+            .ecs_mut()
+            .insert_one(monster, MonsterSpeciesFlags(MonsterFlags::WANTSAMUL));
+
+        let expected = if monster.to_bits().get().is_multiple_of(2) {
+            Position::new(2, 2)
+        } else {
+            Position::new(13, 13)
+        };
+
+        let events = resolve_monster_turn(&mut world, monster, &mut rng);
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::EntityTeleported { to, .. } if *to == expected
+            )),
+            "branches that build upward should flip the directional retreat stair preference"
         );
     }
 
