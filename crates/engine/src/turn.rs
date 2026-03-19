@@ -1671,6 +1671,7 @@ fn resolve_player_action(
                 .get_component::<crate::wands::WandCharges>(*item)
                 .map(|c| *c);
             if let (Some(wand_type), Some(mut wand_charges)) = (wand_type, charges.take()) {
+                let charges_before_zap = wand_charges.spe;
                 let zap_dir = match (wand_type.direction(), effective_dir) {
                     (crate::wands::WandDirection::Nodir, _) => Direction::North,
                     (_, Some(dir)) => dir,
@@ -1691,6 +1692,7 @@ fn resolve_player_action(
                     rng,
                 );
                 events.extend(wand_events);
+                charge_unpaid_wand_usage_in_shop(world, player, *item, charges_before_zap, events);
 
                 if let Some(mut live_charges) =
                     world.get_component_mut::<crate::wands::WandCharges>(*item)
@@ -8370,6 +8372,65 @@ fn pacify_shop_if_settled(world: &mut GameWorld, shop_idx: usize) {
     }
 }
 
+fn charge_unpaid_wand_usage_in_shop(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    item: hecs::Entity,
+    charges_before_zap: i8,
+    events: &mut Vec<EngineEvent>,
+) {
+    if charges_before_zap <= 0 {
+        return;
+    }
+
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return;
+    };
+    let Some(shop_idx) = find_shop_index_containing_position(world, player_pos) else {
+        return;
+    };
+
+    let Some((shopkeeper, shopkeeper_name, fee)) =
+        world.dungeon().shop_rooms.get(shop_idx).and_then(|shop| {
+            let entry = shop.bill.find(item)?;
+            let owed = (entry.price * entry.original_quantity - entry.paid_amount).max(0);
+            if owed <= 0 {
+                return None;
+            }
+            let fee = crate::shop::unpaid_wand_usage_fee(entry.price, charges_before_zap);
+            (fee > 0).then(|| (shop.shopkeeper, shop.shopkeeper_name.clone(), fee))
+        })
+    else {
+        return;
+    };
+
+    let Some(shopkeeper_pos) = world
+        .get_component::<Positioned>(shopkeeper)
+        .map(|pos| pos.0)
+    else {
+        return;
+    };
+    if !live_monster_entity(world, shopkeeper)
+        || !world.dungeon().shop_rooms[shop_idx].contains(shopkeeper_pos)
+    {
+        return;
+    }
+
+    world.dungeon_mut().shop_rooms[shop_idx].debit += fee;
+    if !crate::status::is_deaf(world, player) {
+        events.push(EngineEvent::msg_with(
+            "shop-usage-fee",
+            vec![("shopkeeper", shopkeeper_name), ("amount", fee.to_string())],
+        ));
+    }
+    record_player_exercise_action(
+        world,
+        player,
+        crate::attributes::ExerciseAction::ShopTransaction,
+    );
+    sync_current_level_shopkeeper_state(world);
+}
+
 fn add_player_gold(world: &mut GameWorld, player: hecs::Entity, amount: u32) {
     if amount == 0 {
         return;
@@ -9420,6 +9481,36 @@ mod tests {
         item
     }
 
+    fn spawn_inventory_wand(
+        world: &mut GameWorld,
+        letter: char,
+        wand_type: crate::wands::WandType,
+        charges: i8,
+    ) -> hecs::Entity {
+        let item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Wand,
+                quantity: 1,
+                weight: 7,
+                age: 0,
+                inv_letter: Some(letter),
+                artifact: None,
+            },
+            ObjectLocation::Inventory,
+            crate::monster_ai::WandTypeTag(wand_type),
+            crate::wands::WandCharges {
+                spe: charges,
+                recharged: 0,
+            },
+        ));
+        let player = world.player();
+        if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
+            inv.items.push(item);
+        }
+        item
+    }
+
     fn monster_carries_named_item(world: &GameWorld, monster: hecs::Entity, name: &str) -> bool {
         let carrier_id = monster.to_bits().get() as u32;
         world
@@ -9531,6 +9622,7 @@ mod tests {
         ShopCreditCovers,
         ShopPartialPayment,
         ShopNoMoney,
+        ShopWandUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         DemonBribe,
@@ -9593,6 +9685,7 @@ mod tests {
                 StoryTraversalScenario::ShopCreditCovers => "shop-credit-covers",
                 StoryTraversalScenario::ShopPartialPayment => "shop-partial-payment",
                 StoryTraversalScenario::ShopNoMoney => "shop-no-money",
+                StoryTraversalScenario::ShopWandUsageFee => "shop-wand-usage-fee",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 StoryTraversalScenario::DemonBribe => "demon-bribe",
@@ -10375,6 +10468,40 @@ mod tests {
                 let mut rng = test_rng();
                 let pay_events = resolve_turn(&mut world, PlayerAction::Pay, &mut rng);
                 (world, pay_events)
+            }
+            StoryTraversalScenario::ShopWandUsageFee => {
+                let mut world = make_test_world();
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let wand = spawn_inventory_wand(&mut world, 'z', crate::wands::WandType::Light, 2);
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(wand, 100, 1),
+                    "shop bill should accept an unpaid wand"
+                );
+
+                let mut rng = test_rng();
+                let wand_events = resolve_turn(
+                    &mut world,
+                    PlayerAction::ZapWand {
+                        item: wand,
+                        direction: None,
+                    },
+                    &mut rng,
+                );
+                (world, wand_events)
             }
             StoryTraversalScenario::ShopkeeperSell => {
                 let mut world = make_test_world();
@@ -18095,6 +18222,171 @@ mod tests {
     }
 
     #[test]
+    fn test_zapping_unpaid_wand_in_shop_adds_usage_debit() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let wand = spawn_inventory_wand(&mut world, 'z', crate::wands::WandType::Light, 2);
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(wand, 100, 1),
+            "shop bill should accept an unpaid wand"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::ZapWand {
+                item: wand,
+                direction: None,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].bill.total(), 100);
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 25);
+    }
+
+    #[test]
+    fn test_zapping_last_charge_of_unpaid_wand_costs_full_price() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let wand = spawn_inventory_wand(&mut world, 'z', crate::wands::WandType::Light, 1);
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(wand, 100, 1),
+            "shop bill should accept an unpaid wand"
+        );
+
+        let _events = resolve_turn(
+            &mut world,
+            PlayerAction::ZapWand {
+                item: wand,
+                direction: None,
+            },
+            &mut test_rng(),
+        );
+
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 100);
+    }
+
+    #[test]
+    fn test_zapping_unpaid_wand_outside_shop_does_not_add_usage_debit() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
+            pos.0 = Position::new(8, 5);
+        }
+        let wand = spawn_inventory_wand(&mut world, 'z', crate::wands::WandType::Light, 2);
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(wand, 100, 1),
+            "shop bill should accept an unpaid wand"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::ZapWand {
+                item: wand,
+                direction: None,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 0);
+    }
+
+    #[test]
+    fn test_zapping_depleted_unpaid_wand_does_not_add_usage_debit() {
+        let mut world = make_test_world();
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let wand = spawn_inventory_wand(&mut world, 'z', crate::wands::WandType::Light, -1);
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(wand, 100, 1),
+            "shop bill should accept an unpaid wand"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::ZapWand {
+                item: wand,
+                direction: None,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "wand-nothing"
+        )));
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 0);
+    }
+
+    #[test]
     fn test_striking_wand_on_peaceful_monster_removes_peaceful() {
         use crate::monster_ai::WandTypeTag;
         use crate::wands::{WandCharges, WandType};
@@ -24916,6 +25208,7 @@ mod tests {
             StoryTraversalScenario::ShopCreditCovers,
             StoryTraversalScenario::ShopPartialPayment,
             StoryTraversalScenario::ShopNoMoney,
+            StoryTraversalScenario::ShopWandUsageFee,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopChatPriceQuote,
             StoryTraversalScenario::DemonBribe,
@@ -25234,6 +25527,25 @@ mod tests {
                         shop.credit,
                         0,
                         "{} should keep credit unchanged",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopWandUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(
+                        shop.bill.total(),
+                        100,
+                        "{} should preserve the billed wand price",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        shop.debit,
+                        25,
+                        "{} should add the wand usage fee as debit",
                         scenario.label()
                     );
                 }

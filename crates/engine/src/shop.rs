@@ -247,6 +247,11 @@ impl ShopBill {
     pub fn entries(&self) -> &[BillEntry] {
         &self.entries
     }
+
+    /// Iterate mutably over bill entries.
+    pub fn entries_mut(&mut self) -> &mut [BillEntry] {
+        &mut self.entries
+    }
 }
 
 fn entry_total(entry: &BillEntry) -> i32 {
@@ -793,6 +798,22 @@ pub fn usage_fee(
     } else {
         // Crystal ball, oil lamp, brass lantern, instruments, wands.
         item_buy_price / 4
+    }
+}
+
+/// Compute the normal per-zap fee for an unpaid wand used in a shop.
+///
+/// Mirrors the wand branch of `check_unpaid_usage()` / `cost_per_charge()`
+/// from `shk.c`: the last charge costs full price, while earlier charges
+/// cost one quarter of the wand's buy price.
+pub fn unpaid_wand_usage_fee(item_buy_price: i32, charges_before_use: i8) -> i32 {
+    if charges_before_use <= 0 {
+        return 0;
+    }
+    if charges_before_use > 1 {
+        item_buy_price / 4
+    } else {
+        item_buy_price
     }
 }
 
@@ -3016,6 +3037,22 @@ mod tests {
             usage_fee(100, false, false, false, false, false, false, false),
             25
         );
+    }
+
+    #[test]
+    fn test_unpaid_wand_usage_fee_multi_charge() {
+        assert_eq!(unpaid_wand_usage_fee(100, 2), 25);
+    }
+
+    #[test]
+    fn test_unpaid_wand_usage_fee_last_charge_costs_full_price() {
+        assert_eq!(unpaid_wand_usage_fee(100, 1), 100);
+    }
+
+    #[test]
+    fn test_unpaid_wand_usage_fee_empty_wand_is_free() {
+        assert_eq!(unpaid_wand_usage_fee(100, 0), 0);
+        assert_eq!(unpaid_wand_usage_fee(100, -1), 0);
     }
 
     // ── Credit for sale ─────────────────────────────────────────

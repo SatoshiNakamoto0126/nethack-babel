@@ -8,6 +8,7 @@
 
 use hecs::Entity;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 use crate::action::{Direction, Position};
 use crate::dungeon::{LevelMap, Terrain};
@@ -19,7 +20,7 @@ use crate::world::{GameWorld, HitPoints, Monster, Positioned};
 // ---------------------------------------------------------------------------
 
 /// All wand types in NetHack 3.7, categorised by direction type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WandType {
     // ── NODIR ────────────────────────────────────────────────
     Light,
@@ -131,7 +132,7 @@ impl WandType {
 // ---------------------------------------------------------------------------
 
 /// Tracks remaining charges on a wand entity.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WandCharges {
     /// Current charges (obj.spe).  Can be negative after wresting.
     pub spe: i8,

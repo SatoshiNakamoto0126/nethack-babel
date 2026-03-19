@@ -887,6 +887,10 @@ ambient-oracle-zot = You hear a loud ZOT!
 ambient-vault-scrooge = You hear Ebenezer Scrooge!
 ambient-vault-quarterback = You hear the quarterback calling the play.
 ambient-shop-neiman-marcus = You hear Neiman and Marcus arguing!
+shop-usage-fee = { $shopkeeper } dit : « Frais d'usage : { $amount } pièce{ $amount ->
+    [one] {""}
+   *[other] s
+    } d'or. »
 ui-wizard-mode-disabled = Wizard mode is not enabled.
 ui-item-prompt-drop = Drop what? [a-zA-Z or ?*]
 ui-item-prompt-wield = Wield what? [a-zA-Z or - for bare hands]

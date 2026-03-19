@@ -227,12 +227,18 @@ pub struct SerializableMonster {
 /// Flattened item state with full component data.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializableItem {
+    #[serde(default)]
+    pub serial_id: u32,
     pub core: ObjectCore,
     pub buc: BucStatus,
     pub knowledge: KnowledgeState,
     pub location: ObjectLocation,
     pub enchantment: Option<i8>,
     pub erosion: Option<SerializableErosion>,
+    #[serde(default)]
+    pub wand_type: Option<nethack_babel_engine::wands::WandType>,
+    #[serde(default)]
+    pub wand_charges: Option<nethack_babel_engine::wands::WandCharges>,
 }
 
 /// Erosion data for serialization (avoids depending on Erosion's exact layout).
@@ -543,14 +549,23 @@ fn extract_items(
                 erodeproof: e.erodeproof,
                 greased: e.greased,
             });
+        let wand_type = world
+            .get_component::<nethack_babel_engine::monster_ai::WandTypeTag>(entity)
+            .map(|tag| tag.0);
+        let wand_charges = world
+            .get_component::<nethack_babel_engine::wands::WandCharges>(entity)
+            .map(|charges| *charges);
 
         items.push(SerializableItem {
+            serial_id: entity.to_bits().get() as u32,
             core: core.clone(),
             buc,
             knowledge,
             location,
             enchantment,
             erosion,
+            wand_type,
+            wand_charges,
         });
     }
 
@@ -838,6 +853,12 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
                 greased: ero.greased,
             });
         }
+        if let Some(wand_type) = item_data.wand_type {
+            entity_builder.add(nethack_babel_engine::monster_ai::WandTypeTag(wand_type));
+        }
+        if let Some(wand_charges) = item_data.wand_charges {
+            entity_builder.add(wand_charges);
+        }
         let entity = world.ecs_mut().spawn(entity_builder.build());
         item_entities.push(entity);
     }
@@ -872,6 +893,15 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
             eq.ring_left = slot_entities[9];
             eq.ring_right = slot_entities[10];
             eq.amulet = slot_entities[11];
+        }
+    }
+
+    let mut item_id_map = std::collections::HashMap::new();
+    for (idx, item_data) in data.items.iter().enumerate() {
+        if let Some(item) = item_entities.get(idx).copied()
+            && item_data.serial_id != 0
+        {
+            item_id_map.insert(item_data.serial_id, item);
         }
     }
 
@@ -934,6 +964,14 @@ fn rebuild_world(data: &SaveData) -> GameWorld {
             *loc = ObjectLocation::MonsterInventory {
                 carrier_id: remapped_carrier_id,
             };
+        }
+    }
+
+    for shop in &mut world.dungeon_mut().shop_rooms {
+        for entry in shop.bill.entries_mut() {
+            if let Some(&remapped_item) = item_id_map.get(&(entry.item.to_bits().get() as u32)) {
+                entry.item = remapped_item;
+            }
         }
     }
 
@@ -1901,6 +1939,7 @@ mod tests {
         ShopCreditCovers,
         ShopPartialPayment,
         ShopNoMoney,
+        ShopWandUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         DemonBribe,
@@ -1963,6 +2002,7 @@ mod tests {
                 SaveStoryTraversalScenario::ShopCreditCovers => "shop-credit-covers",
                 SaveStoryTraversalScenario::ShopPartialPayment => "shop-partial-payment",
                 SaveStoryTraversalScenario::ShopNoMoney => "shop-no-money",
+                SaveStoryTraversalScenario::ShopWandUsageFee => "shop-wand-usage-fee",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 SaveStoryTraversalScenario::DemonBribe => "demon-bribe",
@@ -2768,6 +2808,77 @@ mod tests {
                     save_and_reload_world("story-matrix-shop-no-money", &world, [63u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(&mut loaded, PlayerAction::Pay, &mut rng);
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopWandUsageFee => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let player = world.player();
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let wand = world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Wand,
+                        quantity: 1,
+                        weight: 7,
+                        age: 0,
+                        inv_letter: Some('z'),
+                        artifact: None,
+                    },
+                    ObjectLocation::Inventory,
+                    nethack_babel_engine::monster_ai::WandTypeTag(
+                        nethack_babel_engine::wands::WandType::Light,
+                    ),
+                    nethack_babel_engine::wands::WandCharges {
+                        spe: 2,
+                        recharged: 0,
+                    },
+                ));
+                if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+                    inv.items.push(wand);
+                }
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(wand, 100, 1),
+                    "shop bill should accept an unpaid wand"
+                );
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-wand-usage-fee", &world, [64u8; 32]);
+                let loaded_wand = loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .and_then(|inv| {
+                        inv.items.iter().copied().find(|item| {
+                            loaded
+                                .get_component::<ObjectCore>(*item)
+                                .is_some_and(|core| {
+                                    core.object_class == ObjectClass::Wand
+                                        && core.inv_letter == Some('z')
+                                })
+                        })
+                    })
+                    .expect("reloaded inventory should preserve the unpaid wand");
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::ZapWand {
+                        item: loaded_wand,
+                        direction: None,
+                    },
+                    &mut rng,
+                );
                 (loaded, events)
             }
             SaveStoryTraversalScenario::ShopkeeperSell => {
@@ -7839,6 +7950,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopCreditCovers,
             SaveStoryTraversalScenario::ShopPartialPayment,
             SaveStoryTraversalScenario::ShopNoMoney,
+            SaveStoryTraversalScenario::ShopWandUsageFee,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopChatPriceQuote,
             SaveStoryTraversalScenario::DemonBribe,
@@ -8121,6 +8233,15 @@ mod tests {
                     assert_eq!(shop.bill.entries().len(), 1);
                     assert_eq!(shop.bill.entries()[0].paid_amount, 0);
                     assert_eq!(shop.credit, 0);
+                }
+                SaveStoryTraversalScenario::ShopWandUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(shop.bill.total(), 100);
+                    assert_eq!(shop.debit, 25);
                 }
                 SaveStoryTraversalScenario::ShopkeeperSell => {
                     let shop = &world.dungeon().shop_rooms[0];

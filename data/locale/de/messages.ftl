@@ -871,6 +871,10 @@ npc-gurgle-gurgles = { $monster } gurgles.
 npc-burble-burbles = { $monster } burbles.
 npc-trumpet-trumpets = { $monster } trumpets.
 npc-groan-groans = { $monster } groans.
+shop-usage-fee = { $shopkeeper } sagt: „Nutzungsgebühr, { $amount } Goldstück{ $amount ->
+    [one] {""}
+   *[other] e
+    }.“
 shop-price = „Für Euch kostet { $item } nur { $price } Goldstück{ $price ->
     [one] {""}
    *[other] e

@@ -899,6 +899,7 @@ artifact-name-change = { $artifact }的名字在你眼前變化了！
 shop-owe = 你欠{ $shopkeeper }{ $amount }枚金幣。
 shop-bill-total = 你的帳單總計{ $amount }枚金幣。
 shop-pay-success = 你向{ $shopkeeper }支付了{ $amount }枚金幣。
+shop-usage-fee = { $shopkeeper }說道：「使用費，{ $amount }枚金幣。」
 shop-no-money = 你沒有足夠的錢！
 shop-buy = 你花了{ $price }枚金幣買了{ $item }。
 shop-sell = 你以{ $price }枚金幣的價格賣出了{ $item }。

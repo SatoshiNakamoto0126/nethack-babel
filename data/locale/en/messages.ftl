@@ -950,6 +950,10 @@ shop-pay-success = You pay { $amount } zorkmid{ $amount ->
     [one] {""}
    *[other] s
     } to { $shopkeeper }.
+shop-usage-fee = { $shopkeeper } says: "Usage fee, { $amount } zorkmid{ $amount ->
+    [one] {""}
+   *[other] s
+    }."
 shop-no-money = You don't have enough money!
 shop-buy = You buy { $item } for { $price } zorkmid{ $price ->
     [one] {""}
