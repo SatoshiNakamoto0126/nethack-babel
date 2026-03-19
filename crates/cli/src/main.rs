@@ -26,14 +26,15 @@ use nethack_babel_engine::end::format_conduct_summary;
 use nethack_babel_engine::equipment::EquipmentSlots;
 use nethack_babel_engine::event::{DeathCause, EngineEvent};
 use nethack_babel_engine::fov::FovMap;
+use nethack_babel_engine::inventory::Inventory;
 use nethack_babel_engine::map_gen::{Room, generate_level};
 use nethack_babel_engine::role::{Race as EngineRace, Role as EngineRole};
 use nethack_babel_engine::topten::{Leaderboard, LeaderboardEntry, default_leaderboard_path};
 use nethack_babel_engine::turn::resolve_turn;
 use nethack_babel_engine::world::{
     ArmorClass, Attributes, DisplaySymbol, Encumbrance, EncumbranceLevel, ExperienceLevel,
-    GameWorld, HitPoints, Monster, MovementPoints, NORMAL_SPEED, Name, Nutrition, Peaceful,
-    Positioned, Power, Speed,
+    GameWorld, HitPoints, Monster, MonsterIdentity, MovementPoints, NORMAL_SPEED, Name, Nutrition,
+    Peaceful, Positioned, Power, Speed,
 };
 
 use nethack_babel_i18n::locale::{LanguageManifest, LocaleManager};
@@ -472,11 +473,49 @@ fn contextual_chat_target(world: &GameWorld, direction: Direction) -> Option<hec
         })
 }
 
+fn contextual_chat_target_def(
+    world: &GameWorld,
+    direction: Direction,
+) -> Option<(hecs::Entity, MonsterDef)> {
+    let entity = contextual_chat_target(world, direction)?;
+    let identity = world.get_component::<MonsterIdentity>(entity)?;
+    let def = world
+        .monster_catalog()
+        .iter()
+        .find(|def| def.id == identity.0)?
+        .clone();
+    Some((entity, def))
+}
+
+fn player_gold_amount(world: &GameWorld) -> i64 {
+    let player = world.player();
+    let Some(items) = world
+        .get_component::<Inventory>(player)
+        .map(|inv| inv.items.clone())
+    else {
+        return 0;
+    };
+
+    items
+        .into_iter()
+        .filter_map(|item| world.get_component::<ObjectCore>(item))
+        .filter(|core| core.object_class == ObjectClass::Coin)
+        .map(|core| i64::from(core.quantity.max(0)))
+        .sum()
+}
+
 fn is_peaceful_oracle_chat(world: &GameWorld, direction: Direction) -> bool {
     contextual_chat_target(world, direction).is_some_and(|entity| {
         world
             .get_component::<Name>(entity)
             .is_some_and(|name| name.0.eq_ignore_ascii_case("Oracle"))
+            && world.get_component::<Peaceful>(entity).is_some()
+    })
+}
+
+fn is_peaceful_demon_bribe_chat(world: &GameWorld, direction: Direction) -> bool {
+    contextual_chat_target_def(world, direction).is_some_and(|(entity, def)| {
+        def.sound == nethack_babel_data::schema::MonsterSound::Bribe
             && world.get_component::<Peaceful>(entity).is_some()
     })
 }
@@ -542,6 +581,25 @@ fn prompt_oracle_consultation_menu(
     }
 }
 
+fn prompt_tui_demon_bribe(
+    port: &mut impl WindowPort,
+    world: &GameWorld,
+    direction: Direction,
+) -> Option<PlayerAction> {
+    if nethack_babel_engine::status::is_deaf(world, world.player()) {
+        return Some(PlayerAction::BribeDemon {
+            direction,
+            amount: 0,
+        });
+    }
+
+    let gold = player_gold_amount(world);
+    let prompt = format!("How much will you offer? [0..{gold}] (blank to refuse, Esc to cancel)");
+    let line = port.get_line(&prompt)?;
+    let amount = line.trim().parse::<i64>().unwrap_or(0);
+    Some(PlayerAction::BribeDemon { direction, amount })
+}
+
 fn contextualize_tui_action(
     port: &mut impl WindowPort,
     world: &GameWorld,
@@ -550,6 +608,9 @@ fn contextualize_tui_action(
     match action {
         PlayerAction::Chat { direction } if is_peaceful_oracle_chat(world, direction) => {
             prompt_oracle_consultation_menu(port, world, direction)
+        }
+        PlayerAction::Chat { direction } if is_peaceful_demon_bribe_chat(world, direction) => {
+            prompt_tui_demon_bribe(port, world, direction)
         }
         _ => Some(action),
     }
@@ -595,6 +656,36 @@ fn prompt_text_oracle_consultation(
     Ok(action)
 }
 
+fn prompt_text_demon_bribe(
+    stdin: &io::Stdin,
+    stdout: &io::Stdout,
+    world: &GameWorld,
+    direction: Direction,
+) -> Result<Option<PlayerAction>> {
+    if nethack_babel_engine::status::is_deaf(world, world.player()) {
+        return Ok(Some(PlayerAction::BribeDemon {
+            direction,
+            amount: 0,
+        }));
+    }
+
+    let gold = player_gold_amount(world);
+    println!("  How much will you offer? [0..{gold}]");
+    println!("    blank or invalid input counts as refusing");
+    print!("  Offer> ");
+    stdout.lock().flush()?;
+
+    let mut line = String::new();
+    let bytes_read = stdin.lock().read_line(&mut line)?;
+    if bytes_read == 0 {
+        return Ok(None);
+    }
+
+    let trimmed = line.trim();
+    let amount = trimmed.parse::<i64>().unwrap_or(0);
+    Ok(Some(PlayerAction::BribeDemon { direction, amount }))
+}
+
 fn contextualize_text_action(
     stdin: &io::Stdin,
     stdout: &io::Stdout,
@@ -604,6 +695,9 @@ fn contextualize_text_action(
     match action {
         PlayerAction::Chat { direction } if is_peaceful_oracle_chat(world, direction) => {
             prompt_text_oracle_consultation(stdin, stdout, world, direction)
+        }
+        PlayerAction::Chat { direction } if is_peaceful_demon_bribe_chat(world, direction) => {
+            prompt_text_demon_bribe(stdin, stdout, world, direction)
         }
         _ => Ok(Some(action)),
     }

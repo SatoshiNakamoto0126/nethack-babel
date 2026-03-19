@@ -1357,6 +1357,18 @@ mod tests {
             .unwrap_or_else(|| panic!("test catalog should contain a monster with sound {sound:?}"))
     }
 
+    fn monster_name_and_id_matching(
+        world: &GameWorld,
+        predicate: impl Fn(&nethack_babel_data::schema::MonsterDef) -> bool,
+    ) -> (String, nethack_babel_data::MonsterId) {
+        world
+            .monster_catalog()
+            .iter()
+            .find(|def| predicate(def))
+            .map(|def| (def.names.male.clone(), def.id))
+            .unwrap_or_else(|| panic!("test catalog should contain a monster matching predicate"))
+    }
+
     fn monster_name_with_sound_excluding(
         world: &GameWorld,
         sound: MonsterSound,
@@ -1777,6 +1789,7 @@ mod tests {
         ShopNoMoney,
         ShopkeeperSell,
         ShopChatPriceQuote,
+        DemonBribe,
         ShopRepair,
         ShopkeeperDeath,
         ShopRobbery,
@@ -1826,6 +1839,7 @@ mod tests {
                 SaveStoryTraversalScenario::ShopNoMoney => "shop-no-money",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
+                SaveStoryTraversalScenario::DemonBribe => "demon-bribe",
                 SaveStoryTraversalScenario::ShopRepair => "shop-repair",
                 SaveStoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
                 SaveStoryTraversalScenario::ShopRobbery => "shop-robbery",
@@ -2644,6 +2658,40 @@ mod tests {
                     &mut loaded,
                     PlayerAction::Chat {
                         direction: Direction::North,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::DemonBribe => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let (demon_name, demon_id) = monster_name_and_id_matching(&world, |def| {
+                    def.sound == MonsterSound::Bribe
+                        && def
+                            .flags
+                            .contains(nethack_babel_data::schema::MonsterFlags::DEMON)
+                });
+                let demon = spawn_full_monster(&mut world, Position::new(6, 5), &demon_name, 12);
+                world
+                    .ecs_mut()
+                    .insert(
+                        demon,
+                        (
+                            nethack_babel_engine::world::MonsterIdentity(demon_id),
+                            nethack_babel_engine::world::Peaceful,
+                        ),
+                    )
+                    .expect("demon should accept identity and peaceful state");
+                spawn_inventory_gold(&mut world, 500, '$');
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-demon-bribe", &world, [66u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::BribeDemon {
+                        direction: Direction::East,
+                        amount: 500,
                     },
                     &mut rng,
                 );
@@ -6201,6 +6249,52 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_bribing_demon_buys_safe_passage() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let demon_name = monster_name_with_sound(&world, MonsterSound::Bribe);
+        let demon = spawn_full_monster(&mut world, Position::new(6, 5), &demon_name, 12);
+        world
+            .ecs_mut()
+            .insert_one(demon, nethack_babel_engine::world::Peaceful)
+            .expect("demon should accept peaceful marker");
+        spawn_inventory_gold(&mut world, 500, '$');
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("demon-bribe-round-trip", &world, [90u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::BribeDemon {
+                direction: Direction::East,
+                amount: 500,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "demon-vanishes-laughing"
+        )));
+        assert!(
+            loaded.get_component::<Monster>(demon).is_none(),
+            "accepted bribe should still remove the demon after save/load"
+        );
+        let loaded_gold = loaded
+            .get_component::<nethack_babel_engine::inventory::Inventory>(loaded.player())
+            .map(|inv| {
+                inv.items
+                    .iter()
+                    .filter_map(|item| loaded.get_component::<ObjectCore>(*item))
+                    .filter(|core| core.object_class == ObjectClass::Coin)
+                    .map(|core| core.quantity.max(0))
+                    .sum::<i32>()
+            })
+            .unwrap_or(0);
+        assert_eq!(loaded_gold, 0);
+    }
+
+    #[test]
     fn round_trip_loaded_chatting_with_satiated_tame_cat_keeps_purr_line() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         let mew_name = monster_name_with_sound(&world, MonsterSound::Mew);
@@ -6760,6 +6854,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopNoMoney,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopChatPriceQuote,
+            SaveStoryTraversalScenario::DemonBribe,
             SaveStoryTraversalScenario::ShopRepair,
             SaveStoryTraversalScenario::ShopkeeperDeath,
             SaveStoryTraversalScenario::ShopRobbery,
@@ -7020,6 +7115,36 @@ mod tests {
                         })
                         .count();
                     assert_eq!(quote_count, 2);
+                }
+                SaveStoryTraversalScenario::DemonBribe => {
+                    let demon_name = monster_name_and_id_matching(&world, |def| {
+                        def.sound == MonsterSound::Bribe
+                            && def
+                                .flags
+                                .contains(nethack_babel_data::schema::MonsterFlags::DEMON)
+                    })
+                    .0;
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "demon-demand-safe-passage"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "demon-vanishes-laughing"
+                    )));
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 0);
+                    assert_eq!(count_monsters_named(&world, &demon_name), 0);
                 }
                 SaveStoryTraversalScenario::ShopRepair => {
                     let shop = &world.dungeon().shop_rooms[0];

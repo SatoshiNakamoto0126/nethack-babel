@@ -3418,6 +3418,32 @@ npc-cuss-demon-comedian = { $monster } says: "Thou ought to be a comedian, thy s
 # TODO: translate
 npc-cuss-demon-odor = { $monster } says: "Hast thou considered masking thine odour?"
 # TODO: translate
+demon-demand-safe-passage = { $monster } demands { $amount } zorkmids for safe passage.
+# TODO: translate
+demon-demand-something = { $monster } seems to be demanding something.
+# TODO: translate
+demon-offer-all-gold = You give { $monster } all your gold.
+# TODO: translate
+demon-offer-amount = You give { $monster } { $amount } zorkmids.
+# TODO: translate
+demon-refuse = You refuse.
+# TODO: translate
+demon-shortchange = You try to shortchange { $monster }, but fumble.
+# TODO: translate
+demon-vanishes-laughing = { $monster } vanishes, laughing about cowardly mortals.
+# TODO: translate
+demon-scowls-vanishes = { $monster } scowls at you menacingly, then vanishes.
+# TODO: translate
+demon-gets-angry = { $monster } gets angry...
+# TODO: translate
+demon-good-hunting = { $monster } says, "Good hunting, { $honorific }."
+# TODO: translate
+demon-says-something = { $monster } says something.
+# TODO: translate
+demon-looks-angry = { $monster } looks very angry.
+# TODO: translate
+demon-tension-building = You feel tension building.
+# TODO: translate
 npc-spell-cantrip = { $monster } seems to mutter a cantrip.
 # TODO: translate
 npc-vampire-tame-craving = { $monster } says: "I can stand this craving no longer!"

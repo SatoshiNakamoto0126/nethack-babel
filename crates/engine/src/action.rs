@@ -206,6 +206,10 @@ pub enum PlayerAction {
     Chat {
         direction: Direction,
     },
+    BribeDemon {
+        direction: Direction,
+        amount: i64,
+    },
     ConsultOracle {
         direction: Direction,
         major: bool,

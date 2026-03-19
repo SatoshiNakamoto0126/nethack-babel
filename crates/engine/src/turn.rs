@@ -27,10 +27,10 @@ use crate::role::Role;
 use crate::special_levels::{dispatch_special_level, identify_special_level};
 use crate::traps::{TrapEntityInfo, detect_trap, trigger_trap_at};
 use crate::world::{
-    Boulder, CreationOrder, DisplaySymbol, Encumbrance, EncumbranceLevel, ExperienceLevel,
-    GameWorld, HeroSpeed, HeroSpeedBonus, HitPoints, Monster, MonsterSpeedMod, MovementPoints,
-    NORMAL_SPEED, Name, Nutrition, Peaceful, PlayerCombat, Positioned, Power, Speed, SpeedModifier,
-    Tame,
+    Attributes, Boulder, CreationOrder, DisplaySymbol, Encumbrance, EncumbranceLevel,
+    ExperienceLevel, GameWorld, HeroSpeed, HeroSpeedBonus, HitPoints, Monster, MonsterSpeedMod,
+    MovementPoints, NORMAL_SPEED, Name, Nutrition, Peaceful, PlayerCombat, Positioned, Power,
+    Speed, SpeedModifier, Tame,
 };
 
 // ── Movement point calculations ──────────────────────────────────────
@@ -2075,6 +2075,10 @@ fn resolve_player_action(
         PlayerAction::ConsultOracle { direction, major } => {
             let player = world.player();
             resolve_oracle_consultation(world, player, *direction, *major, rng, events);
+        }
+        PlayerAction::BribeDemon { direction, amount } => {
+            let player = world.player();
+            resolve_demon_bribe(world, player, *direction, *amount, rng, events);
         }
         PlayerAction::Ride => {
             if crate::steed::is_mounted(world, player) {
@@ -6739,6 +6743,10 @@ fn is_real_amulet_of_yendor(world: &GameWorld, item: hecs::Entity) -> bool {
     let Some(core) = world.get_component::<ObjectCore>(item) else {
         return false;
     };
+    is_real_amulet_of_yendor_core(world, &core)
+}
+
+fn is_real_amulet_of_yendor_core(world: &GameWorld, core: &ObjectCore) -> bool {
     let Some(amulet_id) = resolve_object_type_by_spec(world.object_catalog(), "Amulet of Yendor")
     else {
         return false;
@@ -6910,6 +6918,267 @@ fn resolve_oracle_consultation<R: Rng>(
         "oracle-consultation",
         vec![("text", text)],
     ));
+}
+
+fn alignment_sign(alignment: Alignment) -> i32 {
+    match alignment {
+        Alignment::Lawful => 1,
+        Alignment::Neutral => 0,
+        Alignment::Chaotic => -1,
+    }
+}
+
+fn player_wields_artifact(world: &GameWorld, player: hecs::Entity, artifact_name: &str) -> bool {
+    let Some(artifact) = crate::artifacts::find_artifact_by_name(artifact_name) else {
+        return false;
+    };
+    let Some(weapon) = crate::equipment::get_equipped_weapon(world, player) else {
+        return false;
+    };
+    world
+        .get_component::<ObjectCore>(weapon)
+        .is_some_and(|core| core.artifact == Some(artifact.id))
+}
+
+fn player_is_demon(world: &GameWorld, player: hecs::Entity) -> bool {
+    world
+        .get_component::<crate::religion::ReligionState>(player)
+        .is_some_and(|state| state.is_demon)
+}
+
+fn monster_has_real_amulet_of_yendor(world: &GameWorld, monster: hecs::Entity) -> bool {
+    let Some(carrier_id) = world
+        .get_component::<CreationOrder>(monster)
+        .map(|order| order.0 as u32)
+    else {
+        return false;
+    };
+    world
+        .ecs()
+        .query::<(&ObjectCore, &ObjectLocation)>()
+        .iter()
+        .any(|(_, (core, loc))| {
+            matches!(
+                *loc,
+                ObjectLocation::MonsterInventory { carrier_id: cid } if cid == carrier_id
+            ) && is_real_amulet_of_yendor_core(world, core)
+        })
+}
+
+fn resolve_demon_bribe<R: Rng>(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    direction: Direction,
+    requested_offer: i64,
+    rng: &mut R,
+    events: &mut Vec<EngineEvent>,
+) {
+    let player_pos = world
+        .get_component::<Positioned>(player)
+        .map(|pos| pos.0)
+        .unwrap_or(Position::new(0, 0));
+    let target_pos = player_pos.step(direction);
+    let Some(monster_entity) = world
+        .ecs()
+        .query::<(&Monster, &Positioned)>()
+        .iter()
+        .find_map(|(entity, (_, pos))| (pos.0 == target_pos).then_some(entity))
+    else {
+        events.push(EngineEvent::msg("chat-nobody-there"));
+        return;
+    };
+
+    if crate::status::is_sleeping(world, monster_entity) {
+        events.push(EngineEvent::msg("npc-chat-sleeping"));
+        return;
+    }
+
+    let Some(monster_def) = current_level_monster_def_for_entity(world, monster_entity) else {
+        events.push(EngineEvent::msg("npc-chat-no-response"));
+        return;
+    };
+    if monster_def.sound != nethack_babel_data::schema::MonsterSound::Bribe {
+        events.push(EngineEvent::msg("npc-chat-no-response"));
+        return;
+    }
+    if world.get_component::<Peaceful>(monster_entity).is_none() {
+        events.push(EngineEvent::msg("npc-chat-no-response"));
+        return;
+    }
+
+    let monster_name = world
+        .get_component::<Name>(monster_entity)
+        .map(|name| name.0.clone())
+        .unwrap_or_else(|| monster_def.names.male.clone());
+    let player_is_blind = crate::status::is_blind(world, player);
+    let player_is_deaf = crate::status::is_deaf(world, player);
+
+    if player_wields_artifact(world, player, "Excalibur")
+        || player_wields_artifact(world, player, "Demonbane")
+    {
+        let _ = world.ecs_mut().remove_one::<Peaceful>(monster_entity);
+        events.push(if player_is_blind {
+            EngineEvent::msg("demon-tension-building")
+        } else {
+            EngineEvent::msg_with("demon-looks-angry", vec![("monster", monster_name)])
+        });
+        return;
+    }
+
+    if player_is_demon(world, player) {
+        events.push(if player_is_deaf {
+            EngineEvent::msg_with(
+                "demon-says-something",
+                vec![("monster", monster_name.clone())],
+            )
+        } else {
+            EngineEvent::msg_with(
+                "demon-good-hunting",
+                vec![
+                    ("monster", monster_name.clone()),
+                    (
+                        "honorific",
+                        if current_player_is_female(world, player) {
+                            "Sister".to_string()
+                        } else {
+                            "Brother".to_string()
+                        },
+                    ),
+                ],
+            )
+        });
+        let _ = world.despawn(monster_entity);
+        return;
+    }
+
+    let starting_gold = player_gold(world, player);
+    if starting_gold <= 0 {
+        let _ = world.ecs_mut().remove_one::<Peaceful>(monster_entity);
+        events.push(EngineEvent::msg_with(
+            "demon-gets-angry",
+            vec![("monster", monster_name)],
+        ));
+        return;
+    }
+
+    let player_alignment = current_player_alignment(world, player);
+    let same_alignment =
+        alignment_sign(player_alignment) == i32::from(monster_def.alignment.signum());
+    let at_home = world.dungeon().branch == DungeonBranch::Gehennom;
+    let demand = crate::minion::demon_demand(starting_gold, at_home, same_alignment, rng);
+    let demon_has_amulet = monster_has_real_amulet_of_yendor(world, monster_entity);
+
+    events.push(if player_is_deaf {
+        EngineEvent::msg_with(
+            "demon-demand-something",
+            vec![("monster", monster_name.clone())],
+        )
+    } else {
+        EngineEvent::msg_with(
+            "demon-demand-safe-passage",
+            vec![
+                ("monster", monster_name.clone()),
+                ("amount", demand.to_string()),
+            ],
+        )
+    });
+
+    let actual_offer = if requested_offer < 0 {
+        events.push(EngineEvent::msg_with(
+            "demon-shortchange",
+            vec![("monster", monster_name.clone())],
+        ));
+        0
+    } else if requested_offer == 0 {
+        events.push(EngineEvent::msg("demon-refuse"));
+        0
+    } else if requested_offer >= starting_gold {
+        events.push(EngineEvent::msg_with(
+            "demon-offer-all-gold",
+            vec![("monster", monster_name.clone())],
+        ));
+        starting_gold
+    } else {
+        events.push(EngineEvent::msg_with(
+            "demon-offer-amount",
+            vec![
+                ("monster", monster_name.clone()),
+                ("amount", requested_offer.to_string()),
+            ],
+        ));
+        requested_offer
+    };
+
+    if actual_offer > 0 {
+        let _ = spend_player_gold(world, player, actual_offer as u32);
+    }
+
+    if player_is_deaf {
+        let _ = world.ecs_mut().remove_one::<Peaceful>(monster_entity);
+        events.push(EngineEvent::msg_with(
+            "demon-gets-angry",
+            vec![("monster", monster_name)],
+        ));
+        return;
+    }
+
+    let charisma = world
+        .get_component::<Attributes>(player)
+        .map(|attrs| attrs.charisma)
+        .unwrap_or(10) as i32;
+    let result = crate::minion::demon_talk(
+        crate::minion::DemonTalkContext {
+            player_gold: starting_gold,
+            offer: actual_offer,
+            demand,
+            charisma,
+            wielding_excalibur_or_demonbane: false,
+            player_is_demon: false,
+            demon_has_amulet,
+        },
+        rng,
+    );
+
+    match result {
+        crate::minion::DemonTalkResult::Bribed { .. } => {
+            events.push(EngineEvent::msg_with(
+                "demon-vanishes-laughing",
+                vec![("monster", monster_name)],
+            ));
+            let _ = world.despawn(monster_entity);
+        }
+        crate::minion::DemonTalkResult::ReluctantlyLeaves => {
+            events.push(EngineEvent::msg_with(
+                "demon-scowls-vanishes",
+                vec![("monster", monster_name)],
+            ));
+            let _ = world.despawn(monster_entity);
+        }
+        crate::minion::DemonTalkResult::Angry | crate::minion::DemonTalkResult::Unbribable => {
+            let _ = world.ecs_mut().remove_one::<Peaceful>(monster_entity);
+            events.push(EngineEvent::msg_with(
+                "demon-gets-angry",
+                vec![("monster", monster_name)],
+            ));
+        }
+        crate::minion::DemonTalkResult::FellowDemon => {
+            events.push(EngineEvent::msg_with(
+                "demon-good-hunting",
+                vec![
+                    ("monster", monster_name),
+                    (
+                        "honorific",
+                        if current_player_is_female(world, player) {
+                            "Sister".to_string()
+                        } else {
+                            "Brother".to_string()
+                        },
+                    ),
+                ],
+            ));
+            let _ = world.despawn(monster_entity);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -8229,6 +8498,7 @@ mod tests {
         ShopNoMoney,
         ShopkeeperSell,
         ShopChatPriceQuote,
+        DemonBribe,
         ShopRepair,
         ShopkeeperDeath,
         ShopRobbery,
@@ -8278,6 +8548,7 @@ mod tests {
                 StoryTraversalScenario::ShopNoMoney => "shop-no-money",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
+                StoryTraversalScenario::DemonBribe => "demon-bribe",
                 StoryTraversalScenario::ShopRepair => "shop-repair",
                 StoryTraversalScenario::ShopkeeperDeath => "shopkeeper-death",
                 StoryTraversalScenario::ShopRobbery => "shop-robbery",
@@ -9078,6 +9349,30 @@ mod tests {
                     &mut world,
                     PlayerAction::Chat {
                         direction: Direction::North,
+                    },
+                    &mut rng,
+                );
+                (world, events)
+            }
+            StoryTraversalScenario::DemonBribe => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let (demon_name, demon_id) = monster_name_and_id_matching(&world, |def| {
+                    def.sound == MonsterSound::Bribe && def.flags.contains(MonsterFlags::DEMON)
+                });
+                let demon = spawn_full_monster(&mut world, Position::new(6, 5), &demon_name, 12);
+                world
+                    .ecs_mut()
+                    .insert(demon, (crate::world::MonsterIdentity(demon_id), Peaceful))
+                    .expect("demon should accept identity and peaceful state");
+                let _gold = spawn_inventory_gold(&mut world, 500, '$');
+
+                let mut rng = test_rng();
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::BribeDemon {
+                        direction: Direction::East,
+                        amount: 500,
                     },
                     &mut rng,
                 );
@@ -17111,6 +17406,125 @@ mod tests {
     }
 
     #[test]
+    fn test_bribing_peaceful_demon_can_buy_safe_passage() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let (demon_name, demon_id) = monster_name_and_id_matching(&world, |def| {
+            def.sound == MonsterSound::Bribe && def.flags.contains(MonsterFlags::DEMON)
+        });
+        let demon = spawn_full_monster(&mut world, Position::new(6, 5), &demon_name, 10);
+        world
+            .ecs_mut()
+            .insert(demon, (crate::world::MonsterIdentity(demon_id), Peaceful))
+            .expect("demon should accept identity and peaceful state");
+        let player = world.player();
+        let _gold = spawn_inventory_gold(&mut world, 500, '$');
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::BribeDemon {
+                direction: Direction::East,
+                amount: 500,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "demon-vanishes-laughing"
+        )));
+        assert_eq!(player_gold(&world, player), 0);
+        assert!(
+            world.get_component::<Monster>(demon).is_none(),
+            "accepted bribe should remove the demon"
+        );
+    }
+
+    #[test]
+    fn test_refusing_peaceful_demon_makes_it_angry_without_taking_gold() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let (demon_name, demon_id) = monster_name_and_id_matching(&world, |def| {
+            def.sound == MonsterSound::Bribe && def.flags.contains(MonsterFlags::DEMON)
+        });
+        let demon = spawn_full_monster(&mut world, Position::new(6, 5), &demon_name, 10);
+        world
+            .ecs_mut()
+            .insert(demon, (crate::world::MonsterIdentity(demon_id), Peaceful))
+            .expect("demon should accept identity and peaceful state");
+        let player = world.player();
+        let _gold = spawn_inventory_gold(&mut world, 500, '$');
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::BribeDemon {
+                direction: Direction::East,
+                amount: 0,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "demon-gets-angry"
+        )));
+        assert_eq!(player_gold(&world, player), 500);
+        assert!(
+            world.get_component::<Peaceful>(demon).is_none(),
+            "refusing the demon should remove Peaceful"
+        );
+    }
+
+    #[test]
+    fn test_bribing_demon_as_demon_causes_good_hunting_departure() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let (demon_name, demon_id) = monster_name_and_id_matching(&world, |def| {
+            def.sound == MonsterSound::Bribe && def.flags.contains(MonsterFlags::DEMON)
+        });
+        let demon = spawn_full_monster(&mut world, Position::new(6, 5), &demon_name, 10);
+        world
+            .ecs_mut()
+            .insert(demon, (crate::world::MonsterIdentity(demon_id), Peaceful))
+            .expect("demon should accept identity and peaceful state");
+        let player = world.player();
+        if world
+            .get_component::<crate::religion::ReligionState>(player)
+            .is_none()
+        {
+            let state = default_religion_state(&world, player);
+            world
+                .ecs_mut()
+                .insert_one(player, state)
+                .expect("player should accept religion state");
+        }
+        world
+            .get_component_mut::<crate::religion::ReligionState>(player)
+            .expect("player should have religion state")
+            .is_demon = true;
+        let _gold = spawn_inventory_gold(&mut world, 300, '$');
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::BribeDemon {
+                direction: Direction::East,
+                amount: 0,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "demon-good-hunting"
+        )));
+        assert_eq!(player_gold(&world, player), 300);
+        assert!(
+            world.get_component::<Monster>(demon).is_none(),
+            "fellow-demon chat should dismiss the demon"
+        );
+    }
+
+    #[test]
     fn test_chatting_with_peaceful_guard_with_gold_demands_drop() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -21160,6 +21574,7 @@ mod tests {
             StoryTraversalScenario::ShopNoMoney,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopChatPriceQuote,
+            StoryTraversalScenario::DemonBribe,
             StoryTraversalScenario::ShopRepair,
             StoryTraversalScenario::ShopkeeperDeath,
             StoryTraversalScenario::ShopRobbery,
@@ -21448,6 +21863,32 @@ mod tests {
                         quote_count,
                         2,
                         "{} should quote both floor items",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::DemonBribe => {
+                    let demon_name = monster_name_and_id_matching(&world, |def| {
+                        def.sound == MonsterSound::Bribe && def.flags.contains(MonsterFlags::DEMON)
+                    })
+                    .0;
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "demon-demand-safe-passage"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "demon-vanishes-laughing"
+                    )));
+                    assert_eq!(
+                        player_gold(&world, player),
+                        0,
+                        "{} should spend the entire bribe",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        count_monsters_named(&world, &demon_name),
+                        0,
+                        "{} should remove the bribed demon",
                         scenario.label()
                     );
                 }
