@@ -1242,7 +1242,13 @@ fn entity_display_name(entity: hecs::Entity, world: &GameWorld, locale: &LocaleM
 // ---------------------------------------------------------------------------
 
 /// Handle full game-over sequence: tombstone, disclosure, leaderboard.
-fn handle_game_over(world: &GameWorld, port: &mut TuiPort, cause: &DeathCause, score: u64) {
+fn handle_game_over(
+    world: &GameWorld,
+    port: &mut TuiPort,
+    locale: &LocaleManager,
+    cause: &DeathCause,
+    score: u64,
+) {
     let player = world.player();
     let player_name = world.entity_name(player);
 
@@ -1291,7 +1297,10 @@ fn handle_game_over(world: &GameWorld, port: &mut TuiPort, cause: &DeathCause, s
         .unwrap_or_default();
     let conduct_lines = format_conduct_summary(&conducts);
     let conduct_text = conduct_lines.join("\n");
-    port.show_text("Voluntary challenges", &conduct_text);
+    port.show_text(
+        &locale.translate("game-over-conduct-title", None),
+        &conduct_text,
+    );
 
     // -- Leaderboard --
     let (role, race, gender, alignment) = player_identity_strings(world, player);
@@ -1317,7 +1326,7 @@ fn handle_game_over(world: &GameWorld, port: &mut TuiPort, cause: &DeathCause, s
     // Display top 10.
     let top_lines = lb.format_top(10);
     let top_text = top_lines.join("\n");
-    port.show_text("Top Scores", &top_text);
+    port.show_text(&locale.translate("score-high-list-title", None), &top_text);
 }
 
 fn player_identity_strings(
@@ -2902,25 +2911,65 @@ fn build_inventory_items(world: &GameWorld, obj_defs: &[ObjectDef]) -> Vec<Inven
         .collect()
 }
 
-fn build_equipped_lines(world: &GameWorld, obj_defs: &[ObjectDef]) -> Vec<String> {
+fn build_equipped_lines(
+    world: &GameWorld,
+    obj_defs: &[ObjectDef],
+    locale: &LocaleManager,
+) -> Vec<String> {
     let player = world.player();
     let Some(equip) = world.get_component::<EquipmentSlots>(player) else {
         return Vec::new();
     };
 
     let slots = [
-        ("Weapon", equip.weapon),
-        ("Off-hand", equip.off_hand),
-        ("Helmet", equip.helmet),
-        ("Cloak", equip.cloak),
-        ("Body armor", equip.body_armor),
-        ("Shield", equip.shield),
-        ("Gloves", equip.gloves),
-        ("Boots", equip.boots),
-        ("Shirt", equip.shirt),
-        ("Ring (left)", equip.ring_left),
-        ("Ring (right)", equip.ring_right),
-        ("Amulet", equip.amulet),
+        (
+            locale.translate("ui-equipment-slot-weapon", None),
+            equip.weapon,
+        ),
+        (
+            locale.translate("ui-equipment-slot-off-hand", None),
+            equip.off_hand,
+        ),
+        (
+            locale.translate("ui-equipment-slot-helmet", None),
+            equip.helmet,
+        ),
+        (
+            locale.translate("ui-equipment-slot-cloak", None),
+            equip.cloak,
+        ),
+        (
+            locale.translate("ui-equipment-slot-body-armor", None),
+            equip.body_armor,
+        ),
+        (
+            locale.translate("ui-equipment-slot-shield", None),
+            equip.shield,
+        ),
+        (
+            locale.translate("ui-equipment-slot-gloves", None),
+            equip.gloves,
+        ),
+        (
+            locale.translate("ui-equipment-slot-boots", None),
+            equip.boots,
+        ),
+        (
+            locale.translate("ui-equipment-slot-shirt", None),
+            equip.shirt,
+        ),
+        (
+            locale.translate("ui-equipment-slot-ring-left", None),
+            equip.ring_left,
+        ),
+        (
+            locale.translate("ui-equipment-slot-ring-right", None),
+            equip.ring_right,
+        ),
+        (
+            locale.translate("ui-equipment-slot-amulet", None),
+            equip.amulet,
+        ),
     ];
 
     slots
@@ -3205,7 +3254,7 @@ fn run_tui_mode(
             }
             Some(PlayerAction::ViewEquipped) => {
                 let title = locale.translate("ui-equipment-title", None);
-                let lines = build_equipped_lines(world, &data.objects);
+                let lines = build_equipped_lines(world, &data.objects, locale);
                 if lines.is_empty() {
                     let body = locale.translate("ui-equipment-empty", None);
                     port.show_text(&title, &body);
@@ -3440,7 +3489,7 @@ fn run_tui_mode(
             };
             if let Some((cause, score)) = death_info {
                 game_over = true;
-                handle_game_over(world, &mut port, &cause, score);
+                handle_game_over(world, &mut port, locale, &cause, score);
             }
         }
     }
@@ -3566,7 +3615,7 @@ fn run_text_mode(
         }
 
         if matches!(action, PlayerAction::ViewEquipped) {
-            let lines = build_equipped_lines(world, &data.objects);
+            let lines = build_equipped_lines(world, &data.objects, locale);
             if lines.is_empty() {
                 println!("  {}", locale.translate("ui-equipment-empty", None));
             } else {
@@ -3636,15 +3685,37 @@ fn run_text_mode(
             match event {
                 EngineEvent::GameOver { cause, score } => {
                     game_over = true;
-                    println!("\n*** GAME OVER ***");
-                    println!("Score: {score}");
-                    println!("Cause: {cause:?}");
+                    use fluent::FluentArgs;
+                    println!("\n{}", locale.translate("ui-game-over-title", None));
+                    let mut score_args = FluentArgs::new();
+                    score_args.set("score", *score as i64);
+                    println!(
+                        "{}",
+                        locale.translate("ui-game-over-score-line", Some(&score_args))
+                    );
+                    let mut cause_args = FluentArgs::new();
+                    cause_args.set("cause", format!("{cause:?}"));
+                    println!(
+                        "{}",
+                        locale.translate("ui-game-over-cause-line", Some(&cause_args))
+                    );
                 }
                 EngineEvent::EntityDied { entity, cause, .. } if world.is_player(*entity) => {
                     game_over = true;
-                    println!("\n*** GAME OVER ***");
-                    println!("Cause: {cause:?}");
-                    println!("Turns: {}", world.turn());
+                    use fluent::FluentArgs;
+                    println!("\n{}", locale.translate("ui-game-over-title", None));
+                    let mut cause_args = FluentArgs::new();
+                    cause_args.set("cause", format!("{cause:?}"));
+                    println!(
+                        "{}",
+                        locale.translate("ui-game-over-cause-line", Some(&cause_args))
+                    );
+                    let mut turn_args = FluentArgs::new();
+                    turn_args.set("turns", world.turn() as i64);
+                    println!(
+                        "{}",
+                        locale.translate("ui-game-over-turns-line", Some(&turn_args))
+                    );
                 }
                 _ => {}
             }
