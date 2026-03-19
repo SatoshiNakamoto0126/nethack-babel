@@ -3042,6 +3042,12 @@ fn run_tui_mode(
         not_implemented: locale.translate("ui-not-implemented", None),
         no_previous_command: locale.translate("ui-no-previous-command", None),
         commands_title: locale.translate("ui-commands-title", None),
+        direction_prompt: locale.translate("ui-direction-prompt", None),
+        direction_prompt_optional: locale.translate("ui-direction-prompt-optional", None),
+        direction_prompt_run: locale.translate("ui-direction-prompt-run", None),
+        direction_prompt_rush: locale.translate("ui-direction-prompt-rush", None),
+        direction_help_title: locale.translate("ui-direction-help-title", None),
+        direction_help_body: locale.translate("ui-direction-help-body", None),
     };
     let map = &world.dungeon().current_level;
     let mut fov = FovMap::new(map.width, map.height);

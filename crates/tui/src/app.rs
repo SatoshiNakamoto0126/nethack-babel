@@ -94,6 +94,12 @@ pub struct TuiMessages {
     pub not_implemented: String,
     pub no_previous_command: String,
     pub commands_title: String,
+    pub direction_prompt: String,
+    pub direction_prompt_optional: String,
+    pub direction_prompt_run: String,
+    pub direction_prompt_rush: String,
+    pub direction_help_title: String,
+    pub direction_help_body: String,
 }
 
 impl Default for TuiMessages {
@@ -105,6 +111,12 @@ impl Default for TuiMessages {
             not_implemented: "Not yet implemented.".to_string(),
             no_previous_command: "No previous command to repeat.".to_string(),
             commands_title: "Commands".to_string(),
+            direction_prompt: "In what direction?".to_string(),
+            direction_prompt_optional: "In what direction? (Esc for none)".to_string(),
+            direction_prompt_run: "Run in what direction?".to_string(),
+            direction_prompt_rush: "Rush in what direction?".to_string(),
+            direction_help_title: "Direction Keys".to_string(),
+            direction_help_body: "h left, j down, k up, l right\ny northwest, u northeast, b southwest, n southeast\n. self, < up, > down\nEsc cancel, ? show this help".to_string(),
         }
     }
 }
@@ -530,12 +542,23 @@ impl App {
         }
     }
 
+    fn localize_direction_prompt<'a>(&'a self, prompt: &'a str) -> &'a str {
+        match prompt {
+            "In what direction?" => &self.messages_i18n.direction_prompt,
+            "In what direction? (Esc for none)" => &self.messages_i18n.direction_prompt_optional,
+            "Run in what direction?" => &self.messages_i18n.direction_prompt_run,
+            "Rush in what direction?" => &self.messages_i18n.direction_prompt_rush,
+            _ => prompt,
+        }
+    }
+
     /// Prompt the player for a direction.
     ///
     /// Displays `prompt` in the message area and waits for a
     /// directional key (vi-keys, arrow keys, `<`, `>`, `.`).
     /// Returns `None` if cancelled with Escape.
     pub fn prompt_direction(&self, port: &mut impl WindowPort, prompt: &str) -> Option<Direction> {
+        let prompt = self.localize_direction_prompt(prompt);
         port.show_message(prompt, MessageUrgency::Normal);
         loop {
             let event = port.get_key();
@@ -551,6 +574,14 @@ impl App {
                         InputKeyCode::Escape => return None,
                         _ => continue,
                     };
+                    if matches!(ct_code, crossterm::event::KeyCode::Char('?')) {
+                        port.show_text(
+                            &self.messages_i18n.direction_help_title,
+                            &self.messages_i18n.direction_help_body,
+                        );
+                        port.show_message(prompt, MessageUrgency::Normal);
+                        continue;
+                    }
                     let mut ct_mods = crossterm::event::KeyModifiers::empty();
                     if modifiers.shift {
                         ct_mods |= crossterm::event::KeyModifiers::SHIFT;
@@ -1426,6 +1457,34 @@ mod tests {
         let mut port = MockPort::new(vec![MockPort::key('x'), MockPort::key('j')]);
         let result = app.prompt_direction(&mut port, "Direction?");
         assert_eq!(result, Some(Direction::South));
+    }
+
+    #[test]
+    fn prompt_direction_question_mark_shows_help_then_accepts_valid() {
+        let app = App::new();
+        let mut port = MockPort::new(vec![MockPort::key('?'), MockPort::key('l')]);
+        let result = app.prompt_direction(&mut port, "In what direction?");
+        assert_eq!(result, Some(Direction::East));
+        assert_eq!(port.shown_text.len(), 1, "help text should be shown once");
+        assert_eq!(port.shown_text[0].0, app.messages_i18n.direction_help_title);
+        assert_eq!(port.shown_text[0].1, app.messages_i18n.direction_help_body);
+        assert_eq!(
+            port.messages,
+            vec![
+                app.messages_i18n.direction_prompt.clone(),
+                app.messages_i18n.direction_prompt.clone()
+            ]
+        );
+    }
+
+    #[test]
+    fn prompt_direction_localizes_common_prompt_text() {
+        let mut app = App::new();
+        app.messages_i18n.direction_prompt = "往哪个方向？".to_string();
+        let mut port = MockPort::new(vec![MockPort::key('h')]);
+        let result = app.prompt_direction(&mut port, "In what direction?");
+        assert_eq!(result, Some(Direction::West));
+        assert_eq!(port.messages, vec!["往哪个方向？".to_string()]);
     }
 
     #[test]
