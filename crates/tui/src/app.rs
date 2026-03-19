@@ -329,6 +329,16 @@ impl App {
         port.show_text(title, &lines.join("\n"));
     }
 
+    fn show_position_command_menu(&self, port: &mut impl WindowPort, position: Position) {
+        let here = position.x as i16 == self.cursor.0 && position.y as i16 == self.cursor.1;
+        let kind = if here {
+            CommandMenuKind::Here
+        } else {
+            CommandMenuKind::There
+        };
+        self.show_command_menu(port, kind);
+    }
+
     fn resolve_tui_only_extended_command(
         &self,
         port: &mut impl WindowPort,
@@ -342,10 +352,6 @@ impl App {
             }
             "herecmdmenu" => {
                 self.show_command_menu(port, CommandMenuKind::Here);
-                Some(None)
-            }
-            "therecmdmenu" => {
-                self.show_command_menu(port, CommandMenuKind::There);
                 Some(None)
             }
             "perminv" => Some(Some(PlayerAction::ViewInventory)),
@@ -937,6 +943,13 @@ impl App {
                 self.get_localized_position(port, "Look at which position?")
                     .map(|position| PlayerAction::LookAt { position }),
             ),
+            "therecmdmenu" => Some({
+                if let Some(position) = self.get_localized_position(port, "Inspect which position?")
+                {
+                    self.show_position_command_menu(port, position);
+                }
+                None
+            }),
             "annotate" => Some(
                 self.get_localized_line(port, "Annotate this level with:")
                     .map(|text| text.trim().to_string())
@@ -2995,6 +3008,7 @@ mod tests {
     #[test]
     fn get_extended_command_therecmdmenu_shows_contextual_menu() {
         let mut app = App::new();
+        app.cursor = (10, 10);
         let mut port = MockPort::new(vec![
             MockPort::key('t'),
             MockPort::key('h'),
@@ -3013,6 +3027,7 @@ mod tests {
                 modifiers: InputModifiers::NONE,
             },
         ]);
+        port.positions.push_back(Some(Position::new(11, 10)));
         let action = app.get_extended_command(&mut port);
         assert!(action.is_none());
         assert!(
@@ -3022,6 +3037,40 @@ mod tests {
                     && body.contains("#chat")
                     && body.contains("#throw")
                     && !body.contains("#pray"))
+        );
+    }
+
+    #[test]
+    fn get_extended_command_therecmdmenu_on_self_shows_here_menu() {
+        let mut app = App::new();
+        app.cursor = (10, 10);
+        let mut port = MockPort::new(vec![
+            MockPort::key('t'),
+            MockPort::key('h'),
+            MockPort::key('e'),
+            MockPort::key('r'),
+            MockPort::key('e'),
+            MockPort::key('c'),
+            MockPort::key('m'),
+            MockPort::key('d'),
+            MockPort::key('m'),
+            MockPort::key('e'),
+            MockPort::key('n'),
+            MockPort::key('u'),
+            InputEvent::Key {
+                code: InputKeyCode::Enter,
+                modifiers: InputModifiers::NONE,
+            },
+        ]);
+        port.positions.push_back(Some(Position::new(10, 10)));
+        let action = app.get_extended_command(&mut port);
+        assert!(action.is_none());
+        assert!(
+            port.shown_text
+                .iter()
+                .any(|(title, body)| title.contains("Commands For Here")
+                    && body.contains("#pickup")
+                    && !body.contains("#throw"))
         );
     }
 }
