@@ -164,6 +164,9 @@ pub struct BillEntry {
     pub price: i32,
     /// Original quantity when the item was billed.
     pub original_quantity: i32,
+    /// Amount already paid toward this entry.
+    #[serde(default)]
+    pub paid_amount: i32,
     /// Whether the item has been completely consumed.
     pub used_up: bool,
 }
@@ -199,6 +202,7 @@ impl ShopBill {
             item,
             price,
             original_quantity: quantity,
+            paid_amount: 0,
             used_up: false,
         });
         true
@@ -221,10 +225,7 @@ impl ShopBill {
 
     /// Total amount owed across all bill entries.
     pub fn total(&self) -> i32 {
-        self.entries
-            .iter()
-            .map(|e| e.price * e.original_quantity)
-            .sum()
+        self.entries.iter().map(entry_amount_owed).sum()
     }
 
     /// Number of entries on the bill.
@@ -246,6 +247,47 @@ impl ShopBill {
     pub fn entries(&self) -> &[BillEntry] {
         &self.entries
     }
+}
+
+fn entry_total(entry: &BillEntry) -> i32 {
+    entry.price * entry.original_quantity
+}
+
+fn entry_amount_owed(entry: &BillEntry) -> i32 {
+    (entry_total(entry) - entry.paid_amount).max(0)
+}
+
+fn apply_payment_to_shop_bill(bill: &mut ShopBill, mut amount: i32) -> i32 {
+    if amount <= 0 {
+        return 0;
+    }
+
+    for entry in &mut bill.entries {
+        if amount <= 0 {
+            break;
+        }
+        let owed = entry_amount_owed(entry);
+        if owed == 0 {
+            continue;
+        }
+        let applied = owed.min(amount);
+        entry.paid_amount += applied;
+        amount -= applied;
+    }
+    bill.entries.retain(|entry| entry_amount_owed(entry) > 0);
+    amount
+}
+
+fn apply_payment_to_shop(shop: &mut ShopRoom, amount: i32) -> i32 {
+    if amount <= 0 {
+        return shop.bill.total() + shop.debit;
+    }
+
+    let applied_to_debit = shop.debit.min(amount);
+    shop.debit -= applied_to_debit;
+    let remaining_for_bill = amount - applied_to_debit;
+    let _ = apply_payment_to_shop_bill(&mut shop.bill, remaining_for_bill);
+    shop.bill.total() + shop.debit
 }
 
 // ---------------------------------------------------------------------------
@@ -1119,37 +1161,41 @@ pub fn pay_bill(
         return events;
     }
 
-    // Total owed = bill + debit.
     let total_owed = shop.bill.total() + shop.debit;
+    let credit_payment = shop.credit.min(total_owed);
+    if credit_payment > 0 {
+        shop.credit -= credit_payment;
+        let _ = apply_payment_to_shop(shop, credit_payment);
+    }
 
-    // Apply credit first.
-    let after_credit = shop.use_credit(total_owed);
-
+    let after_credit = shop.bill.total() + shop.debit;
     if after_credit == 0 {
         // Credit covered everything.
-        shop.bill.clear();
-        shop.debit = 0;
         events.push(EngineEvent::msg("shop-credit-covers"));
         return events;
     }
 
-    // Need to pay the remaining amount with gold.
-    if *player_gold >= after_credit {
-        *player_gold -= after_credit;
-        shop.bill.clear();
-        shop.debit = 0;
+    let gold_payment = (*player_gold).min(after_credit);
+    if gold_payment > 0 {
+        *player_gold -= gold_payment;
+        let remaining = apply_payment_to_shop(shop, gold_payment);
         events.push(EngineEvent::msg_with(
             "shop-pay-success",
             vec![
                 ("shopkeeper", shop.shopkeeper_name.clone()),
-                ("amount", after_credit.to_string()),
+                ("amount", gold_payment.to_string()),
             ],
         ));
+        if remaining > 0 {
+            events.push(EngineEvent::msg_with(
+                "shop-owe",
+                vec![
+                    ("shopkeeper", shop.shopkeeper_name.clone()),
+                    ("amount", remaining.to_string()),
+                ],
+            ));
+        }
     } else {
-        // Partial payment not supported in this implementation;
-        // hero cannot afford the bill.
-        // Restore the credit that was consumed.
-        shop.add_credit(total_owed - after_credit);
         events.push(EngineEvent::msg("shop-no-money"));
     }
 
@@ -2225,6 +2271,51 @@ mod tests {
             }
         });
         assert!(has_thanks);
+    }
+
+    #[test]
+    fn paying_bill_partially_reduces_outstanding_balance() {
+        let mut world = GameWorld::new(Position::new(10, 5));
+        let player = world.player();
+        let mut shop = test_shop(&mut world);
+        let def = test_obj_def(1, 100);
+        let defs = vec![def.clone()];
+
+        let item = crate::items::spawn_item(
+            &mut world,
+            &def,
+            crate::items::SpawnLocation::Floor(10, 5),
+            None,
+        );
+
+        pickup_in_shop(&world, player, item, &mut shop, &defs);
+        let full_bill = shop.bill.total();
+        assert!(
+            full_bill > 100,
+            "charisma-adjusted shop bill should exceed 100"
+        );
+
+        let mut gold = 100;
+        let events = pay_bill(&world, player, &mut shop, &mut gold);
+
+        assert_eq!(gold, 0, "partial payment should spend all available gold");
+        assert!(
+            !shop.bill.is_empty(),
+            "partial payment should preserve remaining debt"
+        );
+        assert_eq!(
+            shop.bill.total(),
+            full_bill - 100,
+            "remaining balance should shrink by the paid amount"
+        );
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-pay-success"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-owe"
+        )));
     }
 
     #[test]

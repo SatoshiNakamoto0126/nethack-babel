@@ -1899,6 +1899,7 @@ mod tests {
         ShopkeeperPayoff,
         ShopkeeperCredit,
         ShopCreditCovers,
+        ShopPartialPayment,
         ShopNoMoney,
         ShopkeeperSell,
         ShopChatPriceQuote,
@@ -1960,6 +1961,7 @@ mod tests {
                 SaveStoryTraversalScenario::ShopkeeperPayoff => "shopkeeper-payoff",
                 SaveStoryTraversalScenario::ShopkeeperCredit => "shopkeeper-credit",
                 SaveStoryTraversalScenario::ShopCreditCovers => "shop-credit-covers",
+                SaveStoryTraversalScenario::ShopPartialPayment => "shop-partial-payment",
                 SaveStoryTraversalScenario::ShopNoMoney => "shop-no-money",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
@@ -2675,7 +2677,7 @@ mod tests {
                 let events = resolve_turn(&mut loaded, PlayerAction::Pay, &mut rng);
                 (loaded, events)
             }
-            SaveStoryTraversalScenario::ShopNoMoney => {
+            SaveStoryTraversalScenario::ShopPartialPayment => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
                 let _gold = spawn_inventory_gold(&mut world, 50, 'g');
                 let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
@@ -2717,7 +2719,53 @@ mod tests {
                 );
 
                 let (mut loaded, loaded_rng) =
-                    save_and_reload_world("story-matrix-shop-no-money", &world, [62u8; 32]);
+                    save_and_reload_world("story-matrix-shop-partial-payment", &world, [62u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(&mut loaded, PlayerAction::Pay, &mut rng);
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopNoMoney => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let unpaid_item = world.spawn((
+                    ObjectCore {
+                        otyp: ObjectTypeId(0),
+                        object_class: ObjectClass::Tool,
+                        quantity: 1,
+                        weight: 10,
+                        age: 0,
+                        inv_letter: Some('u'),
+                        artifact: None,
+                    },
+                    ObjectLocation::Floor {
+                        x: 6,
+                        y: 5,
+                        level: world.dungeon().current_data_dungeon_level(),
+                    },
+                ));
+                assert!(
+                    world.dungeon_mut().shop_rooms[0]
+                        .bill
+                        .add(unpaid_item, 100, 1),
+                    "shop bill should accept a zero-funds entry"
+                );
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-shop-no-money", &world, [63u8; 32]);
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(&mut loaded, PlayerAction::Pay, &mut rng);
                 (loaded, events)
@@ -7422,6 +7470,83 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_preserves_partially_paid_shop_bill_progress() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let _gold = spawn_inventory_gold(&mut world, 50, 'g');
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(nethack_babel_engine::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                nethack_babel_engine::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let unpaid_item = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 10,
+                age: 0,
+                inv_letter: Some('u'),
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: 6,
+                y: 5,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
+        ));
+        assert!(
+            world.dungeon_mut().shop_rooms[0]
+                .bill
+                .add(unpaid_item, 100, 1),
+            "shop bill should accept a partial-payment entry"
+        );
+
+        let mut rng = Pcg64::seed_from_u64(7011);
+        let pay_events = resolve_turn(&mut world, PlayerAction::Pay, &mut rng);
+        assert!(pay_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-pay-success"
+        )));
+        assert!(pay_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-owe"
+        )));
+
+        let (loaded, _) =
+            save_and_reload_world("shop-partial-payment-round-trip", &world, [64u8; 32]);
+        let loaded_player = loaded.player();
+        let gold_total: i32 = loaded
+            .get_component::<Inventory>(loaded_player)
+            .map(|inv| {
+                inv.items
+                    .iter()
+                    .filter_map(|item| loaded.get_component::<ObjectCore>(*item))
+                    .filter(|core| core.object_class == ObjectClass::Coin)
+                    .map(|core| core.quantity)
+                    .sum()
+            })
+            .unwrap_or(0);
+        let shop = &loaded.dungeon().shop_rooms[0];
+
+        assert_eq!(gold_total, 0);
+        assert_eq!(shop.bill.total(), 50);
+        assert_eq!(shop.bill.entries().len(), 1);
+        assert_eq!(shop.bill.entries()[0].paid_amount, 50);
+        assert_eq!(shop.bill.entries()[0].original_quantity, 1);
+        assert_eq!(shop.credit, 0);
+    }
+
+    #[test]
     fn round_trip_loaded_restores_explicit_npc_components_on_current_level() {
         let mut world = make_stair_world(DungeonBranch::Quest, 1, Terrain::Floor);
         let player = world.player();
@@ -7712,6 +7837,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopkeeperPayoff,
             SaveStoryTraversalScenario::ShopkeeperCredit,
             SaveStoryTraversalScenario::ShopCreditCovers,
+            SaveStoryTraversalScenario::ShopPartialPayment,
             SaveStoryTraversalScenario::ShopNoMoney,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopChatPriceQuote,
@@ -7934,15 +8060,23 @@ mod tests {
                         event,
                         EngineEvent::Message { key, .. } if key == "shop-credit-covers"
                     )));
+                    assert!(!final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-pay-success" || key == "shop-owe"
+                    )));
                     assert!(shop.bill.is_empty());
                     assert_eq!(shop.debit, 0);
                     assert_eq!(shop.credit, 30);
                 }
-                SaveStoryTraversalScenario::ShopNoMoney => {
+                SaveStoryTraversalScenario::ShopPartialPayment => {
                     let shop = &world.dungeon().shop_rooms[0];
                     assert!(final_events.iter().any(|event| matches!(
                         event,
-                        EngineEvent::Message { key, .. } if key == "shop-no-money"
+                        EngineEvent::Message { key, .. } if key == "shop-pay-success"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-owe"
                     )));
                     let gold_total: i32 = world
                         .get_component::<Inventory>(player)
@@ -7955,8 +8089,37 @@ mod tests {
                                 .sum()
                         })
                         .unwrap_or(0);
-                    assert_eq!(gold_total, 50);
+                    assert_eq!(gold_total, 0);
+                    assert_eq!(shop.bill.total(), 50);
+                    assert_eq!(shop.bill.entries().len(), 1);
+                    assert_eq!(shop.bill.entries()[0].paid_amount, 50);
+                    assert_eq!(shop.credit, 0);
+                }
+                SaveStoryTraversalScenario::ShopNoMoney => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-no-money"
+                    )));
+                    assert!(!final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-pay-success" || key == "shop-owe"
+                    )));
+                    let gold_total: i32 = world
+                        .get_component::<Inventory>(player)
+                        .map(|inv| {
+                            inv.items
+                                .iter()
+                                .filter_map(|item| world.get_component::<ObjectCore>(*item))
+                                .filter(|core| core.object_class == ObjectClass::Coin)
+                                .map(|core| core.quantity)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    assert_eq!(gold_total, 0);
                     assert_eq!(shop.bill.total(), 100);
+                    assert_eq!(shop.bill.entries().len(), 1);
+                    assert_eq!(shop.bill.entries()[0].paid_amount, 0);
                     assert_eq!(shop.credit, 0);
                 }
                 SaveStoryTraversalScenario::ShopkeeperSell => {

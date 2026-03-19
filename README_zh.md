@@ -6,7 +6,7 @@
 
 [![License: NGPL](https://img.shields.io/badge/License-NGPL-blue.svg)](LICENSE)
 ![Rust: nightly](https://img.shields.io/badge/Rust-nightly-orange.svg)
-![Tests: 4667](https://img.shields.io/badge/tests-4667_passing-brightgreen.svg)
+![Tests: 4677](https://img.shields.io/badge/tests-4677_passing-brightgreen.svg)
 ![LOC: 211K](https://img.shields.io/badge/LOC-211K_Rust-informational.svg)
 
 ## 代码规模对比：C 原版 vs Rust 重制版
@@ -18,7 +18,7 @@
 | **源文件数** | 590 个 `.c/.h` | 115 个 `.rs` | Rust 工作区源码文件更少，但自动化覆盖更广 |
 | **关卡定义** | 167 个 `.lua` 脚本 | 65 个 `.toml` + Rust 生成器 | TOML 存数据，Rust 写逻辑 |
 | **数据文件** | 编译时表格 + dat 资源 | 65 TOML + 20 个 locale 文件 + 内嵌文本 | 发布产物现在是单一可执行文件 |
-| **测试** | 约 0 个（纯人工 QA） | **4,667** 个自动化测试 | 单元 + 集成 + 性质 + 差异执行多层覆盖 |
+| **测试** | 约 0 个（纯人工 QA） | **4,677** 个自动化测试 | 单元 + 集成 + 性质 + 差异执行多层覆盖 |
 | **机制规格** | 代码内注释 | **29 份规格文档** | 从原版提取的公式与测试向量 |
 | **国际化** | 可选 `#ifdef` | 内建（5 种语言） | Fluent + TOML，运行时热切换 |
 | **架构** | 全局状态，IO 混杂 | ECS + 零 IO 事件 | 确定性、可测试、可回放 |
@@ -32,12 +32,12 @@ NetHack Babel 是 [NetHack 3.7](https://github.com/NetHack/NetHack) 的 Rust 从
 
 以下统计基于 2026-03-20 的仓库实测：
 
-- **115 个 Rust 源文件 / 210,956 行**，覆盖 6 个 workspace crate
-- **20 个 locale 文件 / 13,888 行**，包含 Fluent 与翻译 TOML
+- **115 个 Rust 源文件 / 211,355 行**，覆盖 6 个 workspace crate
+- **20 个 locale 文件 / 13,938 行**，包含 Fluent 与翻译 TOML
 - **65 个数据 TOML 文件 / 25,639 行**，覆盖怪物、物品、关卡与 manifest
-- **320 个已跟踪文件 / 305,257 行** 仓库总规模
-- **29 份机制规格 + 29 份 review notes**
-- **4,667 个自动化测试**
+- **320 个已跟踪文件 / 305,703 行** 仓库总规模
+- **29 份机制规格 + 29 份 review notes**，位于 `specs/` 与 `specs/reviews/`
+- **4,677 个自动化测试**
 - **394 个怪物定义 / 430 个物品定义**
 
 ## 原版 NetHack 简介
@@ -51,7 +51,7 @@ NetHack 是 Roguelike 史上最具代表性的作品之一，由 NetHack DevTeam
 - **CJK 物品命名** — 量词系统："3把匕首"而非"3 daggers"；BUC 前缀："祝福的+2长剑"
 - **数据驱动架构** — 394 种怪物、430 种物品、33 件神器，TOML 定义，无需重编译即可修改
 - **ECS 游戏状态** — hecs 实体组件系统，显式回合解算与类型化事件
-- **公式级精确** — 29 份机制规格从原版 C 源码提取；4,667+ 个测试验证忠实度
+- **公式级精确** — 29 份机制规格从原版 C 源码提取；4,677+ 个测试验证忠实度
 - **广覆盖可玩性** — 主线战役、特殊关卡、职业任务、终局、商店、宗教、宠物、陷阱、变形、骑乘、遗骨、回放与存读档都已是 live runtime
 - **逐局外观洗牌** — 每局游戏随机化药水颜色、卷轴标签、戒指材质
 - **完整特殊关卡** — 30+ 生成器：推箱子（8 关）、城堡、美杜莎、冥界全部恶魔巢穴、弗拉德之塔、巫师塔、至圣所、元素位面、星界、13 个职业任务
@@ -136,12 +136,12 @@ cargo run -- --data-dir data -D
 
 | Crate | 职责 | 代码行数 | 测试数 |
 |-------|------|---------|--------|
-| `engine` | 纯游戏逻辑——战斗、怪物、物品、地牢、回合循环，80+ 个模块 | 170,847 | 3,800+ |
+| `engine` | 纯游戏逻辑——战斗、怪物、物品、地牢、回合循环，80+ 个模块 | 171,220 | 3,800+ |
 | `data` | TOML 数据定义与加载器：怪物、物品、地牢、关卡 | 4,753 | 44 |
 | `i18n` | 基于 Fluent 的本地化、物品命名（doname）、CJK 量词 | 7,209 | 91 |
 | `tui` | 基于 ratatui + crossterm 的终端界面，16 色系统 | 8,794 | 172 |
 | `audio` | 基于 rodio 的音效，由引擎事件触发 | 340 | 58 |
-| `cli` | 可执行文件入口——配置、存读档、选项、主循环 | 19,013 | 195 |
+| `cli` | 可执行文件入口——配置、存读档、选项、主循环 | 19,039 | 195 |
 
 ## 游戏系统
 
@@ -195,7 +195,7 @@ NetHack Babel 将所有玩家可见文本与游戏逻辑分离：
 
 ```sh
 cargo build                              # 构建
-cargo test --workspace                   # 运行全部 4,667+ 个测试
+cargo test --workspace                   # 运行全部 4,677+ 个测试
 cargo run -- --data-dir data             # 运行游戏（英文）
 cargo run -- --data-dir data --language zh-CN  # 运行游戏（简体中文）
 cargo run -- --data-dir data -D          # 巫师模式
@@ -205,7 +205,7 @@ cargo build --release                    # 发布构建
 
 ## 项目状态
 
-项目现在已经进入“长尾保真”阶段，而不是“核心系统缺失”阶段。主线战役、职业任务、特殊关卡、终局、商店、宗教、宠物、遗骨、回放、存读档、排行榜和多语言 TUI 都已经可玩，并由 4,667 个自动化测试持续覆盖。当前剩余差距主要集中在原版 NetHack 的细节纹理和节奏感，例如 Wizard of Yendor 的 covetous 行为、`sounds.c` 的聊天与环境声长尾分支，以及少量选择型交互的 UX。
+项目现在已经进入“长尾保真”阶段，而不是“核心系统缺失”阶段。主线战役、职业任务、特殊关卡、终局、商店、宗教、宠物、遗骨、回放、存读档、排行榜和多语言 TUI 都已经可玩，并由 4,677 个自动化测试持续覆盖。当前剩余差距主要集中在原版 NetHack 的细节纹理和节奏感，例如 Wizard of Yendor 的 covetous 行为、`sounds.c` 的聊天与环境声长尾分支，以及少量选择型交互的 UX。
 
 详见 [GAP_STATUS.md](GAP_STATUS.md)（状态报告）和 [DIFFERENCES.md](DIFFERENCES.md)（已知差异）。
 

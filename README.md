@@ -6,7 +6,7 @@
 
 [![License: NGPL](https://img.shields.io/badge/License-NGPL-blue.svg)](LICENSE)
 ![Rust: nightly](https://img.shields.io/badge/Rust-nightly-orange.svg)
-![Tests: 4667](https://img.shields.io/badge/tests-4667_passing-brightgreen.svg)
+![Tests: 4677](https://img.shields.io/badge/tests-4677_passing-brightgreen.svg)
 ![LOC: 211K](https://img.shields.io/badge/LOC-211K_Rust-informational.svg)
 
 ## Codebase Comparison: C Original vs Rust Remaster
@@ -18,7 +18,7 @@
 | **Source files** | 590 `.c/.h` | 115 `.rs` | Rust workspace uses fewer gameplay files despite broader automated coverage |
 | **Level definitions** | 167 `.lua` scripts | 65 `.toml` + Rust generators | TOML for data, Rust for logic |
 | **Data files** | Compiled-in tables + dat assets | 65 TOML + 20 locale files + embedded text | Release artifact now ships as a single executable |
-| **Tests** | ~0 (manual QA only) | **4,667** automated | Unit + integration + property + differential layers |
+| **Tests** | ~0 (manual QA only) | **4,677** automated | Unit + integration + property + differential layers |
 | **Specifications** | In-code comments | **29 spec documents** | Extracted formulas with test vectors |
 | **i18n** | Optional `#ifdef` | Built-in (5 languages) | Fluent + TOML, hot-switchable |
 | **Architecture** | Global state, IO mixed in | ECS + zero-IO events | Deterministic, testable, replayable |
@@ -32,12 +32,12 @@ NetHack Babel is a ground-up reimplementation of [NetHack 3.7](https://github.co
 
 Measured on 2026-03-20 from the checked-in repository:
 
-- **115 Rust source files / 210,956 lines** across the six workspace crates
-- **20 locale files / 13,888 lines** of Fluent + TOML translation content
+- **115 Rust source files / 211,355 lines** across the six workspace crates
+- **20 locale files / 13,938 lines** of Fluent + TOML translation content
 - **65 data TOML files / 25,639 lines** for monsters, items, levels, and manifests
-- **320 tracked files / 305,257 total lines** in the repository
-- **29 mechanism specs + 29 review notes** under `specs/`
-- **4,667 automated tests** in the workspace test suite
+- **320 tracked files / 305,703 total lines** in the repository
+- **29 mechanism specs + 29 review notes** under `specs/` and `specs/reviews/`
+- **4,677 automated tests** in the workspace test suite
 - **394 monsters / 430 items** loaded by the current embedded runtime assets
 
 ## About Original NetHack
@@ -51,7 +51,7 @@ NetHack is one of the foundational roguelikes, developed continuously for decade
 - **CJK-aware item naming** — Chinese counter words (量词) system: "3把匕首" instead of "3 daggers"; BUC prefix: "祝福的+2长剑"
 - **Data-driven architecture** — 394 monsters, 430 items, 33 artifacts defined in TOML; modify content without recompiling
 - **ECS-based game state** — hecs entity-component-system with explicit turn resolution and typed events
-- **Formula-precise mechanics** — 29 mechanism specs extracted from the original C source; 4,667 tests verify fidelity
+- **Formula-precise mechanics** — 29 mechanism specs extracted from the original C source; 4,677 tests verify fidelity
 - **Broad gameplay coverage** — the main campaign, special levels, quests, endgame, shops, religion, pets, traps, polymorph, riding, bones, conducts, replay, and save/load are all live runtime systems
 - **Per-game appearance shuffling** — each game randomizes potion colors, scroll labels, ring materials
 - **Complete special levels** — 30+ generators: Sokoban (8 puzzles), Castle, Medusa, all Gehennom levels, Vlad's Tower, Wizard Tower, Sanctum, Elemental Planes, Astral Plane, 13 role-specific quest branches
@@ -156,12 +156,12 @@ NetHack Babel is a Cargo workspace with six crates. Dependencies flow strictly d
 
 | Crate | Role | LOC | Tests |
 |-------|------|-----|-------|
-| `engine` | Pure game logic — combat, monsters, items, dungeon, turn loop, 80+ modules | 170,847 | 3,800+ |
+| `engine` | Pure game logic — combat, monsters, items, dungeon, turn loop, 80+ modules | 171,220 | 3,800+ |
 | `data` | TOML schema definitions and loaders for monsters, items, dungeons, levels | 4,753 | 44 |
 | `i18n` | Fluent-based localization, item naming (doname), CJK classifiers | 7,209 | 91 |
 | `tui` | Terminal UI built on ratatui + crossterm, 16-color system | 8,794 | 172 |
 | `audio` | Sound effects via rodio, triggered by engine events | 340 | 58 |
-| `cli` | Binary entry point — config, save/load, options, main loop | 19,013 | 195 |
+| `cli` | Binary entry point — config, save/load, options, main loop | 19,039 | 195 |
 
 ```
                      cli
@@ -240,7 +240,7 @@ The `specs/` directory contains 29 mechanism specifications extracted from the o
 
 NetHack Babel uses a 4-layer test pyramid plus a differential execution harness for compiler-grade cross-validation against the original C engine.
 
-### Test Pyramid (4,667+ tests)
+### Test Pyramid (4,677+ tests)
 
 | Layer | Tests | Purpose |
 |-------|-------|---------|
@@ -297,7 +297,7 @@ For the GitHub release binary, download the single executable asset attached to 
 
 ## Project Status
 
-The project is now in the "long-tail parity" phase rather than the "missing core systems" phase. The main campaign, quest branches, special levels, endgame, shops, religion, pets, bones, replay, save/load, leaderboard, and multilingual TUI are all playable and exercised by 4,667 automated tests. The remaining gaps are concentrated in original-NetHack texture and cadence: Wizard of Yendor covetous behavior, `sounds.c` conversational and ambient edge cases, and a few choice-heavy interactions where UX still lags behind the C original.
+The project is now in the "long-tail parity" phase rather than the "missing core systems" phase. The main campaign, quest branches, special levels, endgame, shops, religion, pets, bones, replay, save/load, leaderboard, and multilingual TUI are all playable and exercised by 4,677 automated tests. The remaining gaps are concentrated in original-NetHack texture and cadence: Wizard of Yendor covetous behavior, `sounds.c` conversational and ambient edge cases, and a few choice-heavy interactions where UX still lags behind the C original.
 
 Save format note: the current on-disk save version is `1.0.0`. Older `0.3.x` saves are intentionally rejected because level-scoped floor object data and story/runtime state are now serialized differently.
 
