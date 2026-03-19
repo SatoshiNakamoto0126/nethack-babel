@@ -35,6 +35,37 @@ impl GameContent {
         }
     }
 
+    /// Load built-in embedded content files.
+    pub fn embedded() -> Self {
+        Self::from_texts(
+            include_str!("../../../data/content/rumors_true.txt"),
+            include_str!("../../../data/content/rumors_false.txt"),
+            include_str!("../../../data/content/epitaphs.txt"),
+            include_str!("../../../data/content/bogusmon.txt"),
+            include_str!("../../../data/content/oracles.txt"),
+            include_str!("../../../data/content/engravings.txt"),
+        )
+    }
+
+    /// Construct game content from raw text file contents.
+    pub fn from_texts(
+        rumors_true: &str,
+        rumors_false: &str,
+        epitaphs: &str,
+        bogusmon: &str,
+        oracles: &str,
+        engravings: &str,
+    ) -> Self {
+        Self {
+            rumors_true: parse_lines(rumors_true),
+            rumors_false: parse_lines(rumors_false),
+            epitaphs: parse_lines(epitaphs),
+            bogusmon: parse_lines(bogusmon),
+            oracles: parse_sections(oracles),
+            engravings: parse_lines(engravings),
+        }
+    }
+
     /// Get a random rumor (true or false, weighted 2:1 toward true).
     pub fn random_rumor(&self, rng: &mut impl Rng) -> Option<&str> {
         let use_true = rng.random_range(0..3) != 0; // 2/3 true
@@ -107,11 +138,7 @@ impl GameContent {
 /// Load a text file as a vector of non-empty, trimmed lines.
 fn load_lines(path: &std::path::Path) -> Vec<String> {
     match std::fs::read_to_string(path) {
-        Ok(content) => content
-            .lines()
-            .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty())
-            .collect(),
+        Ok(content) => parse_lines(&content),
         Err(_) => Vec::new(),
     }
 }
@@ -119,13 +146,25 @@ fn load_lines(path: &std::path::Path) -> Vec<String> {
 /// Load a text file split by `---` separators into sections.
 fn load_sections(path: &std::path::Path) -> Vec<String> {
     match std::fs::read_to_string(path) {
-        Ok(content) => content
-            .split("\n---\n")
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect(),
+        Ok(content) => parse_sections(&content),
         Err(_) => Vec::new(),
     }
+}
+
+fn parse_lines(content: &str) -> Vec<String> {
+    content
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+fn parse_sections(content: &str) -> Vec<String> {
+    content
+        .split("\n---\n")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 #[cfg(test)]

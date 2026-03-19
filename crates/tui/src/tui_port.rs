@@ -71,6 +71,8 @@ pub struct TuiPort {
     message_history: Vec<String>,
     /// Maximum history entries to keep.
     max_history: usize,
+    message_history_title: String,
+    press_any_key_to_continue: String,
 }
 
 impl TuiPort {
@@ -89,6 +91,8 @@ impl TuiPort {
             show_more: false,
             message_history: Vec::new(),
             max_history: 200,
+            message_history_title: "Message History".to_string(),
+            press_any_key_to_continue: "(Press any key to continue)".to_string(),
         }
     }
 
@@ -96,6 +100,15 @@ impl TuiPort {
     pub fn create() -> io::Result<Self> {
         let terminal = init_terminal()?;
         Ok(Self::new(terminal))
+    }
+
+    pub fn set_ui_labels(
+        &mut self,
+        message_history_title: String,
+        press_any_key_to_continue: String,
+    ) {
+        self.message_history_title = message_history_title;
+        self.press_any_key_to_continue = press_any_key_to_continue;
     }
 
     // ── Internal drawing ────────────────────────────────────────
@@ -331,7 +344,8 @@ impl WindowPort for TuiPort {
 
         // Render history as a scrollable text block.
         let content = display_messages.join("\n");
-        self.show_text("Message History", &content);
+        let title = self.message_history_title.clone();
+        self.show_text(&title, &content);
     }
 
     // ── Menus ────────────────────────────────────────────────────
@@ -741,7 +755,7 @@ impl WindowPort for TuiPort {
             }
 
             // "Press any key" at bottom
-            let footer = "(Press any key to continue)";
+            let footer = self.press_any_key_to_continue.as_str();
             let footer_y = area.bottom().saturating_sub(1);
             let footer_style = Style::default().fg(ratatui::style::Color::DarkGray);
             let w = display_width(footer);

@@ -3623,7 +3623,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardTaunt => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
                 let player = world.player();
-                let _wizard =
+                let wizard =
                     spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
                 world
                     .ecs_mut()
@@ -3789,7 +3789,7 @@ mod tests {
                         ground_pos,
                     );
                 }
-                let wizard =
+                let _wizard =
                     spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
 
                 let (mut loaded, loaded_rng) = save_and_reload_world(

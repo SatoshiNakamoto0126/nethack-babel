@@ -100,22 +100,10 @@ pub fn load_game_data(data_dir: &Path) -> Result<GameData, LoadError> {
     }
 
     // Load all objects from item category files
-    let item_files = [
-        "weapons.toml",
-        "armor.toml",
-        "rings.toml",
-        "amulets.toml",
-        "tools.toml",
-        "food.toml",
-        "potions.toml",
-        "scrolls.toml",
-        "wands.toml",
-        "spellbooks.toml",
-        "gems.toml",
-    ];
+    let item_files = ITEM_FILE_NAMES;
 
     let mut objects = Vec::new();
-    for filename in &item_files {
+    for filename in item_files {
         let path = items_dir.join(filename);
         if path.exists() {
             let loaded = load_objects(&path)?;
@@ -130,6 +118,71 @@ pub fn load_game_data(data_dir: &Path) -> Result<GameData, LoadError> {
     Ok(GameData { monsters, objects })
 }
 
+/// Canonical object data file order.
+pub const ITEM_FILE_NAMES: &[&str] = &[
+    "weapons.toml",
+    "armor.toml",
+    "rings.toml",
+    "amulets.toml",
+    "tools.toml",
+    "food.toml",
+    "potions.toml",
+    "scrolls.toml",
+    "wands.toml",
+    "spellbooks.toml",
+    "gems.toml",
+];
+
+/// Load all game data from preloaded text sources.
+pub fn load_game_data_from_sources(
+    item_sources: &[(&str, &str)],
+    monsters_source: &str,
+) -> Result<GameData, LoadError> {
+    let mut objects = Vec::new();
+    for (_filename, contents) in item_sources {
+        objects.extend(load_objects_from_str(contents)?);
+    }
+
+    let monsters = load_monsters_from_str(monsters_source)?;
+    Ok(GameData { monsters, objects })
+}
+
+/// Load the built-in embedded game data.
+pub fn load_embedded_game_data() -> Result<GameData, LoadError> {
+    let item_sources = [
+        (
+            "weapons.toml",
+            include_str!("../../../data/items/weapons.toml"),
+        ),
+        ("armor.toml", include_str!("../../../data/items/armor.toml")),
+        ("rings.toml", include_str!("../../../data/items/rings.toml")),
+        (
+            "amulets.toml",
+            include_str!("../../../data/items/amulets.toml"),
+        ),
+        ("tools.toml", include_str!("../../../data/items/tools.toml")),
+        ("food.toml", include_str!("../../../data/items/food.toml")),
+        (
+            "potions.toml",
+            include_str!("../../../data/items/potions.toml"),
+        ),
+        (
+            "scrolls.toml",
+            include_str!("../../../data/items/scrolls.toml"),
+        ),
+        ("wands.toml", include_str!("../../../data/items/wands.toml")),
+        (
+            "spellbooks.toml",
+            include_str!("../../../data/items/spellbooks.toml"),
+        ),
+        ("gems.toml", include_str!("../../../data/items/gems.toml")),
+    ];
+    load_game_data_from_sources(
+        &item_sources,
+        include_str!("../../../data/monsters/base.toml"),
+    )
+}
+
 /// Load monster definitions from a TOML file.
 ///
 /// The file is expected to contain a top-level `[[monster]]` array where each
@@ -142,8 +195,7 @@ pub fn load_game_data(data_dir: &Path) -> Result<GameData, LoadError> {
 /// cannot be mapped to schema enums.
 pub fn load_monsters(path: &Path) -> Result<Vec<MonsterDef>, LoadError> {
     let contents = std::fs::read_to_string(path)?;
-    let file: TomlMonsterFile = toml::from_str(&contents)?;
-    file.monster.into_iter().map(convert_monster).collect()
+    load_monsters_from_str(&contents)
 }
 
 /// Load object definitions from a TOML file.
@@ -158,7 +210,18 @@ pub fn load_monsters(path: &Path) -> Result<Vec<MonsterDef>, LoadError> {
 /// cannot be mapped to schema enums.
 pub fn load_objects(path: &Path) -> Result<Vec<ObjectDef>, LoadError> {
     let contents = std::fs::read_to_string(path)?;
-    let file: TomlObjectFile = toml::from_str(&contents)?;
+    load_objects_from_str(&contents)
+}
+
+/// Load monster definitions from TOML text.
+pub fn load_monsters_from_str(contents: &str) -> Result<Vec<MonsterDef>, LoadError> {
+    let file: TomlMonsterFile = toml::from_str(contents)?;
+    file.monster.into_iter().map(convert_monster).collect()
+}
+
+/// Load object definitions from TOML text.
+pub fn load_objects_from_str(contents: &str) -> Result<Vec<ObjectDef>, LoadError> {
+    let file: TomlObjectFile = toml::from_str(contents)?;
     file.object.into_iter().map(convert_object).collect()
 }
 

@@ -2204,6 +2204,7 @@ pub fn find_option(name: &str) -> Option<&'static OptionInfo> {
 }
 
 /// Return all options in a given section.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn options_in_section(section: OptionSection) -> Vec<&'static OptionInfo> {
     ALL_OPTIONS
         .iter()

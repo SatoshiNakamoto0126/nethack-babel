@@ -92,6 +92,8 @@ pub struct TuiMessages {
     pub never_mind: String,
     pub no_such_item: String,
     pub not_implemented: String,
+    pub no_previous_command: String,
+    pub commands_title: String,
 }
 
 impl Default for TuiMessages {
@@ -101,6 +103,8 @@ impl Default for TuiMessages {
             never_mind: "Never mind.".to_string(),
             no_such_item: "You don't have that item.".to_string(),
             not_implemented: "Not yet implemented.".to_string(),
+            no_previous_command: "No previous command to repeat.".to_string(),
+            commands_title: "Commands".to_string(),
         }
     }
 }
@@ -201,7 +205,10 @@ impl App {
         if let Some(action) = &self.last_repeatable_action {
             return Some(action.clone());
         }
-        port.show_message("No previous command to repeat.", MessageUrgency::Normal);
+        port.show_message(
+            &self.messages_i18n.no_previous_command,
+            MessageUrgency::Normal,
+        );
         None
     }
 
@@ -212,7 +219,7 @@ impl App {
             .iter()
             .map(|cmd| format!("#{} - {}", cmd.name, cmd.description))
             .collect();
-        port.show_text("Commands", &lines.join("\n"));
+        port.show_text(&self.messages_i18n.commands_title, &lines.join("\n"));
     }
 
     fn resolve_tui_only_extended_command(

@@ -126,7 +126,7 @@ impl LocaleManager {
             name: "English".to_string(),
             name_en: "English".to_string(),
             author: "NetHack DevTeam".to_string(),
-            version: "0.1.0".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
             fallback: None,
             is_cjk: false,
             has_articles: true,

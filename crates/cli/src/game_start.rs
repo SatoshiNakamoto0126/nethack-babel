@@ -84,15 +84,6 @@ pub enum Alignment {
 }
 
 impl Alignment {
-    /// English name (for CLI arg parsing and internal use).
-    pub fn name(self) -> &'static str {
-        match self {
-            Alignment::Lawful => "Lawful",
-            Alignment::Neutral => "Neutral",
-            Alignment::Chaotic => "Chaotic",
-        }
-    }
-
     /// FTL message key for this alignment.
     fn ftl_key(self) -> &'static str {
         match self {

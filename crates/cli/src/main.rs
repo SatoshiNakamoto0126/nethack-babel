@@ -7,7 +7,7 @@ mod save;
 mod server;
 
 use std::io::{self, BufRead, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -17,7 +17,7 @@ use rand_pcg::Pcg64;
 
 use nethack_babel_data::{
     BucStatus, Color as NhColor, GameData, MonsterDef, ObjectClass, ObjectCore, ObjectDef,
-    load_game_data,
+    load_embedded_game_data, load_game_data,
 };
 use nethack_babel_engine::action::{Direction, PlayerAction, Position};
 use nethack_babel_engine::conduct::ConductState;
@@ -29,6 +29,7 @@ use nethack_babel_engine::fov::FovMap;
 use nethack_babel_engine::inventory::Inventory;
 use nethack_babel_engine::map_gen::{Room, generate_level};
 use nethack_babel_engine::role::{Race as EngineRace, Role as EngineRole};
+use nethack_babel_engine::rumors::GameContent;
 use nethack_babel_engine::topten::{Leaderboard, LeaderboardEntry, default_leaderboard_path};
 use nethack_babel_engine::turn::resolve_turn;
 use nethack_babel_engine::world::{
@@ -95,6 +96,74 @@ struct Cli {
     /// Choose player race (e.g. Human, Elf, Dwarf, Gnome, Orc)
     #[arg(long)]
     race: Option<String>,
+}
+
+const EMPTY_TRANSLATIONS_TOML: &str = "[translations]\n";
+
+struct EmbeddedLocaleSource {
+    code: &'static str,
+    manifest: &'static str,
+    messages: &'static str,
+    monsters: Option<&'static str>,
+    objects: Option<&'static str>,
+    classifiers: Option<&'static str>,
+}
+
+const EMBEDDED_LOCALES: &[EmbeddedLocaleSource] = &[
+    EmbeddedLocaleSource {
+        code: "en",
+        manifest: include_str!("../../../data/locale/en/manifest.toml"),
+        messages: include_str!("../../../data/locale/en/messages.ftl"),
+        monsters: None,
+        objects: Some(include_str!("../../../data/locale/en/objects.toml")),
+        classifiers: None,
+    },
+    EmbeddedLocaleSource {
+        code: "de",
+        manifest: include_str!("../../../data/locale/de/manifest.toml"),
+        messages: include_str!("../../../data/locale/de/messages.ftl"),
+        monsters: Some(include_str!("../../../data/locale/de/monsters.toml")),
+        objects: Some(include_str!("../../../data/locale/de/objects.toml")),
+        classifiers: None,
+    },
+    EmbeddedLocaleSource {
+        code: "fr",
+        manifest: include_str!("../../../data/locale/fr/manifest.toml"),
+        messages: include_str!("../../../data/locale/fr/messages.ftl"),
+        monsters: Some(include_str!("../../../data/locale/fr/monsters.toml")),
+        objects: Some(include_str!("../../../data/locale/fr/objects.toml")),
+        classifiers: None,
+    },
+    EmbeddedLocaleSource {
+        code: "zh-CN",
+        manifest: include_str!("../../../data/locale/zh-CN/manifest.toml"),
+        messages: include_str!("../../../data/locale/zh-CN/messages.ftl"),
+        monsters: Some(include_str!("../../../data/locale/zh-CN/monsters.toml")),
+        objects: Some(include_str!("../../../data/locale/zh-CN/objects.toml")),
+        classifiers: Some(include_str!("../../../data/locale/zh-CN/classifiers.toml")),
+    },
+    EmbeddedLocaleSource {
+        code: "zh-TW",
+        manifest: include_str!("../../../data/locale/zh-TW/manifest.toml"),
+        messages: include_str!("../../../data/locale/zh-TW/messages.ftl"),
+        monsters: Some(include_str!("../../../data/locale/zh-TW/monsters.toml")),
+        objects: Some(include_str!("../../../data/locale/zh-TW/objects.toml")),
+        classifiers: None,
+    },
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResourceSource {
+    Filesystem,
+    Embedded,
+}
+
+struct RuntimeAssets {
+    data: GameData,
+    locale: LocaleManager,
+    content: GameContent,
+    source: ResourceSource,
+    data_dir: Option<PathBuf>,
 }
 
 // ---------------------------------------------------------------------------
@@ -533,30 +602,33 @@ fn oracle_major_price(world: &GameWorld) -> i32 {
 
 fn prompt_oracle_consultation_menu(
     port: &mut impl WindowPort,
+    locale: &LocaleManager,
     world: &GameWorld,
     direction: Direction,
 ) -> Option<PlayerAction> {
     let major_price = oracle_major_price(world);
+    let mut major_args = fluent::FluentArgs::new();
+    major_args.set("amount", major_price as i64);
     let menu = Menu {
-        title: "Consult The Oracle".to_string(),
+        title: locale.translate("ui-oracle-menu-title", None),
         items: vec![
             MenuItem {
                 accelerator: 'a',
-                text: "Minor consultation (50 zorkmids)".to_string(),
+                text: locale.translate("ui-oracle-minor-option", None),
                 selected: false,
                 selectable: true,
                 group: None,
             },
             MenuItem {
                 accelerator: 'b',
-                text: format!("Major consultation ({major_price} zorkmids)"),
+                text: locale.translate("ui-oracle-major-option", Some(&major_args)),
                 selected: false,
                 selectable: true,
                 group: None,
             },
             MenuItem {
                 accelerator: 'c',
-                text: "Cancel".to_string(),
+                text: locale.translate("ui-cancel", None),
                 selected: false,
                 selectable: true,
                 group: None,
@@ -583,6 +655,7 @@ fn prompt_oracle_consultation_menu(
 
 fn prompt_tui_demon_bribe(
     port: &mut impl WindowPort,
+    locale: &LocaleManager,
     world: &GameWorld,
     direction: Direction,
 ) -> Option<PlayerAction> {
@@ -594,7 +667,9 @@ fn prompt_tui_demon_bribe(
     }
 
     let gold = player_gold_amount(world);
-    let prompt = format!("How much will you offer? [0..{gold}] (blank to refuse, Esc to cancel)");
+    let mut prompt_args = fluent::FluentArgs::new();
+    prompt_args.set("amount", gold);
+    let prompt = locale.translate("ui-demon-bribe-prompt", Some(&prompt_args));
     let line = port.get_line(&prompt)?;
     let amount = line.trim().parse::<i64>().unwrap_or(0);
     Some(PlayerAction::BribeDemon { direction, amount })
@@ -602,15 +677,16 @@ fn prompt_tui_demon_bribe(
 
 fn contextualize_tui_action(
     port: &mut impl WindowPort,
+    locale: &LocaleManager,
     world: &GameWorld,
     action: PlayerAction,
 ) -> Option<PlayerAction> {
     match action {
         PlayerAction::Chat { direction } if is_peaceful_oracle_chat(world, direction) => {
-            prompt_oracle_consultation_menu(port, world, direction)
+            prompt_oracle_consultation_menu(port, locale, world, direction)
         }
         PlayerAction::Chat { direction } if is_peaceful_demon_bribe_chat(world, direction) => {
-            prompt_tui_demon_bribe(port, world, direction)
+            prompt_tui_demon_bribe(port, locale, world, direction)
         }
         _ => Some(action),
     }
@@ -619,15 +695,24 @@ fn contextualize_tui_action(
 fn prompt_text_oracle_consultation(
     stdin: &io::Stdin,
     stdout: &io::Stdout,
+    locale: &LocaleManager,
     world: &GameWorld,
     direction: Direction,
 ) -> Result<Option<PlayerAction>> {
     let major_price = oracle_major_price(world);
-    println!("  Consult the Oracle:");
-    println!("    a - minor consultation (50 zorkmids)");
-    println!("    b - major consultation ({major_price} zorkmids)");
-    println!("    q - cancel");
-    print!("  Choice> ");
+    let mut major_args = fluent::FluentArgs::new();
+    major_args.set("amount", major_price as i64);
+    println!("  {}", locale.translate("ui-oracle-menu-title", None));
+    println!(
+        "    a - {}",
+        locale.translate("ui-oracle-minor-option", None)
+    );
+    println!(
+        "    b - {}",
+        locale.translate("ui-oracle-major-option", Some(&major_args))
+    );
+    println!("    q - {}", locale.translate("ui-cancel", None));
+    print!("  {} ", locale.translate("ui-choice-prompt", None));
     stdout.lock().flush()?;
 
     let mut line = String::new();
@@ -659,6 +744,7 @@ fn prompt_text_oracle_consultation(
 fn prompt_text_demon_bribe(
     stdin: &io::Stdin,
     stdout: &io::Stdout,
+    locale: &LocaleManager,
     world: &GameWorld,
     direction: Direction,
 ) -> Result<Option<PlayerAction>> {
@@ -670,9 +756,14 @@ fn prompt_text_demon_bribe(
     }
 
     let gold = player_gold_amount(world);
-    println!("  How much will you offer? [0..{gold}]");
-    println!("    blank or invalid input counts as refusing");
-    print!("  Offer> ");
+    let mut prompt_args = fluent::FluentArgs::new();
+    prompt_args.set("amount", gold);
+    println!(
+        "  {}",
+        locale.translate("ui-demon-bribe-text-title", Some(&prompt_args))
+    );
+    println!("    {}", locale.translate("ui-demon-bribe-help", None));
+    print!("  {} ", locale.translate("ui-offer-prompt", None));
     stdout.lock().flush()?;
 
     let mut line = String::new();
@@ -689,15 +780,16 @@ fn prompt_text_demon_bribe(
 fn contextualize_text_action(
     stdin: &io::Stdin,
     stdout: &io::Stdout,
+    locale: &LocaleManager,
     world: &GameWorld,
     action: PlayerAction,
 ) -> Result<Option<PlayerAction>> {
     match action {
         PlayerAction::Chat { direction } if is_peaceful_oracle_chat(world, direction) => {
-            prompt_text_oracle_consultation(stdin, stdout, world, direction)
+            prompt_text_oracle_consultation(stdin, stdout, locale, world, direction)
         }
         PlayerAction::Chat { direction } if is_peaceful_demon_bribe_chat(world, direction) => {
-            prompt_text_demon_bribe(stdin, stdout, world, direction)
+            prompt_text_demon_bribe(stdin, stdout, locale, world, direction)
         }
         _ => Ok(Some(action)),
     }
@@ -777,6 +869,17 @@ fn update_fov(world: &mut GameWorld, fov: &mut FovMap) {
 // Locale initialization
 // ---------------------------------------------------------------------------
 
+fn activate_locale(locale: &mut LocaleManager, language: &str) {
+    let normalized = language.replace('_', "-");
+    if locale.set_language(&normalized).is_err() {
+        tracing::info!(
+            "Language '{}' not available, falling back to English",
+            normalized
+        );
+        let _ = locale.set_language("en");
+    }
+}
+
 /// Discover all locale directories under `data_dir/locale/`, load their
 /// manifests and FTL message files, then activate the requested language.
 fn init_locale_manager(data_dir: &Path, language: &str) -> Result<LocaleManager> {
@@ -850,17 +953,74 @@ fn init_locale_manager(data_dir: &Path, language: &str) -> Result<LocaleManager>
         }
     }
 
-    // Normalize: CLI may use "zh_CN" but locale dirs use "zh-CN".
-    let normalized = language.replace('_', "-");
-    if locale.set_language(&normalized).is_err() {
-        tracing::info!(
-            "Language '{}' not available, falling back to English",
-            normalized
-        );
-        let _ = locale.set_language("en");
-    }
+    activate_locale(&mut locale, language);
 
     Ok(locale)
+}
+
+fn init_embedded_locale_manager(language: &str) -> Result<LocaleManager> {
+    let mut locale = LocaleManager::new();
+
+    for embedded in EMBEDDED_LOCALES {
+        let manifest: LanguageManifest = toml::from_str(embedded.manifest)
+            .with_context(|| format!("parsing embedded locale manifest '{}'", embedded.code))?;
+        locale
+            .load_locale(
+                embedded.code,
+                manifest,
+                &[("messages.ftl", embedded.messages)],
+            )
+            .with_context(|| format!("loading embedded locale '{}'", embedded.code))?;
+
+        locale
+            .load_entity_translations(
+                embedded.code,
+                embedded.monsters.unwrap_or(EMPTY_TRANSLATIONS_TOML),
+                embedded.objects.unwrap_or(EMPTY_TRANSLATIONS_TOML),
+            )
+            .with_context(|| format!("loading embedded entity translations '{}'", embedded.code))?;
+
+        if let Some(classifiers) = embedded.classifiers {
+            locale
+                .load_classifier(classifiers)
+                .with_context(|| format!("loading embedded classifiers '{}'", embedded.code))?;
+        }
+    }
+
+    activate_locale(&mut locale, language);
+    Ok(locale)
+}
+
+fn load_runtime_assets(specified_data_dir: &str, language: &str) -> Result<RuntimeAssets> {
+    match resolve_data_dir(specified_data_dir) {
+        Ok(data_dir) => {
+            let data = load_game_data(&data_dir)
+                .with_context(|| format!("Failed to load game data from {}", data_dir.display()))?;
+            let locale = init_locale_manager(&data_dir, language)?;
+            Ok(RuntimeAssets {
+                data,
+                locale,
+                content: GameContent::load(&data_dir),
+                source: ResourceSource::Filesystem,
+                data_dir: Some(data_dir),
+            })
+        }
+        Err(err) => {
+            tracing::info!(
+                "Falling back to embedded resources because filesystem data was not found: {err}"
+            );
+            let data =
+                load_embedded_game_data().context("Failed to load embedded static game data")?;
+            let locale = init_embedded_locale_manager(language)?;
+            Ok(RuntimeAssets {
+                data,
+                locale,
+                content: GameContent::embedded(),
+                source: ResourceSource::Embedded,
+                data_dir: None,
+            })
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1336,7 +1496,7 @@ fn render_map_ascii(world: &GameWorld) {
 }
 
 /// Render the status bar in text mode.
-fn render_status_text(world: &GameWorld) {
+fn render_status_text(world: &GameWorld, locale: &LocaleManager) {
     let player = world.player();
     let hp = world
         .get_component::<HitPoints>(player)
@@ -1350,10 +1510,13 @@ fn render_status_text(world: &GameWorld) {
 
     let depth = world.dungeon().depth;
     let turn = world.turn();
+    let mut args = fluent::FluentArgs::new();
+    args.set("depth", depth as i64);
+    args.set("hp", hp);
+    args.set("turn", turn as i64);
+    args.set("pos", pos);
 
-    println!(
-        "Dlvl:{depth}  {hp}  T:{turn}  Pos:{pos}  [hjklyubn=move .=wait <=up >=down q=quit ?=help]"
-    );
+    println!("{}", locale.translate("ui-text-status-line", Some(&args)));
 }
 
 /// Display events as text messages.
@@ -2382,10 +2545,30 @@ fn option_accelerator(index: usize) -> char {
     }
 }
 
+fn option_label(locale: &LocaleManager, name: &str) -> String {
+    let key = format!("option-label-{}", name.replace('_', "-"));
+    let translated = locale.translate(&key, None);
+    if translated == key {
+        name.replace('_', " ")
+    } else {
+        translated
+    }
+}
+
+fn option_value(locale: &LocaleManager, value: &str) -> String {
+    let key = format!("option-value-{}", value.replace('_', "-"));
+    let translated = locale.translate(&key, None);
+    if translated == key {
+        value.to_string()
+    } else {
+        translated
+    }
+}
+
 fn show_game_options(
     port: &mut TuiPort,
     cfg: &mut config::Config,
-    _locale: &LocaleManager,
+    locale: &LocaleManager,
     config_path: &str,
 ) {
     loop {
@@ -2396,15 +2579,17 @@ fn show_game_options(
             .enumerate()
             .map(|(i, (name, value))| {
                 let accel = option_accelerator(i);
+                let label = option_label(locale, name);
                 // Look up description from the option metadata table.
                 let desc_suffix = config::describe_option(name)
                     .map(|_d| "") // Description is available but we keep menu compact
                     .unwrap_or("");
                 let text = if value == "true" || value == "false" {
                     let on = value == "true";
-                    format!("[{}] {}{}", if on { "X" } else { " " }, name, desc_suffix)
+                    format!("[{}] {}{}", if on { "X" } else { " " }, label, desc_suffix)
                 } else {
-                    format!("{}: {}{}", name, value, desc_suffix)
+                    let display_value = option_value(locale, value);
+                    format!("{label}: {display_value}{desc_suffix}")
                 };
                 MenuItem {
                     accelerator: accel,
@@ -2416,12 +2601,10 @@ fn show_game_options(
             })
             .collect();
 
-        let behavior_count = config::options_in_section(config::OptionSection::Behavior).len();
+        let mut title_args = fluent::FluentArgs::new();
+        title_args.set("count", option_pairs.len() as i64);
         let menu = Menu {
-            title: format!(
-                "Game Settings ({} behavior options available)",
-                behavior_count
-            ),
+            title: locale.translate("ui-options-game-title", Some(&title_args)),
             items,
             how: MenuHow::PickOne,
         };
@@ -2443,7 +2626,11 @@ fn show_game_options(
                         let _ = config::apply_option(cfg, &toggle_name, None);
                     } else {
                         // Compound/string option: prompt for new value
-                        let prompt = format!("{} [{}]: ", name, current_value);
+                        let display_value = option_value(locale, current_value);
+                        let mut args = fluent::FluentArgs::new();
+                        args.set("option", option_label(locale, name));
+                        args.set("current", display_value);
+                        let prompt = locale.translate("ui-options-edit-prompt", Some(&args));
                         if let Some(val) = port.get_line(&prompt)
                             && !val.is_empty()
                         {
@@ -2750,6 +2937,66 @@ fn build_equipped_lines(world: &GameWorld, obj_defs: &[ObjectDef]) -> Vec<String
         .collect()
 }
 
+fn localized_help_text(locale: &LocaleManager) -> (String, String) {
+    let title = locale.translate("help-title", None);
+    let help_keys = [
+        "help-move",
+        "",
+        "help-move-diagram",
+        "",
+        "help-attack",
+        "help-wait",
+        "help-search",
+        "help-inventory",
+        "help-pickup",
+        "help-drop",
+        "help-stairs-up",
+        "help-stairs-down",
+        "help-eat",
+        "help-quaff",
+        "help-read",
+        "help-wield",
+        "help-wear",
+        "help-remove",
+        "help-zap",
+        "help-options",
+        "help-look",
+        "help-history",
+        "",
+        "help-shift-run",
+        "help-arrows",
+        "",
+        "help-symbols-title",
+    ];
+    let symbol_keys = [
+        "help-symbol-player",
+        "help-symbol-floor",
+        "help-symbol-corridor",
+        "help-symbol-door-closed",
+        "help-symbol-door-open",
+        "help-symbol-stairs-up",
+        "help-symbol-stairs-down",
+        "help-symbol-water",
+        "help-symbol-fountain",
+    ];
+
+    let mut lines: Vec<String> = help_keys
+        .iter()
+        .map(|key| {
+            if key.is_empty() {
+                String::new()
+            } else {
+                locale.translate(key, None)
+            }
+        })
+        .collect();
+    for key in &symbol_keys {
+        lines.push(format!("  {}", locale.translate(key, None)));
+    }
+
+    (title, lines.join("\n"))
+}
+
 struct TuiRuntimeContext<'a> {
     locale: &'a mut LocaleManager,
     cfg: &'a mut config::Config,
@@ -2781,6 +3028,10 @@ fn run_tui_mode(
     let mut port =
         TuiPort::create().map_err(|e| anyhow::anyhow!("Failed to initialize TUI: {e}"))?;
     port.init();
+    port.set_ui_labels(
+        locale.translate("ui-message-history-title", None),
+        locale.translate("ui-press-any-key-continue", None),
+    );
 
     let mut app = App::new();
     app.set_wizard_mode(wizard_mode);
@@ -2789,6 +3040,8 @@ fn run_tui_mode(
         never_mind: locale.translate("ui-never-mind", None),
         no_such_item: locale.translate("ui-no-such-item", None),
         not_implemented: locale.translate("ui-not-implemented", None),
+        no_previous_command: locale.translate("ui-no-previous-command", None),
+        commands_title: locale.translate("ui-commands-title", None),
     };
     let map = &world.dungeon().current_level;
     let mut fov = FovMap::new(map.width, map.height);
@@ -2894,61 +3147,8 @@ fn run_tui_mode(
                 continue;
             }
             Some(PlayerAction::Help) => {
-                let title = locale.translate("help-title", None);
-                let help_keys = [
-                    "help-move",
-                    "",
-                    "help-move-diagram",
-                    "",
-                    "help-attack",
-                    "help-wait",
-                    "help-search",
-                    "help-inventory",
-                    "help-pickup",
-                    "help-drop",
-                    "help-stairs-up",
-                    "help-stairs-down",
-                    "help-eat",
-                    "help-quaff",
-                    "help-read",
-                    "help-wield",
-                    "help-wear",
-                    "help-remove",
-                    "help-zap",
-                    "help-options",
-                    "help-look",
-                    "help-history",
-                    "",
-                    "help-shift-run",
-                    "help-arrows",
-                    "",
-                    "help-symbols-title",
-                ];
-                let symbol_keys = [
-                    "help-symbol-player",
-                    "help-symbol-floor",
-                    "help-symbol-corridor",
-                    "help-symbol-door-closed",
-                    "help-symbol-door-open",
-                    "help-symbol-stairs-up",
-                    "help-symbol-stairs-down",
-                    "help-symbol-water",
-                    "help-symbol-fountain",
-                ];
-                let mut lines: Vec<String> = help_keys
-                    .iter()
-                    .map(|k| {
-                        if k.is_empty() {
-                            String::new()
-                        } else {
-                            locale.translate(k, None)
-                        }
-                    })
-                    .collect();
-                for key in &symbol_keys {
-                    lines.push(format!("  {}", locale.translate(key, None)));
-                }
-                port.show_text(&title, &lines.join("\n"));
+                let (title, body) = localized_help_text(locale);
+                port.show_text(&title, &body);
                 continue;
             }
             Some(PlayerAction::ViewInventory) => {
@@ -3018,7 +3218,7 @@ fn run_tui_mode(
             }
             Some(PlayerAction::Quit) => {
                 // Ctrl+C — ask for confirmation
-                let confirmed = port.ask_yn("Really quit?", "yn", 'n');
+                let confirmed = port.ask_yn(&locale.translate("ui-confirm-quit", None), "yn", 'n');
                 if confirmed == 'y' {
                     break;
                 }
@@ -3037,8 +3237,10 @@ fn run_tui_mode(
                 // Generate a fresh seed from the current RNG to persist.
                 let rng_state: [u8; 32] = rng.random();
                 if let Err(e) = ensure_save_dir(&save_path) {
+                    let mut args = fluent::FluentArgs::new();
+                    args.set("error", e.to_string());
                     app.push_message(
-                        format!("Failed to create save directory: {e}"),
+                        locale.translate("ui-save-create-dir-failed", Some(&args)),
                         MessageUrgency::System,
                     );
                     app.display_pending_messages(&mut port);
@@ -3055,7 +3257,12 @@ fn run_tui_mode(
                         break;
                     }
                     Err(e) => {
-                        app.push_message(format!("Save failed: {e}"), MessageUrgency::System);
+                        let mut args = fluent::FluentArgs::new();
+                        args.set("error", e.to_string());
+                        app.push_message(
+                            locale.translate("ui-save-failed", Some(&args)),
+                            MessageUrgency::System,
+                        );
                         app.display_pending_messages(&mut port);
                         continue;
                     }
@@ -3066,8 +3273,10 @@ fn run_tui_mode(
                 let save_path = save::save_file_path(&player_name);
                 let rng_state: [u8; 32] = rng.random();
                 if let Err(e) = ensure_save_dir(&save_path) {
+                    let mut args = fluent::FluentArgs::new();
+                    args.set("error", e.to_string());
                     app.push_message(
-                        format!("Failed to create save directory: {e}"),
+                        locale.translate("ui-save-create-dir-failed", Some(&args)),
                         MessageUrgency::System,
                     );
                     continue;
@@ -3080,7 +3289,12 @@ fn run_tui_mode(
                         );
                     }
                     Err(e) => {
-                        app.push_message(format!("Save failed: {e}"), MessageUrgency::System);
+                        let mut args = fluent::FluentArgs::new();
+                        args.set("error", e.to_string());
+                        app.push_message(
+                            locale.translate("ui-save-failed", Some(&args)),
+                            MessageUrgency::System,
+                        );
                     }
                 }
                 continue;
@@ -3149,7 +3363,7 @@ fn run_tui_mode(
             None => continue, // Unmapped key or Escape.
         };
 
-        let Some(action) = contextualize_tui_action(&mut port, world, action) else {
+        let Some(action) = contextualize_tui_action(&mut port, locale, world, action) else {
             continue;
         };
 
@@ -3206,9 +3420,7 @@ fn run_text_mode(
 
     println!();
     println!("{}", locale.translate("event-dungeon-welcome", None));
-    println!(
-        "Commands: h/j/k/l/y/u/b/n move, . wait, s search, , pickup, i inv, eq equip, p pray, < up, > down, q quit, ? help"
-    );
+    println!("{}", locale.translate("ui-text-commands-summary", None));
     println!();
 
     let stdin = io::stdin();
@@ -3219,7 +3431,7 @@ fn run_text_mode(
 
     loop {
         render_map_ascii(world);
-        render_status_text(world);
+        render_status_text(world, locale);
 
         if game_over {
             println!("{}", locale.translate("ui-game-over-thanks", None));
@@ -3252,41 +3464,12 @@ fn run_text_mode(
             break;
         }
         if command_input == "?" || command_input == "help" {
+            let (title, body) = localized_help_text(locale);
             println!();
-            println!("=== NetHack Babel Help ===");
-            println!("Movement (vi-keys):");
-            println!("  y k u     NW  N  NE");
-            println!("  h . l      W  .   E");
-            println!("  b j n     SW  S  SE");
-            println!();
-            println!("Commands:");
-            println!("  .  = rest/wait one turn");
-            println!("  s  = search adjacent squares");
-            println!("  ,  = pick up items at your feet");
-            println!("  i  = show inventory");
-            println!("  eq = show equipped items");
-            println!("  p  = pray");
-            println!("  <  = go up stairs");
-            println!("  >  = go down stairs");
-            println!("  repeat = repeat last action");
-            println!("  save = save game");
-            println!("  savequit = save and quit");
-            println!("  q  = quit the game");
-            println!("  ?  = show this help");
-            println!("  open <dir>, kick <dir>, chat <dir>, run <dir>");
-            println!("  drop <letter>, wear/wield/apply <letter>, throw <letter> <dir>");
-            println!("  zap <letter> [dir], dip <letter> <letter>, cast <spell> [dir]");
-            println!("  travel <x> <y>, jump <x> <y>, lookat <x> <y>, whatis <x> <y>");
-            println!("  annotate <text>, engrave <text>, call <class> <name>");
-            println!();
-            println!("Symbols:");
-            println!("  @  = you (the player)");
-            println!("  .  = floor");
-            println!("  #  = corridor or wall");
-            println!("  +  = closed/locked door");
-            println!("  |  = open door");
-            println!("  <  = stairs up");
-            println!("  >  = stairs down");
+            println!("=== {title} ===");
+            for line in body.lines() {
+                println!("{line}");
+            }
             println!();
             continue;
         }
@@ -3297,7 +3480,7 @@ fn run_text_mode(
             if let Some(prev) = &last_repeatable_action {
                 prev.clone()
             } else {
-                println!("  Nothing to repeat.");
+                println!("  {}", locale.translate("ui-no-previous-command", None));
                 continue;
             }
         } else {
@@ -3314,7 +3497,8 @@ fn run_text_mode(
             }
         };
 
-        let Some(action) = contextualize_text_action(&stdin, &stdout, world, action)? else {
+        let Some(action) = contextualize_text_action(&stdin, &stdout, locale, world, action)?
+        else {
             continue;
         };
 
@@ -3325,9 +3509,9 @@ fn run_text_mode(
         if matches!(action, PlayerAction::ViewInventory) {
             let items = build_inventory_items(world, &data.objects);
             if items.is_empty() {
-                println!("  You are not carrying anything.");
+                println!("  {}", locale.translate("ui-inventory-empty", None));
             } else {
-                println!("  Inventory:");
+                println!("  {}", locale.translate("ui-inventory-title", None));
                 for item in &items {
                     println!("    {} - {}", item.letter, item.name);
                 }
@@ -3338,9 +3522,9 @@ fn run_text_mode(
         if matches!(action, PlayerAction::ViewEquipped) {
             let lines = build_equipped_lines(world, &data.objects);
             if lines.is_empty() {
-                println!("  You have nothing equipped.");
+                println!("  {}", locale.translate("ui-equipment-empty", None));
             } else {
-                println!("  Equipped:");
+                println!("  {}", locale.translate("ui-equipment-title", None));
                 for line in &lines {
                     println!("    {line}");
                 }
@@ -3353,12 +3537,21 @@ fn run_text_mode(
             let save_path = save::save_file_path(&player_name);
             let rng_state: [u8; 32] = rng.random();
             if let Err(e) = ensure_save_dir(&save_path) {
-                println!("  Failed to create save directory: {e}");
+                let mut args = fluent::FluentArgs::new();
+                args.set("error", e.to_string());
+                println!(
+                    "  {}",
+                    locale.translate("ui-save-create-dir-failed", Some(&args))
+                );
                 continue;
             }
             match save::save_game(world, &save_path, save::SaveReason::Checkpoint, rng_state) {
                 Ok(()) => println!("  {}", locale.translate("ui-save-success", None)),
-                Err(e) => println!("  Save failed: {e}"),
+                Err(e) => {
+                    let mut args = fluent::FluentArgs::new();
+                    args.set("error", e.to_string());
+                    println!("  {}", locale.translate("ui-save-failed", Some(&args)));
+                }
             }
             continue;
         }
@@ -3368,7 +3561,12 @@ fn run_text_mode(
             let save_path = save::save_file_path(&player_name);
             let rng_state: [u8; 32] = rng.random();
             if let Err(e) = ensure_save_dir(&save_path) {
-                println!("  Failed to create save directory: {e}");
+                let mut args = fluent::FluentArgs::new();
+                args.set("error", e.to_string());
+                println!(
+                    "  {}",
+                    locale.translate("ui-save-create-dir-failed", Some(&args))
+                );
                 continue;
             }
             match save::save_game(world, &save_path, save::SaveReason::Quit, rng_state) {
@@ -3376,7 +3574,11 @@ fn run_text_mode(
                     println!("  {}", locale.translate("ui-save-goodbye", None));
                     break;
                 }
-                Err(e) => println!("  Save failed: {e}"),
+                Err(e) => {
+                    let mut args = fluent::FluentArgs::new();
+                    args.set("error", e.to_string());
+                    println!("  {}", locale.translate("ui-save-failed", Some(&args)));
+                }
             }
             continue;
         }
@@ -3461,30 +3663,41 @@ fn main() -> Result<()> {
         cfg.game.language = lang.clone();
     }
 
-    // 4. Load game data.
-    let data_dir = resolve_data_dir(&cli.data_dir)?;
-    let data = load_game_data(&data_dir)
-        .with_context(|| format!("Failed to load game data from {}", data_dir.display()))?;
+    // 4. Load static resources.
+    let RuntimeAssets {
+        data,
+        mut locale,
+        content,
+        source,
+        data_dir,
+    } = load_runtime_assets(&cli.data_dir, &cfg.game.language)?;
 
     if cli.text {
         println!("NetHack Babel v{}", env!("CARGO_PKG_VERSION"));
         println!();
+        let mut resource_args = fluent::FluentArgs::new();
+        resource_args.set("monsters", data.monsters.len() as i64);
+        resource_args.set("objects", data.objects.len() as i64);
+        match (source, data_dir.as_ref()) {
+            (ResourceSource::Filesystem, Some(path)) => {
+                resource_args.set("path", path.display().to_string());
+                println!(
+                    "{}",
+                    locale.translate("ui-startup-loaded-filesystem", Some(&resource_args))
+                );
+            }
+            (ResourceSource::Embedded, _) => println!(
+                "{}",
+                locale.translate("ui-startup-loaded-embedded", Some(&resource_args))
+            ),
+            _ => {}
+        }
+        let mut language_args = fluent::FluentArgs::new();
+        language_args.set("code", locale.current_language());
+        language_args.set("name", locale.manifest().name.clone());
         println!(
-            "Loaded {} monsters, {} objects from {}",
-            data.monsters.len(),
-            data.objects.len(),
-            data_dir.display()
-        );
-    }
-
-    // 5. Initialize locale manager.
-    let mut locale = init_locale_manager(&data_dir, &cfg.game.language)?;
-
-    if cli.text {
-        println!(
-            "Language: {} ({})",
-            locale.current_language(),
-            locale.manifest().name
+            "{}",
+            locale.translate("ui-startup-language", Some(&language_args))
         );
     }
 
@@ -3514,7 +3727,10 @@ fn main() -> Result<()> {
         // Re-seed the RNG from the saved state.
         rng = Pcg64::from_seed(rng_state);
         if cli.text {
-            println!("Restored saved game: turn {turn}, depth {depth}.");
+            let mut args = fluent::FluentArgs::new();
+            args.set("turn", turn as i64);
+            args.set("depth", depth as i64);
+            println!("{}", locale.translate("ui-restored-save", Some(&args)));
         }
         (restored_world, None)
     } else {
@@ -3557,8 +3773,8 @@ fn main() -> Result<()> {
         if cli.text {
             let mut role_args = fluent::FluentArgs::new();
             role_args.set("name", character_choice.name.clone());
-            role_args.set("align", character_choice.alignment.name().to_string());
-            role_args.set("race", character_choice.race.name().to_string());
+            role_args.set("align", character_choice.alignment.display_name(&locale));
+            role_args.set("race", character_choice.race.display_name(&locale));
             role_args.set("role", character_choice.role_name.clone());
             println!(
                 "{}",
@@ -3598,7 +3814,7 @@ fn main() -> Result<()> {
         let setup = create_world(&data, &mut rng, Some(&character_choice.name));
         let mut new_world = setup.world;
         new_world.set_spawn_catalogs(data.monsters.clone(), data.objects.clone());
-        new_world.set_game_content(nethack_babel_engine::rumors::GameContent::load(&data_dir));
+        new_world.set_game_content(content.clone());
 
         // Apply role/race stats and name to the player.
         game_start::apply_character_choice(&mut new_world, &character_choice);
