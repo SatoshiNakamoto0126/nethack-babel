@@ -1951,10 +1951,10 @@ chronicle-empty = Your chronicle is empty.
 clairvoyance-nothing-new = You sense nothing new.
 
 # TODO: translate
-container-put-in = You put { $item } into { $container }.
+container-put-in = 你把 { $item } 放进了 { $container }。
 
 # TODO: translate
-container-take-out = You take { $item } out of { $container }.
+container-take-out = 你从 { $container } 中取出了 { $item }。
 
 # TODO: translate
 crystal-ball-cloudy = All you see is a swirling mess.
@@ -1972,16 +1972,16 @@ detect-food-none = You don't sense any food.
 detect-gold-none = You don't sense any gold.
 
 # TODO: translate
-detect-monsters-none = You don't sense any monsters.
+detect-monsters-none = 你没有感知到任何怪物。
 
 # TODO: translate
 detect-objects-none = You don't sense any objects.
 
 # TODO: translate
-detect-traps-none = You don't sense any traps.
+detect-traps-none = 你没有感知到任何陷阱。
 
 # TODO: translate
-dig-blocked = This is too hard to dig in.
+dig-blocked = 这里太硬了，挖不动。
 
 # TODO: translate
 dig-floor-blocked = The floor here is too hard to dig in.
@@ -2237,10 +2237,10 @@ jump-too-burdened = You are carrying too much to jump!
 kick-door-held = The door is held shut!
 
 # TODO: translate
-kick-door-open = The door crashes open!
+kick-door-open = 门被你一脚踹开了！
 
 # TODO: translate
-kick-hurt-foot = Ouch! That hurts!
+kick-hurt-foot = 哎哟！好疼！
 
 # TODO: translate
 kick-item-blocked = Something blocks your kick.
@@ -2312,13 +2312,13 @@ lock-need-key = You need a key to lock this.
 lock-no-door = There is no door here.
 
 # TODO: translate
-lock-no-target = There is nothing here to lock or unlock.
+lock-no-target = 这里没有可供上锁或开锁的东西。
 
 # TODO: translate
 lock-pick-container-success = You succeed in picking the lock.
 
 # TODO: translate
-lock-pick-fail = You fail to pick the lock.
+lock-pick-fail = 你没能撬开这把锁。
 
 # TODO: translate
 lock-pick-success = You succeed in picking the lock.
