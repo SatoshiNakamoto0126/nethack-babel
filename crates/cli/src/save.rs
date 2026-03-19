@@ -1360,7 +1360,7 @@ mod tests {
         action::{Direction, PlayerAction},
         artifacts::find_artifact_by_name,
         dungeon::{DungeonBranch, LevelMap, PortalLink, Terrain},
-        event::{DeathCause, EngineEvent},
+        event::{DeathCause, EngineEvent, HpSource},
         pets::PetState,
         role::Role,
         teleport::handle_magic_portal,
@@ -1890,6 +1890,7 @@ mod tests {
         WizardAmuletWake,
         WizardBlackGlowBlind,
         WizardCovetousQuestArtifact,
+        WizardRetreatHeal,
         HumanoidAlohaChat,
         HobbitComplaintChat,
         VampireKindredChat,
@@ -1952,6 +1953,7 @@ mod tests {
                 SaveStoryTraversalScenario::WizardCovetousQuestArtifact => {
                     "wizard-covetous-quest-artifact"
                 }
+                SaveStoryTraversalScenario::WizardRetreatHeal => "wizard-retreat-heal",
                 SaveStoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
                 SaveStoryTraversalScenario::HobbitComplaintChat => "hobbit-complaint-chat",
                 SaveStoryTraversalScenario::VampireKindredChat => "vampire-kindred-chat",
@@ -3534,7 +3536,7 @@ mod tests {
                     spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 20);
                 if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
                     hp.current = 20;
-                    hp.max = 40;
+                    hp.max = 20;
                 }
                 let sword = spawn_inventory_object_by_name(&mut world, "long sword", 'b');
                 world
@@ -3562,7 +3564,9 @@ mod tests {
                         matches!(
                             event,
                             EngineEvent::Message { key, .. }
-                                if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                                if key == "wizard-curse-items"
+                                    || key == "wizard-summon-nasties"
+                                    || key == "wizard-double-trouble"
                         )
                     }) {
                         final_events = events;
@@ -3788,6 +3792,53 @@ mod tests {
                     Some(wizard),
                     loaded_player,
                     action,
+                    &mut rng,
+                );
+                (loaded, final_events)
+            }
+            SaveStoryTraversalScenario::WizardRetreatHeal => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                for y in 3..=21 {
+                    for x in 3..=21 {
+                        world
+                            .dungeon_mut()
+                            .current_level
+                            .set_terrain(Position::new(x, y), Terrain::Floor);
+                    }
+                }
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+                let player = world.player();
+                set_player_position(&mut world, Position::new(20, 20));
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(7, 7), "Wizard of Yendor", 20);
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+                    hp.current = 12;
+                    hp.max = 20;
+                }
+                if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+                    player_events.invoked = true;
+                }
+                let mut pre_save_rng = Pcg64::seed_from_u64(7017);
+                let _teleport_events = nethack_babel_engine::turn::force_wizard_retreat_and_heal(
+                    &mut world,
+                    wizard,
+                    player,
+                    &mut pre_save_rng,
+                );
+
+                let (mut loaded, loaded_rng) =
+                    save_and_reload_world("story-matrix-wizard-retreat-heal", &world, [73u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let loaded_player = loaded.player();
+                let loaded_wizard = find_monster_named(&loaded, "Wizard of Yendor")
+                    .expect("wizard retreat save matrix should keep a live Wizard");
+                let final_events = nethack_babel_engine::turn::force_wizard_retreat_and_heal(
+                    &mut loaded,
+                    loaded_wizard,
+                    loaded_player,
                     &mut rng,
                 );
                 (loaded, final_events)
@@ -4098,7 +4149,7 @@ mod tests {
                     spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
                 if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
                     hp.current = 20;
-                    hp.max = 40;
+                    hp.max = 20;
                 }
                 if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
                     player_events.invoked = true;
@@ -5602,7 +5653,7 @@ mod tests {
         spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'b');
         let wizard = spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 20);
         if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
-            hp.current = 12;
+            hp.current = 20;
             hp.max = 20;
         }
         let cursed_target = spawn_inventory_object_by_name(&mut world, "long sword", 'a');
@@ -5627,6 +5678,7 @@ mod tests {
         let mut saw_harassment = false;
         let mut saw_curse = false;
         let mut saw_summon = false;
+        let mut saw_double_trouble = false;
         let mut saw_level_teleport = false;
         let mut saw_remote_theft = false;
 
@@ -5650,6 +5702,12 @@ mod tests {
                     EngineEvent::Message { key, .. } if key == "wizard-summon-nasties"
                 )
             });
+            let turn_saw_double_trouble = events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "wizard-double-trouble"
+                )
+            });
             let turn_saw_level_teleport = events.iter().any(|event| {
                 matches!(
                     event,
@@ -5660,9 +5718,13 @@ mod tests {
             saw_remote_theft |= turn_saw_theft;
             saw_curse |= turn_saw_curse;
             saw_summon |= turn_saw_summon;
+            saw_double_trouble |= turn_saw_double_trouble;
             saw_level_teleport |= turn_saw_level_teleport;
-            saw_harassment |=
-                turn_saw_theft || turn_saw_curse || turn_saw_summon || turn_saw_level_teleport;
+            saw_harassment |= turn_saw_theft
+                || turn_saw_curse
+                || turn_saw_summon
+                || turn_saw_double_trouble
+                || turn_saw_level_teleport;
 
             if turn_saw_level_teleport {
                 assert!(
@@ -5673,7 +5735,9 @@ mod tests {
                 );
             }
 
-            if saw_remote_theft && (saw_curse || saw_summon || saw_level_teleport) {
+            if saw_remote_theft
+                && (saw_curse || saw_summon || saw_double_trouble || saw_level_teleport)
+            {
                 break;
             }
         }
@@ -5687,7 +5751,7 @@ mod tests {
             "a distant live wizard should eventually covetously steal the Amulet after save/load"
         );
         assert!(
-            saw_curse || saw_summon || saw_level_teleport,
+            saw_curse || saw_summon || saw_double_trouble || saw_level_teleport,
             "a live wizard should keep applying non-theft harassment after the covetous steal"
         );
         assert!(
@@ -7528,6 +7592,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardAmuletWake,
             SaveStoryTraversalScenario::WizardBlackGlowBlind,
             SaveStoryTraversalScenario::WizardCovetousQuestArtifact,
+            SaveStoryTraversalScenario::WizardRetreatHeal,
             SaveStoryTraversalScenario::HumanoidAlohaChat,
             SaveStoryTraversalScenario::HobbitComplaintChat,
             SaveStoryTraversalScenario::VampireKindredChat,
@@ -8192,7 +8257,9 @@ mod tests {
                     assert!(final_events.iter().any(|event| matches!(
                         event,
                         EngineEvent::Message { key, .. }
-                            if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                            if key == "wizard-curse-items"
+                                || key == "wizard-summon-nasties"
+                                || key == "wizard-double-trouble"
                     )));
                     let cursed = world
                         .get_component::<Inventory>(player)
@@ -8465,6 +8532,37 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.invoked),
                         "save/load covetous matrix should preserve the invoked priority trigger"
+                    );
+                }
+                SaveStoryTraversalScenario::WizardRetreatHeal => {
+                    let wizard = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("wizard retreat save matrix should keep a live Wizard");
+                    assert!(
+                        final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::HpChange {
+                                entity,
+                                amount,
+                                source: HpSource::Regeneration,
+                                ..
+                            } if *entity == wizard && *amount > 0
+                        )),
+                        "save/load wizard retreat matrix should really heal the wounded Wizard"
+                    );
+                    let wizard_pos = world
+                        .get_component::<Positioned>(wizard)
+                        .expect("wizard retreat save matrix should keep wizard position")
+                        .0;
+                    assert_eq!(wizard_pos, Position::new(3, 3));
+                    let hp = world
+                        .get_component::<HitPoints>(wizard)
+                        .expect("wizard retreat save matrix should keep wizard HP");
+                    assert!(hp.current > 12);
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.invoked),
+                        "save/load wizard retreat matrix should preserve the invoked trigger"
                     );
                 }
                 SaveStoryTraversalScenario::VampireNightChat => {

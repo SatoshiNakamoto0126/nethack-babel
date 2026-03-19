@@ -823,7 +823,7 @@ fn covetous_behavior(
         3
     };
 
-    if ratio < 2 {
+    if ratio < 3 {
         // STRAT_HEAL: teleport to stairs and heal.
         if let Some(stairs_pos) = find_stairs(world) {
             if monster_pos != stairs_pos {
@@ -3036,6 +3036,36 @@ mod tests {
         // Monster should now be at stairs position.
         let pos = world.get_component::<Positioned>(monster).unwrap().0;
         assert_eq!(pos, Position::new(3, 3));
+    }
+
+    #[test]
+    fn covetous_monster_ratio_two_still_prefers_heal_fallback() {
+        let mut world = make_test_world();
+        let mut rng = test_rng();
+
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+
+        let monster = spawn_intelligent_monster(
+            &mut world,
+            Position::new(12, 8),
+            20,
+            30,
+            MonsterIntelligence::Humanoid,
+        );
+        let _ = world.ecs_mut().insert_one(monster, Covetous);
+
+        let events = resolve_monster_turn(&mut world, monster, &mut rng);
+
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                EngineEvent::EntityTeleported { to, .. } if *to == Position::new(3, 3)
+            )),
+            "ratio=2 covetous monsters should still use the heal fallback and teleport to stairs"
+        );
     }
 
     // ── Test 4: Intelligent monster opens doors ───────────────────

@@ -6221,6 +6221,16 @@ fn process_wizard_of_yendor_turn(
 
     let wizard = active_wizard;
     seed_wizard_runtime_state(world, wizard);
+    if wizard_should_fall_back_to_heal(
+        world,
+        wizard,
+        player_has_amulet,
+        player_has_invocation_tool,
+        player_has_quest_artifact,
+    ) && apply_wizard_retreat_and_heal(world, wizard, player, rng, events)
+    {
+        return;
+    }
     if should_wizard_level_teleport_player(world, player_has_amulet, rng)
         && apply_wizard_level_teleport(world, rng, events)
     {
@@ -6303,6 +6313,18 @@ pub fn force_wizard_harassment_action(
 ) -> Vec<EngineEvent> {
     let mut events = wizard_harassment_messages(world, player, action);
     apply_wizard_harassment_action(world, wizard, player, action, rng, &mut events);
+    events
+}
+
+#[doc(hidden)]
+pub fn force_wizard_retreat_and_heal(
+    world: &mut GameWorld,
+    wizard: hecs::Entity,
+    player: hecs::Entity,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    let mut events = Vec::new();
+    let _ = apply_wizard_retreat_and_heal(world, wizard, player, rng, &mut events);
     events
 }
 
@@ -6574,6 +6596,127 @@ fn wizard_reposition_adjacent_to_player(
         wizard_pos.0 = target_pos;
         return true;
     }
+    false
+}
+
+fn wizard_should_fall_back_to_heal(
+    world: &GameWorld,
+    wizard: hecs::Entity,
+    player_has_amulet: bool,
+    player_has_invocation_tool: bool,
+    player_has_quest_artifact: bool,
+) -> bool {
+    let Some(hp) = world.get_component::<HitPoints>(wizard) else {
+        return false;
+    };
+    hp.current < hp.max
+        && !(player_has_amulet || player_has_invocation_tool || player_has_quest_artifact)
+}
+
+fn find_wizard_retreat_stairs(world: &GameWorld) -> Option<Position> {
+    let map = &world.dungeon().current_level;
+    for y in 0..map.height {
+        for x in 0..map.width {
+            let pos = Position::new(x as i32, y as i32);
+            if map
+                .get(pos)
+                .is_some_and(|cell| matches!(cell.terrain, Terrain::StairsUp | Terrain::StairsDown))
+            {
+                return Some(pos);
+            }
+        }
+    }
+    None
+}
+
+fn find_random_walkable_unoccupied_tile(world: &GameWorld, rng: &mut impl Rng) -> Option<Position> {
+    let map = &world.dungeon().current_level;
+    let mut candidates = Vec::new();
+    for y in 0..map.height {
+        for x in 0..map.width {
+            let pos = Position::new(x as i32, y as i32);
+            if map.get(pos).is_some_and(|cell| cell.terrain.is_walkable())
+                && !world
+                    .query::<Positioned>()
+                    .iter()
+                    .any(|(_, placed)| placed.0 == pos)
+            {
+                candidates.push(pos);
+            }
+        }
+    }
+    if candidates.is_empty() {
+        None
+    } else {
+        Some(candidates[rng.random_range(0..candidates.len())])
+    }
+}
+
+fn dist2_positions(lhs: Position, rhs: Position) -> i32 {
+    let dx = lhs.x - rhs.x;
+    let dy = lhs.y - rhs.y;
+    dx * dx + dy * dy
+}
+
+fn apply_wizard_retreat_and_heal(
+    world: &mut GameWorld,
+    wizard: hecs::Entity,
+    player: hecs::Entity,
+    rng: &mut impl Rng,
+    events: &mut Vec<EngineEvent>,
+) -> bool {
+    let Some(wizard_pos) = world.get_component::<Positioned>(wizard).map(|pos| pos.0) else {
+        return false;
+    };
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return false;
+    };
+
+    let retreat_pos = find_wizard_retreat_stairs(world)
+        .or_else(|| find_random_walkable_unoccupied_tile(world, rng));
+    let Some(retreat_pos) = retreat_pos else {
+        return false;
+    };
+
+    if wizard_pos != retreat_pos {
+        let wizard_name = world.entity_name(wizard);
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(wizard) {
+            pos.0 = retreat_pos;
+        }
+        events.push(EngineEvent::EntityTeleported {
+            entity: wizard,
+            from: wizard_pos,
+            to: retreat_pos,
+        });
+        events.push(EngineEvent::msg_with(
+            "monster-teleport-away",
+            vec![("monster", wizard_name)],
+        ));
+        return true;
+    }
+
+    let should_heal = world
+        .get_component::<HitPoints>(wizard)
+        .map(|hp| hp.current <= hp.max - 8)
+        .unwrap_or(false);
+    if dist2_positions(retreat_pos, player_pos) > 64
+        && should_heal
+        && let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard)
+    {
+        let old = hp.current;
+        hp.current = (hp.current + rng.random_range(1..=8)).min(hp.max);
+        let healed = hp.current - old;
+        if healed > 0 {
+            events.push(EngineEvent::HpChange {
+                entity: wizard,
+                amount: healed,
+                new_hp: hp.current,
+                source: HpSource::Regeneration,
+            });
+            return true;
+        }
+    }
+
     false
 }
 
@@ -8903,6 +9046,7 @@ mod tests {
         WizardAmuletWake,
         WizardBlackGlowBlind,
         WizardCovetousQuestArtifact,
+        WizardRetreatHeal,
         HumanoidAlohaChat,
         HobbitComplaintChat,
         VampireKindredChat,
@@ -8963,6 +9107,7 @@ mod tests {
                 StoryTraversalScenario::WizardCovetousQuestArtifact => {
                     "wizard-covetous-quest-artifact"
                 }
+                StoryTraversalScenario::WizardRetreatHeal => "wizard-retreat-heal",
                 StoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
                 StoryTraversalScenario::HobbitComplaintChat => "hobbit-complaint-chat",
                 StoryTraversalScenario::VampireKindredChat => "vampire-kindred-chat",
@@ -10515,7 +10660,7 @@ mod tests {
                     spawn_full_monster(&mut world, Position::new(14, 14), "Wizard of Yendor", 12);
                 if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
                     hp.current = 20;
-                    hp.max = 40;
+                    hp.max = 20;
                 }
                 let mut player_events = read_player_events(&world, player);
                 player_events.invoked = true;
@@ -10528,7 +10673,9 @@ mod tests {
                         matches!(
                             event,
                             EngineEvent::Message { key, .. }
-                                if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                                if key == "wizard-curse-items"
+                                    || key == "wizard-summon-nasties"
+                                    || key == "wizard-double-trouble"
                         )
                     }) {
                         final_events = events;
@@ -10732,6 +10879,38 @@ mod tests {
                     action,
                     &mut rng,
                 );
+                (world, final_events)
+            }
+            StoryTraversalScenario::WizardRetreatHeal => {
+                let mut world = make_stair_world(Terrain::Floor, 1);
+                for y in 3..=21 {
+                    for x in 3..=21 {
+                        world
+                            .dungeon_mut()
+                            .current_level
+                            .set_terrain(Position::new(x, y), Terrain::Floor);
+                    }
+                }
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+                let player = world.player();
+                set_player_position(&mut world, Position::new(20, 20));
+                let wizard =
+                    spawn_full_monster(&mut world, Position::new(7, 7), "Wizard of Yendor", 20);
+                if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+                    hp.current = 12;
+                    hp.max = 20;
+                }
+                let mut player_events = read_player_events(&world, player);
+                player_events.invoked = true;
+                persist_player_events(&mut world, player, player_events);
+                let mut rng = test_rng();
+                let _teleport_events =
+                    force_wizard_retreat_and_heal(&mut world, wizard, player, &mut rng);
+                let final_events =
+                    force_wizard_retreat_and_heal(&mut world, wizard, player, &mut rng);
                 (world, final_events)
             }
             StoryTraversalScenario::HumanoidAlohaChat => {
@@ -11006,7 +11185,7 @@ mod tests {
                     spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
                 if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
                     hp.current = 20;
-                    hp.max = 40;
+                    hp.max = 20;
                 }
                 let mut player_events = read_player_events(&world, player);
                 player_events.invoked = true;
@@ -16449,6 +16628,81 @@ mod tests {
         }
 
         panic!("far Wizard should eventually covetously teleport and steal the Amulet");
+    }
+
+    #[test]
+    fn test_wounded_wizard_prefers_covetous_target_over_heal_fallback() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 20);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+            hp.current = 5;
+            hp.max = 20;
+        }
+
+        let action = crate::npc::choose_wizard_action(
+            &world,
+            wizard,
+            true,
+            false,
+            false,
+            false,
+            &mut test_rng(),
+        );
+
+        assert_eq!(
+            action,
+            crate::npc::WizardAction::StealAmulet,
+            "wounded Wizard should still prioritize the Amulet over the heal fallback"
+        );
+    }
+
+    #[test]
+    fn test_wounded_wizard_retreats_to_stairs_and_heals() {
+        let mut world = make_stair_world(Terrain::Floor, 1);
+        for y in 3..=21 {
+            for x in 3..=21 {
+                world
+                    .dungeon_mut()
+                    .current_level
+                    .set_terrain(Position::new(x, y), Terrain::Floor);
+            }
+        }
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(3, 3), Terrain::StairsDown);
+        let player = world.player();
+        set_player_position(&mut world, Position::new(20, 20));
+        let wizard = spawn_full_monster(&mut world, Position::new(7, 7), "Wizard of Yendor", 20);
+        if let Some(mut hp) = world.get_component_mut::<HitPoints>(wizard) {
+            hp.current = 12;
+            hp.max = 20;
+        }
+        let mut rng = test_rng();
+
+        let teleport_events = force_wizard_retreat_and_heal(&mut world, wizard, player, &mut rng);
+        assert!(teleport_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::EntityTeleported { entity, to, .. }
+                if *entity == wizard && *to == Position::new(3, 3)
+        )));
+
+        let heal_events = force_wizard_retreat_and_heal(&mut world, wizard, player, &mut rng);
+        assert!(heal_events.iter().any(|event| matches!(
+            event,
+            EngineEvent::HpChange {
+                entity,
+                amount,
+                source: HpSource::Regeneration,
+                ..
+            } if *entity == wizard && *amount > 0
+        )));
+
+        let hp = world
+            .get_component::<HitPoints>(wizard)
+            .expect("wounded wizard should keep HP after healing");
+        assert!(hp.current > 12);
     }
 
     // ── Cross-system wiring tests ──────────────────────────────
@@ -23200,6 +23454,7 @@ mod tests {
             StoryTraversalScenario::WizardAmuletWake,
             StoryTraversalScenario::WizardBlackGlowBlind,
             StoryTraversalScenario::WizardCovetousQuestArtifact,
+            StoryTraversalScenario::WizardRetreatHeal,
             StoryTraversalScenario::HumanoidAlohaChat,
             StoryTraversalScenario::HobbitComplaintChat,
             StoryTraversalScenario::VampireKindredChat,
@@ -23940,7 +24195,9 @@ mod tests {
                         final_events.iter().any(|event| matches!(
                             event,
                             EngineEvent::Message { key, .. }
-                                if key == "wizard-curse-items" || key == "wizard-summon-nasties"
+                                if key == "wizard-curse-items"
+                                    || key == "wizard-summon-nasties"
+                                    || key == "wizard-double-trouble"
                         )),
                         "{} should keep harassing after the theft phase",
                         scenario.label()
@@ -24184,6 +24441,41 @@ mod tests {
                             .get_component::<PlayerEvents>(player)
                             .is_some_and(|events| events.invoked),
                         "{} should preserve the invoked covetous priority trigger",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::WizardRetreatHeal => {
+                    let wizard = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("wizard retreat story matrix should keep the live Wizard");
+                    assert!(
+                        final_events.iter().any(|event| matches!(
+                            event,
+                            EngineEvent::HpChange {
+                                entity,
+                                amount,
+                                source: HpSource::Regeneration,
+                                ..
+                            } if *entity == wizard && *amount > 0
+                        )),
+                        "{} should actually heal the wounded Wizard after retreating",
+                        scenario.label()
+                    );
+                    let wizard_pos = world
+                        .get_component::<Positioned>(wizard)
+                        .expect("wizard retreat story matrix should keep wizard position")
+                        .0;
+                    assert_eq!(
+                        wizard_pos,
+                        Position::new(3, 3),
+                        "{} should retreat to the staircase before healing",
+                        scenario.label()
+                    );
+                    let hp = world
+                        .get_component::<HitPoints>(wizard)
+                        .expect("wizard retreat story matrix should keep wizard HP");
+                    assert!(
+                        hp.current > 12,
+                        "{} should leave the Wizard healthier than the setup state",
                         scenario.label()
                     );
                 }
