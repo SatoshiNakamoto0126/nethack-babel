@@ -1710,6 +1710,7 @@ ui-direction-prompt-run = Run in what direction?
 ui-direction-prompt-rush = Rush in what direction?
 ui-direction-help-title = Direction Keys
 ui-direction-help-body = h left, j down, k up, l right; y northwest, u northeast, b southwest, n southeast; . self, < up, > down; Esc cancel, ? show this help
+ui-direction-invalid = Not a direction. Press ? for help.
 ui-no-previous-command = No previous command to repeat.
 ui-press-any-key-continue = (Press any key to continue)
 ui-text-commands-summary = Commands: h/j/k/l/y/u/b/n move, . wait, s search, , pickup, i inv, eq equip, p pray, < up, > down, q quit, ? help

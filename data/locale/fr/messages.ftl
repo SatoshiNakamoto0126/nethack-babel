@@ -230,6 +230,7 @@ ui-direction-prompt-run = Courir dans quelle direction ?
 ui-direction-prompt-rush = Foncer dans quelle direction ?
 ui-direction-help-title = Touches de direction
 ui-direction-help-body = h gauche, j bas, k haut, l droite ; y nord-ouest, u nord-est, b sud-ouest, n sud-est ; . sur place, < monter, > descendre ; Échap annule, ? affiche cette aide
+ui-direction-invalid = Ce n'est pas une direction. Appuyez sur ? pour l'aide.
 ui-no-previous-command = Aucune commande précédente à répéter.
 ui-press-any-key-continue = (Appuyez sur une touche pour continuer)
 ui-text-commands-summary = Commandes : h/j/k/l/y/u/b/n déplacement, . attendre, s chercher, , ramasser, i inventaire, eq équipement, p prier, < monter, > descendre, q quitter, ? aide

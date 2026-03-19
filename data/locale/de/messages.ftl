@@ -317,6 +317,7 @@ ui-direction-prompt-run = In welche Richtung laufen?
 ui-direction-prompt-rush = In welche Richtung stuermen?
 ui-direction-help-title = Richtungstasten
 ui-direction-help-body = h links, j unten, k oben, l rechts; y nordwest, u nordost, b suedwest, n suedost; . selbst, < hoch, > runter; Esc abbrechen, ? diese Hilfe anzeigen
+ui-direction-invalid = Keine Richtung. Druecke ? fuer Hilfe.
 ui-no-previous-command = Kein vorheriger Befehl zum Wiederholen.
 ui-press-any-key-continue = (Beliebige Taste zum Fortfahren)
 ui-text-commands-summary = Befehle: h/j/k/l/y/u/b/n bewegen, . warten, s suchen, , aufheben, i Inventar, eq Ausruestung, p beten, < hoch, > runter, q beenden, ? Hilfe

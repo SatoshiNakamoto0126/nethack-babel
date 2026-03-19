@@ -102,6 +102,7 @@ pub struct TuiMessages {
     pub direction_prompt_rush: String,
     pub direction_help_title: String,
     pub direction_help_body: String,
+    pub direction_invalid: String,
     pub item_prompt_drop: String,
     pub item_prompt_wield: String,
     pub item_prompt_wear: String,
@@ -159,6 +160,7 @@ impl Default for TuiMessages {
             direction_prompt_rush: "Rush in what direction?".to_string(),
             direction_help_title: "Direction Keys".to_string(),
             direction_help_body: "h left, j down, k up, l right\ny northwest, u northeast, b southwest, n southeast\n. self, < up, > down\nEsc cancel, ? show this help".to_string(),
+            direction_invalid: "Not a direction. Press ? for help.".to_string(),
             item_prompt_drop: "Drop what? [a-zA-Z or ?*]".to_string(),
             item_prompt_wield: "Wield what? [a-zA-Z or - for bare hands]".to_string(),
             item_prompt_wear: "Wear what? [a-zA-Z or ?*]".to_string(),
@@ -714,7 +716,14 @@ impl App {
                         InputKeyCode::Left => crossterm::event::KeyCode::Left,
                         InputKeyCode::Right => crossterm::event::KeyCode::Right,
                         InputKeyCode::Escape => return None,
-                        _ => continue,
+                        _ => {
+                            port.show_message(
+                                &self.messages_i18n.direction_invalid,
+                                MessageUrgency::Normal,
+                            );
+                            port.show_message(prompt, MessageUrgency::Normal);
+                            continue;
+                        }
                     };
                     if matches!(ct_code, crossterm::event::KeyCode::Char('?')) {
                         port.show_text(
@@ -732,7 +741,11 @@ impl App {
                     if let Some(dir) = map_direction_key(key_event) {
                         return Some(dir);
                     }
-                    // Not a direction key — ignore and keep waiting.
+                    port.show_message(
+                        &self.messages_i18n.direction_invalid,
+                        MessageUrgency::Normal,
+                    );
+                    port.show_message(prompt, MessageUrgency::Normal);
                 }
                 _ => continue,
             }
@@ -1603,6 +1616,14 @@ mod tests {
         let mut port = MockPort::new(vec![MockPort::key('x'), MockPort::key('j')]);
         let result = app.prompt_direction(&mut port, "Direction?");
         assert_eq!(result, Some(Direction::South));
+        assert_eq!(
+            port.messages,
+            vec![
+                "Direction?".to_string(),
+                app.messages_i18n.direction_invalid.clone(),
+                "Direction?".to_string()
+            ]
+        );
     }
 
     #[test]

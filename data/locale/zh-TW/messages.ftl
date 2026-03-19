@@ -1640,6 +1640,7 @@ ui-direction-prompt-run = 朝哪個方向奔跑？
 ui-direction-prompt-rush = 朝哪個方向猛衝？
 ui-direction-help-title = 方向鍵幫助
 ui-direction-help-body = h 向左，j 向下，k 向上，l 向右；y 左上，u 右上，b 左下，n 右下；. 原地，< 上樓，> 下樓；Esc 取消，? 顯示此幫助
+ui-direction-invalid = 這不是方向輸入。按 ? 查看幫助。
 ui-no-previous-command = 沒有可重複的上一條命令。
 ui-press-any-key-continue = （按任意鍵繼續）
 ui-text-commands-summary = 指令：h/j/k/l/y/u/b/n 移動，. 原地等待，s 搜尋，, 拾取，i 背包，eq 裝備，p 祈禱，< 上樓，> 下樓，q 離開，? 幫助

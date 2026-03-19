@@ -3132,6 +3132,7 @@ fn run_tui_mode(
         direction_prompt_rush: locale.translate("ui-direction-prompt-rush", None),
         direction_help_title: locale.translate("ui-direction-help-title", None),
         direction_help_body: locale.translate("ui-direction-help-body", None),
+        direction_invalid: locale.translate("ui-direction-invalid", None),
         item_prompt_drop: locale.translate("ui-item-prompt-drop", None),
         item_prompt_wield: locale.translate("ui-item-prompt-wield", None),
         item_prompt_wear: locale.translate("ui-item-prompt-wear", None),
