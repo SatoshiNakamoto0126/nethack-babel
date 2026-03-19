@@ -656,9 +656,11 @@ pub struct MonsterChatState {
     pub player_hallucinating: bool,
     pub chat_roll: u32,
     pub player_has_gold: bool,
+    pub player_has_amulet: bool,
     pub player_armed: bool,
     pub player_armored: bool,
     pub player_has_shirt: bool,
+    pub player_badly_hurt: bool,
     pub player_is_healer: bool,
     pub player_is_vampire_kindred: bool,
     pub player_is_nightchild: bool,
@@ -675,6 +677,78 @@ pub struct MonsterChatOutcome {
 fn chat_outcome(key: &str, monster_name: &str) -> MonsterChatOutcome {
     MonsterChatOutcome {
         event: EngineEvent::msg_with(key, vec![("monster", monster_name.to_string())]),
+        wake_radius: None,
+    }
+}
+
+fn wizard_chat_outcome(monster_name: &str, state: MonsterChatState) -> MonsterChatOutcome {
+    if state.chat_roll.is_multiple_of(5) {
+        return MonsterChatOutcome {
+            event: EngineEvent::msg_with(
+                "wizard-taunt-laughs",
+                vec![("wizard", monster_name.to_string())],
+            ),
+            wake_radius: None,
+        };
+    }
+
+    if state.player_has_amulet {
+        return MonsterChatOutcome {
+            event: EngineEvent::msg_with(
+                "wizard-taunt-relinquish",
+                vec![(
+                    "insult",
+                    WIZARD_INSULTS[(state.chat_roll as usize) % WIZARD_INSULTS.len()].to_string(),
+                )],
+            ),
+            wake_radius: None,
+        };
+    }
+
+    if state.player_badly_hurt {
+        let key = if state.chat_roll.is_multiple_of(2) {
+            "wizard-taunt-panic"
+        } else {
+            "wizard-taunt-last-breath"
+        };
+        return MonsterChatOutcome {
+            event: EngineEvent::msg_with(
+                key,
+                vec![(
+                    "insult",
+                    WIZARD_INSULTS[(state.chat_roll as usize) % WIZARD_INSULTS.len()].to_string(),
+                )],
+            ),
+            wake_radius: None,
+        };
+    }
+
+    if state.badly_hurt {
+        return chat_outcome(
+            if state.chat_roll.is_multiple_of(2) {
+                "wizard-taunt-return"
+            } else {
+                "wizard-taunt-back"
+            },
+            monster_name,
+        );
+    }
+
+    MonsterChatOutcome {
+        event: EngineEvent::msg_with(
+            "wizard-taunt-general",
+            vec![
+                (
+                    "malediction",
+                    WIZARD_MALEDICTIONS[(state.chat_roll as usize) % WIZARD_MALEDICTIONS.len()]
+                        .to_string(),
+                ),
+                (
+                    "insult",
+                    WIZARD_INSULTS[(state.chat_roll as usize) % WIZARD_INSULTS.len()].to_string(),
+                ),
+            ],
+        ),
         wake_radius: None,
     }
 }
@@ -797,7 +871,9 @@ pub fn contextual_monster_chat(
             }
         }
         MonsterSound::Bribe | MonsterSound::Cuss => {
-            if !state.is_peaceful {
+            if !state.is_peaceful && monster_name.eq_ignore_ascii_case("Wizard of Yendor") {
+                Some(wizard_chat_outcome(monster_name, state))
+            } else if !state.is_peaceful {
                 let key = if monster_def.flags.contains(MonsterFlags::MINION)
                     && monster_def.alignment > 0
                 {
@@ -2051,6 +2127,57 @@ mod tests {
         let mut rng = test_rng();
         let event = maybe_wizard_taunt(&world, wizard, player, true, &mut rng);
         assert!(event.is_none(), "paralyzed wizards should not taunt");
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_hostile_wizard_demands_amulet() {
+        let monster = fake_monster(
+            MonsterSound::Cuss,
+            "Wizard of Yendor",
+            '@',
+            MonsterFlags::empty(),
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "Wizard of Yendor",
+            MonsterChatState {
+                player_has_amulet: true,
+                chat_roll: 1,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("hostile Wizard chat should produce a taunt");
+        assert!(matches!(
+            outcome.event,
+            EngineEvent::Message { ref key, .. } if key == "wizard-taunt-relinquish"
+        ));
+    }
+
+    #[test]
+    fn test_contextual_monster_chat_badly_hurt_wizard_vows_return() {
+        let monster = fake_monster(
+            MonsterSound::Cuss,
+            "Wizard of Yendor",
+            '@',
+            MonsterFlags::empty(),
+        );
+        let outcome = contextual_monster_chat(
+            &monster,
+            "Wizard of Yendor",
+            MonsterChatState {
+                badly_hurt: true,
+                chat_roll: 2,
+                ..MonsterChatState::default()
+            },
+            false,
+        )
+        .expect("badly hurt Wizard chat should still produce a taunt");
+        assert!(matches!(
+            outcome.event,
+            EngineEvent::Message { ref key, .. }
+                if key == "wizard-taunt-return" || key == "wizard-taunt-back"
+        ));
     }
 
     // ── Stealing tests ───────────────────────────────────────────

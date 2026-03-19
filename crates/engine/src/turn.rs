@@ -1968,6 +1968,9 @@ fn resolve_player_action(
                         .get_component::<crate::equipment::EquipmentSlots>(player)
                         .map(|slots| (*slots).clone())
                         .unwrap_or_default();
+                    let player_badly_hurt = world
+                        .get_component::<HitPoints>(player)
+                        .is_some_and(|hp| hp.current < (hp.max.max(1) / 4));
                     let (
                         player_is_vampire_kindred,
                         player_is_nightchild,
@@ -1996,6 +1999,7 @@ fn resolve_player_action(
                         player_hallucinating: crate::status::is_hallucinating(world, player),
                         chat_roll: rng.random_range(0..4),
                         player_has_gold: player_gold(world, player) > 0,
+                        player_has_amulet: player_has_named_item(world, player, "Amulet of Yendor"),
                         player_armed: player_equipment.weapon.is_some(),
                         player_armored: player_equipment.cloak.is_some()
                             || player_equipment.body_armor.is_some()
@@ -2004,6 +2008,7 @@ fn resolve_player_action(
                             || player_equipment.gloves.is_some()
                             || player_equipment.boots.is_some(),
                         player_has_shirt: player_equipment.shirt.is_some(),
+                        player_badly_hurt,
                         player_is_healer: matches!(current_player_role(world), Some(Role::Healer)),
                         player_is_vampire_kindred,
                         player_is_nightchild,
@@ -17187,6 +17192,29 @@ mod tests {
                             | "npc-laugh-snickers"
                             | "npc-laugh-laughs"
                     )
+            )
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_hostile_wizard_uses_wizard_taunt_lines() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let _amulet = spawn_inventory_object_by_name(&mut world, "Amulet of Yendor", 'a');
+        spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key.starts_with("wizard-taunt-")
             )
         }));
     }
