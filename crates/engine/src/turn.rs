@@ -5976,11 +5976,17 @@ fn find_player_named_item(
     player: hecs::Entity,
     expected_name: &str,
 ) -> Option<hecs::Entity> {
-    if let Some(inv) = world.get_component::<crate::inventory::Inventory>(player)
-        && let Some(item) = inv.items.iter().find(|item| {
-            item_display_name(world, **item)
+    let expected_artifact =
+        crate::artifacts::find_artifact_by_name(expected_name).map(|artifact| artifact.id);
+    let item_matches = |item: hecs::Entity| {
+        world
+            .get_component::<ObjectCore>(item)
+            .is_some_and(|core| expected_artifact.is_some_and(|artifact_id| core.artifact == Some(artifact_id)))
+            || item_display_name(world, item)
                 .is_some_and(|name| quest_name_matches(&name, expected_name))
-        })
+    };
+    if let Some(inv) = world.get_component::<crate::inventory::Inventory>(player)
+        && let Some(item) = inv.items.iter().find(|item| item_matches(**item))
     {
         return Some(*item);
     }
@@ -5989,9 +5995,7 @@ fn find_player_named_item(
         .get_component::<crate::equipment::EquipmentSlots>(player)
         .and_then(|slots| {
             slots.all_worn().iter().find_map(|(_, item)| {
-                item_display_name(world, *item)
-                    .is_some_and(|name| quest_name_matches(&name, expected_name))
-                    .then_some(*item)
+                item_matches(*item).then_some(*item)
             })
         })
 }
@@ -8879,6 +8883,7 @@ mod tests {
         WizardIntervention,
         WizardAmuletWake,
         WizardBlackGlowBlind,
+        WizardCovetousQuestArtifact,
         HumanoidAlohaChat,
         HobbitComplaintChat,
         VampireKindredChat,
@@ -8936,6 +8941,9 @@ mod tests {
                 StoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 StoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 StoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
+                StoryTraversalScenario::WizardCovetousQuestArtifact => {
+                    "wizard-covetous-quest-artifact"
+                }
                 StoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
                 StoryTraversalScenario::HobbitComplaintChat => "hobbit-complaint-chat",
                 StoryTraversalScenario::VampireKindredChat => "vampire-kindred-chat",
@@ -10645,6 +10653,67 @@ mod tests {
                 );
 
                 (world, events)
+            }
+            StoryTraversalScenario::WizardCovetousQuestArtifact => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, wizard_identity())
+                    .expect("player should accept wizard identity");
+                spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'b');
+                let mut rng = test_rng();
+                let mut setup_events = Vec::new();
+                change_level_to_branch(
+                    &mut world,
+                    crate::dungeon::DungeonBranch::Quest,
+                    7,
+                    false,
+                    None,
+                    &mut rng,
+                    &mut setup_events,
+                );
+                let eye = crate::artifacts::find_artifact_by_name("The Eye of the Aethiopica")
+                    .expect("wizard covetous story matrix should know the quest artifact");
+                let eye = world
+                    .ecs()
+                    .query::<&ObjectCore>()
+                    .iter()
+                    .find_map(|(entity, core)| (core.artifact == Some(eye.id)).then_some(entity))
+                    .expect("wizard covetous story matrix should find the quest artifact");
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(eye) {
+                    *loc = ObjectLocation::Inventory;
+                }
+                if let Some(mut inv) =
+                    world.get_component_mut::<crate::inventory::Inventory>(player)
+                {
+                    inv.items.push(eye);
+                }
+                let player_pos = world
+                    .get_component::<Positioned>(player)
+                    .expect("player should keep a position after quest goal transition")
+                    .0;
+                let wizard = spawn_full_monster(
+                    &mut world,
+                    Position::new(player_pos.x + 1, player_pos.y),
+                    "Wizard of Yendor",
+                    12,
+                );
+                let mut player_events = read_player_events(&world, player);
+                player_events.invoked = true;
+                persist_player_events(&mut world, player, player_events);
+                let action = crate::npc::choose_wizard_action(
+                    &world, wizard, false, true, true, true, &mut rng,
+                );
+                let final_events = force_wizard_harassment_action(
+                    &mut world,
+                    Some(wizard),
+                    player,
+                    action,
+                    &mut rng,
+                );
+                (world, final_events)
             }
             StoryTraversalScenario::HumanoidAlohaChat => {
                 let mut world = make_test_world();
@@ -14975,25 +15044,42 @@ mod tests {
             .ecs_mut()
             .insert_one(player, wizard_identity())
             .expect("player should accept wizard identity");
-        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
-        let eye = world.spawn((
-            ObjectCore {
-                otyp: ObjectTypeId(0),
-                object_class: ObjectClass::Tool,
-                quantity: 1,
-                weight: 10,
-                age: 0,
-                inv_letter: Some('q'),
-                artifact: None,
-            },
-            ObjectLocation::Inventory,
-            Name("The Eye of the Aethiopica".to_string()),
-        ));
+        let mut rng = test_rng();
+        let mut setup_events = Vec::new();
+        change_level_to_branch(
+            &mut world,
+            crate::dungeon::DungeonBranch::Quest,
+            7,
+            false,
+            None,
+            &mut rng,
+            &mut setup_events,
+        );
+        let eye = crate::artifacts::find_artifact_by_name("The Eye of the Aethiopica")
+            .expect("Eye of the Aethiopica should exist");
+        let eye = world
+            .ecs()
+            .query::<&ObjectCore>()
+            .iter()
+            .find_map(|(entity, core)| (core.artifact == Some(eye.id)).then_some(entity))
+            .expect("quest goal should place the Eye artifact");
+        if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(eye) {
+            *loc = ObjectLocation::Inventory;
+        }
         if let Some(mut inv) = world.get_component_mut::<crate::inventory::Inventory>(player) {
             inv.items.push(eye);
         }
         let mut events = Vec::new();
-        let mut rng = test_rng();
+        let player_pos = world
+            .get_component::<Positioned>(player)
+            .expect("player should keep a position")
+            .0;
+        let wizard = spawn_full_monster(
+            &mut world,
+            Position::new(player_pos.x + 1, player_pos.y),
+            "Wizard of Yendor",
+            12,
+        );
 
         apply_wizard_harassment_action(
             &mut world,
@@ -23091,6 +23177,7 @@ mod tests {
             StoryTraversalScenario::WizardIntervention,
             StoryTraversalScenario::WizardAmuletWake,
             StoryTraversalScenario::WizardBlackGlowBlind,
+            StoryTraversalScenario::WizardCovetousQuestArtifact,
             StoryTraversalScenario::HumanoidAlohaChat,
             StoryTraversalScenario::HobbitComplaintChat,
             StoryTraversalScenario::VampireKindredChat,
@@ -24015,6 +24102,55 @@ mod tests {
                     assert!(
                         cursed,
                         "{} should still curse inventory despite suppressing the message",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::WizardCovetousQuestArtifact => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "wizard-steal-quest-artifact"
+                    )));
+                    assert!(
+                        find_player_named_item(&world, player, "The Eye of the Aethiopica")
+                            .is_none(),
+                        "{} should remove the quest artifact from the player",
+                        scenario.label()
+                    );
+                    assert!(
+                        find_player_named_item(&world, player, "Book of the Dead").is_some(),
+                        "{} should leave lower-priority invocation tools on the player",
+                        scenario.label()
+                    );
+                    let wizard = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("wizard covetous scenario should keep the live Wizard");
+                    let wizard_pos = world
+                        .get_component::<Positioned>(wizard)
+                        .expect("wizard should keep a position")
+                        .0;
+                    let eye = world
+                        .ecs()
+                        .query::<&Name>()
+                        .iter()
+                        .find_map(|(entity, name)| {
+                            quest_name_matches(&name.0, "The Eye of the Aethiopica")
+                                .then_some(entity)
+                        })
+                        .expect("wizard covetous scenario should keep the quest artifact entity");
+                    let item_loc = world
+                        .get_component::<ObjectLocation>(eye)
+                        .expect("stolen quest artifact should stay in the world");
+                    assert!(matches!(
+                        *item_loc,
+                        ObjectLocation::Floor { x, y, level }
+                            if (x as i32 - wizard_pos.x).abs() <= 1
+                                && (y as i32 - wizard_pos.y).abs() <= 1
+                                && level == world.dungeon().current_data_dungeon_level()
+                    ));
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.invoked),
+                        "{} should preserve the invoked covetous priority trigger",
                         scenario.label()
                     );
                 }

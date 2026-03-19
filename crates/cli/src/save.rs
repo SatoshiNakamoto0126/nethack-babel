@@ -1889,6 +1889,7 @@ mod tests {
         WizardIntervention,
         WizardAmuletWake,
         WizardBlackGlowBlind,
+        WizardCovetousQuestArtifact,
         HumanoidAlohaChat,
         HobbitComplaintChat,
         VampireKindredChat,
@@ -1948,6 +1949,9 @@ mod tests {
                 SaveStoryTraversalScenario::WizardIntervention => "wizard-intervention",
                 SaveStoryTraversalScenario::WizardAmuletWake => "wizard-amulet-wake",
                 SaveStoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
+                SaveStoryTraversalScenario::WizardCovetousQuestArtifact => {
+                    "wizard-covetous-quest-artifact"
+                }
                 SaveStoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
                 SaveStoryTraversalScenario::HobbitComplaintChat => "hobbit-complaint-chat",
                 SaveStoryTraversalScenario::VampireKindredChat => "vampire-kindred-chat",
@@ -3731,6 +3735,74 @@ mod tests {
                     "deterministic black-glow harness should still curse the tracked item"
                 );
                 (loaded, events)
+            }
+            SaveStoryTraversalScenario::WizardCovetousQuestArtifact => {
+                let mut world = make_stair_world(DungeonBranch::Quest, 6, Terrain::StairsDown);
+                let player = world.player();
+                world
+                    .ecs_mut()
+                    .insert_one(player, wizard_identity())
+                    .expect("player should accept wizard identity");
+                let mut rng = Pcg64::seed_from_u64(7013);
+                let stairs_down = find_terrain(&world.dungeon().current_level, Terrain::StairsDown)
+                    .expect("wizard covetous save matrix should preserve quest stairs down");
+                set_player_position(&mut world, stairs_down);
+                let descend_events = resolve_turn(&mut world, PlayerAction::GoDown, &mut rng);
+                assert!(
+                    descend_events
+                        .iter()
+                        .any(|event| matches!(event, EngineEvent::LevelChanged { .. })),
+                    "wizard covetous save matrix should descend into the quest goal"
+                );
+                spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'b');
+                let eye = find_artifact_by_name("The Eye of the Aethiopica")
+                    .expect("wizard covetous save matrix should use the real quest artifact");
+                let eye = world
+                    .ecs()
+                    .query::<&ObjectCore>()
+                    .iter()
+                    .find_map(|(entity, core)| (core.artifact == Some(eye.id)).then_some(entity))
+                    .expect("wizard covetous save matrix should find the quest artifact entity");
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(eye) {
+                    *loc = ObjectLocation::Inventory;
+                }
+                if let Some(mut inv) = world.get_component_mut::<Inventory>(player) {
+                    inv.items.push(eye);
+                }
+                let player_pos = world
+                    .get_component::<Positioned>(player)
+                    .expect("wizard covetous save matrix player should keep a position")
+                    .0;
+                let _wizard = spawn_full_monster(
+                    &mut world,
+                    Position::new(player_pos.x + 1, player_pos.y),
+                    "Wizard of Yendor",
+                    20,
+                );
+                if let Some(mut player_events) = world.get_component_mut::<PlayerEvents>(player) {
+                    player_events.invoked = true;
+                }
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-wizard-covetous-quest-artifact",
+                    &world,
+                    [64u8; 32],
+                );
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let loaded_player = loaded.player();
+                let wizard = find_monster_named(&loaded, "Wizard of Yendor")
+                    .expect("wizard covetous save matrix should keep a live Wizard");
+                let action = nethack_babel_engine::npc::choose_wizard_action(
+                    &loaded, wizard, false, true, true, true, &mut rng,
+                );
+                let final_events = nethack_babel_engine::turn::force_wizard_harassment_action(
+                    &mut loaded,
+                    Some(wizard),
+                    loaded_player,
+                    action,
+                    &mut rng,
+                );
+                (loaded, final_events)
             }
             SaveStoryTraversalScenario::HumanoidAlohaChat => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
@@ -7435,6 +7507,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardIntervention,
             SaveStoryTraversalScenario::WizardAmuletWake,
             SaveStoryTraversalScenario::WizardBlackGlowBlind,
+            SaveStoryTraversalScenario::WizardCovetousQuestArtifact,
             SaveStoryTraversalScenario::HumanoidAlohaChat,
             SaveStoryTraversalScenario::HobbitComplaintChat,
             SaveStoryTraversalScenario::VampireKindredChat,
@@ -8279,6 +8352,84 @@ mod tests {
                             .get_component::<StatusEffects>(player)
                             .is_some_and(|status| status.blindness > 0),
                         "black-glow blind scenario should preserve blindness through round-trip"
+                    );
+                }
+                SaveStoryTraversalScenario::WizardCovetousQuestArtifact => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "wizard-steal-quest-artifact"
+                    )));
+                    let player_keeps_book =
+                        resolve_object_type_by_spec(&world, "Book of the Dead").is_some_and(
+                            |book_type| {
+                                world.get_component::<Inventory>(player).is_some_and(|inv| {
+                                    inv.items.iter().any(|item| {
+                                        world
+                                            .get_component::<ObjectCore>(*item)
+                                            .is_some_and(|core| core.otyp == book_type)
+                                            && world
+                                                .get_component::<ObjectLocation>(*item)
+                                                .is_some_and(|loc| {
+                                                    matches!(*loc, ObjectLocation::Inventory)
+                                                })
+                                    })
+                                })
+                            },
+                        );
+                    assert!(
+                        player_keeps_book,
+                        "save/load covetous matrix should leave lower-priority invocation tools on the player"
+                    );
+                    let eye_artifact = find_artifact_by_name("The Eye of the Aethiopica")
+                        .expect("wizard covetous save matrix should know the quest artifact id");
+                    let player_keeps_eye =
+                        world.get_component::<Inventory>(player).is_some_and(|inv| {
+                            inv.items.iter().any(|item| {
+                                world
+                                    .get_component::<ObjectCore>(*item)
+                                    .is_some_and(|core| core.artifact == Some(eye_artifact.id))
+                                    && world
+                                        .get_component::<ObjectLocation>(*item)
+                                        .is_some_and(|loc| {
+                                            matches!(*loc, ObjectLocation::Inventory)
+                                        })
+                            })
+                        });
+                    assert!(
+                        !player_keeps_eye,
+                        "save/load covetous matrix should remove the quest artifact from the player"
+                    );
+                    let wizard = find_monster_named(&world, "Wizard of Yendor")
+                        .expect("wizard covetous save matrix should keep a live Wizard");
+                    let wizard_pos = world
+                        .get_component::<Positioned>(wizard)
+                        .expect("wizard should keep a position")
+                        .0;
+                    let eye = world
+                        .ecs()
+                        .query::<&ObjectCore>()
+                        .iter()
+                        .find_map(|(entity, core)| {
+                            (core.artifact == Some(eye_artifact.id)).then_some(entity)
+                        })
+                        .expect(
+                            "wizard covetous save matrix should keep the quest artifact entity",
+                        );
+                    let item_loc = world
+                        .get_component::<ObjectLocation>(eye)
+                        .expect("stolen quest artifact should stay in the world");
+                    assert!(matches!(
+                        *item_loc,
+                        ObjectLocation::Floor { x, y, level }
+                            if (x as i32 - wizard_pos.x).abs() <= 1
+                                && (y as i32 - wizard_pos.y).abs() <= 1
+                                && level == world.dungeon().current_data_dungeon_level()
+                    ));
+                    assert!(
+                        world
+                            .get_component::<PlayerEvents>(player)
+                            .is_some_and(|events| events.invoked),
+                        "save/load covetous matrix should preserve the invoked priority trigger"
                     );
                 }
                 SaveStoryTraversalScenario::VampireNightChat => {
