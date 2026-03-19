@@ -1171,13 +1171,7 @@ pub fn voiced_monster_chat(
                 "npc-neigh-whickers"
             }
         }
-        MonsterSound::Moo => {
-            if state.is_tame {
-                "npc-moo-moos"
-            } else {
-                "npc-bellow-bellows"
-            }
-        }
+        MonsterSound::Moo => "npc-moo-moos",
         MonsterSound::Wail => "npc-wail-wails",
         MonsterSound::Gurgle => "npc-gurgle-gurgles",
         MonsterSound::Burble => "npc-burble-burbles",
@@ -2965,10 +2959,10 @@ mod tests {
     }
 
     #[test]
-    fn test_voiced_monster_chat_hostile_moo_becomes_bellow() {
+    fn test_voiced_monster_chat_untamed_moo_stays_moo() {
         let evt = voiced_monster_chat("rothe", MonsterSound::Moo, MonsterChatState::default())
             .expect("untamed mooing monsters should emit a chat line");
-        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-bellow-bellows"));
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-moo-moos"));
     }
 
     #[test]
