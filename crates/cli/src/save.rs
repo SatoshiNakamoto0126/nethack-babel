@@ -1815,6 +1815,7 @@ mod tests {
         WizardBlackGlowBlind,
         HumanoidAlohaChat,
         WereFullMoonChat,
+        WereDaytimeMoonChat,
         WizardLevelTeleport,
         EndgameAscension,
     }
@@ -1868,6 +1869,7 @@ mod tests {
                 SaveStoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 SaveStoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
                 SaveStoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
+                SaveStoryTraversalScenario::WereDaytimeMoonChat => "were-daytime-moon-chat",
                 SaveStoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 SaveStoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -3680,6 +3682,38 @@ mod tests {
 
                 let (mut loaded, loaded_rng) =
                     save_and_reload_world("story-matrix-were-full-moon-chat", &world, [66u8; 32]);
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::WereDaytimeMoonChat => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                for _ in 0..8 {
+                    world.advance_turn();
+                }
+                let were_name =
+                    monster_name_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+                let were = spawn_full_monster(&mut world, Position::new(6, 5), &were_name, 10);
+                let were_id =
+                    monster_id_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+                world
+                    .ecs_mut()
+                    .insert_one(were, MonsterIdentity(were_id))
+                    .expect("daytime were save scenario should accept explicit monster identity");
+                let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+                let _ = nethack_babel_engine::status::make_sleeping(&mut world, sleeper, 20);
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-were-daytime-moon-chat",
+                    &world,
+                    [167u8; 32],
+                );
                 let mut rng = Pcg64::from_seed(loaded_rng);
                 let events = resolve_turn(
                     &mut loaded,
@@ -6909,6 +6943,7 @@ mod tests {
             SaveStoryTraversalScenario::WizardBlackGlowBlind,
             SaveStoryTraversalScenario::HumanoidAlohaChat,
             SaveStoryTraversalScenario::WereFullMoonChat,
+            SaveStoryTraversalScenario::WereDaytimeMoonChat,
             SaveStoryTraversalScenario::WizardLevelTeleport,
             SaveStoryTraversalScenario::EndgameAscension,
         ] {
@@ -7764,6 +7799,25 @@ mod tests {
                     assert!(
                         !nethack_babel_engine::status::is_sleeping(&world, sleeper),
                         "full moon were chat should still wake nearby sleeping monsters after save/load"
+                    );
+                }
+                SaveStoryTraversalScenario::WereDaytimeMoonChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-were-moon"
+                    )));
+                    let sleeper = world
+                        .ecs()
+                        .query::<(
+                            &nethack_babel_engine::world::Monster,
+                            &nethack_babel_engine::world::Name,
+                        )>()
+                        .iter()
+                        .find_map(|(entity, (_, name))| (name.0 == "kobold").then_some(entity))
+                        .expect("daytime were save matrix should keep the sleeping kobold");
+                    assert!(
+                        nethack_babel_engine::status::is_sleeping(&world, sleeper),
+                        "daytime full moon were chat should keep nearby sleepers asleep after save/load"
                     );
                 }
                 SaveStoryTraversalScenario::HumanoidAlohaChat => {

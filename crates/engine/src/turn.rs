@@ -1977,6 +1977,7 @@ fn resolve_player_action(
                         hungry,
                         satiated,
                         full_moon: crate::were::is_full_moon(world.turn()),
+                        night: crate::were::is_night(world.turn()),
                         blinded,
                         trapped,
                         hurt,
@@ -2026,7 +2027,8 @@ fn resolve_player_action(
                         {
                             let wakes_nearby = (monster_def.sound
                                 == nethack_babel_data::schema::MonsterSound::Were
-                                && crate::were::is_full_moon(world.turn()))
+                                && crate::were::is_full_moon(world.turn())
+                                && crate::were::is_night(world.turn()))
                                 || monster_def.sound
                                     == nethack_babel_data::schema::MonsterSound::Trumpet;
                             if wakes_nearby {
@@ -8524,6 +8526,7 @@ mod tests {
         WizardBlackGlowBlind,
         HumanoidAlohaChat,
         WereFullMoonChat,
+        WereDaytimeMoonChat,
         WizardLevelTeleport,
         EndgameAscension,
     }
@@ -8575,6 +8578,7 @@ mod tests {
                 StoryTraversalScenario::WizardBlackGlowBlind => "wizard-black-glow-blind",
                 StoryTraversalScenario::HumanoidAlohaChat => "humanoid-aloha-chat",
                 StoryTraversalScenario::WereFullMoonChat => "were-full-moon-chat",
+                StoryTraversalScenario::WereDaytimeMoonChat => "were-daytime-moon-chat",
                 StoryTraversalScenario::WizardLevelTeleport => "wizard-level-teleport",
                 StoryTraversalScenario::EndgameAscension => "endgame-ascension",
             }
@@ -10307,6 +10311,32 @@ mod tests {
                     .ecs_mut()
                     .insert_one(were, crate::world::MonsterIdentity(were_id))
                     .expect("were full moon scenario should accept explicit monster identity");
+                let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+                let _ = crate::status::make_sleeping(&mut world, sleeper, 20);
+
+                let events = resolve_turn(
+                    &mut world,
+                    PlayerAction::Chat {
+                        direction: Direction::East,
+                    },
+                    &mut test_rng(),
+                );
+
+                (world, events)
+            }
+            StoryTraversalScenario::WereDaytimeMoonChat => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                advance_world_turns(&mut world, 8);
+                let were_name =
+                    monster_name_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+                let were = spawn_full_monster(&mut world, Position::new(6, 5), &were_name, 10);
+                let were_id =
+                    monster_id_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+                world
+                    .ecs_mut()
+                    .insert_one(were, crate::world::MonsterIdentity(were_id))
+                    .expect("daytime were scenario should accept explicit monster identity");
                 let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
                 let _ = crate::status::make_sleeping(&mut world, sleeper, 20);
 
@@ -17142,6 +17172,38 @@ mod tests {
     }
 
     #[test]
+    fn test_chatting_with_daytime_full_moon_werewolf_mentions_moon_and_keeps_sleepers() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        advance_world_turns(&mut world, 8);
+        let were_name = monster_name_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+        let were = spawn_full_monster(&mut world, Position::new(6, 5), &were_name, 10);
+        let were_id = monster_id_with_sound_excluding(&world, MonsterSound::Were, &["wererat"]);
+        world
+            .ecs_mut()
+            .insert_one(were, crate::world::MonsterIdentity(were_id))
+            .expect("daytime were chat test should accept explicit monster identity");
+        let sleeper = spawn_full_monster(&mut world, Position::new(7, 5), "kobold", 8);
+        let _ = crate::status::make_sleeping(&mut world, sleeper, 20);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-were-moon")
+        }));
+        assert!(
+            crate::status::is_sleeping(&world, sleeper),
+            "daytime full moon were chat should not wake nearby sleepers"
+        );
+    }
+
+    #[test]
     fn test_chatting_with_werewolf_off_full_moon_mentions_moon() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -21627,6 +21689,7 @@ mod tests {
             StoryTraversalScenario::WizardBlackGlowBlind,
             StoryTraversalScenario::HumanoidAlohaChat,
             StoryTraversalScenario::WereFullMoonChat,
+            StoryTraversalScenario::WereDaytimeMoonChat,
             StoryTraversalScenario::WizardLevelTeleport,
             StoryTraversalScenario::EndgameAscension,
         ] {
@@ -22566,6 +22629,23 @@ mod tests {
                     assert!(
                         !crate::status::is_sleeping(&world, sleeper),
                         "{} should wake nearby sleeping monsters",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::WereDaytimeMoonChat => {
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "npc-were-moon"
+                    )));
+                    let sleeper = world
+                        .ecs()
+                        .query::<(&Monster, &Name)>()
+                        .iter()
+                        .find_map(|(entity, (_, name))| (name.0 == "kobold").then_some(entity))
+                        .expect("daytime were scenario should keep the sleeping kobold");
+                    assert!(
+                        crate::status::is_sleeping(&world, sleeper),
+                        "{} should keep nearby sleeping monsters asleep",
                         scenario.label()
                     );
                 }

@@ -645,6 +645,7 @@ pub struct MonsterChatState {
     pub hungry: bool,
     pub satiated: bool,
     pub full_moon: bool,
+    pub night: bool,
     pub blinded: bool,
     pub trapped: bool,
     pub hurt: bool,
@@ -893,7 +894,7 @@ pub fn voiced_monster_chat(
     let tame_level = state.tameness.unwrap_or(if state.is_tame { 10 } else { 0 });
     let key = match sound {
         MonsterSound::Bark => {
-            if state.full_moon {
+            if state.full_moon && state.night {
                 "npc-bark-howls"
             } else if monster_name.eq_ignore_ascii_case("dingo")
                 && state.is_peaceful
@@ -917,7 +918,7 @@ pub fn voiced_monster_chat(
             }
         }
         MonsterSound::Were => {
-            if state.full_moon {
+            if state.full_moon && state.night {
                 if monster_name.to_ascii_lowercase().contains("wererat") {
                     "npc-were-shrieks"
                 } else {
@@ -2738,6 +2739,7 @@ mod tests {
             MonsterSound::Bark,
             MonsterChatState {
                 full_moon: true,
+                night: true,
                 ..MonsterChatState::default()
             },
         )
@@ -2753,12 +2755,44 @@ mod tests {
     }
 
     #[test]
+    fn test_voiced_monster_chat_daytime_full_moon_barker_stays_non_howl() {
+        let evt = voiced_monster_chat(
+            "little dog",
+            MonsterSound::Bark,
+            MonsterChatState {
+                is_peaceful: true,
+                full_moon: true,
+                night: false,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("daytime full moon peaceful barkers should still emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-bark-barks"));
+    }
+
+    #[test]
+    fn test_voiced_monster_chat_daytime_full_moon_were_mentions_moon() {
+        let evt = voiced_monster_chat(
+            "werewolf",
+            MonsterSound::Were,
+            MonsterChatState {
+                full_moon: true,
+                night: false,
+                ..MonsterChatState::default()
+            },
+        )
+        .expect("daytime full moon were-creatures should still emit a chat line");
+        assert!(matches!(evt, EngineEvent::Message { key, .. } if key == "npc-were-moon"));
+    }
+
+    #[test]
     fn test_voiced_monster_chat_full_moon_wererat_shrieks() {
         let evt = voiced_monster_chat(
             "wererat",
             MonsterSound::Were,
             MonsterChatState {
                 full_moon: true,
+                night: true,
                 ..MonsterChatState::default()
             },
         )

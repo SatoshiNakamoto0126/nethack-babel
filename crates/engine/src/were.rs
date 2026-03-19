@@ -272,6 +272,15 @@ pub fn is_full_moon(turn: u32) -> bool {
     (turn % 80) < 10
 }
 
+/// Check whether the current turn falls during night hours.
+///
+/// NetHack uses wall-clock time. We approximate that cycle over 24 turns:
+/// 00:00-05:59 and 22:00-23:59 count as night.
+pub fn is_night(turn: u32) -> bool {
+    let hour = turn % 24;
+    !(6..=21).contains(&hour)
+}
+
 /// Decide whether a were-creature should change form this turn.
 ///
 /// Mirrors C `were_change(mon)`.
