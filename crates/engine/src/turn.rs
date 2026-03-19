@@ -8439,6 +8439,7 @@ fn charge_unpaid_wand_usage_in_shop(
 enum ApplyUsageFeeKind {
     DefaultCharged,
     CheapCharged,
+    Lamp { is_magic_lamp: bool, was_lit: bool },
 }
 
 #[derive(Clone, Copy)]
@@ -8451,11 +8452,6 @@ fn snapshot_apply_usage_fee(
     world: &GameWorld,
     item: hecs::Entity,
 ) -> Option<ApplyUsageFeeSnapshot> {
-    let charges_before_use = world.get_component::<Enchantment>(item)?.spe as i32;
-    if charges_before_use <= 0 {
-        return None;
-    }
-
     let kind = match crate::apply::classify_ext_tool_entity(world, item) {
         Some(crate::apply::ExtToolType::CanOfGrease) => ApplyUsageFeeKind::CheapCharged,
         Some(
@@ -8464,7 +8460,41 @@ fn snapshot_apply_usage_fee(
             | crate::apply::ExtToolType::FireHorn
             | crate::apply::ExtToolType::DrumOfEarthquake,
         ) => ApplyUsageFeeKind::DefaultCharged,
-        _ => return None,
+        _ => match crate::tools::classify_tool(world, item) {
+            Some(crate::tools::ToolType::OilLamp) => ApplyUsageFeeKind::Lamp {
+                is_magic_lamp: false,
+                was_lit: world
+                    .get_component::<LightSource>(item)
+                    .map(|light| light.lit)
+                    .unwrap_or(false),
+            },
+            Some(crate::tools::ToolType::MagicLamp) => ApplyUsageFeeKind::Lamp {
+                is_magic_lamp: true,
+                was_lit: world
+                    .get_component::<LightSource>(item)
+                    .map(|light| light.lit)
+                    .unwrap_or(false),
+            },
+            Some(crate::tools::ToolType::Lantern) => ApplyUsageFeeKind::Lamp {
+                is_magic_lamp: false,
+                was_lit: world
+                    .get_component::<LightSource>(item)
+                    .map(|light| light.lit)
+                    .unwrap_or(false),
+            },
+            _ => return None,
+        },
+    };
+
+    let charges_before_use = match kind {
+        ApplyUsageFeeKind::DefaultCharged | ApplyUsageFeeKind::CheapCharged => {
+            let charges_before_use = world.get_component::<Enchantment>(item)?.spe as i32;
+            if charges_before_use <= 0 {
+                return None;
+            }
+            charges_before_use
+        }
+        ApplyUsageFeeKind::Lamp { .. } => 0,
     };
 
     Some(ApplyUsageFeeSnapshot {
@@ -8480,11 +8510,33 @@ fn charge_unpaid_apply_usage_in_shop(
     snapshot: ApplyUsageFeeSnapshot,
     events: &mut Vec<EngineEvent>,
 ) {
-    let charges_after_use = world
-        .get_component::<Enchantment>(item)
-        .map(|ench| ench.spe as i32)
-        .unwrap_or(snapshot.charges_before_use);
-    if charges_after_use >= snapshot.charges_before_use {
+    let used = match snapshot.kind {
+        ApplyUsageFeeKind::DefaultCharged | ApplyUsageFeeKind::CheapCharged => {
+            let charges_after_use = world
+                .get_component::<Enchantment>(item)
+                .map(|ench| ench.spe as i32)
+                .unwrap_or(snapshot.charges_before_use);
+            charges_after_use < snapshot.charges_before_use
+        }
+        ApplyUsageFeeKind::Lamp {
+            is_magic_lamp,
+            was_lit,
+        } => {
+            let now_lit = world
+                .get_component::<LightSource>(item)
+                .map(|light| light.lit)
+                .unwrap_or(false);
+            (!was_lit && now_lit)
+                || (is_magic_lamp
+                    && events.iter().any(|event| {
+                        matches!(
+                            event,
+                            EngineEvent::Message { key, .. } if key == "tool-magic-lamp-djinni"
+                        )
+                    }))
+        }
+    };
+    if !used {
         return;
     }
 
@@ -8516,6 +8568,16 @@ fn charge_unpaid_apply_usage_in_shop(
                 ApplyUsageFeeKind::DefaultCharged => crate::shop::usage_fee(
                     entry.price,
                     false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                ),
+                ApplyUsageFeeKind::Lamp { is_magic_lamp, .. } => crate::shop::usage_fee(
+                    entry.price,
+                    is_magic_lamp,
                     false,
                     false,
                     false,
@@ -9750,6 +9812,7 @@ mod tests {
         ShopNoMoney,
         ShopWandUsageFee,
         ShopGreaseUsageFee,
+        ShopLampUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         DemonBribe,
@@ -9814,6 +9877,7 @@ mod tests {
                 StoryTraversalScenario::ShopNoMoney => "shop-no-money",
                 StoryTraversalScenario::ShopWandUsageFee => "shop-wand-usage-fee",
                 StoryTraversalScenario::ShopGreaseUsageFee => "shop-grease-usage-fee",
+                StoryTraversalScenario::ShopLampUsageFee => "shop-lamp-usage-fee",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 StoryTraversalScenario::DemonBribe => "demon-bribe",
@@ -10662,6 +10726,35 @@ mod tests {
                 let mut rng = test_rng();
                 let apply_events =
                     resolve_turn(&mut world, PlayerAction::Apply { item: grease }, &mut rng);
+                (world, apply_events)
+            }
+            StoryTraversalScenario::ShopLampUsageFee => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let lamp = spawn_inventory_object_by_name(&mut world, "oil lamp", 'l');
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(lamp, 100, 1),
+                    "shop bill should accept unpaid lamp"
+                );
+
+                let mut rng = test_rng();
+                let apply_events =
+                    resolve_turn(&mut world, PlayerAction::Apply { item: lamp }, &mut rng);
                 (world, apply_events)
             }
             StoryTraversalScenario::ShopkeeperSell => {
@@ -18667,6 +18760,206 @@ mod tests {
     }
 
     #[test]
+    fn test_applying_unpaid_oil_lamp_in_shop_adds_usage_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let lamp = spawn_inventory_object_by_name(&mut world, "oil lamp", 'l');
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(lamp, 100, 1),
+            "shop bill should accept unpaid lamp"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Apply { item: lamp },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tool-lamp-on"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert!(
+            world
+                .get_component::<LightSource>(lamp)
+                .is_some_and(|light| light.lit),
+            "apply should light the lamp"
+        );
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 25);
+    }
+
+    #[test]
+    fn test_turning_off_unpaid_oil_lamp_in_shop_does_not_add_usage_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let lamp = spawn_inventory_object_by_name(&mut world, "oil lamp", 'l');
+        world
+            .ecs_mut()
+            .insert_one(
+                lamp,
+                LightSource {
+                    lit: true,
+                    recharged: 0,
+                },
+            )
+            .expect("lamp should accept a light source");
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(lamp, 100, 1),
+            "shop bill should accept unpaid lamp"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Apply { item: lamp },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tool-lamp-off"
+        )));
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert!(
+            world
+                .get_component::<LightSource>(lamp)
+                .is_some_and(|light| !light.lit),
+            "apply should extinguish the lamp"
+        );
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 0);
+    }
+
+    #[test]
+    fn test_applying_unpaid_oil_lamp_in_shop_adds_usage_debit_when_lit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let lamp = spawn_inventory_object_by_name(&mut world, "oil lamp", 'l');
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(lamp, 100, 1),
+            "shop bill should accept unpaid lamp"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Apply { item: lamp },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tool-lamp-on"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 25);
+    }
+
+    #[test]
+    fn test_turning_off_unpaid_lit_oil_lamp_in_shop_does_not_add_usage_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let lamp = spawn_inventory_object_by_name(&mut world, "oil lamp", 'l');
+        world
+            .ecs_mut()
+            .insert_one(
+                lamp,
+                LightSource {
+                    lit: true,
+                    recharged: 0,
+                },
+            )
+            .expect("lamp should accept light state");
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(lamp, 100, 1),
+            "shop bill should accept unpaid lamp"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Apply { item: lamp },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tool-lamp-off"
+        )));
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 0);
+    }
+
+    #[test]
     fn test_striking_wand_on_peaceful_monster_removes_peaceful() {
         use crate::monster_ai::WandTypeTag;
         use crate::wands::{WandCharges, WandType};
@@ -25490,6 +25783,7 @@ mod tests {
             StoryTraversalScenario::ShopNoMoney,
             StoryTraversalScenario::ShopWandUsageFee,
             StoryTraversalScenario::ShopGreaseUsageFee,
+            StoryTraversalScenario::ShopLampUsageFee,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopChatPriceQuote,
             StoryTraversalScenario::DemonBribe,
@@ -25850,6 +26144,29 @@ mod tests {
                         shop.debit,
                         10,
                         "{} should add the grease usage fee as debit",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopLampUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "tool-lamp-on"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(
+                        shop.bill.total(),
+                        100,
+                        "{} should preserve the billed lamp price",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        shop.debit,
+                        25,
+                        "{} should add the lamp usage fee as debit",
                         scenario.label()
                     );
                 }

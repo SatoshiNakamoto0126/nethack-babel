@@ -817,6 +817,26 @@ pub fn unpaid_wand_usage_fee(item_buy_price: i32, charges_before_use: i8) -> i32
     }
 }
 
+/// Compute the fee for using an unpaid lamp or lantern in a shop.
+///
+/// Mirrors the lamp branches of `cost_per_charge()` in `shk.c`.
+/// Ordinary oil lamps and brass lanterns bill one quarter of the item's
+/// buy price on normal use.  Magic lamps use the oil-lamp base cost when
+/// used as a light source and bill `cost + cost/3` when releasing a djinni.
+pub fn unpaid_lamp_usage_fee(item_buy_price: i32, is_magic_lamp: bool, altusage: bool) -> i32 {
+    const OIL_LAMP_BASE_COST: i32 = 10;
+
+    if is_magic_lamp {
+        if altusage {
+            item_buy_price + item_buy_price / 3
+        } else {
+            OIL_LAMP_BASE_COST
+        }
+    } else {
+        item_buy_price / 4
+    }
+}
+
 /// Compute Kop spawn counts for a given dungeon depth.
 ///
 /// Returns `(kops, sergeants, lieutenants, kaptains)`.
@@ -3053,6 +3073,22 @@ mod tests {
     fn test_unpaid_wand_usage_fee_empty_wand_is_free() {
         assert_eq!(unpaid_wand_usage_fee(100, 0), 0);
         assert_eq!(unpaid_wand_usage_fee(100, -1), 0);
+    }
+
+    #[test]
+    fn test_unpaid_lamp_usage_fee_ordinary_lamp_is_quarter_price() {
+        assert_eq!(unpaid_lamp_usage_fee(100, false, false), 25);
+    }
+
+    #[test]
+    fn test_unpaid_lamp_usage_fee_magic_lamp_normal_use_is_fixed_oil_lamp_cost() {
+        assert_eq!(unpaid_lamp_usage_fee(50, true, false), 10);
+        assert_eq!(unpaid_lamp_usage_fee(100, true, false), 10);
+    }
+
+    #[test]
+    fn test_unpaid_lamp_usage_fee_magic_lamp_altuse_adds_one_third() {
+        assert_eq!(unpaid_lamp_usage_fee(50, true, true), 66);
     }
 
     // ── Credit for sale ─────────────────────────────────────────
