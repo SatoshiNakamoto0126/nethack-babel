@@ -6146,16 +6146,19 @@ mod tests {
     }
 
     #[test]
-    fn round_trip_loaded_chatting_with_oracle_keeps_consultation_text() {
+    fn round_trip_loaded_consulting_oracle_keeps_consultation_text() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         world.set_game_content(nethack_babel_engine::rumors::GameContent {
-            oracles: vec![
-                "The first consultation.".to_string(),
-                "The second consultation.".to_string(),
-            ],
+            rumors_true: vec!["A true rumor.".to_string()],
+            oracles: vec!["The first consultation.".to_string()],
             ..nethack_babel_engine::rumors::GameContent::default()
         });
-        spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        let oracle = spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        world
+            .ecs_mut()
+            .insert_one(oracle, nethack_babel_engine::world::Peaceful)
+            .expect("oracle should accept peaceful marker");
+        spawn_inventory_gold(&mut world, 200, '$');
 
         let (mut loaded, loaded_rng) =
             save_and_reload_world("oracle-chat-round-trip", &world, [89u8; 32]);
@@ -6164,8 +6167,9 @@ mod tests {
 
         let events = resolve_turn(
             &mut loaded,
-            PlayerAction::Chat {
+            PlayerAction::ConsultOracle {
                 direction: Direction::East,
+                major: false,
             },
             &mut rng,
         );
@@ -6174,7 +6178,7 @@ mod tests {
             event,
             EngineEvent::Message { key, args }
                 if key == "oracle-consultation"
-                    && args.iter().any(|(k, v)| k == "text" && v == "The first consultation.")
+                    && args.iter().any(|(k, v)| k == "text" && v == "A true rumor.")
         )));
         assert!(
             loaded
@@ -6182,6 +6186,18 @@ mod tests {
                 .is_some_and(|flags| flags.minor_oracle),
             "oracle consultation after load should still set the minor_oracle flag"
         );
+        let loaded_gold = loaded
+            .get_component::<nethack_babel_engine::inventory::Inventory>(loaded.player())
+            .map(|inv| {
+                inv.items
+                    .iter()
+                    .filter_map(|item| loaded.get_component::<ObjectCore>(*item))
+                    .filter(|core| core.object_class == ObjectClass::Coin)
+                    .map(|core| core.quantity.max(0))
+                    .sum::<i32>()
+            })
+            .unwrap_or(0);
+        assert_eq!(loaded_gold, 150);
     }
 
     #[test]

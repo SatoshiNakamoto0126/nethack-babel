@@ -452,6 +452,9 @@ priest-cranky-3 = Le prêtre dit : « Pèlerin, je n'ai plus rien à te dire. »
 
 rumor-fortune-cookie = Vous ouvrez le biscuit de fortune. Il dit : « { $rumor } »
 oracle-consultation = { $text }
+oracle-no-mood = The Oracle is in no mood for consultations.
+oracle-no-gold = You have no gold.
+oracle-not-enough-gold = You don't even have enough gold for that!
 
 ## ============================================================================
 ## Identification de symboles

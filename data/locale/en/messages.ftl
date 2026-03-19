@@ -1905,6 +1905,9 @@ npc-groan-groans = { $monster } groans.
 
 rumor-fortune-cookie = You open the fortune cookie. It reads: "{ $rumor }"
 oracle-consultation = { $text }
+oracle-no-mood = The Oracle is in no mood for consultations.
+oracle-no-gold = You have no gold.
+oracle-not-enough-gold = You don't even have enough gold for that!
 
 ## ============================================================================
 ## Symbol identification

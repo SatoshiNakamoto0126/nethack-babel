@@ -206,6 +206,10 @@ pub enum PlayerAction {
     Chat {
         direction: Direction,
     },
+    ConsultOracle {
+        direction: Direction,
+        major: bool,
+    },
     Loot,
     EnhanceSkill,
     Dip {

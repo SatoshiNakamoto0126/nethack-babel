@@ -539,6 +539,9 @@ priest-cranky-3 = Der Priester sagt: „Pilger, ich spreche nicht länger mit Eu
 
 rumor-fortune-cookie = Du öffnest den Glückskeks. Er sagt: „{ $rumor }"
 oracle-consultation = { $text }
+oracle-no-mood = The Oracle is in no mood for consultations.
+oracle-no-gold = You have no gold.
+oracle-not-enough-gold = You don't even have enough gold for that!
 
 ## ============================================================================
 ## Symbolidentifikation

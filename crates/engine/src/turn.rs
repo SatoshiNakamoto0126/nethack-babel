@@ -1964,31 +1964,6 @@ fn resolve_player_action(
                         aggravate_monsters_on_current_level(world, rng, events);
                         return;
                     }
-                    if monster_def.sound == nethack_babel_data::schema::MonsterSound::Oracle {
-                        let consultation_index = world
-                            .get_component::<PlayerEvents>(player)
-                            .map(|flags| if flags.minor_oracle { 1 } else { 0 })
-                            .unwrap_or(0);
-                        if let Some(text) = world
-                            .game_content()
-                            .oracle_consultation(consultation_index)
-                            .map(str::to_string)
-                        {
-                            if let Some(mut flags) = world.get_component_mut::<PlayerEvents>(player)
-                            {
-                                if !flags.minor_oracle {
-                                    flags.minor_oracle = true;
-                                } else {
-                                    flags.major_oracle = true;
-                                }
-                            }
-                            events.push(EngineEvent::msg_with(
-                                "oracle-consultation",
-                                vec![("text", text)],
-                            ));
-                            return;
-                        }
-                    }
                     let player_equipment = world
                         .get_component::<crate::equipment::EquipmentSlots>(player)
                         .map(|slots| (*slots).clone())
@@ -2096,6 +2071,10 @@ fn resolve_player_action(
                     events.push(EngineEvent::msg("chat-nobody-there"));
                 }
             }
+        }
+        PlayerAction::ConsultOracle { direction, major } => {
+            let player = world.player();
+            resolve_oracle_consultation(world, player, *direction, *major, rng, events);
         }
         PlayerAction::Ride => {
             if crate::steed::is_mounted(world, player) {
@@ -6819,6 +6798,118 @@ fn player_gold(world: &GameWorld, player: hecs::Entity) -> i64 {
                 .sum()
         })
         .unwrap_or(0)
+}
+
+fn oracle_minor_consultation_cost() -> i32 {
+    50
+}
+
+fn oracle_major_consultation_cost(world: &GameWorld, player: hecs::Entity) -> i32 {
+    500 + 50 * i32::from(current_player_level(world, player))
+}
+
+fn resolve_oracle_consultation_text<R: Rng>(
+    world: &GameWorld,
+    player_events: &PlayerEvents,
+    major: bool,
+    rng: &mut R,
+) -> Option<String> {
+    if major {
+        let major_index = usize::from(player_events.major_oracle);
+        world
+            .game_content()
+            .oracle_consultation(major_index)
+            .map(str::to_string)
+            .or_else(|| {
+                world
+                    .game_content()
+                    .random_true_rumor(rng)
+                    .map(str::to_string)
+            })
+    } else {
+        world
+            .game_content()
+            .random_true_rumor(rng)
+            .map(str::to_string)
+            .or_else(|| {
+                world
+                    .game_content()
+                    .oracle_consultation(0)
+                    .map(str::to_string)
+            })
+    }
+}
+
+fn resolve_oracle_consultation<R: Rng>(
+    world: &mut GameWorld,
+    player: hecs::Entity,
+    direction: Direction,
+    major: bool,
+    rng: &mut R,
+    events: &mut Vec<EngineEvent>,
+) {
+    let player_pos = world
+        .get_component::<Positioned>(player)
+        .map(|p| p.0)
+        .unwrap_or(Position::new(0, 0));
+    let target_pos = player_pos.step(direction);
+    let Some(monster_entity) = world
+        .ecs()
+        .query::<(&Monster, &Positioned)>()
+        .iter()
+        .find_map(|(entity, (_, pos))| (pos.0 == target_pos).then_some(entity))
+    else {
+        events.push(EngineEvent::msg("chat-nobody-there"));
+        return;
+    };
+
+    let Some(monster_def) = current_level_monster_def_for_entity(world, monster_entity) else {
+        events.push(EngineEvent::msg("npc-chat-no-response"));
+        return;
+    };
+    if monster_def.sound != nethack_babel_data::schema::MonsterSound::Oracle {
+        events.push(EngineEvent::msg("npc-chat-no-response"));
+        return;
+    }
+    if world.get_component::<Peaceful>(monster_entity).is_none() {
+        events.push(EngineEvent::msg("oracle-no-mood"));
+        return;
+    }
+
+    let player_gold_total = player_gold(world, player) as i32;
+    if player_gold_total <= 0 {
+        events.push(EngineEvent::msg("oracle-no-gold"));
+        return;
+    }
+
+    let amount_paid = if major {
+        player_gold_total.min(oracle_major_consultation_cost(world, player))
+    } else {
+        let minor_cost = oracle_minor_consultation_cost();
+        if player_gold_total < minor_cost {
+            events.push(EngineEvent::msg("oracle-not-enough-gold"));
+            return;
+        }
+        minor_cost
+    };
+    let _ = spend_player_gold(world, player, amount_paid as u32);
+
+    let mut player_events = read_player_events(world, player);
+    let Some(text) = resolve_oracle_consultation_text(world, &player_events, major, rng) else {
+        events.push(EngineEvent::msg("npc-chat-no-response"));
+        return;
+    };
+
+    if major {
+        player_events.major_oracle = true;
+    } else {
+        player_events.minor_oracle = true;
+    }
+    persist_player_events(world, player, player_events);
+    events.push(EngineEvent::msg_with(
+        "oracle-consultation",
+        vec![("text", text)],
+    ));
 }
 
 #[cfg(test)]
@@ -17229,22 +17320,75 @@ mod tests {
     }
 
     #[test]
-    fn test_chatting_with_oracle_uses_minor_consultation_and_sets_flag() {
+    fn test_consulting_oracle_minor_uses_true_rumor_costs_gold_and_sets_flag() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         world.set_game_content(crate::rumors::GameContent {
+            rumors_true: vec!["A true rumor.".to_string()],
             oracles: vec![
                 "The first consultation.".to_string(),
                 "The second consultation.".to_string(),
             ],
             ..crate::rumors::GameContent::default()
         });
-        spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        let oracle = spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        world
+            .ecs_mut()
+            .insert_one(oracle, Peaceful)
+            .expect("oracle should accept peaceful marker");
+        let _gold = spawn_inventory_gold(&mut world, 150, '$');
 
         let events = resolve_turn(
             &mut world,
-            PlayerAction::Chat {
+            PlayerAction::ConsultOracle {
                 direction: Direction::East,
+                major: false,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, args }
+                if key == "oracle-consultation"
+                    && args.iter().any(|(k, v)| k == "text" && v == "A true rumor.")
+        )));
+        assert!(
+            world
+                .get_component::<PlayerEvents>(world.player())
+                .is_some_and(|flags| flags.minor_oracle),
+            "first oracle consultation should set the minor_oracle flag"
+        );
+        assert_eq!(player_gold(&world, world.player()), 100);
+    }
+
+    #[test]
+    fn test_consulting_oracle_major_after_minor_uses_major_text_and_sets_flag() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.set_game_content(crate::rumors::GameContent {
+            rumors_true: vec!["A true rumor.".to_string()],
+            oracles: vec![
+                "The first consultation.".to_string(),
+                "The second consultation.".to_string(),
+            ],
+            ..crate::rumors::GameContent::default()
+        });
+        let oracle = spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        world
+            .ecs_mut()
+            .insert_one(oracle, Peaceful)
+            .expect("oracle should accept peaceful marker");
+        let _gold = spawn_inventory_gold(&mut world, 5_000, '$');
+        if let Some(mut flags) = world.get_component_mut::<PlayerEvents>(world.player()) {
+            flags.minor_oracle = true;
+        }
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::ConsultOracle {
+                direction: Direction::East,
+                major: true,
             },
             &mut test_rng(),
         );
@@ -17258,31 +17402,32 @@ mod tests {
         assert!(
             world
                 .get_component::<PlayerEvents>(world.player())
-                .is_some_and(|flags| flags.minor_oracle),
-            "first oracle consultation should set the minor_oracle flag"
+                .is_some_and(|flags| flags.major_oracle),
+            "second oracle consultation should set the major_oracle flag"
         );
+        assert_eq!(player_gold(&world, world.player()), 4_450);
     }
 
     #[test]
-    fn test_chatting_with_oracle_after_minor_consultation_uses_second_text() {
+    fn test_consulting_oracle_major_can_take_all_player_gold_when_short() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         world.set_game_content(crate::rumors::GameContent {
-            oracles: vec![
-                "The first consultation.".to_string(),
-                "The second consultation.".to_string(),
-            ],
+            oracles: vec!["The first consultation.".to_string()],
             ..crate::rumors::GameContent::default()
         });
-        spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
-        if let Some(mut flags) = world.get_component_mut::<PlayerEvents>(world.player()) {
-            flags.minor_oracle = true;
-        }
+        let oracle = spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        world
+            .ecs_mut()
+            .insert_one(oracle, Peaceful)
+            .expect("oracle should accept peaceful marker");
+        let _gold = spawn_inventory_gold(&mut world, 200, '$');
 
         let events = resolve_turn(
             &mut world,
-            PlayerAction::Chat {
+            PlayerAction::ConsultOracle {
                 direction: Direction::East,
+                major: true,
             },
             &mut test_rng(),
         );
@@ -17291,13 +17436,51 @@ mod tests {
             event,
             EngineEvent::Message { key, args }
                 if key == "oracle-consultation"
-                    && args.iter().any(|(k, v)| k == "text" && v == "The second consultation.")
+                    && args.iter().any(|(k, v)| k == "text" && v == "The first consultation.")
         )));
         assert!(
             world
                 .get_component::<PlayerEvents>(world.player())
                 .is_some_and(|flags| flags.major_oracle),
-            "second oracle consultation should set the major_oracle flag"
+            "major oracle consultation should set the major_oracle flag even when underpaying"
+        );
+        assert_eq!(player_gold(&world, world.player()), 0);
+    }
+
+    #[test]
+    fn test_consulting_oracle_without_enough_gold_for_minor_emits_error() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        world.set_game_content(crate::rumors::GameContent {
+            rumors_true: vec!["A true rumor.".to_string()],
+            ..crate::rumors::GameContent::default()
+        });
+        let oracle = spawn_full_monster(&mut world, Position::new(6, 5), "oracle", 12);
+        world
+            .ecs_mut()
+            .insert_one(oracle, Peaceful)
+            .expect("oracle should accept peaceful marker");
+        let _gold = spawn_inventory_gold(&mut world, 40, '$');
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::ConsultOracle {
+                direction: Direction::East,
+                major: false,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "oracle-not-enough-gold"
+        )));
+        assert_eq!(player_gold(&world, world.player()), 40);
+        assert!(
+            !world
+                .get_component::<PlayerEvents>(world.player())
+                .is_some_and(|flags| flags.minor_oracle),
+            "failed oracle consultation should not set the minor_oracle flag"
         );
     }
 

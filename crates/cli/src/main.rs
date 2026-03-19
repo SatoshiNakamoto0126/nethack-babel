@@ -32,8 +32,8 @@ use nethack_babel_engine::topten::{Leaderboard, LeaderboardEntry, default_leader
 use nethack_babel_engine::turn::resolve_turn;
 use nethack_babel_engine::world::{
     ArmorClass, Attributes, DisplaySymbol, Encumbrance, EncumbranceLevel, ExperienceLevel,
-    GameWorld, HitPoints, Monster, MovementPoints, NORMAL_SPEED, Name, Nutrition, Positioned,
-    Power, Speed,
+    GameWorld, HitPoints, Monster, MovementPoints, NORMAL_SPEED, Name, Nutrition, Peaceful,
+    Positioned, Power, Speed,
 };
 
 use nethack_babel_i18n::locale::{LanguageManifest, LocaleManager};
@@ -457,6 +457,156 @@ fn build_status(world: &GameWorld, locale: &LocaleManager) -> StatusLine {
     }
 
     StatusLine { line1, line2 }
+}
+
+fn contextual_chat_target(world: &GameWorld, direction: Direction) -> Option<hecs::Entity> {
+    let player = world.player();
+    let player_pos = world.get_component::<Positioned>(player).map(|pos| pos.0)?;
+    let target_pos = player_pos.step(direction);
+    world
+        .ecs()
+        .query::<(&Monster, &Positioned, &HitPoints)>()
+        .iter()
+        .find_map(|(entity, (_, pos, hp))| {
+            (pos.0 == target_pos && hp.current > 0).then_some(entity)
+        })
+}
+
+fn is_peaceful_oracle_chat(world: &GameWorld, direction: Direction) -> bool {
+    contextual_chat_target(world, direction).is_some_and(|entity| {
+        world
+            .get_component::<Name>(entity)
+            .is_some_and(|name| name.0.eq_ignore_ascii_case("Oracle"))
+            && world.get_component::<Peaceful>(entity).is_some()
+    })
+}
+
+fn oracle_major_price(world: &GameWorld) -> i32 {
+    let player = world.player();
+    500 + 50
+        * i32::from(
+            world
+                .get_component::<ExperienceLevel>(player)
+                .map(|lvl| lvl.0)
+                .unwrap_or(1),
+        )
+}
+
+fn prompt_oracle_consultation_menu(
+    port: &mut impl WindowPort,
+    world: &GameWorld,
+    direction: Direction,
+) -> Option<PlayerAction> {
+    let major_price = oracle_major_price(world);
+    let menu = Menu {
+        title: "Consult The Oracle".to_string(),
+        items: vec![
+            MenuItem {
+                accelerator: 'a',
+                text: "Minor consultation (50 zorkmids)".to_string(),
+                selected: false,
+                selectable: true,
+                group: None,
+            },
+            MenuItem {
+                accelerator: 'b',
+                text: format!("Major consultation ({major_price} zorkmids)"),
+                selected: false,
+                selectable: true,
+                group: None,
+            },
+            MenuItem {
+                accelerator: 'c',
+                text: "Cancel".to_string(),
+                selected: false,
+                selectable: true,
+                group: None,
+            },
+        ],
+        how: MenuHow::PickOne,
+    };
+
+    match port.show_menu(&menu) {
+        MenuResult::Selected(indices) if !indices.is_empty() => match indices[0] {
+            0 => Some(PlayerAction::ConsultOracle {
+                direction,
+                major: false,
+            }),
+            1 => Some(PlayerAction::ConsultOracle {
+                direction,
+                major: true,
+            }),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn contextualize_tui_action(
+    port: &mut impl WindowPort,
+    world: &GameWorld,
+    action: PlayerAction,
+) -> Option<PlayerAction> {
+    match action {
+        PlayerAction::Chat { direction } if is_peaceful_oracle_chat(world, direction) => {
+            prompt_oracle_consultation_menu(port, world, direction)
+        }
+        _ => Some(action),
+    }
+}
+
+fn prompt_text_oracle_consultation(
+    stdin: &io::Stdin,
+    stdout: &io::Stdout,
+    world: &GameWorld,
+    direction: Direction,
+) -> Result<Option<PlayerAction>> {
+    let major_price = oracle_major_price(world);
+    println!("  Consult the Oracle:");
+    println!("    a - minor consultation (50 zorkmids)");
+    println!("    b - major consultation ({major_price} zorkmids)");
+    println!("    q - cancel");
+    print!("  Choice> ");
+    stdout.lock().flush()?;
+
+    let mut line = String::new();
+    let bytes_read = stdin.lock().read_line(&mut line)?;
+    if bytes_read == 0 {
+        return Ok(None);
+    }
+
+    let choice = line
+        .trim()
+        .chars()
+        .next()
+        .unwrap_or('q')
+        .to_ascii_lowercase();
+    let action = match choice {
+        'a' | 'm' => Some(PlayerAction::ConsultOracle {
+            direction,
+            major: false,
+        }),
+        'b' | 'M' | 'g' => Some(PlayerAction::ConsultOracle {
+            direction,
+            major: true,
+        }),
+        _ => None,
+    };
+    Ok(action)
+}
+
+fn contextualize_text_action(
+    stdin: &io::Stdin,
+    stdout: &io::Stdout,
+    world: &GameWorld,
+    action: PlayerAction,
+) -> Result<Option<PlayerAction>> {
+    match action {
+        PlayerAction::Chat { direction } if is_peaceful_oracle_chat(world, direction) => {
+            prompt_text_oracle_consultation(stdin, stdout, world, direction)
+        }
+        _ => Ok(Some(action)),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2905,6 +3055,10 @@ fn run_tui_mode(
             None => continue, // Unmapped key or Escape.
         };
 
+        let Some(action) = contextualize_tui_action(&mut port, world, action) else {
+            continue;
+        };
+
         app.remember_repeatable_action(&action);
 
         // Resolve the turn.
@@ -3064,6 +3218,10 @@ fn run_text_mode(
                     continue;
                 }
             }
+        };
+
+        let Some(action) = contextualize_text_action(&stdin, &stdout, world, action)? else {
+            continue;
         };
 
         if is_repeatable_text_action(&action) {
