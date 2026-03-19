@@ -1329,6 +1329,8 @@ pub fn wizard_should_respawn(
 pub enum WizardAction {
     /// Steal the Amulet of Yendor from the player.
     StealAmulet,
+    /// Steal one of the invocation tools from the player.
+    StealInvocationTool,
     /// Summon hostile monsters around the player.
     SummonNasties,
     /// Curse random items in the player's inventory.
@@ -1411,6 +1413,9 @@ const DEMON_CUSS_KEYS: &[&str] = &[
 pub fn wizard_harass_events(action: WizardAction) -> Vec<EngineEvent> {
     match action {
         WizardAction::StealAmulet => vec![EngineEvent::msg("wizard-steal-amulet")],
+        WizardAction::StealInvocationTool => {
+            vec![EngineEvent::msg("wizard-steal-invocation-tool")]
+        }
         WizardAction::DoubleTrouble => vec![EngineEvent::msg("wizard-double-trouble")],
         WizardAction::SummonNasties => vec![EngineEvent::msg("wizard-summon-nasties")],
         WizardAction::CurseItems => vec![EngineEvent::msg("wizard-curse-items")],
@@ -1450,6 +1455,7 @@ pub fn choose_wizard_action(
     world: &GameWorld,
     wizard: Entity,
     player_has_amulet: bool,
+    player_has_invocation_tool: bool,
     rng: &mut impl Rng,
 ) -> WizardAction {
     let wizard_hp = world
@@ -1457,8 +1463,18 @@ pub fn choose_wizard_action(
         .map(|hp| (hp.current, hp.max))
         .unwrap_or((1, 1));
 
-    if player_has_amulet && wizard_is_adjacent_to_player(world, wizard, world.player()) {
-        WizardAction::StealAmulet
+    if wizard_is_adjacent_to_player(world, wizard, world.player()) {
+        if player_has_amulet {
+            WizardAction::StealAmulet
+        } else if player_has_invocation_tool {
+            WizardAction::StealInvocationTool
+        } else if wizard_hp.0 >= wizard_hp.1 {
+            WizardAction::DoubleTrouble
+        } else if rng.random_range(0..2) == 0 {
+            WizardAction::SummonNasties
+        } else {
+            WizardAction::CurseItems
+        }
     } else if wizard_hp.0 >= wizard_hp.1 {
         WizardAction::DoubleTrouble
     } else if rng.random_range(0..2) == 0 {
@@ -1589,9 +1605,16 @@ pub fn wizard_harass(
     wizard: Entity,
     _player: Entity,
     player_has_amulet: bool,
+    player_has_invocation_tool: bool,
     rng: &mut impl Rng,
 ) -> Vec<EngineEvent> {
-    let action = choose_wizard_action(world, wizard, player_has_amulet, rng);
+    let action = choose_wizard_action(
+        world,
+        wizard,
+        player_has_amulet,
+        player_has_invocation_tool,
+        rng,
+    );
     // The actual side-effects are handled by the caller, since harassment can
     // manipulate inventory and spawn monsters in engine-specific ways.
     wizard_harass_events(action)
@@ -1946,7 +1969,8 @@ mod tests {
 
         let mut rng = test_rng();
         let events = wizard_harass(
-            &mut world, wizard, player, true, // player has amulet
+            &mut world, wizard, player, true,  // player has amulet
+            false, // no invocation tool required
             &mut rng,
         );
 
@@ -1954,6 +1978,64 @@ mod tests {
             .iter()
             .any(|e| matches!(e, EngineEvent::Message { key, .. } if key == "wizard-steal-amulet"));
         assert!(steal, "wizard should attempt to steal the Amulet");
+    }
+
+    #[test]
+    fn test_wizard_steal_invocation_tool() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
+        let _ = world.ecs_mut().insert_one(
+            wizard,
+            WizardOfYendor {
+                last_killed_turn: 0,
+                times_killed: 1,
+            },
+        );
+
+        let mut rng = test_rng();
+        let events = wizard_harass(
+            &mut world, wizard, player, false, // no amulet
+            true,  // has invocation tool
+            &mut rng,
+        );
+
+        let steal = events.iter().any(|e| {
+            matches!(e, EngineEvent::Message { key, .. } if key == "wizard-steal-invocation-tool")
+        });
+        assert!(steal, "wizard should attempt to steal an invocation tool");
+    }
+
+    #[test]
+    fn test_wizard_prefers_amulet_over_invocation_tool() {
+        let mut world = make_test_world();
+        let player = world.player();
+        let wizard = spawn_monster(&mut world, Position::new(9, 8), "Wizard of Yendor", 50);
+        let _ = world.ecs_mut().insert_one(
+            wizard,
+            WizardOfYendor {
+                last_killed_turn: 0,
+                times_killed: 1,
+            },
+        );
+
+        let mut rng = test_rng();
+        let events = wizard_harass(
+            &mut world, wizard, player, true, // has amulet
+            true, // also has invocation tool
+            &mut rng,
+        );
+
+        assert!(events.iter().any(
+            |e| matches!(e, EngineEvent::Message { key, .. } if key == "wizard-steal-amulet")
+        ));
+        assert!(
+            !events.iter().any(|e| matches!(
+                e,
+                EngineEvent::Message { key, .. } if key == "wizard-steal-invocation-tool"
+            )),
+            "the real Amulet should remain the Wizard's highest-priority theft target"
+        );
     }
 
     #[test]
@@ -1971,7 +2053,7 @@ mod tests {
         );
 
         let mut rng = test_rng();
-        let events = wizard_harass(&mut world, wizard, player, false, &mut rng);
+        let events = wizard_harass(&mut world, wizard, player, false, false, &mut rng);
 
         let double = events.iter().any(
             |e| matches!(e, EngineEvent::Message { key, .. } if key == "wizard-double-trouble"),
@@ -2000,6 +2082,7 @@ mod tests {
         let mut rng = test_rng();
         let events = wizard_harass(
             &mut world, wizard, player, false, // no amulet
+            false, // no invocation tool
             &mut rng,
         );
 

@@ -3263,6 +3263,9 @@ wizard-respawned-taunt = So thou thought thou couldst {$verb} me, fool.
 wizard-steal-amulet = The Wizard of Yendor steals the Amulet!
 
 # TODO: translate
+wizard-steal-invocation-tool = The Wizard of Yendor steals one of the invocation tools!
+
+# TODO: translate
 wizard-summon-nasties = New nasties appear from thin air!
 
 # TODO: translate

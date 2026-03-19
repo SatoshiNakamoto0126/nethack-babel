@@ -5996,6 +5996,21 @@ fn find_player_named_item(
         })
 }
 
+const WIZARD_COVETED_INVOCATION_ITEMS: [&str; 3] = [
+    "Book of the Dead",
+    "Bell of Opening",
+    "Candelabrum of Invocation",
+];
+
+fn find_player_coveted_invocation_item(
+    world: &GameWorld,
+    player: hecs::Entity,
+) -> Option<hecs::Entity> {
+    WIZARD_COVETED_INVOCATION_ITEMS
+        .iter()
+        .find_map(|name| find_player_named_item(world, player, name))
+}
+
 fn player_has_worn_or_wielded_named_item(
     world: &GameWorld,
     player: hecs::Entity,
@@ -6113,6 +6128,7 @@ fn process_wizard_of_yendor_turn(
     let player = world.player();
     let mut player_events = read_player_events(world, player);
     let player_has_amulet = player_has_named_item(world, player, "Amulet of Yendor");
+    let player_has_invocation_tool = find_player_coveted_invocation_item(world, player).is_some();
     let wizard_times_killed = player_events
         .wizard_times_killed
         .max(u32::from(player_events.killed_wizard));
@@ -6196,7 +6212,13 @@ fn process_wizard_of_yendor_turn(
     {
         return;
     }
-    let action = crate::npc::choose_wizard_action(world, wizard, player_has_amulet, rng);
+    let action = crate::npc::choose_wizard_action(
+        world,
+        wizard,
+        player_has_amulet,
+        player_has_invocation_tool,
+        rng,
+    );
     events.extend(wizard_harassment_messages(world, player, action));
     apply_wizard_harassment_action(world, Some(wizard), player, action, rng, events);
 }
@@ -6524,7 +6546,20 @@ fn apply_wizard_harassment_action(
                     })
                 && let Some(amulet) = find_player_named_item(world, player, "Amulet of Yendor")
             {
-                wizard_steal_amulet(world, wizard, player, amulet);
+                wizard_steal_player_item(world, wizard, player, amulet);
+            }
+        }
+        crate::npc::WizardAction::StealInvocationTool => {
+            if let Some(wizard) = wizard
+                && world
+                    .get_component::<Positioned>(wizard)
+                    .zip(world.get_component::<Positioned>(player))
+                    .is_some_and(|(wizard_pos, player_pos)| {
+                        crate::ball::chebyshev_distance(wizard_pos.0, player_pos.0) == 1
+                    })
+                && let Some(item) = find_player_coveted_invocation_item(world, player)
+            {
+                wizard_steal_player_item(world, wizard, player, item);
             }
         }
         crate::npc::WizardAction::DoubleTrouble => {
@@ -6923,13 +6958,13 @@ fn spawn_named_monster_near_entity_with_flags(
     Some((entity, spawn_pos))
 }
 
-fn wizard_steal_amulet(
+fn wizard_steal_player_item(
     world: &mut GameWorld,
     wizard: hecs::Entity,
     player: hecs::Entity,
-    amulet: hecs::Entity,
+    item: hecs::Entity,
 ) {
-    if !detach_item_from_player_possessions(world, player, amulet) {
+    if !detach_item_from_player_possessions(world, player, item) {
         return;
     }
 
@@ -6940,12 +6975,12 @@ fn wizard_steal_amulet(
         .unwrap_or(Position::new(0, 0));
     let drop_pos = nearest_walkable_drop_pos(world, drop_origin);
 
-    if let Some(mut core) = world.get_component_mut::<ObjectCore>(amulet) {
+    if let Some(mut core) = world.get_component_mut::<ObjectCore>(item) {
         core.inv_letter = None;
     }
     let branch = world.dungeon().branch;
     let depth = world.dungeon().depth;
-    if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(amulet) {
+    if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(item) {
         *loc = crate::dungeon::floor_object_location(branch, depth, drop_pos);
     }
 }
@@ -14858,6 +14893,45 @@ mod tests {
         let item_loc = world
             .get_component::<ObjectLocation>(amulet)
             .expect("stolen amulet should stay in the world");
+        assert!(matches!(
+            *item_loc,
+            ObjectLocation::Floor { x, y, level }
+                if (x as i32 - wizard_pos.x).abs() <= 1
+                    && (y as i32 - wizard_pos.y).abs() <= 1
+                    && level == world.dungeon().current_data_dungeon_level()
+        ));
+    }
+
+    #[test]
+    fn test_wizard_steal_invocation_tool_drops_it_off_player() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let wizard = spawn_full_monster(&mut world, Position::new(6, 5), "Wizard of Yendor", 12);
+        let book = spawn_inventory_object_by_name(&mut world, "Book of the Dead", 'b');
+        let mut events = Vec::new();
+        let mut rng = test_rng();
+
+        apply_wizard_harassment_action(
+            &mut world,
+            Some(wizard),
+            player,
+            crate::npc::WizardAction::StealInvocationTool,
+            &mut rng,
+            &mut events,
+        );
+
+        assert!(
+            !player_carries_item(&world, player, book),
+            "wizard harassment should remove the invocation tool from the player's possessions"
+        );
+        let wizard_pos = world
+            .get_component::<Positioned>(wizard)
+            .expect("wizard should still exist")
+            .0;
+        let item_loc = world
+            .get_component::<ObjectLocation>(book)
+            .expect("stolen invocation tool should stay in the world");
         assert!(matches!(
             *item_loc,
             ObjectLocation::Floor { x, y, level }
