@@ -3807,9 +3807,9 @@ ambient-shop-register = You hear the chime of a cash register.
 # TODO: translate
 ambient-shop-prices = You hear someone mumbling about prices.
 # TODO: translate
-ambient-temple-praise = You hear someone praising the gods.
+ambient-temple-praise = You hear someone praising { $deity }.
 # TODO: translate
-ambient-temple-beseech = You hear someone beseeching the gods.
+ambient-temple-beseech = You hear someone beseeching { $deity }.
 # TODO: translate
 ambient-temple-sacrifice = You hear an animal carcass being offered in sacrifice.
 # TODO: translate

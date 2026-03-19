@@ -517,6 +517,9 @@ pub struct AmbientSoundContext<'a> {
     pub branch: &'a str,
     pub has_shop: bool,
     pub has_temple: bool,
+    pub temple_can_speak: bool,
+    pub temple_in_sight: bool,
+    pub temple_deity: Option<&'a str>,
     pub has_oracle: bool,
     pub has_court: bool,
     pub has_swamp: bool,
@@ -537,6 +540,9 @@ impl<'a> AmbientSoundContext<'a> {
             branch,
             has_shop: false,
             has_temple: false,
+            temple_can_speak: false,
+            temple_in_sight: false,
+            temple_deity: None,
             has_oracle: false,
             has_court: false,
             has_swamp: false,
@@ -641,12 +647,7 @@ pub fn ambient_sounds(ctx: AmbientSoundContext<'_>, rng: &mut impl Rng) -> Optio
                     (true, _) => "ambient-shop-neiman-marcus",
                 })
             } else if ctx.has_temple {
-                Some(match rng.random_range(0..4u32) {
-                    0 => "ambient-temple-praise",
-                    1 => "ambient-temple-beseech",
-                    2 => "ambient-temple-sacrifice",
-                    _ => "ambient-temple-donations",
-                })
+                select_temple_ambient(ctx, rng)
             } else if ctx.has_oracle {
                 Some(match (ctx.hallucinating, rng.random_range(0..3u32)) {
                     (false, 0) => "ambient-oracle-wind",
@@ -690,6 +691,29 @@ pub fn ambient_sounds(ctx: AmbientSoundContext<'_>, rng: &mut impl Rng) -> Optio
             }
         }
     }
+}
+
+fn select_temple_ambient(ctx: AmbientSoundContext<'_>, rng: &mut impl Rng) -> Option<&'static str> {
+    const TEMPLE_LINES: [(&str, bool, bool); 4] = [
+        ("ambient-temple-praise", true, false),
+        ("ambient-temple-beseech", true, false),
+        ("ambient-temple-sacrifice", false, true),
+        ("ambient-temple-donations", true, false),
+    ];
+
+    for _ in 0..16 {
+        let (key, requires_speech, requires_hidden) =
+            TEMPLE_LINES[rng.random_range(0..TEMPLE_LINES.len())];
+        if requires_speech && !ctx.temple_can_speak {
+            continue;
+        }
+        if requires_hidden && ctx.temple_in_sight {
+            continue;
+        }
+        return Some(key);
+    }
+
+    None
 }
 
 // ===========================================================================
@@ -1210,6 +1234,8 @@ mod tests {
             if let Some(msg) = ambient_sounds(
                 AmbientSoundContext {
                     has_temple: true,
+                    temple_can_speak: true,
+                    temple_deity: Some("Odin"),
                     ..AmbientSoundContext::new(5, "Dungeons")
                 },
                 &mut rng,
@@ -1224,6 +1250,56 @@ mod tests {
             }
         }
         assert!(found, "should eventually get a temple ambient sound");
+    }
+
+    #[test]
+    fn ambient_sounds_temple_speechless_priest_only_sacrifices_when_hidden() {
+        let mut found = false;
+        for seed in 0..500u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    has_temple: true,
+                    temple_in_sight: false,
+                    ..AmbientSoundContext::new(5, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert_eq!(msg, "ambient-temple-sacrifice");
+                found = true;
+                break;
+            }
+        }
+        assert!(
+            found,
+            "speechless hidden priests should still allow sacrifice ambience"
+        );
+    }
+
+    #[test]
+    fn ambient_sounds_temple_visible_priest_skips_sacrifice() {
+        let mut found = false;
+        for seed in 0..500u64 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            if let Some(msg) = ambient_sounds(
+                AmbientSoundContext {
+                    has_temple: true,
+                    temple_can_speak: true,
+                    temple_in_sight: true,
+                    temple_deity: Some("Odin"),
+                    ..AmbientSoundContext::new(5, "Dungeons")
+                },
+                &mut rng,
+            ) {
+                assert_ne!(msg, "ambient-temple-sacrifice");
+                found = true;
+                break;
+            }
+        }
+        assert!(
+            found,
+            "visible priests should still allow non-sacrifice temple ambience"
+        );
     }
 
     // -----------------------------------------------------------------------

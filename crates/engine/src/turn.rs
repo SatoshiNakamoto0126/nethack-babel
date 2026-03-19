@@ -829,14 +829,17 @@ fn emit_ambient_dungeon_sound(
             .shop_rooms
             .iter()
             .any(|shop| !shop_room_is_deserted(world, shop));
-    let has_temple = current_level_has_temple_ambient(world);
+    let temple_ambient = current_level_temple_ambient_context(world);
     let has_oracle = current_level_has_oracle_ambient(world);
     let vault_ambient = current_level_vault_ambient_kind(world);
     let ambient_context = crate::music::AmbientSoundContext {
         depth: world.dungeon().depth,
         branch: ambient_branch_name(world.dungeon().branch),
         has_shop,
-        has_temple,
+        has_temple: temple_ambient.is_some(),
+        temple_can_speak: temple_ambient.is_some_and(|ctx| ctx.can_speak),
+        temple_in_sight: temple_ambient.is_some_and(|ctx| ctx.in_sight),
+        temple_deity: temple_ambient.map(|ctx| ctx.deity),
         has_oracle,
         has_court: current_level_has_court_ambient(world),
         has_swamp: current_level_has_swamp_ambient(world),
@@ -850,7 +853,16 @@ fn emit_ambient_dungeon_sound(
         vault_ambient,
     };
     if let Some(key) = crate::music::ambient_sounds(ambient_context, rng) {
-        events.push(EngineEvent::msg(key));
+        if matches!(key, "ambient-temple-praise" | "ambient-temple-beseech")
+            && let Some(deity) = ambient_context.temple_deity
+        {
+            events.push(EngineEvent::msg_with(
+                key,
+                vec![("deity", deity.to_string())],
+            ));
+        } else {
+            events.push(EngineEvent::msg(key));
+        }
     }
 }
 
@@ -923,27 +935,75 @@ fn ambient_branch_name(branch: DungeonBranch) -> &'static str {
     }
 }
 
-fn current_level_has_temple_ambient(world: &GameWorld) -> bool {
-    let Some(player_pos) = world
+#[derive(Debug, Clone, Copy, Default)]
+struct TempleAmbientContext {
+    can_speak: bool,
+    in_sight: bool,
+    deity: &'static str,
+}
+
+fn current_level_temple_ambient_context(world: &GameWorld) -> Option<TempleAmbientContext> {
+    let player = world.player();
+    let player_pos = world
         .get_component::<Positioned>(world.player())
-        .map(|pos| pos.0)
-    else {
-        return false;
-    };
+        .map(|pos| pos.0)?;
+    let map = &world.dungeon().current_level;
+    let mut fov = FovMap::new(map.width, map.height);
+    fov.compute(player_pos, 8, |x, y| {
+        map.get(Position::new(x, y))
+            .is_none_or(|cell| cell.terrain.is_opaque())
+    });
+
     world
         .ecs()
-        .query::<(&Monster, &crate::npc::Priest)>()
+        .query::<(&Monster, &crate::npc::Priest, &Positioned)>()
         .iter()
-        .any(|(entity, (_, priest))| {
-            live_monster_entity(world, entity)
+        .find_map(|(entity, (_, priest, pos))| {
+            (live_monster_entity(world, entity)
                 && priest.has_shrine
                 && !priest.is_high_priest
                 && world
                     .get_component::<crate::status::StatusEffects>(entity)
                     .is_none_or(|status| status.sleeping == 0 && status.paralysis == 0)
-                && world
-                    .get_component::<Positioned>(entity)
-                    .is_some_and(|pos| crate::ball::chebyshev_distance(player_pos, pos.0) > 3)
+                && crate::ball::chebyshev_distance(player_pos, pos.0) > 3)
+                .then(|| {
+                    let can_speak = current_level_monster_def_for_entity(world, entity)
+                        .map(|monster_def| {
+                            !matches!(
+                                monster_def.sound,
+                                nethack_babel_data::schema::MonsterSound::Silent
+                                    | nethack_babel_data::schema::MonsterSound::Bark
+                                    | nethack_babel_data::schema::MonsterSound::Mew
+                                    | nethack_babel_data::schema::MonsterSound::Roar
+                                    | nethack_babel_data::schema::MonsterSound::Bellow
+                                    | nethack_babel_data::schema::MonsterSound::Growl
+                                    | nethack_babel_data::schema::MonsterSound::Sqeek
+                                    | nethack_babel_data::schema::MonsterSound::Sqawk
+                                    | nethack_babel_data::schema::MonsterSound::Chirp
+                                    | nethack_babel_data::schema::MonsterSound::Hiss
+                                    | nethack_babel_data::schema::MonsterSound::Buzz
+                                    | nethack_babel_data::schema::MonsterSound::Grunt
+                                    | nethack_babel_data::schema::MonsterSound::Neigh
+                                    | nethack_babel_data::schema::MonsterSound::Moo
+                                    | nethack_babel_data::schema::MonsterSound::Wail
+                                    | nethack_babel_data::schema::MonsterSound::Gurgle
+                                    | nethack_babel_data::schema::MonsterSound::Burble
+                                    | nethack_babel_data::schema::MonsterSound::Trumpet
+                            )
+                        })
+                        .unwrap_or(true);
+                    let deity = world
+                        .get_component::<nethack_babel_data::PlayerIdentity>(player)
+                        .map(|identity| {
+                            crate::religion::god_name(identity.role.0, priest.alignment)
+                        })
+                        .unwrap_or("the gods");
+                    TempleAmbientContext {
+                        can_speak,
+                        in_sight: fov.is_visible_pos(pos.0),
+                        deity,
+                    }
+                })
         })
 }
 
@@ -20888,6 +20948,54 @@ mod tests {
             found,
             "temple levels should eventually emit live ambient temple texture"
         );
+    }
+
+    #[test]
+    fn test_emit_ambient_dungeon_sound_temple_speech_uses_deity_arg() {
+        let mut world = make_test_world();
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(player, priest_identity())
+            .expect("player should accept priest identity");
+        let priest = spawn_full_monster(&mut world, Position::new(6, 5), "priest", 12);
+        world
+            .ecs_mut()
+            .insert_one(
+                priest,
+                crate::npc::Priest {
+                    alignment: Alignment::Lawful,
+                    has_shrine: true,
+                    is_high_priest: false,
+                    angry: false,
+                },
+            )
+            .expect("priest should accept explicit runtime state");
+        set_player_position(&mut world, Position::new(2, 2));
+
+        let expected_deity =
+            crate::religion::god_name(crate::religion::roles::PRIEST, Alignment::Lawful);
+        let mut rng = test_rng();
+        for _ in 0..400 {
+            let mut events = Vec::new();
+            emit_ambient_dungeon_sound(&world, &mut rng, &mut events);
+            for event in events {
+                if let EngineEvent::Message { key, args } = event
+                    && matches!(
+                        key.as_str(),
+                        "ambient-temple-praise" | "ambient-temple-beseech"
+                    )
+                {
+                    assert!(
+                        args.iter()
+                            .any(|(name, value)| name == "deity" && value == expected_deity)
+                    );
+                    return;
+                }
+            }
+        }
+
+        panic!("expected a spoken temple ambient line carrying deity metadata");
     }
 
     #[test]
