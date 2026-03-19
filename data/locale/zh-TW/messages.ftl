@@ -3736,7 +3736,7 @@ npc-mumble-incomprehensible = { $monster } mumbles incomprehensibly.
 npc-bones-rattle = { $monster } rattles noisily.
 
 # TODO: translate
-npc-shriek = { $monster } shrieks.
+npc-shriek = { $monster } 尖聲嘶叫。
 
 # TODO: translate
 npc-bark-barks = { $monster } 汪汪叫。
@@ -3748,7 +3748,7 @@ npc-bark-whines = { $monster } 嗚咽起來。
 npc-bark-howls = { $monster } 嚎叫起來。
 
 # TODO: translate
-npc-bark-yips = { $monster } yips.
+npc-bark-yips = { $monster } 短促地叫了一聲。
 
 # TODO: translate
 npc-mew-mews = { $monster } 輕輕喵了一聲。
@@ -3778,13 +3778,13 @@ npc-bellow-bellows = { $monster } 發出怒吼！
 npc-squeak-squeaks = { $monster } 吱吱叫。
 
 # TODO: translate
-npc-squawk-squawks = { $monster } squawks.
+npc-squawk-squawks = { $monster } 嘎嘎亂叫。
 
 # TODO: translate
-npc-squawk-nevermore = { $monster } says: "Nevermore!"
+npc-squawk-nevermore = { $monster } 說道：「Nevermore!」
 
 # TODO: translate
-npc-chirp-chirps = { $monster } chirps.
+npc-chirp-chirps = { $monster } 啾啾叫。
 
 # TODO: translate
 npc-hiss-hisses = { $monster } 發出嘶嘶聲！
@@ -3808,25 +3808,25 @@ npc-neigh-whinnies = { $monster } 嘶鳴不已。
 npc-neigh-whickers = { $monster } 發出輕快的馬鳴。
 
 # TODO: translate
-npc-were-shrieks = { $monster } lets out a blood curdling shriek!
+npc-were-shrieks = { $monster } 發出令人毛骨悚然的尖叫！
 
 # TODO: translate
 npc-were-howls = { $monster } 發出令人毛骨悚然的嚎叫！
 
 # TODO: translate
-npc-were-moon = { $monster } whispers inaudibly. All you can make out is "moon".
+npc-were-moon = { $monster } 低聲耳語，幾乎聽不清。你只勉強分辨出「月亮」兩個字。
 
 # TODO: translate
-npc-moo-moos = { $monster } moos.
+npc-moo-moos = { $monster } 哞哞叫。
 
 # TODO: translate
 npc-wail-wails = { $monster } 哀號起來。
 
 # TODO: translate
-npc-gurgle-gurgles = { $monster } gurgles.
+npc-gurgle-gurgles = { $monster } 發出咕嚕聲。
 
 # TODO: translate
-npc-burble-burbles = { $monster } burbles.
+npc-burble-burbles = { $monster } 咕噥作響。
 
 # TODO: translate
 npc-trumpet-trumpets = { $monster } 發出高亢的號鳴。
@@ -3835,20 +3835,20 @@ npc-trumpet-trumpets = { $monster } 發出高亢的號鳴。
 npc-groan-groans = { $monster } 呻吟起來。
 
 # TODO: translate
-god-roars-suffer = A booming voice roars: "Suffer for thy blasphemy!"
+god-roars-suffer = 一個轟鳴的聲音咆哮道：「為你的褻瀆受苦吧！」
 
 # TODO: translate
-god-how-dare-harm-servant = A booming voice roars: "How darest thou harm my servant?"
+god-how-dare-harm-servant = 一個轟鳴的聲音咆哮道：「你竟敢傷害我的僕從？」
 
 # TODO: translate
-god-profane-shrine = A booming voice roars: "Thou hast profaned my shrine!"
+god-profane-shrine = 一個轟鳴的聲音咆哮道：「你玷污了我的神殿！」
 ambient-gehennom-damned = 你聽到被詛咒者的哀嚎！
 # TODO: translate
-ambient-gehennom-groans = You hear groans and moans!
+ambient-gehennom-groans = 你聽到呻吟與哀號！
 # TODO: translate
-ambient-gehennom-laughter = You hear diabolical laughter!
+ambient-gehennom-laughter = 你聽到惡魔般的獰笑！
 # TODO: translate
-ambient-gehennom-brimstone = You smell brimstone!
+ambient-gehennom-brimstone = 你聞到硫磺味！
 ambient-mines-money = 你聽到有人在數錢。
 ambient-mines-register = 你聽到收銀機的叮噹聲。
 ambient-mines-cart = 你聽到彷彿吃力礦車發出的聲響。
@@ -3863,36 +3863,36 @@ ambient-oracle-wind = 你聽到一陣詭異的風聲。
 ambient-oracle-ravings = 你聽到一陣痙攣般的胡言亂語。
 ambient-oracle-snakes = 你聽到蛇的鼾聲。
 # TODO: translate
-ambient-barracks-honed = You hear blades being honed.
+ambient-barracks-honed = 你聽到有人在磨刀。
 # TODO: translate
-ambient-barracks-snoring = You hear loud snoring.
+ambient-barracks-snoring = 你聽到響亮的鼾聲。
 # TODO: translate
-ambient-barracks-dice = You hear dice being thrown.
+ambient-barracks-dice = 你聽到擲骰子的聲音。
 # TODO: translate
-ambient-barracks-macarthur = You hear General MacArthur!
+ambient-barracks-macarthur = 你彷彿聽到了麥克阿瑟將軍的聲音！
 # TODO: translate
-ambient-swamp-mosquitoes = You hear mosquitoes!
+ambient-swamp-mosquitoes = 你聽到蚊群的嗡嗡聲！
 # TODO: translate
-ambient-swamp-marsh-gas = You smell marsh gas!
+ambient-swamp-marsh-gas = 你聞到沼氣味！
 # TODO: translate
-ambient-swamp-donald-duck = You hear Donald Duck!
+ambient-swamp-donald-duck = 你彷彿聽到了唐老鴨的叫聲！
 ambient-fountain-bubbling = 你聽到汩汩的水聲。
 # TODO: translate
-ambient-fountain-coins = You hear water falling on coins.
+ambient-fountain-coins = 你聽到水滴落在硬幣上的聲音。
 # TODO: translate
-ambient-fountain-naiad = You hear the splashing of a naiad.
+ambient-fountain-naiad = 你聽到水澤仙女拍水的聲音。
 # TODO: translate
-ambient-fountain-soda = You hear a soda fountain!
+ambient-fountain-soda = 你聽到汽水噴泉般的聲響！
 # TODO: translate
 ambient-sink-drip = 你聽到水滴緩緩落下的聲音。
 # TODO: translate
 ambient-sink-gurgle = 你聽到咕嚕咕嚕的水聲。
 # TODO: translate
-ambient-sink-dishes = You hear dishes being washed!
+ambient-sink-dishes = 你聽到有人在洗盤子！
 # TODO: translate
 ambient-vault-counting = 你聽到有人在數錢。
 # TODO: translate
-ambient-vault-searching = You hear someone searching.
+ambient-vault-searching = 你聽到有人在翻找什麼。
 # TODO: translate
 ambient-vault-footsteps = 你聽到巡邏守衛的腳步聲。
 # TODO: translate
