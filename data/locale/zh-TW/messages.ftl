@@ -1839,11 +1839,21 @@ offer-what = 獻上什麼？
 ## 對話
 npc-chat-no-response = 這個生物似乎不想聊天。
 npc-chat-sleeping = 這個生物似乎根本沒注意到你。
+npc-chat-deaf-response = 就算對方回應了，你也聽不見。
 chat-nobody-there = 那裡沒有人可以交談。
+chat-up = 上面的人聽不見你說話。
+chat-down = 下面的人聽不見你說話。
+chat-self = 自言自語對地牢冒險者可不是什麼好習慣。
 chat-cannot-speak = 以 { $form } 的形態，你無法說話。
 chat-strangled = 你說不出話來。你快窒息了！
 chat-swallowed = 外面的人聽不見你說話。
 chat-underwater = 在水下，你的話誰也聽不清。
+chat-statue = 雕像似乎根本沒注意到你。
+chat-wall = 這簡直就像在對著牆說話。
+chat-wall-hallu-gripes = 牆壁開始抱怨自己的差事。
+chat-wall-hallu-joke = 牆壁給你講了個很好笑的笑話！
+chat-wall-hallu-insults = 牆壁狠狠辱罵了你的出身！
+chat-wall-hallu-uninterested = 牆壁看起來對你毫無興趣。
 
 ## 移動/旅行
 peaceful-monster-blocks = 你停了下來。{ $monster } 擋住了去路。

@@ -6949,6 +6949,32 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_chatting_with_untamed_mooing_monster_bellows() {
+        let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+        let moo_name = monster_name_with_sound(&world, MonsterSound::Moo);
+        spawn_full_monster(&mut world, Position::new(6, 5), &moo_name, 8);
+
+        let (mut loaded, loaded_rng) =
+            save_and_reload_world("moo-chat-round-trip", &world, [92u8; 32]);
+        let mut rng = Pcg64::from_seed(loaded_rng);
+
+        let events = resolve_turn(
+            &mut loaded,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut rng,
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-bellow-bellows"
+            )
+        }));
+    }
+
+    #[test]
     fn round_trip_loaded_chatting_with_death_keeps_rider_line() {
         let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
         spawn_full_monster(&mut world, Position::new(6, 5), "Death", 20);

@@ -1908,11 +1908,21 @@ offer-what = Sacrifice what?
 ## Chat
 npc-chat-no-response = The creature doesn't seem to want to chat.
 npc-chat-sleeping = The creature seems not to notice you.
+npc-chat-deaf-response = Any response falls on deaf ears.
 chat-nobody-there = There is nobody there to talk to.
+chat-up = They won't hear you up there.
+chat-down = They won't hear you down there.
+chat-self = Talking to yourself is a bad habit for a dungeoneer.
 chat-cannot-speak = As { $form }, you cannot speak.
 chat-strangled = You can't speak. You're choking!
 chat-swallowed = They won't hear you out there.
 chat-underwater = Your speech is unintelligible underwater.
+chat-statue = The statue seems not to notice you.
+chat-wall = It's like talking to a wall.
+chat-wall-hallu-gripes = The wall gripes about its job.
+chat-wall-hallu-joke = The wall tells you a funny joke!
+chat-wall-hallu-insults = The wall insults your heritage!
+chat-wall-hallu-uninterested = The wall doesn't seem interested.
 
 ## Movement / travel
 peaceful-monster-blocks = You stop. { $monster } is in the way.

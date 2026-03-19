@@ -6,23 +6,22 @@
 
 [![License: NGPL](https://img.shields.io/badge/License-NGPL-blue.svg)](LICENSE)
 ![Rust: nightly](https://img.shields.io/badge/Rust-nightly-orange.svg)
-![Tests: 4637](https://img.shields.io/badge/tests-4637_passing-brightgreen.svg)
-![LOC: 209K](https://img.shields.io/badge/LOC-209K_Rust-informational.svg)
+![Tests: 4667](https://img.shields.io/badge/tests-4667_passing-brightgreen.svg)
+![LOC: 211K](https://img.shields.io/badge/LOC-211K_Rust-informational.svg)
 
 ## Codebase Comparison: C Original vs Rust Remaster
 
 | Metric | C NetHack 3.7 | Rust Babel | Notes |
 |--------|--------------|------------|-------|
 | **Language** | C + Lua | Rust | Pure Rust, no C dependencies |
-| **Code lines** | 370K (`.c/.h`) + 21K (`.lua`) | 209K (`.rs`) + 15K locale + 26K TOML | Rust splits gameplay, i18n, and data instead of compiling tables into the binary |
-| **Source files** | 381 `.c/.h` | 115 `.rs` | Rust workspace uses fewer source files despite broader test coverage |
-| **Level definitions** | 157 `.lua` scripts | 65 `.toml` + Rust generators | TOML for data, Rust for logic |
+| **Code lines** | 424K (`.c/.h`) + 24K (`.lua`) | 211K (`.rs`) + 14K locale + 26K TOML | Rust splits gameplay, i18n, and data instead of compiling tables into the binary |
+| **Source files** | 590 `.c/.h` | 115 `.rs` | Rust workspace uses fewer gameplay files despite broader automated coverage |
+| **Level definitions** | 167 `.lua` scripts | 65 `.toml` + Rust generators | TOML for data, Rust for logic |
 | **Data files** | Compiled-in tables + dat assets | 65 TOML + 20 locale files + embedded text | Release artifact now ships as a single executable |
-| **Tests** | ~0 (manual QA only) | **4,637** automated | 4-layer pyramid + differential harness |
+| **Tests** | ~0 (manual QA only) | **4,667** automated | Unit + integration + property + differential layers |
 | **Specifications** | In-code comments | **29 spec documents** | Extracted formulas with test vectors |
 | **i18n** | Optional `#ifdef` | Built-in (5 languages) | Fluent + TOML, hot-switchable |
 | **Architecture** | Global state, IO mixed in | ECS + zero-IO events | Deterministic, testable, replayable |
-| **Build time** | ~30s (make) | ~15s (cargo) | Incremental builds faster |
 | **Binary size** | ~4MB | ~5.8MB | Single executable release asset with embedded data and locales |
 
 ## Overview
@@ -31,13 +30,15 @@ NetHack Babel is a ground-up reimplementation of [NetHack 3.7](https://github.co
 
 ## Current Scale
 
-Measured on 2026-03-19 from the checked-in repository:
+Measured on 2026-03-20 from the checked-in repository:
 
-- **115 Rust source files / 208,997 lines** across the six workspace crates
-- **20 locale files / 14,730 lines** of Fluent + TOML translation content
+- **115 Rust source files / 210,956 lines** across the six workspace crates
+- **20 locale files / 13,888 lines** of Fluent + TOML translation content
 - **65 data TOML files / 25,639 lines** for monsters, items, levels, and manifests
-- **320 tracked files / 304,102 total lines** in the repository
-- **4,637 automated tests** in the workspace test suite
+- **320 tracked files / 305,257 total lines** in the repository
+- **29 mechanism specs + 29 review notes** under `specs/`
+- **4,667 automated tests** in the workspace test suite
+- **394 monsters / 430 items** loaded by the current embedded runtime assets
 
 ## About Original NetHack
 
@@ -50,8 +51,8 @@ NetHack is one of the foundational roguelikes, developed continuously for decade
 - **CJK-aware item naming** — Chinese counter words (量词) system: "3把匕首" instead of "3 daggers"; BUC prefix: "祝福的+2长剑"
 - **Data-driven architecture** — 394 monsters, 430 items, 33 artifacts defined in TOML; modify content without recompiling
 - **ECS-based game state** — hecs entity-component-system with explicit turn resolution and typed events
-- **Formula-precise mechanics** — 29 mechanism specs extracted from the original C source; 4,637 tests verify fidelity
-- **99.8% coverage** — all C NetHack gameplay systems implemented: combat, magic, items, monsters, dungeon, religion, pets, traps, shops, polymorph, riding, bones, conducts, and more
+- **Formula-precise mechanics** — 29 mechanism specs extracted from the original C source; 4,667 tests verify fidelity
+- **Broad gameplay coverage** — the main campaign, special levels, quests, endgame, shops, religion, pets, traps, polymorph, riding, bones, conducts, replay, and save/load are all live runtime systems
 - **Per-game appearance shuffling** — each game randomizes potion colors, scroll labels, ring materials
 - **Complete special levels** — 30+ generators: Sokoban (8 puzzles), Castle, Medusa, all Gehennom levels, Vlad's Tower, Wizard Tower, Sanctum, Elemental Planes, Astral Plane, 13 role-specific quest branches
 - **13 playable roles** — Archeologist, Barbarian, Caveman, Healer, Knight, Monk, Priest, Ranger, Rogue, Samurai, Tourist, Valkyrie, Wizard — each with unique quest, starting inventory, and rank titles
@@ -70,7 +71,7 @@ Official release artifacts are published as a single executable per tag. Release
 ### Release Binary
 
 ```sh
-./nethack-babel-v0.1.2-aarch64-apple-darwin --language zh-CN
+./nethack-babel-v0.1.4-aarch64-apple-darwin --language zh-CN
 ```
 
 ### Source Checkout
@@ -155,12 +156,12 @@ NetHack Babel is a Cargo workspace with six crates. Dependencies flow strictly d
 
 | Crate | Role | LOC | Tests |
 |-------|------|-----|-------|
-| `engine` | Pure game logic — combat, monsters, items, dungeon, turn loop, 80 modules | 170,276 | 3,800+ |
+| `engine` | Pure game logic — combat, monsters, items, dungeon, turn loop, 80+ modules | 170,847 | 3,800+ |
 | `data` | TOML schema definitions and loaders for monsters, items, dungeons, levels | 4,753 | 44 |
 | `i18n` | Fluent-based localization, item naming (doname), CJK classifiers | 7,209 | 91 |
-| `tui` | Terminal UI built on ratatui + crossterm, 16-color system | 8,385 | 172 |
+| `tui` | Terminal UI built on ratatui + crossterm, 16-color system | 8,794 | 172 |
 | `audio` | Sound effects via rodio, triggered by engine events | 340 | 58 |
-| `cli` | Binary entry point — config, save/load, options, main loop | 18,034 | 195 |
+| `cli` | Binary entry point — config, save/load, options, main loop | 19,013 | 195 |
 
 ```
                      cli
@@ -233,13 +234,13 @@ NetHack Babel separates all player-visible text from game logic:
 
 ## Mechanism Specifications
 
-The `specs/` directory contains 29 mechanism specifications extracted from the original NetHack C source, reviewed, and verified. Each spec documents the exact formulas, constants, edge cases, and test vectors for a game subsystem.
+The `specs/` directory contains 29 mechanism specifications extracted from the original NetHack C source, reviewed and paired with 29 review notes. Each spec documents the exact formulas, constants, edge cases, and test vectors for a game subsystem.
 
 ## Testing Infrastructure
 
 NetHack Babel uses a 4-layer test pyramid plus a differential execution harness for compiler-grade cross-validation against the original C engine.
 
-### Test Pyramid (4,637+ tests)
+### Test Pyramid (4,667+ tests)
 
 | Layer | Tests | Purpose |
 |-------|-------|---------|
@@ -284,7 +285,7 @@ Rust nightly is the only requirement:
 
 ```sh
 cargo build                              # Build
-cargo test --workspace                   # Run all 4,637+ tests
+cargo test --workspace                   # Run all 4,667+ tests
 cargo run -- --data-dir data             # Run (English)
 cargo run -- --data-dir data --language zh-CN  # Run (Chinese)
 cargo run -- --data-dir data -D          # Wizard mode
@@ -296,7 +297,7 @@ For the GitHub release binary, download the single executable asset attached to 
 
 ## Project Status
 
-The game engine is feature-complete with 99.8% coverage of NetHack 3.7 gameplay systems. All core systems — combat, magic, items, monsters, dungeon generation, special levels, quests, pets, religion, traps, shops, hunger, status effects, identification, polymorph, riding, conducts, bones, save/load, leaderboard, and the terminal UI — are implemented and verified against the original NetHack source with 4,637+ passing tests.
+The project is now in the "long-tail parity" phase rather than the "missing core systems" phase. The main campaign, quest branches, special levels, endgame, shops, religion, pets, bones, replay, save/load, leaderboard, and multilingual TUI are all playable and exercised by 4,667 automated tests. The remaining gaps are concentrated in original-NetHack texture and cadence: Wizard of Yendor covetous behavior, `sounds.c` conversational and ambient edge cases, and a few choice-heavy interactions where UX still lags behind the C original.
 
 Save format note: the current on-disk save version is `1.0.0`. Older `0.3.x` saves are intentionally rejected because level-scoped floor object data and story/runtime state are now serialized differently.
 
@@ -304,23 +305,21 @@ See [GAP_STATUS.md](GAP_STATUS.md) for the detailed status report and [DIFFERENC
 
 ## Roadmap (2026)
 
-1. **Temple and shop long-tail parity**  
-   Push beyond the current `temple-entry / sanctum-entry / untended-temple-ghost / temple ambient / temple-ambient-outside-shrine / vault-ambient / vault-scrooge / vault-quarterback / fountain-ambient / sink-ambient / court-ambient / beehive-ambient / morgue-ambient / zoo-ambient / oracle-zot / oracle-visible-suppression / ambient-engulfed-suppression / ambient-underwater-suppression / shop-neiman-marcus / shop-geico-pitch / priest-wrath-damage / priest-wrath-blindness / wrong-alignment-priest / shop-entry / shop-entry-invisible / shop ambient / digging-warning / mount-warning / follow / payoff / credit-covers / no-money / pray / calm-down / cranky-priest-chat / business-good-bad / shoplifter-chat / repair / drop-credit / live-sell / robbery / restitution / shopkeeper-death / deserted-shop / protection-spend / donation-tiers / poverty / pious / selfless-generosity / ale-gift / blessing-clairvoyance / cleansing / floor-quote-chat / multi-item-floor-quote-chat / shop-price-texture / deaf-shopkeeper-indications / izchak-shopkeeper-chat / silent-chat-block / strangled-chat-block / swallowed-chat-block / underwater-chat-block` runtime closure and finish the remaining priest/shopkeeper edge cases: richer deity/shop feedback and deeper economy-side aftermath.
-2. **Wizard harassment parity**  
-   Broaden Wizard of Yendor harassment beyond the current respawn/cached-respawn/respawn-boom/respawn-taunt/covetous-chase theft/covetous ground-amulet theft/covetous hero-tile theft/covetous monster-tool theft/covetous quest-artifact theft/directional retreat-heal stairs/portal fallback/covetous temple-priest amulet exclusion/curse/blind-silent black glow/group-enabled nasty-summon/level-teleport/off-screen-intervention/intervention-resurrection/intervention-aggravation/amulet-portal-sense-worn-or-wielded/amulet-wakes-sleeping-wizard/live-taunt/blind-hears-taunts/visibility-and-range-gated-taunts/inactive-wizard-harassment-suppression/chat-wakes-nearby-sleepers/player-anchored-double-trouble runtime, with stronger cadence and more long-tail original-NetHack behavior.
-3. **Story drift detection**  
-   Expand the current quest/endgame/shop/temple/sanctum/wizard plus `Medusa`/`Castle`/`Orcus`/`Fort Ludios`/`Vlad`/invocation-portal/oracle-consultation/demon-bribe/wizard-taunt/wizard-amulet-wake/wizard-covetous-ground-amulet/wizard-covetous-monster-tool/wizard-retreat-heal/were-full-moon-chat/humanoid-aloha-chat/chat-precondition-blocks traversal/save-load matrices into broader drift-detection harnesses for economy, religion, branch transitions, and other campaign-critical paths.
-4. **Runtime cache and save hardening**  
-   Continue auditing level-local runtime state and keep save-format rules explicit whenever serialized world semantics change.
-5. **Contributor and content tooling**  
-   Keep content docs, validation scripts, and schema guidance aligned with the live data-driven dungeon/topology pipeline.
+1. **Wizard of Yendor fidelity pass**  
+   Continue porting the remaining `wizard.c` texture: fuller covetous targeting, more original `intervene()` cadence, and tighter `nasty()` candidate selection so late-game pressure feels closer to vanilla NetHack.
+2. **NPC voice and ambient texture pass**  
+   Keep closing the gap with `sounds.c`, especially the remaining `MS_VAMPIRE`, `MS_IMITATE`, `MS_TRUMPET`, full-moon/were timing, and a few room ambience cases such as swamp and barracks.
+3. **Shop, Oracle, and demon interaction UX**  
+   Preserve the engine behavior that already exists, but improve the player-facing prompt flow so consultations, bribes, pricing, and warnings feel as complete as the original C interaction model.
+4. **Drift harness expansion**  
+   Grow the current story/save matrices into broader campaign-level drift detection for economy, religion, branch state, and endgame pressure, so parity improvements stay stable across save/load and replay.
 
 ## TODO (Short-Term)
 
-- [ ] Extend temple/shop parity beyond the current temple-entry/sanctum-entry/untended-temple-ghost/temple-ambient/temple-ambient-outside-shrine/vault-ambient/vault-scrooge/vault-quarterback/fountain-ambient/sink-ambient/court-ambient/beehive-ambient/morgue-ambient/zoo-ambient/oracle-zot/oracle-visible-suppression/ambient-engulfed-suppression/ambient-underwater-suppression/shop-neiman-marcus/shop-geico-pitch/priest-wrath-damage/priest-wrath-blindness/wrong-alignment-priest/shop-entry/shop-entry-invisible/shop-ambient/digging-warning/mount-warning/payoff/follow/credit-covers/no-money/pray/calm/cranky-priest-chat/business-good-bad/shoplifter-chat/repair/drop-credit/live-sell/robbery/restitution/shopkeeper-death/deserted-shop/protection-spend/donation-tiers/poverty/pious/selfless-generosity/ale-gift/blessing-clairvoyance/cleansing/floor-quote-chat/multi-item-floor-quote-chat/shop-price-texture/deaf-shopkeeper-indications/izchak-shopkeeper-chat/silent-chat-block/strangled-chat-block/swallowed-chat-block/underwater-chat-block path: remaining richer deity/shop feedback and more original economy aftermath.
-- [ ] Extend Wizard of Yendor harassment parity beyond the current respawn, cached resurrection, respawn boom, resurrection taunts, covetous chase theft, covetous ground-amulet theft, covetous hero-tile theft, covetous monster-tool theft, covetous quest-artifact theft, directional retreat-heal stairs, portal fallback, covetous temple-priest amulet exclusion, cursing, blind-silent black glow, group-enabled scaled nasty summon, level teleport, off-screen intervention, intervention resurrection, intervention aggravation, worn-or-wielded amulet portal sensing, carried-amulet waking pressure, blind-audible taunts, visibility/range-gated live taunts, inactive-body harassment suppression, chat-based wake pressure, player-anchored Double Trouble, and repeated reload coverage.
-- [ ] Grow the story traversal matrix into a broader save/load plus drift-detection harness for economy, religion, and branch state beyond the current quest/endgame/shop/temple/sanctum/wizard/Medusa/Castle/Orcus/Fort-Ludios/Vlad/invocation-portal/oracle-consultation/demon-bribe/wizard-intervention/wizard-taunt/wizard-amulet-wake/wizard-covetous-ground-amulet/wizard-covetous-monster-tool/wizard-retreat-heal/were-full-moon-chat/humanoid-aloha-chat/chat-precondition-blocks scenarios.
-- [ ] Audit remaining level-local runtime state for cross-level leakage and save/load omissions.
+- [ ] Finish the remaining `wizard.c` covetous and intervention long-tail, especially cadence and target selection details.
+- [ ] Close the highest-signal `sounds.c` gaps: vampire lines, imitate/trumpet side effects, and remaining ambience texture.
+- [ ] Tighten shop/oracle/demon prompt UX so player-facing interaction quality matches the engine parity already implemented underneath.
+- [ ] Keep expanding story/save drift coverage for wizard, religion, economy, and branch-transition edge cases.
 
 ## Documentation
 

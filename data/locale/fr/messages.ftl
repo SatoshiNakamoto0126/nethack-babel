@@ -477,11 +477,21 @@ offer-what = Offrir quoi ?
 ## Discussion
 npc-chat-no-response = La créature ne semble pas vouloir discuter.
 npc-chat-sleeping = La créature ne semble même pas vous remarquer.
+npc-chat-deaf-response = Même s'il y a une réponse, elle tombe dans des oreilles sourdes.
 chat-nobody-there = Il n'y a personne à qui parler.
-chat-cannot-speak = As { $form }, you cannot speak.
-chat-strangled = You can't speak. You're choking!
-chat-swallowed = They won't hear you out there.
-chat-underwater = Your speech is unintelligible underwater.
+chat-up = On ne vous entendra pas là-haut.
+chat-down = On ne vous entendra pas là-dessous.
+chat-self = Se parler à soi-même est une mauvaise habitude pour un aventurier du donjon.
+chat-cannot-speak = Sous la forme de { $form }, vous ne pouvez pas parler.
+chat-strangled = Vous ne pouvez pas parler. Vous étouffez !
+chat-swallowed = On ne vous entendra pas là-dehors.
+chat-underwater = Sous l'eau, votre discours est incompréhensible.
+chat-statue = La statue ne semble pas vous remarquer.
+chat-wall = C'est comme parler à un mur.
+chat-wall-hallu-gripes = Le mur se plaint de son travail.
+chat-wall-hallu-joke = Le mur vous raconte une blague très drôle !
+chat-wall-hallu-insults = Le mur insulte vos origines !
+chat-wall-hallu-uninterested = Le mur ne semble pas intéressé.
 
 ## Déplacement / voyage
 peaceful-monster-blocks = Vous vous arrêtez. { $monster } vous bloque le passage.

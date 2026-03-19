@@ -564,11 +564,21 @@ offer-what = Was opfern?
 ## Gespräch
 npc-chat-no-response = Die Kreatur scheint nicht reden zu wollen.
 npc-chat-sleeping = Die Kreatur scheint Euch nicht zu bemerken.
+npc-chat-deaf-response = Selbst wenn eine Antwort kommt, könnt Ihr sie nicht hören.
 chat-nobody-there = Dort ist niemand zum Reden.
-chat-cannot-speak = As { $form }, you cannot speak.
-chat-strangled = You can't speak. You're choking!
-chat-swallowed = They won't hear you out there.
-chat-underwater = Your speech is unintelligible underwater.
+chat-up = Dort oben wird man Euch nicht hören.
+chat-down = Dort unten wird man Euch nicht hören.
+chat-self = Mit sich selbst zu reden ist eine schlechte Angewohnheit für einen Kerkerabenteurer.
+chat-cannot-speak = In der Gestalt von { $form } könnt Ihr nicht sprechen.
+chat-strangled = Ihr könnt nicht sprechen. Ihr erstickt!
+chat-swallowed = Dort draußen wird man Euch nicht hören.
+chat-underwater = Unter Wasser ist Eure Sprache unverständlich.
+chat-statue = Die Statue scheint Euch nicht zu bemerken.
+chat-wall = Das ist, als würdet Ihr mit einer Wand reden.
+chat-wall-hallu-gripes = Die Wand beklagt sich über ihre Arbeit.
+chat-wall-hallu-joke = Die Wand erzählt Euch einen lustigen Witz!
+chat-wall-hallu-insults = Die Wand beleidigt Eure Abstammung!
+chat-wall-hallu-uninterested = Die Wand scheint nicht interessiert zu sein.
 
 ## Bewegung / Reise
 peaceful-monster-blocks = Du hältst an. { $monster } steht im Weg.

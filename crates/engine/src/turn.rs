@@ -1948,7 +1948,26 @@ fn resolve_player_action(
                 .get_component::<Positioned>(player)
                 .map(|p| p.0)
                 .unwrap_or(Position::new(0, 0));
+            match direction {
+                Direction::Up => {
+                    events.push(EngineEvent::msg("chat-up"));
+                    return;
+                }
+                Direction::Down => {
+                    events.push(EngineEvent::msg("chat-down"));
+                    return;
+                }
+                Direction::Self_ => {
+                    events.push(EngineEvent::msg("chat-self"));
+                    return;
+                }
+                _ => {}
+            }
             let target_pos = player_pos.step(*direction);
+            if !world.dungeon().current_level.in_bounds(target_pos) {
+                events.push(EngineEvent::msg("chat-nobody-there"));
+                return;
+            }
             // Check if there's a monster at the target position.
             let monster_at_target = world
                 .ecs()
@@ -2039,9 +2058,13 @@ fn resolve_player_action(
                     return;
                 }
 
-                if !crate::status::is_deaf(world, player)
-                    && let Some(monster_def) =
-                        current_level_monster_def_for_entity(world, monster_entity)
+                if crate::status::is_deaf(world, player) {
+                    events.push(EngineEvent::msg("npc-chat-deaf-response"));
+                    return;
+                }
+
+                if let Some(monster_def) =
+                    current_level_monster_def_for_entity(world, monster_entity)
                 {
                     let is_peaceful = world.get_component::<Peaceful>(monster_entity).is_some();
                     let is_tame = world.get_component::<Tame>(monster_entity).is_some();
@@ -2113,6 +2136,8 @@ fn resolve_player_action(
                         player_is_silver_dragon,
                         player_is_baby_silver_dragon,
                     ) = current_player_polymorph_chat_flags(world, player);
+                    let player_counts_as_orc_kindred =
+                        current_player_counts_as_orc_kindred(world, player);
                     let full_moon = crate::were::is_full_moon(world.turn());
                     let night = crate::were::is_night(world.turn());
                     let chat_state = crate::npc::MonsterChatState {
@@ -2151,10 +2176,22 @@ fn resolve_player_action(
                         player_is_silver_dragon,
                         player_is_baby_silver_dragon,
                     };
+                    let effective_monster_def = if monster_def.sound
+                        == nethack_babel_data::schema::MonsterSound::Orc
+                        && (player_counts_as_orc_kindred
+                            || crate::status::is_hallucinating(world, player))
+                    {
+                        nethack_babel_data::schema::MonsterDef {
+                            sound: nethack_babel_data::schema::MonsterSound::Humanoid,
+                            ..monster_def.clone()
+                        }
+                    } else {
+                        monster_def.clone()
+                    };
                     if let Some(outcome) = crate::npc::contextual_monster_chat(
-                        monster_def,
+                        &effective_monster_def,
                         &monster_name,
-                        chat_state,
+                        chat_state.clone(),
                         current_player_is_female(world, player),
                     ) {
                         events.push(outcome.event);
@@ -2174,7 +2211,7 @@ fn resolve_player_action(
                     }
                     if let Some(sound_event) = crate::npc::voiced_monster_chat(
                         &monster_name,
-                        monster_def.sound,
+                        effective_monster_def.sound,
                         chat_state,
                     ) {
                         events.push(sound_event);
@@ -2203,6 +2240,21 @@ fn resolve_player_action(
 
                 events.push(EngineEvent::msg("npc-chat-no-response"));
             } else {
+                if !crate::status::is_blind(world, player) && is_floor_statue_at(world, target_pos)
+                {
+                    events.push(EngineEvent::msg("chat-statue"));
+                    return;
+                }
+                let terrain = world
+                    .dungeon()
+                    .current_level
+                    .get(target_pos)
+                    .map(|cell| cell.terrain);
+                if terrain == Some(Terrain::Wall) {
+                    let hallucinating = crate::status::is_hallucinating(world, player);
+                    events.push(EngineEvent::msg(wall_chat_message_key(hallucinating, rng)));
+                    return;
+                }
                 if let Some(shop_idx) = find_shop_index_containing_position(world, player_pos) {
                     let shop = world.dungeon().shop_rooms[shop_idx].clone();
                     let floor_items = crate::inventory::items_at_position(world, player_pos);
@@ -5798,6 +5850,47 @@ fn current_player_is_female(world: &GameWorld, player: hecs::Entity) -> bool {
     world
         .get_component::<PlayerIdentity>(player)
         .is_some_and(|identity| identity.gender == nethack_babel_data::Gender::Female)
+}
+
+fn current_player_counts_as_orc_kindred(world: &GameWorld, player: hecs::Entity) -> bool {
+    if world
+        .get_component::<PlayerIdentity>(player)
+        .and_then(|identity| crate::role::Race::from_id(identity.race))
+        == Some(crate::role::Race::Orc)
+    {
+        return true;
+    }
+
+    let Some(monster_form_id) = world
+        .get_component::<crate::polyself::PolymorphState>(player)
+        .map(|state| state.monster_form_id)
+    else {
+        return false;
+    };
+    world
+        .monster_catalog()
+        .iter()
+        .find(|monster| monster.id == monster_form_id)
+        .is_some_and(crate::mondata::is_orc)
+}
+
+fn is_floor_statue_at(world: &GameWorld, pos: Position) -> bool {
+    crate::inventory::items_at_position(world, pos)
+        .into_iter()
+        .map(|entity| world.entity_name(entity))
+        .any(|name| name.eq_ignore_ascii_case("statue"))
+}
+
+fn wall_chat_message_key(hallucinating: bool, rng: &mut impl Rng) -> &'static str {
+    if !hallucinating {
+        return "chat-wall";
+    }
+    match rng.random_range(0..4u32) {
+        0 => "chat-wall-hallu-gripes",
+        1 => "chat-wall-hallu-joke",
+        2 => "chat-wall-hallu-insults",
+        _ => "chat-wall-hallu-uninterested",
+    }
 }
 
 fn current_player_polymorph_chat_flags(
@@ -19053,7 +19146,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deaf_player_chatting_with_laughing_monster_gets_no_response() {
+    fn test_deaf_player_chatting_with_laughing_monster_gets_explicit_deaf_response() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
         let player = world.player();
@@ -19071,13 +19164,64 @@ mod tests {
         );
 
         assert!(events.iter().any(|event| {
-            matches!(event, EngineEvent::Message { key, .. } if key == "npc-chat-no-response")
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-chat-deaf-response")
         }));
         assert!(!events.iter().any(|event| {
             matches!(
                 event,
                 EngineEvent::Message { key, .. } if key.starts_with("npc-laugh-")
             )
+        }));
+    }
+
+    #[test]
+    fn test_chatting_up_says_they_wont_hear_you_up_there() {
+        let mut world = make_test_world();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::Up,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "chat-up")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_down_says_they_wont_hear_you_down_there() {
+        let mut world = make_test_world();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::Down,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "chat-down")
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_self_mentions_bad_habit() {
+        let mut world = make_test_world();
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::Self_,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "chat-self")
         }));
     }
 
@@ -19102,6 +19246,130 @@ mod tests {
                 event,
                 EngineEvent::Message { key, .. } if key == "npc-gecko-geico-pitch"
             )
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_wall_uses_wall_line() {
+        let mut world = make_test_world();
+        let player = world.player();
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
+            pos.0 = Position::new(5, 5);
+        }
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Wall);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "chat-wall")
+        }));
+    }
+
+    #[test]
+    fn test_hallucinating_chatting_with_wall_uses_wall_gag() {
+        let mut world = make_test_world();
+        let player = world.player();
+        if let Some(mut pos) = world.get_component_mut::<Positioned>(player) {
+            pos.0 = Position::new(5, 5);
+        }
+        world
+            .dungeon_mut()
+            .current_level
+            .set_terrain(Position::new(6, 5), Terrain::Wall);
+        let _ = crate::status::make_hallucinated(&mut world, player, 200);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. }
+                    if matches!(
+                        key.as_str(),
+                        "chat-wall-hallu-gripes"
+                            | "chat-wall-hallu-joke"
+                            | "chat-wall-hallu-insults"
+                            | "chat-wall-hallu-uninterested"
+                    )
+            )
+        }));
+    }
+
+    #[test]
+    fn test_chatting_with_floor_statue_gets_statue_line() {
+        let mut world = make_test_world();
+        let statue = world.spawn((
+            ObjectCore {
+                otyp: ObjectTypeId(0),
+                object_class: ObjectClass::Tool,
+                quantity: 1,
+                weight: 250,
+                age: 0,
+                inv_letter: None,
+                artifact: None,
+            },
+            ObjectLocation::Floor {
+                x: 6,
+                y: 5,
+                level: world.dungeon().current_data_dungeon_level(),
+            },
+            Name("statue".to_string()),
+        ));
+        assert!(world.get_component::<Name>(statue).is_some());
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "chat-statue")
+        }));
+    }
+
+    #[test]
+    fn test_hallucinating_chatting_with_orc_uses_humanoid_line() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let player = world.player();
+        let orc_name = monster_name_with_sound(&world, MonsterSound::Orc);
+        spawn_full_monster(&mut world, Position::new(6, 5), &orc_name, 10);
+        let _ = crate::status::make_hallucinated(&mut world, player, 200);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-humanoid-threatens"
+            )
+        }));
+        assert!(!events.iter().any(|event| {
+            matches!(event, EngineEvent::Message { key, .. } if key == "npc-grunt-grunts")
         }));
     }
 
@@ -20124,6 +20392,29 @@ mod tests {
                 .is_none_or(|status| status.sleeping == 0),
             "trumpet chat should wake nearby sleeping monsters"
         );
+    }
+
+    #[test]
+    fn test_chatting_with_untamed_mooing_monster_bellows() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let moo_name = monster_name_with_sound(&world, MonsterSound::Moo);
+        spawn_full_monster(&mut world, Position::new(6, 5), &moo_name, 10);
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Chat {
+                direction: Direction::East,
+            },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::Message { key, .. } if key == "npc-bellow-bellows"
+            )
+        }));
     }
 
     #[test]
