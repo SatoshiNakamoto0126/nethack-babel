@@ -55,6 +55,8 @@ NetHack is one of the foundational roguelikes, developed continuously for decade
 
 ## Quick Start
 
+Official release artifacts are published as a single executable per tag. When running from a source checkout, keep using the local `data/` tree shown below.
+
 ```sh
 git clone https://github.com/SatoshiNakamoto0126/nethack-babel.git
 cd nethack-babel
@@ -62,6 +64,8 @@ cargo run -- --data-dir data
 ```
 
 ### Play in Chinese
+
+The official release binary is distributed as a single executable. In a source checkout, keep passing `--data-dir data` as shown here.
 
 ```sh
 cargo run -- --data-dir data --language zh_CN    # Simplified Chinese
@@ -86,6 +90,7 @@ cargo run -- --server 127.0.0.1:2323
 ```
 
 Rust nightly is required and will be selected automatically via `rust-toolchain.toml`. If you use [rustup](https://rustup.rs/), no manual setup is needed.
+The release workflow now publishes a single executable asset per tag instead of a tarball containing `data/`.
 
 ## Controls
 
@@ -268,6 +273,8 @@ cargo run -- --data-dir data -D          # Wizard mode
 cargo clippy --workspace --all-targets   # Lint
 cargo build --release                    # Release build
 ```
+
+For the GitHub release binary, download the single executable asset attached to the tag release. Source checkouts still use the repository `data/` tree when run locally.
 
 ## Project Status
 

@@ -3,9 +3,9 @@
 # install.sh -- build and install NetHack Babel
 #
 # Usage:
-#   ./install.sh              # install to ~/.local/bin + ~/.nethack-babel/
-#   ./install.sh --system     # install to /usr/local/bin + /usr/local/share/nethack-babel/
-#   ./install.sh --prefix DIR # install to DIR/bin + DIR/share/nethack-babel/
+#   ./install.sh              # install to ~/.local/bin + ~/.config/nethack-babel/
+#   ./install.sh --system     # install to /usr/local/bin + ~/.config/nethack-babel/
+#   ./install.sh --prefix DIR # install to DIR/bin + ~/.config/nethack-babel/
 
 set -euo pipefail
 
@@ -33,9 +33,9 @@ while [ $# -gt 0 ]; do
         --help|-h)
             echo "Usage: $0 [--system | --prefix DIR]"
             echo ""
-            echo "  (default)      Install to ~/.local/bin and ~/.nethack-babel/"
-            echo "  --system       Install to /usr/local/bin and /usr/local/share/nethack-babel/"
-            echo "  --prefix DIR   Install to DIR/bin and DIR/share/nethack-babel/"
+            echo "  (default)      Install to ~/.local/bin and ~/.config/nethack-babel/"
+            echo "  --system       Install to /usr/local/bin and ~/.config/nethack-babel/"
+            echo "  --prefix DIR   Install to DIR/bin and ~/.config/nethack-babel/"
             exit 0
             ;;
         *)
@@ -52,19 +52,16 @@ done
 case "$INSTALL_MODE" in
     user)
         BIN_DIR="$HOME/.local/bin"
-        DATA_DIR="$HOME/.nethack-babel/data"
         CONFIG_DIR="$HOME/.config/nethack-babel"
         NEEDS_SUDO=""
         ;;
     system)
         BIN_DIR="/usr/local/bin"
-        DATA_DIR="/usr/local/share/nethack-babel/data"
         CONFIG_DIR="$HOME/.config/nethack-babel"
         NEEDS_SUDO="sudo"
         ;;
     prefix)
         BIN_DIR="$PREFIX/bin"
-        DATA_DIR="$PREFIX/share/nethack-babel/data"
         CONFIG_DIR="$HOME/.config/nethack-babel"
         NEEDS_SUDO=""
         ;;
@@ -84,10 +81,6 @@ echo "==> Installing binary to $BIN_DIR..."
 ${NEEDS_SUDO:+$NEEDS_SUDO} mkdir -p "$BIN_DIR"
 ${NEEDS_SUDO:+$NEEDS_SUDO} cp "$BINARY" "$BIN_DIR/nethack-babel"
 ${NEEDS_SUDO:+$NEEDS_SUDO} chmod 755 "$BIN_DIR/nethack-babel"
-
-echo "==> Installing data files to $DATA_DIR..."
-${NEEDS_SUDO:+$NEEDS_SUDO} mkdir -p "$DATA_DIR"
-${NEEDS_SUDO:+$NEEDS_SUDO} cp -R data/* "$DATA_DIR/"
 
 echo "==> Setting up default config at $CONFIG_DIR..."
 mkdir -p "$CONFIG_DIR"
@@ -120,7 +113,6 @@ fi
 echo ""
 echo "==> Installation complete!"
 echo "    Binary:  $BIN_DIR/nethack-babel"
-echo "    Data:    $DATA_DIR/"
 echo "    Config:  $CONFIG_DIR/config.toml"
 
 # Check if BIN_DIR is in PATH

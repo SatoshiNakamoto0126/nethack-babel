@@ -1,6 +1,6 @@
 # NetHack Babel -- Guidebook
 
-*Version 0.1.0*
+*Version 0.1.1*
 
 ---
 
@@ -70,7 +70,7 @@ From the source repository:
 
     cargo run -- --data-dir data
 
-With a compiled binary, run it from a directory containing `data/`, or pass the path explicitly:
+The official GitHub release is a single executable asset. When running from a source checkout, pass the path explicitly:
 
     nethack-babel --data-dir /path/to/data
 
