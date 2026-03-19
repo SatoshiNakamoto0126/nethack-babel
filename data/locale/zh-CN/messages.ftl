@@ -1868,7 +1868,7 @@ attack-acid-resisted = The acid doesn't seem to affect you.
 attack-breath = { $monster } breathes at you!
 
 # TODO: translate
-attack-cold-hit = You are covered in frost!
+attack-cold-hit = 你浑身覆满寒霜！
 
 # TODO: translate
 attack-cold-resisted = You feel mildly chilly.
@@ -1889,7 +1889,7 @@ attack-drain-level = You feel your life force draining away!
 attack-engulf = { $monster } engulfs you!
 
 # TODO: translate
-attack-fire-hit = You are engulfed in flames!
+attack-fire-hit = 火焰吞没了你！
 
 # TODO: translate
 attack-fire-resisted = You feel mildly warm.
@@ -1901,16 +1901,16 @@ attack-hug-crush = You are being crushed!
 attack-paralyze = You are frozen in place!
 
 # TODO: translate
-attack-poisoned = You feel very sick!
+attack-poisoned = 你觉得恶心得厉害！
 
 # TODO: translate
-attack-shock-hit = You are jolted by electricity!
+attack-shock-hit = 电流猛地击中了你！
 
 # TODO: translate
 attack-shock-resisted = You are only mildly tingled.
 
 # TODO: translate
-attack-sleep = You feel drowsy...
+attack-sleep = 你感到昏昏欲睡……
 
 # TODO: translate
 attack-slowed = You feel yourself moving more slowly.
@@ -2928,10 +2928,10 @@ stairs-at-top = You are at the top of the dungeon.
 stairs-not-here = You don't see any stairs here.
 
 # TODO: translate
-status-blindness-end = You can see again.
+status-blindness-end = 你又能看见了。
 
 # TODO: translate
-status-confusion-end = You feel less confused now.
+status-confusion-end = 你感觉不那么混乱了。
 
 # TODO: translate
 status-fall-asleep = You fall asleep.
@@ -2955,10 +2955,10 @@ status-invisibility-end = You are no longer invisible.
 status-levitation-end = You float gently to the floor.
 
 # TODO: translate
-status-paralysis-end = You can move again.
+status-paralysis-end = 你又能动了。
 
 # TODO: translate
-status-paralyzed-cant-move = You can't move!
+status-paralyzed-cant-move = 你动弹不得！
 
 # TODO: translate
 status-sick-cured = What a relief!
@@ -2967,10 +2967,10 @@ status-sick-cured = What a relief!
 status-sick-recovered = You feel better.
 
 # TODO: translate
-status-sleepy-end = You feel awake.
+status-sleepy-end = 你清醒过来了。
 
 # TODO: translate
-status-sleepy-start = You feel drowsy.
+status-sleepy-start = 你感到困倦。
 
 # TODO: translate
 status-speed-end = You feel yourself slow down.
@@ -3335,10 +3335,10 @@ wizard-kill-none = There are no monsters here to wipe out.
 wizard-map-revealed = An image of your surroundings forms in your mind!
 
 # TODO: translate
-wizard-vague-nervous = You feel vaguely nervous.
+wizard-vague-nervous = 你隐约感到不安。
 
 # TODO: translate
-wizard-black-glow = You notice a black glow surrounding you.
+wizard-black-glow = 你注意到一阵黑色光芒笼罩着你。
 
 # TODO: translate
 wizard-aggravate = Distant noises echo as the dungeon suddenly awakens.
@@ -3362,7 +3362,7 @@ wizard-steal-invocation-tool = The Wizard of Yendor steals one of the invocation
 wizard-steal-quest-artifact = The Wizard of Yendor steals the quest artifact!
 
 # TODO: translate
-wizard-summon-nasties = New nasties appear from thin air!
+wizard-summon-nasties = 新的恶物凭空出现了！
 
 # TODO: translate
 wizard-taunt-laughs = {$wizard} laughs fiendishly.
@@ -3383,7 +3383,7 @@ wizard-taunt-return = I shall return.
 wizard-taunt-back = I'll be back.
 
 # TODO: translate
-wizard-taunt-general = {$malediction}, {$insult}!
+wizard-taunt-general = {$malediction}，{$insult}！
 
 # TODO: translate
 amulet-feels-hot = The Amulet feels hot!
@@ -3531,15 +3531,15 @@ npc-cuss-demon-comedian = { $monster } says: "Thou ought to be a comedian, thy s
 # TODO: translate
 npc-cuss-demon-odor = { $monster } says: "Hast thou considered masking thine odour?"
 # TODO: translate
-demon-demand-safe-passage = { $monster } demands { $amount } zorkmids for safe passage.
+demon-demand-safe-passage = { $monster } 索要 { $amount } 枚 zorkmid 作为买路钱。
 # TODO: translate
 demon-demand-something = { $monster } seems to be demanding something.
 # TODO: translate
 demon-offer-all-gold = You give { $monster } all your gold.
 # TODO: translate
-demon-offer-amount = You give { $monster } { $amount } zorkmids.
+demon-offer-amount = 你给了 { $monster } { $amount } 枚 zorkmid。
 # TODO: translate
-demon-refuse = You refuse.
+demon-refuse = 你拒绝了。
 # TODO: translate
 demon-shortchange = You try to shortchange { $monster }, but fumble.
 # TODO: translate
@@ -3902,9 +3902,9 @@ ambient-mines-cart = You hear a sound reminiscent of a straining mine cart.
 # TODO: translate
 ambient-shop-shoplifters = You hear someone cursing shoplifters.
 # TODO: translate
-ambient-shop-register = You hear the chime of a cash register.
+ambient-shop-register = 你听到收银机的叮当声。
 # TODO: translate
-ambient-shop-prices = You hear someone mumbling about prices.
+ambient-shop-prices = 你听到有人在小声嘟囔价格。
 # TODO: translate
 ambient-temple-praise = You hear someone praising { $deity }.
 # TODO: translate
@@ -3971,3 +3971,42 @@ ambient-shallow-door-close = You hear a door close.
 ambient-shallow-water = You hear water dripping.
 # TODO: translate
 ambient-shallow-moving = You hear someone moving around.
+ui-wizard-mode-disabled = 未启用巫师模式。
+ui-item-prompt-drop = 丢弃哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-wield = 挥舞哪一件？[a-zA-Z 或 - 表示空手]
+ui-item-prompt-wear = 穿戴哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-take-off = 脱下哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-put-on = 戴上哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-remove = 取下哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-apply = 使用哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-ready = 准备哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-throw = 投掷哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-zap = 击发哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-invoke = 调用哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-rub = 摩擦哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-tip = 倾倒哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-offer = 献上哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-force-lock = 用哪一件强行撬锁？[a-zA-Z 或 ?*]
+ui-item-prompt-dip = 蘸哪一件？[a-zA-Z 或 ?*]
+ui-item-prompt-dip-into = 蘸进哪一件里？[a-zA-Z 或 ?*]
+ui-item-prompt-name-item = 给哪件物品命名？[a-zA-Z 或 ?*]
+ui-item-prompt-adjust-item = 调整哪件物品？[a-zA-Z 或 ?*]
+ui-text-prompt-wish = 想许什么愿？
+ui-text-prompt-create-monster = 要创建哪种怪物？
+ui-text-prompt-teleport-level = 要传送到地城第几层？
+ui-text-prompt-annotate-level = 给这一层加什么注记：
+ui-text-prompt-engrave = 要刻写什么？
+ui-text-prompt-call-class = 要给哪个类别字母命名？
+ui-text-prompt-call-name = 要叫它什么？
+ui-text-prompt-known-class = 查看哪个类别字母？
+ui-text-prompt-cast-spell = 施放哪个法术字母？
+ui-text-prompt-name-target = 命名目标（[i]物品/[m]怪物/[l]楼层）？
+ui-text-prompt-name-level = 给这一层起名：
+ui-text-prompt-call-monster = 要叫这只怪物什么？
+ui-text-prompt-name-it = 要给它起什么名字？
+ui-text-prompt-assign-inventory-letter = 指定新的物品栏字母：
+ui-position-prompt-travel = 要前往哪里？
+ui-position-prompt-jump = 要跳到哪里？
+ui-position-prompt-inspect = 检查哪个位置？
+ui-position-prompt-look = 查看哪个位置？
+ui-position-prompt-name-monster = 给哪个位置的怪物命名？

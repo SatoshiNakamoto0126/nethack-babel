@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hecs::Entity;
-use nethack_babel_engine::action::{Direction, NameTarget, PlayerAction, SpellId};
+use nethack_babel_engine::action::{Direction, NameTarget, PlayerAction, Position, SpellId};
 
 use crate::input::{
     DirectionCommand, ItemCommand, ItemDirectionCommand, PromptKind, complete_extended_command,
@@ -94,12 +94,51 @@ pub struct TuiMessages {
     pub not_implemented: String,
     pub no_previous_command: String,
     pub commands_title: String,
+    pub wizard_mode_disabled: String,
     pub direction_prompt: String,
     pub direction_prompt_optional: String,
     pub direction_prompt_run: String,
     pub direction_prompt_rush: String,
     pub direction_help_title: String,
     pub direction_help_body: String,
+    pub item_prompt_drop: String,
+    pub item_prompt_wield: String,
+    pub item_prompt_wear: String,
+    pub item_prompt_take_off: String,
+    pub item_prompt_put_on: String,
+    pub item_prompt_remove: String,
+    pub item_prompt_apply: String,
+    pub item_prompt_ready: String,
+    pub item_prompt_throw: String,
+    pub item_prompt_zap: String,
+    pub item_prompt_invoke: String,
+    pub item_prompt_rub: String,
+    pub item_prompt_tip: String,
+    pub item_prompt_offer: String,
+    pub item_prompt_force_lock: String,
+    pub item_prompt_dip: String,
+    pub item_prompt_dip_into: String,
+    pub item_prompt_name_item: String,
+    pub item_prompt_adjust_item: String,
+    pub text_prompt_wish: String,
+    pub text_prompt_create_monster: String,
+    pub text_prompt_teleport_level: String,
+    pub text_prompt_annotate_level: String,
+    pub text_prompt_engrave: String,
+    pub text_prompt_call_class: String,
+    pub text_prompt_call_name: String,
+    pub text_prompt_known_class: String,
+    pub text_prompt_cast_spell: String,
+    pub text_prompt_name_target: String,
+    pub text_prompt_name_level: String,
+    pub text_prompt_call_monster: String,
+    pub text_prompt_name_it: String,
+    pub text_prompt_assign_inventory_letter: String,
+    pub position_prompt_travel: String,
+    pub position_prompt_jump: String,
+    pub position_prompt_inspect: String,
+    pub position_prompt_look: String,
+    pub position_prompt_name_monster: String,
 }
 
 impl Default for TuiMessages {
@@ -111,12 +150,51 @@ impl Default for TuiMessages {
             not_implemented: "Not yet implemented.".to_string(),
             no_previous_command: "No previous command to repeat.".to_string(),
             commands_title: "Commands".to_string(),
+            wizard_mode_disabled: "Wizard mode is not enabled.".to_string(),
             direction_prompt: "In what direction?".to_string(),
             direction_prompt_optional: "In what direction? (Esc for none)".to_string(),
             direction_prompt_run: "Run in what direction?".to_string(),
             direction_prompt_rush: "Rush in what direction?".to_string(),
             direction_help_title: "Direction Keys".to_string(),
             direction_help_body: "h left, j down, k up, l right\ny northwest, u northeast, b southwest, n southeast\n. self, < up, > down\nEsc cancel, ? show this help".to_string(),
+            item_prompt_drop: "Drop what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_wield: "Wield what? [a-zA-Z or - for bare hands]".to_string(),
+            item_prompt_wear: "Wear what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_take_off: "Take off what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_put_on: "Put on what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_remove: "Remove what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_apply: "Apply what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_ready: "Ready what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_throw: "Throw what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_zap: "Zap what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_invoke: "Invoke what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_rub: "Rub what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_tip: "Tip what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_offer: "Offer what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_force_lock: "Force lock with what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_dip: "Dip what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_dip_into: "Dip into what? [a-zA-Z or ?*]".to_string(),
+            item_prompt_name_item: "Name which item? [a-zA-Z or ?*]".to_string(),
+            item_prompt_adjust_item: "Adjust which item? [a-zA-Z or ?*]".to_string(),
+            text_prompt_wish: "Wish for what?".to_string(),
+            text_prompt_create_monster: "Create which monster?".to_string(),
+            text_prompt_teleport_level: "Teleport to which dungeon level?".to_string(),
+            text_prompt_annotate_level: "Annotate this level with:".to_string(),
+            text_prompt_engrave: "Engrave what?".to_string(),
+            text_prompt_call_class: "Call which class letter?".to_string(),
+            text_prompt_call_name: "Call it what?".to_string(),
+            text_prompt_known_class: "Known which class letter?".to_string(),
+            text_prompt_cast_spell: "Cast which spell letter?".to_string(),
+            text_prompt_name_target: "Name target ([i]tem/[m]onster/[l]evel)?".to_string(),
+            text_prompt_name_level: "Name this level:".to_string(),
+            text_prompt_call_monster: "Call this monster what?".to_string(),
+            text_prompt_name_it: "Name it what?".to_string(),
+            text_prompt_assign_inventory_letter: "Assign new inventory letter:".to_string(),
+            position_prompt_travel: "Travel to where?".to_string(),
+            position_prompt_jump: "Jump to where?".to_string(),
+            position_prompt_inspect: "Inspect which position?".to_string(),
+            position_prompt_look: "Look at which position?".to_string(),
+            position_prompt_name_monster: "Name which monster position?".to_string(),
         }
     }
 }
@@ -264,8 +342,8 @@ impl App {
             "wizwhere" => self.wizard_action(port, PlayerAction::WizWhere),
             "wizkill" => self.wizard_action(port, PlayerAction::WizKill),
             "wizwish" => {
-                let wish = port
-                    .get_line("Wish for what?")
+                let wish = self
+                    .get_localized_line(port, "Wish for what?")
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty());
                 match wish {
@@ -276,8 +354,8 @@ impl App {
                 }
             }
             "wizgenesis" => {
-                let monster = port
-                    .get_line("Create which monster?")
+                let monster = self
+                    .get_localized_line(port, "Create which monster?")
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty());
                 match monster {
@@ -288,8 +366,8 @@ impl App {
                 }
             }
             "wizlevelport" => {
-                let depth = port
-                    .get_line("Teleport to which dungeon level?")
+                let depth = self
+                    .get_localized_line(port, "Teleport to which dungeon level?")
                     .and_then(|s| s.trim().parse::<i32>().ok());
                 match depth {
                     Some(depth) => {
@@ -315,7 +393,10 @@ impl App {
         if self.wizard_mode {
             Some(Some(action))
         } else {
-            port.show_message("Wizard mode is not enabled.", MessageUrgency::Normal);
+            port.show_message(
+                &self.messages_i18n.wizard_mode_disabled,
+                MessageUrgency::Normal,
+            );
             Some(None)
         }
     }
@@ -324,7 +405,10 @@ impl App {
         if self.wizard_mode {
             port.show_message(&self.messages_i18n.not_implemented, MessageUrgency::Normal);
         } else {
-            port.show_message("Wizard mode is not enabled.", MessageUrgency::Normal);
+            port.show_message(
+                &self.messages_i18n.wizard_mode_disabled,
+                MessageUrgency::Normal,
+            );
         }
         Some(None)
     }
@@ -343,8 +427,8 @@ impl App {
             InputKeyCode::Char('e' | 'E') => self.wizard_action(port, PlayerAction::WizDetect),
             InputKeyCode::Char('f' | 'F') => self.wizard_action(port, PlayerAction::WizMap),
             InputKeyCode::Char('g' | 'G') => {
-                let monster = port
-                    .get_line("Create which monster?")
+                let monster = self
+                    .get_localized_line(port, "Create which monster?")
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty());
                 match monster {
@@ -356,8 +440,8 @@ impl App {
             }
             InputKeyCode::Char('i' | 'I') => self.wizard_action(port, PlayerAction::WizIdentify),
             InputKeyCode::Char('v' | 'V') => {
-                let depth = port
-                    .get_line("Teleport to which dungeon level?")
+                let depth = self
+                    .get_localized_line(port, "Teleport to which dungeon level?")
                     .and_then(|s| s.trim().parse::<i32>().ok());
                 match depth {
                     Some(depth) => {
@@ -367,8 +451,8 @@ impl App {
                 }
             }
             InputKeyCode::Char('w' | 'W') => {
-                let wish = port
-                    .get_line("Wish for what?")
+                let wish = self
+                    .get_localized_line(port, "Wish for what?")
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty());
                 match wish {
@@ -521,7 +605,7 @@ impl App {
     /// `*` (show full inventory).  Returns the typed character, or
     /// `None` if cancelled with Escape.
     pub fn prompt_inventory_item(&self, port: &mut impl WindowPort, prompt: &str) -> Option<char> {
-        port.show_message(prompt, MessageUrgency::Normal);
+        port.show_message(self.localize_prompt(prompt), MessageUrgency::Normal);
         loop {
             let event = port.get_key();
             match event {
@@ -542,14 +626,64 @@ impl App {
         }
     }
 
-    fn localize_direction_prompt<'a>(&'a self, prompt: &'a str) -> &'a str {
+    fn localize_prompt<'a>(&'a self, prompt: &'a str) -> &'a str {
         match prompt {
+            "Drop what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_drop,
+            "Wield what? [a-zA-Z or - for bare hands]" => &self.messages_i18n.item_prompt_wield,
+            "Wear what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_wear,
+            "Take off what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_take_off,
+            "Put on what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_put_on,
+            "Remove what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_remove,
+            "Apply what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_apply,
+            "Ready what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_ready,
+            "Throw what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_throw,
+            "Zap what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_zap,
+            "Invoke what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_invoke,
+            "Rub what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_rub,
+            "Tip what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_tip,
+            "Offer what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_offer,
+            "Force lock with what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_force_lock,
+            "Dip what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_dip,
+            "Dip into what? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_dip_into,
+            "Name which item? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_name_item,
+            "Adjust which item? [a-zA-Z or ?*]" => &self.messages_i18n.item_prompt_adjust_item,
             "In what direction?" => &self.messages_i18n.direction_prompt,
             "In what direction? (Esc for none)" => &self.messages_i18n.direction_prompt_optional,
             "Run in what direction?" => &self.messages_i18n.direction_prompt_run,
             "Rush in what direction?" => &self.messages_i18n.direction_prompt_rush,
+            "Wish for what?" => &self.messages_i18n.text_prompt_wish,
+            "Create which monster?" => &self.messages_i18n.text_prompt_create_monster,
+            "Teleport to which dungeon level?" => &self.messages_i18n.text_prompt_teleport_level,
+            "Travel to where?" => &self.messages_i18n.position_prompt_travel,
+            "Jump to where?" => &self.messages_i18n.position_prompt_jump,
+            "Inspect which position?" => &self.messages_i18n.position_prompt_inspect,
+            "Look at which position?" => &self.messages_i18n.position_prompt_look,
+            "Annotate this level with:" => &self.messages_i18n.text_prompt_annotate_level,
+            "Engrave what?" => &self.messages_i18n.text_prompt_engrave,
+            "Call which class letter?" => &self.messages_i18n.text_prompt_call_class,
+            "Call it what?" => &self.messages_i18n.text_prompt_call_name,
+            "Known which class letter?" => &self.messages_i18n.text_prompt_known_class,
+            "Cast which spell letter?" => &self.messages_i18n.text_prompt_cast_spell,
+            "Name target ([i]tem/[m]onster/[l]evel)?" => {
+                &self.messages_i18n.text_prompt_name_target
+            }
+            "Name this level:" => &self.messages_i18n.text_prompt_name_level,
+            "Name which monster position?" => &self.messages_i18n.position_prompt_name_monster,
+            "Call this monster what?" => &self.messages_i18n.text_prompt_call_monster,
+            "Name it what?" => &self.messages_i18n.text_prompt_name_it,
+            "Assign new inventory letter:" => {
+                &self.messages_i18n.text_prompt_assign_inventory_letter
+            }
             _ => prompt,
         }
+    }
+
+    fn get_localized_line(&self, port: &mut impl WindowPort, prompt: &str) -> Option<String> {
+        port.get_line(self.localize_prompt(prompt))
+    }
+
+    fn get_localized_position(&self, port: &mut impl WindowPort, prompt: &str) -> Option<Position> {
+        port.ask_position(self.localize_prompt(prompt))
     }
 
     /// Prompt the player for a direction.
@@ -558,7 +692,7 @@ impl App {
     /// directional key (vi-keys, arrow keys, `<`, `>`, `.`).
     /// Returns `None` if cancelled with Escape.
     pub fn prompt_direction(&self, port: &mut impl WindowPort, prompt: &str) -> Option<Direction> {
-        let prompt = self.localize_direction_prompt(prompt);
+        let prompt = self.localize_prompt(prompt);
         port.show_message(prompt, MessageUrgency::Normal);
         loop {
             let event = port.get_key();
@@ -754,40 +888,41 @@ impl App {
 
         match command.as_str() {
             "travel" | "retravel" => Some(
-                port.ask_position("Travel to where?")
+                self.get_localized_position(port, "Travel to where?")
                     .map(|destination| PlayerAction::Travel { destination }),
             ),
             "jump" => Some(
-                port.ask_position("Jump to where?")
+                self.get_localized_position(port, "Jump to where?")
                     .map(|position| PlayerAction::Jump { position }),
             ),
-            "whatis" | "showtrap" => Some(port.ask_position("Inspect which position?").map(
-                |position| PlayerAction::WhatIs {
-                    position: Some(position),
-                },
-            )),
+            "whatis" | "showtrap" => Some(
+                self.get_localized_position(port, "Inspect which position?")
+                    .map(|position| PlayerAction::WhatIs {
+                        position: Some(position),
+                    }),
+            ),
             "glance" => Some(
-                port.ask_position("Look at which position?")
+                self.get_localized_position(port, "Look at which position?")
                     .map(|position| PlayerAction::LookAt { position }),
             ),
             "annotate" => Some(
-                port.get_line("Annotate this level with:")
+                self.get_localized_line(port, "Annotate this level with:")
                     .map(|text| text.trim().to_string())
                     .filter(|text| !text.is_empty())
                     .map(|text| PlayerAction::Annotate { text }),
             ),
             "engrave" => Some(
-                port.get_line("Engrave what?")
+                self.get_localized_line(port, "Engrave what?")
                     .map(|text| text.trim().to_string())
                     .filter(|text| !text.is_empty())
                     .map(|text| PlayerAction::Engrave { text }),
             ),
             "call" => {
-                let class = port
-                    .get_line("Call which class letter?")
+                let class = self
+                    .get_localized_line(port, "Call which class letter?")
                     .and_then(|s| s.chars().find(|c| c.is_ascii_graphic()));
-                let name = port
-                    .get_line("Call it what?")
+                let name = self
+                    .get_localized_line(port, "Call it what?")
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty());
                 Some(match (class, name) {
@@ -796,7 +931,7 @@ impl App {
                 })
             }
             "knownclass" => Some(
-                port.get_line("Known which class letter?")
+                self.get_localized_line(port, "Known which class letter?")
                     .and_then(|s| s.chars().find(|c| c.is_ascii_graphic()))
                     .map(|class| PlayerAction::KnownClass { class }),
             ),
@@ -832,8 +967,8 @@ impl App {
                 Some(Some(PlayerAction::Dip { item, into }))
             }
             "cast" => {
-                let spell = port
-                    .get_line("Cast which spell letter?")
+                let spell = self
+                    .get_localized_line(port, "Cast which spell letter?")
                     .and_then(|s| s.chars().find(|c| c.is_ascii_alphabetic()))
                     .map(|c| c.to_ascii_lowercase() as u8 - b'a')
                     .map(SpellId);
@@ -844,8 +979,8 @@ impl App {
                 Some(Some(PlayerAction::CastSpell { spell, direction }))
             }
             "name" | "naming" => {
-                let target_kind = port
-                    .get_line("Name target ([i]tem/[m]onster/[l]evel)?")
+                let target_kind = self
+                    .get_localized_line(port, "Name target ([i]tem/[m]onster/[l]evel)?")
                     .and_then(|s| {
                         s.chars()
                             .find(|c| c.is_ascii_alphabetic())
@@ -854,8 +989,8 @@ impl App {
                     .unwrap_or('i');
 
                 if target_kind == 'l' {
-                    let Some(name) = port
-                        .get_line("Name this level:")
+                    let Some(name) = self
+                        .get_localized_line(port, "Name this level:")
                         .map(|s| s.trim().to_string())
                         .filter(|s| !s.is_empty())
                     else {
@@ -868,11 +1003,13 @@ impl App {
                 }
 
                 if target_kind == 'm' {
-                    let Some(position) = port.ask_position("Name which monster position?") else {
+                    let Some(position) =
+                        self.get_localized_position(port, "Name which monster position?")
+                    else {
                         return Some(None);
                     };
-                    let Some(name) = port
-                        .get_line("Call this monster what?")
+                    let Some(name) = self
+                        .get_localized_line(port, "Call this monster what?")
                         .map(|s| s.trim().to_string())
                         .filter(|s| !s.is_empty())
                     else {
@@ -893,8 +1030,8 @@ impl App {
                     port.show_message(&self.messages_i18n.no_such_item, MessageUrgency::Normal);
                     return Some(None);
                 };
-                let Some(name) = port
-                    .get_line("Name it what?")
+                let Some(name) = self
+                    .get_localized_line(port, "Name it what?")
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty())
                 else {
@@ -915,8 +1052,8 @@ impl App {
                     port.show_message(&self.messages_i18n.no_such_item, MessageUrgency::Normal);
                     return Some(None);
                 };
-                let new_letter = port
-                    .get_line("Assign new inventory letter:")
+                let new_letter = self
+                    .get_localized_line(port, "Assign new inventory letter:")
                     .and_then(|s| s.chars().find(|c| c.is_ascii_alphabetic()));
                 Some(new_letter.map(|new_letter| PlayerAction::Adjust { item, new_letter }))
             }
@@ -1397,10 +1534,11 @@ mod tests {
 
     #[test]
     fn prompt_inventory_item_shows_prompt() {
-        let app = App::new();
+        let mut app = App::new();
+        app.messages_i18n.item_prompt_wear = "穿戴哪一件？".to_string();
         let mut port = MockPort::new(vec![MockPort::key('b')]);
-        app.prompt_inventory_item(&mut port, "Wear what?");
-        assert!(port.messages.contains(&"Wear what?".to_string()));
+        app.prompt_inventory_item(&mut port, "Wear what? [a-zA-Z or ?*]");
+        assert!(port.messages.contains(&"穿戴哪一件？".to_string()));
     }
 
     // ── prompt_direction tests ─────────────────────────────────────
@@ -2618,7 +2756,7 @@ mod tests {
         assert!(
             port.messages
                 .iter()
-                .any(|m| m.contains("Wizard mode is not enabled"))
+                .any(|m| m == &app.messages_i18n.wizard_mode_disabled)
         );
     }
 
@@ -2721,7 +2859,7 @@ mod tests {
         assert!(
             port.messages
                 .iter()
-                .any(|m| m.contains("Wizard mode is not enabled"))
+                .any(|m| m == &app.messages_i18n.wizard_mode_disabled)
         );
     }
 
@@ -2752,7 +2890,7 @@ mod tests {
         assert!(
             port.messages
                 .iter()
-                .any(|m| m.contains("Wizard mode is not enabled"))
+                .any(|m| m == &app.messages_i18n.wizard_mode_disabled)
         );
     }
 
