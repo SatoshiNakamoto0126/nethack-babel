@@ -472,6 +472,26 @@ game-over-turns = You lasted { $turns } turn{ $turns ->
     }.
 game-over-killer = Killed by { $killer }.
 game-over-epitaph = Rest in peace, { $name }.
+gender-male = male
+gender-female = female
+gender-neuter = neuter
+death-cause-killed-by = killed by { $killer }
+death-cause-starvation = starved to death
+death-cause-poisoning = died of poisoning
+death-cause-petrification = turned to stone
+death-cause-drowning = drowned
+death-cause-burning = burned to death
+death-cause-disintegration = disintegrated
+death-cause-sickness = died of sickness
+death-cause-strangulation = strangled
+death-cause-falling = fell to death
+death-cause-crushed-boulder = crushed by a boulder
+death-cause-quit = quit
+death-cause-escaped = escaped
+death-cause-ascended = ascended
+death-cause-trickery = died by trickery
+ui-tombstone-epitaph = { $name }, level { $level } adventurer
+ui-tombstone-info = { $cause } -- Score: { $score } -- Turns: { $turns } -- HP: { $hp }/{ $maxhp }
 
 ## ============================================================================
 ## UI — welcome and status
@@ -1098,6 +1118,8 @@ score-display = Score: { $score }
 score-rank = You are ranked { $rank }.
 score-high-new = NEW HIGH SCORE!
 score-high-list-title = Top Scores
+score-high-header = No  Points     Entry
+score-high-row = { $rank }. { $score }  { $name } the { $role } ({ $gender } { $race } { $alignment }), { $cause }, on { $depth }
 score-high-entry = { $rank }. { $name } the { $role } ({ $score } points)
 score-gold-collected = Gold collected: { $amount }
 score-monsters-killed = Monsters killed: { $count }
@@ -1497,18 +1519,30 @@ event-player-role = You are { $name } the { $race } { $role } { $align }.
 
 terrain-floor = a floor
 terrain-corridor = a corridor
+terrain-stone = solid stone
 terrain-wall = a wall
 terrain-closed-door = a closed door
 terrain-open-door = an open door
+terrain-locked-door = a locked door
 terrain-stairs-up = stairs going up
 terrain-stairs-down = stairs going down
 terrain-fountain = a fountain
 terrain-altar = an altar
+terrain-throne = a throne
+terrain-sink = a sink
+terrain-grave = a grave
+terrain-pool = a pool
+terrain-moat = a moat
+terrain-ice-terrain = ice
+terrain-air = air
+terrain-cloud = a cloud
 terrain-water = water
 terrain-lava = lava
 terrain-trap = a trap
 terrain-tree = a tree
 terrain-iron-bars = iron bars
+terrain-drawbridge = a drawbridge
+terrain-magic-portal = a magic portal
 
 ## ============================================================================
 ## Engine — trap messages
@@ -1655,6 +1689,29 @@ stat-label-pw = Pw
 stat-label-ac = AC
 stat-label-xp = Xp
 stat-label-turn = T
+stat-status-blind = Blind
+stat-status-conf = Conf
+stat-status-stun = Stun
+stat-status-hallu = Hallu
+stat-status-lev = Lev
+stat-status-ill = Ill
+stat-enc-burdened = Burdened
+stat-enc-stressed = Stressed
+stat-enc-strained = Strained
+stat-enc-overtaxed = Overtaxed
+stat-enc-overloaded = Overloaded
+stat-branch-mines = Mines
+stat-branch-sokoban = Sokoban
+stat-branch-quest = Quest
+stat-branch-gehennom = Geh
+stat-branch-vlad = Vlad
+stat-branch-knox = Knox
+stat-branch-earth = Earth
+stat-branch-air = Air
+stat-branch-fire = Fire
+stat-branch-water = Water
+stat-branch-astral = Astral
+stat-branch-end = End
 
 ## ============================================================================
 ## Options menu

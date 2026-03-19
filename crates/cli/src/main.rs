@@ -412,36 +412,7 @@ fn build_status(world: &GameWorld, locale: &LocaleManager) -> StatusLine {
         attrs.dexterity, attrs.constitution, attrs.intelligence, attrs.wisdom, attrs.charisma,
     );
 
-    // Branch-aware depth label.
-    let dlvl_display = match world.dungeon().branch {
-        nethack_babel_engine::dungeon::DungeonBranch::Main => {
-            format!("{}", world.dungeon().depth)
-        }
-        nethack_babel_engine::dungeon::DungeonBranch::Mines => {
-            format!("Mines:{}", world.dungeon().depth)
-        }
-        nethack_babel_engine::dungeon::DungeonBranch::Sokoban => {
-            format!("Sokbn:{}", world.dungeon().depth)
-        }
-        nethack_babel_engine::dungeon::DungeonBranch::Quest => {
-            format!("Quest:{}", world.dungeon().depth)
-        }
-        nethack_babel_engine::dungeon::DungeonBranch::Gehennom => {
-            format!("Geh:{}", world.dungeon().depth)
-        }
-        nethack_babel_engine::dungeon::DungeonBranch::VladsTower => {
-            format!("Vlad:{}", world.dungeon().depth)
-        }
-        nethack_babel_engine::dungeon::DungeonBranch::FortLudios => "Knox".to_string(),
-        nethack_babel_engine::dungeon::DungeonBranch::Endgame => match world.dungeon().depth {
-            1 => "Earth".to_string(),
-            2 => "Air".to_string(),
-            3 => "Fire".to_string(),
-            4 => "Water".to_string(),
-            5 => "Astral".to_string(),
-            _ => format!("End:{}", world.dungeon().depth),
-        },
-    };
+    let dlvl_display = status_depth_display(world, locale);
 
     let hp = world
         .get_component::<HitPoints>(player)
@@ -473,22 +444,22 @@ fn build_status(world: &GameWorld, locale: &LocaleManager) -> StatusLine {
     {
         use nethack_babel_engine::status;
         if status::is_blind(world, player) {
-            effects.push("Blind");
+            effects.push(translate_or_fallback(locale, "stat-status-blind", "Blind"));
         }
         if status::is_confused(world, player) {
-            effects.push("Conf");
+            effects.push(translate_or_fallback(locale, "stat-status-conf", "Conf"));
         }
         if status::is_stunned(world, player) {
-            effects.push("Stun");
+            effects.push(translate_or_fallback(locale, "stat-status-stun", "Stun"));
         }
         if status::is_hallucinating(world, player) {
-            effects.push("Hallu");
+            effects.push(translate_or_fallback(locale, "stat-status-hallu", "Hallu"));
         }
         if status::is_levitating(world, player) {
-            effects.push("Lev");
+            effects.push(translate_or_fallback(locale, "stat-status-lev", "Lev"));
         }
         if status::is_sick(world, player) {
-            effects.push("Ill");
+            effects.push(translate_or_fallback(locale, "stat-status-ill", "Ill"));
         }
     }
     let encumbrance = world
@@ -497,11 +468,31 @@ fn build_status(world: &GameWorld, locale: &LocaleManager) -> StatusLine {
         .unwrap_or(Encumbrance::Unencumbered);
     if let Some(label) = match encumbrance {
         Encumbrance::Unencumbered => None,
-        Encumbrance::Burdened => Some("Burdened"),
-        Encumbrance::Stressed => Some("Stressed"),
-        Encumbrance::Strained => Some("Strained"),
-        Encumbrance::Overtaxed => Some("Overtaxed"),
-        Encumbrance::Overloaded => Some("Overloaded"),
+        Encumbrance::Burdened => Some(translate_or_fallback(
+            locale,
+            "stat-enc-burdened",
+            "Burdened",
+        )),
+        Encumbrance::Stressed => Some(translate_or_fallback(
+            locale,
+            "stat-enc-stressed",
+            "Stressed",
+        )),
+        Encumbrance::Strained => Some(translate_or_fallback(
+            locale,
+            "stat-enc-strained",
+            "Strained",
+        )),
+        Encumbrance::Overtaxed => Some(translate_or_fallback(
+            locale,
+            "stat-enc-overtaxed",
+            "Overtaxed",
+        )),
+        Encumbrance::Overloaded => Some(translate_or_fallback(
+            locale,
+            "stat-enc-overloaded",
+            "Overloaded",
+        )),
     } {
         effects.push(label);
     }
@@ -1449,31 +1440,21 @@ fn handle_game_over(
         .unwrap_or((0, 0));
 
     let turns = world.turn();
-
-    let death_reason = match cause {
-        DeathCause::KilledBy { killer_name } => format!("killed by {}", killer_name),
-        DeathCause::Starvation => "starved to death".to_string(),
-        DeathCause::Poisoning => "died of poisoning".to_string(),
-        DeathCause::Petrification => "turned to stone".to_string(),
-        DeathCause::Drowning => "drowned".to_string(),
-        DeathCause::Burning => "burned to death".to_string(),
-        DeathCause::Disintegration => "disintegrated".to_string(),
-        DeathCause::Sickness => "died of sickness".to_string(),
-        DeathCause::Strangulation => "strangled".to_string(),
-        DeathCause::Falling => "fell to death".to_string(),
-        DeathCause::CrushedByBoulder => "crushed by a boulder".to_string(),
-        DeathCause::Quit => "quit".to_string(),
-        DeathCause::Escaped => "escaped".to_string(),
-        DeathCause::Ascended => "ascended".to_string(),
-        DeathCause::Trickery => "died by trickery".to_string(),
-    };
+    let death_reason = localized_death_cause(locale, cause);
+    let canonical_death = canonical_death_cause(cause);
 
     // -- Tombstone --
-    let epitaph = format!("{}, level {} adventurer", player_name, level);
-    let info = format!(
-        "{} -- Score: {} -- Turns: {} -- HP: {}/{}",
-        death_reason, score, turns, hp, maxhp
-    );
+    let mut epitaph_args = fluent::FluentArgs::new();
+    epitaph_args.set("name", player_name.clone());
+    epitaph_args.set("level", level as i64);
+    let epitaph = locale.translate("ui-tombstone-epitaph", Some(&epitaph_args));
+    let mut info_args = fluent::FluentArgs::new();
+    info_args.set("cause", death_reason.clone());
+    info_args.set("score", score as i64);
+    info_args.set("turns", turns as i64);
+    info_args.set("hp", hp);
+    info_args.set("maxhp", maxhp);
+    let info = locale.translate("ui-tombstone-info", Some(&info_args));
     port.render_tombstone(&epitaph, &info);
 
     // -- Disclosure: conducts --
@@ -1500,8 +1481,8 @@ fn handle_game_over(
         race,
         gender,
         alignment,
-        death_cause: death_reason,
-        dungeon_level: format!("Dlvl:{}", level),
+        death_cause: canonical_death,
+        dungeon_level: canonical_depth_display(world),
         experience_level: level as u32,
         turns: turns as u64,
         timestamp: chrono_timestamp(),
@@ -1510,7 +1491,7 @@ fn handle_game_over(
     let _ = lb.save(&lb_path);
 
     // Display top 10.
-    let top_lines = lb.format_top(10);
+    let top_lines = format_top_localized(&lb, locale, 10);
     let top_text = top_lines.join("\n");
     port.show_text(&locale.translate("score-high-list-title", None), &top_text);
 }
@@ -1548,6 +1529,185 @@ fn player_identity_strings(
     .to_string();
 
     (role, race, gender, alignment)
+}
+
+fn canonical_depth_display(world: &GameWorld) -> String {
+    use nethack_babel_engine::dungeon::DungeonBranch;
+
+    let depth = world.dungeon().depth;
+    match world.dungeon().branch {
+        DungeonBranch::Main => format!("Dlvl:{depth}"),
+        DungeonBranch::Mines => format!("Mines:{depth}"),
+        DungeonBranch::Sokoban => format!("Sokoban:{depth}"),
+        DungeonBranch::Quest => format!("Quest:{depth}"),
+        DungeonBranch::Gehennom => format!("Geh:{depth}"),
+        DungeonBranch::VladsTower => format!("Vlad:{depth}"),
+        DungeonBranch::FortLudios => "Knox".to_string(),
+        DungeonBranch::Endgame => match depth {
+            1 => "Earth".to_string(),
+            2 => "Air".to_string(),
+            3 => "Fire".to_string(),
+            4 => "Water".to_string(),
+            5 => "Astral".to_string(),
+            _ => format!("End:{depth}"),
+        },
+    }
+}
+
+fn localized_depth_display(locale: &LocaleManager, depth: &str) -> String {
+    if let Some((prefix, suffix)) = depth.split_once(':') {
+        let localized_prefix = match prefix {
+            "Dlvl" => locale.translate("stat-label-dlvl", None),
+            "Mines" => translate_or_fallback(locale, "stat-branch-mines", "Mines"),
+            "Sokoban" => translate_or_fallback(locale, "stat-branch-sokoban", "Sokoban"),
+            "Quest" => translate_or_fallback(locale, "stat-branch-quest", "Quest"),
+            "Geh" => translate_or_fallback(locale, "stat-branch-gehennom", "Geh"),
+            "Vlad" => translate_or_fallback(locale, "stat-branch-vlad", "Vlad"),
+            "End" => translate_or_fallback(locale, "stat-branch-end", "End"),
+            _ => prefix.to_string(),
+        };
+        return format!("{localized_prefix}:{suffix}");
+    }
+
+    match depth {
+        "Knox" => translate_or_fallback(locale, "stat-branch-knox", "Knox"),
+        "Earth" => translate_or_fallback(locale, "stat-branch-earth", "Earth"),
+        "Air" => translate_or_fallback(locale, "stat-branch-air", "Air"),
+        "Fire" => translate_or_fallback(locale, "stat-branch-fire", "Fire"),
+        "Water" => translate_or_fallback(locale, "stat-branch-water", "Water"),
+        "Astral" => translate_or_fallback(locale, "stat-branch-astral", "Astral"),
+        _ => depth.to_string(),
+    }
+}
+
+fn canonical_death_cause(cause: &DeathCause) -> String {
+    match cause {
+        DeathCause::KilledBy { killer_name } => format!("killed by {killer_name}"),
+        DeathCause::Starvation => "starved to death".to_string(),
+        DeathCause::Poisoning => "died of poisoning".to_string(),
+        DeathCause::Petrification => "turned to stone".to_string(),
+        DeathCause::Drowning => "drowned".to_string(),
+        DeathCause::Burning => "burned to death".to_string(),
+        DeathCause::Disintegration => "disintegrated".to_string(),
+        DeathCause::Sickness => "died of sickness".to_string(),
+        DeathCause::Strangulation => "strangled".to_string(),
+        DeathCause::Falling => "fell to death".to_string(),
+        DeathCause::CrushedByBoulder => "crushed by a boulder".to_string(),
+        DeathCause::Quit => "quit".to_string(),
+        DeathCause::Escaped => "escaped".to_string(),
+        DeathCause::Ascended => "ascended".to_string(),
+        DeathCause::Trickery => "died by trickery".to_string(),
+    }
+}
+
+fn localized_death_cause(locale: &LocaleManager, cause: &DeathCause) -> String {
+    localized_death_cause_text(locale, &canonical_death_cause(cause))
+}
+
+fn localized_death_cause_text(locale: &LocaleManager, raw: &str) -> String {
+    if let Some(killer_name) = raw.strip_prefix("killed by ") {
+        let mut args = fluent::FluentArgs::new();
+        args.set("killer", killer_name.to_string());
+        return locale.translate("death-cause-killed-by", Some(&args));
+    }
+
+    let key = match raw {
+        "starved to death" => "death-cause-starvation",
+        "died of poisoning" => "death-cause-poisoning",
+        "turned to stone" => "death-cause-petrification",
+        "drowned" => "death-cause-drowning",
+        "burned to death" => "death-cause-burning",
+        "disintegrated" => "death-cause-disintegration",
+        "died of sickness" => "death-cause-sickness",
+        "strangled" => "death-cause-strangulation",
+        "fell to death" => "death-cause-falling",
+        "crushed by a boulder" => "death-cause-crushed-boulder",
+        "quit" => "death-cause-quit",
+        "escaped" => "death-cause-escaped",
+        "ascended" => "death-cause-ascended",
+        "died by trickery" => "death-cause-trickery",
+        _ => return raw.to_string(),
+    };
+    locale.translate(key, None)
+}
+
+fn localized_role_name(locale: &LocaleManager, role: &str) -> String {
+    let key = match role {
+        "Archeologist" => "role-archeologist",
+        "Barbarian" => "role-barbarian",
+        "Caveperson" => "role-caveperson",
+        "Healer" => "role-healer",
+        "Knight" => "role-knight",
+        "Monk" => "role-monk",
+        "Priest" => "role-priest",
+        "Ranger" => "role-ranger",
+        "Rogue" => "role-rogue",
+        "Samurai" => "role-samurai",
+        "Tourist" => "role-tourist",
+        "Valkyrie" => "role-valkyrie",
+        "Wizard" => "role-wizard",
+        _ => return role.to_string(),
+    };
+    locale.translate(key, None)
+}
+
+fn localized_race_name(locale: &LocaleManager, race: &str) -> String {
+    let key = match race {
+        "Human" => "race-human",
+        "Elf" => "race-elf",
+        "Dwarf" => "race-dwarf",
+        "Gnome" => "race-gnome",
+        "Orc" => "race-orc",
+        _ => return race.to_string(),
+    };
+    locale.translate(key, None)
+}
+
+fn localized_alignment_name(locale: &LocaleManager, alignment: &str) -> String {
+    let key = match alignment {
+        "lawful" => "alignment-lawful",
+        "neutral" => "alignment-neutral",
+        "chaotic" => "alignment-chaotic",
+        _ => return alignment.to_string(),
+    };
+    locale.translate(key, None)
+}
+
+fn localized_gender_name(locale: &LocaleManager, gender: &str) -> String {
+    let key = match gender {
+        "male" => "gender-male",
+        "female" => "gender-female",
+        "neuter" => "gender-neuter",
+        _ => return gender.to_string(),
+    };
+    locale.translate(key, None)
+}
+
+fn format_top_localized(lb: &Leaderboard, locale: &LocaleManager, n: usize) -> Vec<String> {
+    let mut lines = vec![locale.translate("score-high-header", None)];
+    for entry in lb.entries.iter().take(n) {
+        let mut args = fluent::FluentArgs::new();
+        args.set("rank", entry.rank as i64);
+        args.set("score", entry.score);
+        args.set("name", entry.player_name.clone());
+        args.set("role", localized_role_name(locale, &entry.role));
+        args.set("race", localized_race_name(locale, &entry.race));
+        args.set("gender", localized_gender_name(locale, &entry.gender));
+        args.set(
+            "alignment",
+            localized_alignment_name(locale, &entry.alignment),
+        );
+        args.set(
+            "cause",
+            localized_death_cause_text(locale, &entry.death_cause),
+        );
+        args.set(
+            "depth",
+            localized_depth_display(locale, &entry.dungeon_level),
+        );
+        lines.push(locale.translate("score-high-row", Some(&args)));
+    }
+    lines
 }
 
 /// Simple timestamp without requiring chrono crate.
@@ -1693,25 +1853,113 @@ fn render_map_ascii(world: &GameWorld) {
 /// Render the status bar in text mode.
 fn render_status_text(world: &GameWorld, locale: &LocaleManager) {
     let player = world.player();
+    let hp_label = locale.translate("stat-label-hp", None);
     let hp = world
         .get_component::<HitPoints>(player)
-        .map(|h| format!("HP:{}/{}", h.current, h.max))
-        .unwrap_or_else(|| "HP:??".to_string());
+        .map(|h| format!("{hp_label}:{}/{}", h.current, h.max))
+        .unwrap_or_else(|| format!("{hp_label}:??"));
 
     let pos = world
         .get_component::<Positioned>(player)
         .map(|p| format!("({},{})", p.0.x, p.0.y))
         .unwrap_or_else(|| "(?,?)".to_string());
 
-    let depth = world.dungeon().depth;
+    let depth = status_depth_display(world, locale);
     let turn = world.turn();
     let mut args = fluent::FluentArgs::new();
-    args.set("depth", depth as i64);
+    args.set("depth", depth);
     args.set("hp", hp);
     args.set("turn", turn as i64);
     args.set("pos", pos);
 
     println!("{}", locale.translate("ui-text-status-line", Some(&args)));
+}
+
+fn translate_or_fallback(locale: &LocaleManager, key: &str, fallback: &str) -> String {
+    let translated = locale.translate(key, None);
+    if translated == key {
+        fallback.to_string()
+    } else {
+        translated
+    }
+}
+
+fn status_depth_display(world: &GameWorld, locale: &LocaleManager) -> String {
+    use nethack_babel_engine::dungeon::DungeonBranch;
+
+    let depth = world.dungeon().depth;
+    match world.dungeon().branch {
+        DungeonBranch::Main => depth.to_string(),
+        DungeonBranch::Mines => format!(
+            "{}:{}",
+            translate_or_fallback(locale, "stat-branch-mines", "Mines"),
+            depth
+        ),
+        DungeonBranch::Sokoban => format!(
+            "{}:{}",
+            translate_or_fallback(locale, "stat-branch-sokoban", "Sokoban"),
+            depth
+        ),
+        DungeonBranch::Quest => format!(
+            "{}:{}",
+            translate_or_fallback(locale, "stat-branch-quest", "Quest"),
+            depth
+        ),
+        DungeonBranch::Gehennom => format!(
+            "{}:{}",
+            translate_or_fallback(locale, "stat-branch-gehennom", "Geh"),
+            depth
+        ),
+        DungeonBranch::VladsTower => format!(
+            "{}:{}",
+            translate_or_fallback(locale, "stat-branch-vlad", "Vlad"),
+            depth
+        ),
+        DungeonBranch::FortLudios => translate_or_fallback(locale, "stat-branch-knox", "Knox"),
+        DungeonBranch::Endgame => match depth {
+            1 => translate_or_fallback(locale, "stat-branch-earth", "Earth"),
+            2 => translate_or_fallback(locale, "stat-branch-air", "Air"),
+            3 => translate_or_fallback(locale, "stat-branch-fire", "Fire"),
+            4 => translate_or_fallback(locale, "stat-branch-water", "Water"),
+            5 => translate_or_fallback(locale, "stat-branch-astral", "Astral"),
+            _ => format!(
+                "{}:{}",
+                translate_or_fallback(locale, "stat-branch-end", "End"),
+                depth
+            ),
+        },
+    }
+}
+
+fn terrain_display_name(locale: &LocaleManager, terrain: Terrain) -> String {
+    let (key, fallback) = match terrain {
+        Terrain::Stone => ("terrain-stone", "solid stone"),
+        Terrain::Wall => ("terrain-wall", "a wall"),
+        Terrain::Floor => ("terrain-floor", "a floor"),
+        Terrain::Corridor => ("terrain-corridor", "a corridor"),
+        Terrain::DoorOpen => ("terrain-open-door", "an open door"),
+        Terrain::DoorClosed => ("terrain-closed-door", "a closed door"),
+        Terrain::DoorLocked => ("terrain-locked-door", "a locked door"),
+        Terrain::StairsUp => ("terrain-stairs-up", "stairs going up"),
+        Terrain::StairsDown => ("terrain-stairs-down", "stairs going down"),
+        Terrain::Altar => ("terrain-altar", "an altar"),
+        Terrain::Fountain => ("terrain-fountain", "a fountain"),
+        Terrain::Throne => ("terrain-throne", "a throne"),
+        Terrain::Sink => ("terrain-sink", "a sink"),
+        Terrain::Grave => ("terrain-grave", "a grave"),
+        Terrain::Pool => ("terrain-pool", "a pool"),
+        Terrain::Moat => ("terrain-moat", "a moat"),
+        Terrain::Lava => ("terrain-lava", "lava"),
+        Terrain::Ice => ("terrain-ice-terrain", "ice"),
+        Terrain::Air => ("terrain-air", "air"),
+        Terrain::Cloud => ("terrain-cloud", "a cloud"),
+        Terrain::Water => ("terrain-water", "water"),
+        Terrain::Tree => ("terrain-tree", "a tree"),
+        Terrain::IronBars => ("terrain-iron-bars", "iron bars"),
+        Terrain::Drawbridge => ("terrain-drawbridge", "a drawbridge"),
+        Terrain::MagicPortal => ("terrain-magic-portal", "a magic portal"),
+    };
+    translate_or_fallback(locale, key, fallback)
 }
 
 /// Display events as text messages.
@@ -2352,6 +2600,17 @@ mod text_input_tests {
     }
 
     #[test]
+    fn zh_cn_command_menu_descriptions_are_localized() {
+        let locale = init_embedded_locale_manager("zh-CN").expect("locale");
+        let (title, body) = localized_command_menu_text(&locale, CommandMenuKind::There);
+        assert_eq!(title, "目标位置相关命令");
+        assert!(body.contains("#chat - 与某人交谈"));
+        assert!(body.contains("#throw - 投掷一件物品"));
+        assert!(!body.contains("talk to someone"));
+        assert!(!body.contains("throw an object"));
+    }
+
+    #[test]
     fn load_runtime_assets_falls_back_to_embedded_when_data_dir_is_missing() {
         let assets = load_runtime_assets("/definitely/missing/nethack-babel-data", "zh-CN")
             .expect("embedded runtime assets");
@@ -2383,6 +2642,83 @@ mod text_input_tests {
         assert_eq!(option_value(&locale, "traditional"), "传统");
         assert_eq!(option_value(&locale, "teleport"), "传送");
         assert_eq!(option_value(&locale, "loot"), "仅战利品");
+    }
+
+    #[test]
+    fn zh_cn_status_branch_depth_is_localized() {
+        let locale = init_embedded_locale_manager("zh-CN").expect("locale");
+        let mut world = GameWorld::new(Position::new(1, 1));
+        world
+            .dungeon_mut()
+            .change_branch(nethack_babel_engine::dungeon::DungeonBranch::Mines, 3);
+
+        let status = build_status(&world, &locale);
+        assert!(status.line2.contains("深度:矿坑:3"));
+        assert!(!status.line2.contains("Mines:3"));
+    }
+
+    #[test]
+    fn zh_cn_status_effects_are_localized() {
+        use nethack_babel_engine::status::StatusEffects;
+
+        let locale = init_embedded_locale_manager("zh-CN").expect("locale");
+        let mut world = GameWorld::new(Position::new(1, 1));
+        let player = world.player();
+        world
+            .ecs_mut()
+            .insert_one(
+                player,
+                StatusEffects {
+                    blindness: 5,
+                    confusion: 5,
+                    levitation: 5,
+                    ..StatusEffects::default()
+                },
+            )
+            .expect("status effects");
+        world
+            .ecs_mut()
+            .insert_one(player, EncumbranceLevel(Encumbrance::Burdened))
+            .expect("encumbrance");
+
+        let status = build_status(&world, &locale);
+        assert!(status.line2.contains("盲"));
+        assert!(status.line2.contains("乱"));
+        assert!(status.line2.contains("浮"));
+        assert!(status.line2.contains("负重"));
+        assert!(!status.line2.contains("Blind"));
+        assert!(!status.line2.contains("Burdened"));
+    }
+
+    #[test]
+    fn zh_cn_terrain_display_name_is_localized() {
+        let locale = init_embedded_locale_manager("zh-CN").expect("locale");
+        assert_eq!(
+            terrain_display_name(&locale, Terrain::MagicPortal),
+            "魔法传送门"
+        );
+        assert_eq!(
+            terrain_display_name(&locale, Terrain::DoorLocked),
+            "锁住的门"
+        );
+    }
+
+    #[test]
+    fn zh_cn_death_cause_is_localized() {
+        let locale = init_embedded_locale_manager("zh-CN").expect("locale");
+        let cause = DeathCause::KilledBy {
+            killer_name: "山丘兽人".to_string(),
+        };
+        assert_eq!(localized_death_cause(&locale, &cause), "被山丘兽人杀死");
+    }
+
+    #[test]
+    fn canonical_depth_display_uses_real_dungeon_depth() {
+        let mut world = GameWorld::new(Position::new(1, 1));
+        world
+            .dungeon_mut()
+            .change_branch(nethack_babel_engine::dungeon::DungeonBranch::Mines, 7);
+        assert_eq!(canonical_depth_display(&world), "Mines:7");
     }
 
     #[test]
@@ -3704,7 +4040,7 @@ fn run_tui_mode(
                 if y < map.height && x < map.width {
                     let terrain = map.cells[y][x].terrain;
                     let mut args = fluent::FluentArgs::new();
-                    args.set("terrain", format!("{:?}", terrain));
+                    args.set("terrain", terrain_display_name(locale, terrain));
                     let text = locale.translate("event-you-see-here", Some(&args));
                     app.push_message(text, MessageUrgency::Normal);
                 }
@@ -3723,7 +4059,7 @@ fn run_tui_mode(
                     if y < map.height && x < map.width {
                         let terrain = map.cells[y][x].terrain;
                         let mut args = fluent::FluentArgs::new();
-                        args.set("terrain", format!("{:?}", terrain));
+                        args.set("terrain", terrain_display_name(locale, terrain));
                         let text = locale.translate("event-you-see-here", Some(&args));
                         app.push_message(text, MessageUrgency::Normal);
                     }
@@ -3738,7 +4074,7 @@ fn run_tui_mode(
                     if y < map.height && x < map.width {
                         let terrain = map.cells[y][x].terrain;
                         let mut args = fluent::FluentArgs::new();
-                        args.set("terrain", format!("{:?}", terrain));
+                        args.set("terrain", terrain_display_name(locale, terrain));
                         let text = locale.translate("event-you-see-here", Some(&args));
                         app.push_message(text, MessageUrgency::Normal);
                     }
@@ -4167,7 +4503,7 @@ fn run_text_mode(
                         locale.translate("ui-game-over-score-line", Some(&score_args))
                     );
                     let mut cause_args = FluentArgs::new();
-                    cause_args.set("cause", format!("{cause:?}"));
+                    cause_args.set("cause", localized_death_cause(locale, cause));
                     println!(
                         "{}",
                         locale.translate("ui-game-over-cause-line", Some(&cause_args))
@@ -4178,7 +4514,7 @@ fn run_text_mode(
                     use fluent::FluentArgs;
                     println!("\n{}", locale.translate("ui-game-over-title", None));
                     let mut cause_args = FluentArgs::new();
-                    cause_args.set("cause", format!("{cause:?}"));
+                    cause_args.set("cause", localized_death_cause(locale, cause));
                     println!(
                         "{}",
                         locale.translate("ui-game-over-cause-line", Some(&cause_args))
