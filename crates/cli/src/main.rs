@@ -778,6 +778,38 @@ fn prompt_text_demon_bribe(
     Ok(Some(PlayerAction::BribeDemon { direction, amount }))
 }
 
+fn parse_prompted_position_line(line: &str) -> Option<Position> {
+    let mut parts = line.split_whitespace();
+    let x_token = parts.next()?;
+    let y_token = parts.next()?;
+    parse_position_tokens(x_token, y_token)
+}
+
+fn command_menu_kind_for_position(player_pos: Position, position: Position) -> CommandMenuKind {
+    if player_pos == position {
+        CommandMenuKind::Here
+    } else {
+        CommandMenuKind::There
+    }
+}
+
+fn prompt_text_position(
+    stdin: &io::Stdin,
+    stdout: &io::Stdout,
+    prompt: &str,
+) -> Result<Option<Position>> {
+    print!("  {} ", prompt);
+    stdout.lock().flush()?;
+
+    let mut line = String::new();
+    let bytes_read = stdin.lock().read_line(&mut line)?;
+    if bytes_read == 0 {
+        return Ok(None);
+    }
+
+    Ok(parse_prompted_position_line(&line))
+}
+
 fn contextualize_text_action(
     stdin: &io::Stdin,
     stdout: &io::Stdout,
@@ -2164,6 +2196,28 @@ mod text_input_tests {
         assert!(body.contains("#chat"));
         assert!(body.contains("#throw"));
         assert!(!body.contains("#pray"));
+    }
+
+    #[test]
+    fn parse_prompted_position_line_parses_two_numbers() {
+        assert_eq!(
+            parse_prompted_position_line("10 11\n"),
+            Some(Position::new(10, 11))
+        );
+        assert!(parse_prompted_position_line("10\n").is_none());
+    }
+
+    #[test]
+    fn command_menu_kind_for_position_uses_here_for_player_tile() {
+        let player_pos = Position::new(5, 7);
+        assert!(matches!(
+            command_menu_kind_for_position(player_pos, Position::new(5, 7)),
+            CommandMenuKind::Here
+        ));
+        assert!(matches!(
+            command_menu_kind_for_position(player_pos, Position::new(6, 7)),
+            CommandMenuKind::There
+        ));
     }
 
     #[test]
@@ -3675,10 +3729,27 @@ fn run_text_mode(
             println!();
             continue;
         }
+        if command_input == "therecmdmenu" {
+            let prompt = locale.translate("ui-position-prompt-inspect", None);
+            if let Some(position) = prompt_text_position(&stdin, &stdout, &prompt)? {
+                let player_pos = world
+                    .get_component::<Positioned>(world.player())
+                    .map(|p| p.0)
+                    .unwrap_or(Position::new(0, 0));
+                let kind = command_menu_kind_for_position(player_pos, position);
+                let (title, body) = localized_command_menu_text(locale, kind);
+                println!();
+                println!("=== {title} ===");
+                for line in body.lines() {
+                    println!("{line}");
+                }
+                println!();
+            }
+            continue;
+        }
         if let Some(kind) = match command_input {
             "reqmenu" => Some(CommandMenuKind::Request),
             "herecmdmenu" => Some(CommandMenuKind::Here),
-            "therecmdmenu" => Some(CommandMenuKind::There),
             _ => None,
         } {
             let (title, body) = localized_command_menu_text(locale, kind);
