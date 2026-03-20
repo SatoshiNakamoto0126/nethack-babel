@@ -1051,3 +1051,4 @@ tip-bag-of-tricks = { $count ->
     [one] Ein Monster fällt aus dem Beutel!
    *[other] Monster fallen aus dem Beutel!
 }
+tool-horn-of-plenty-spills = Etwas quillt aus dem Füllhorn heraus!

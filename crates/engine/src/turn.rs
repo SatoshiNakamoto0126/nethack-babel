@@ -8461,6 +8461,7 @@ fn charge_unpaid_wand_usage_in_shop(
 enum ApplyUsageFeeKind {
     DefaultCharged,
     CheapCharged,
+    BagLikeCharged,
     Lamp { is_magic_lamp: bool, was_lit: bool },
 }
 
@@ -8476,6 +8477,7 @@ fn snapshot_apply_usage_fee(
 ) -> Option<ApplyUsageFeeSnapshot> {
     let kind = match crate::apply::classify_ext_tool_entity(world, item) {
         Some(crate::apply::ExtToolType::CanOfGrease) => ApplyUsageFeeKind::CheapCharged,
+        Some(crate::apply::ExtToolType::HornOfPlenty) => ApplyUsageFeeKind::BagLikeCharged,
         Some(
             crate::apply::ExtToolType::BellOfOpening
             | crate::apply::ExtToolType::MagicFlute
@@ -8514,7 +8516,9 @@ fn snapshot_apply_usage_fee(
     };
 
     let charges_before_use = match kind {
-        ApplyUsageFeeKind::DefaultCharged | ApplyUsageFeeKind::CheapCharged => {
+        ApplyUsageFeeKind::DefaultCharged
+        | ApplyUsageFeeKind::CheapCharged
+        | ApplyUsageFeeKind::BagLikeCharged => {
             let charges_before_use = world.get_component::<Enchantment>(item)?.spe as i32;
             if charges_before_use <= 0 {
                 return None;
@@ -8538,7 +8542,9 @@ fn charge_unpaid_apply_usage_in_shop(
     events: &mut Vec<EngineEvent>,
 ) {
     let used = match snapshot.kind {
-        ApplyUsageFeeKind::DefaultCharged | ApplyUsageFeeKind::CheapCharged => {
+        ApplyUsageFeeKind::DefaultCharged
+        | ApplyUsageFeeKind::CheapCharged
+        | ApplyUsageFeeKind::BagLikeCharged => {
             let charges_after_use = world
                 .get_component::<Enchantment>(item)
                 .map(|ench| ench.spe as i32)
@@ -8588,6 +8594,16 @@ fn charge_unpaid_apply_usage_in_shop(
                     false,
                     false,
                     true,
+                    false,
+                    false,
+                    false,
+                ),
+                ApplyUsageFeeKind::BagLikeCharged => crate::shop::usage_fee(
+                    entry.price,
+                    false,
+                    true,
+                    false,
+                    false,
                     false,
                     false,
                     false,
@@ -9205,6 +9221,7 @@ fn handle_shop_container_put_in(
 enum TipUsageFeeKind {
     CheapCharged,
     BagOfTricksEmptied,
+    HornOfPlentyEmptied,
 }
 
 fn handle_shop_consequences_for_floor_item(
@@ -9327,6 +9344,16 @@ fn charge_unpaid_tip_usage_in_shop(
                     false,
                     true,
                 ),
+                TipUsageFeeKind::HornOfPlentyEmptied => crate::shop::usage_fee(
+                    entry.price,
+                    false,
+                    true,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
+                ),
             };
             (fee > 0).then(|| (shop.shopkeeper, shop.shopkeeper_name.clone(), fee))
         })
@@ -9440,6 +9467,41 @@ fn handle_player_tip(
             player,
             item,
             TipUsageFeeKind::BagOfTricksEmptied,
+            &mut events,
+        );
+        return events;
+    }
+
+    if item_name.contains("horn of plenty") {
+        let charges_before = world
+            .get_component::<Enchantment>(item)
+            .map(|ench| ench.spe)
+            .unwrap_or(0);
+        if charges_before <= 0 {
+            return vec![EngineEvent::msg("tool-nothing-happens")];
+        }
+
+        let mut events = Vec::new();
+        let mut created_any = false;
+        for _ in 0..charges_before.max(0) as usize {
+            if let Some((_, item_events)) =
+                crate::apply::spawn_horn_of_plenty_item(world, player, item, false, rng)
+            {
+                created_any = true;
+                events.extend(item_events);
+            }
+            if let Some(mut ench) = world.get_component_mut::<Enchantment>(item) {
+                ench.spe = ench.spe.saturating_sub(1);
+            }
+        }
+        if !created_any {
+            events.push(EngineEvent::msg("tool-nothing-happens"));
+        }
+        charge_unpaid_tip_usage_in_shop(
+            world,
+            player,
+            item,
+            TipUsageFeeKind::HornOfPlentyEmptied,
             &mut events,
         );
         return events;
@@ -10337,6 +10399,7 @@ mod tests {
         ShopTinningUsageFee,
         ShopSpellbookUsageFee,
         ShopMagicFluteUsageFee,
+        ShopHornOfPlentyUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         ShopContainerPickup,
@@ -10409,6 +10472,7 @@ mod tests {
                 StoryTraversalScenario::ShopTinningUsageFee => "shop-tinning-usage-fee",
                 StoryTraversalScenario::ShopSpellbookUsageFee => "shop-spellbook-usage-fee",
                 StoryTraversalScenario::ShopMagicFluteUsageFee => "shop-magic-flute-usage-fee",
+                StoryTraversalScenario::ShopHornOfPlentyUsageFee => "shop-horn-of-plenty-usage-fee",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 StoryTraversalScenario::ShopContainerPickup => "shop-container-pickup",
@@ -11462,6 +11526,39 @@ mod tests {
                 let mut rng = test_rng();
                 let apply_events =
                     resolve_turn(&mut world, PlayerAction::Apply { item: flute }, &mut rng);
+                (world, apply_events)
+            }
+            StoryTraversalScenario::ShopHornOfPlentyUsageFee => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let horn = spawn_inventory_object_by_name(&mut world, "horn of plenty", 'h');
+                world
+                    .ecs_mut()
+                    .insert_one(horn, Enchantment { spe: 2 })
+                    .expect("horn of plenty should accept charges");
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(horn, 100, 1),
+                    "shop bill should accept unpaid horn of plenty"
+                );
+
+                let mut rng = test_rng();
+                let apply_events =
+                    resolve_turn(&mut world, PlayerAction::Apply { item: horn }, &mut rng);
                 (world, apply_events)
             }
             StoryTraversalScenario::ShopkeeperSell => {
@@ -19618,6 +19715,76 @@ mod tests {
     }
 
     #[test]
+    fn test_applying_unpaid_horn_of_plenty_in_shop_bills_generated_item_and_usage_fee() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let horn = spawn_inventory_object_by_name(&mut world, "horn of plenty", 'h');
+        world
+            .ecs_mut()
+            .insert_one(horn, Enchantment { spe: 2 })
+            .expect("horn of plenty should accept charges");
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(horn, 100, 1),
+            "shop bill should accept unpaid horn of plenty"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Apply { item: horn },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tool-horn-of-plenty-spills"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(
+            world
+                .get_component::<Enchantment>(horn)
+                .map(|ench| ench.spe),
+            Some(1)
+        );
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 20);
+        assert!(world.dungeon().shop_rooms[0].bill.total() > 100);
+        let billed_generated_item = world.dungeon().shop_rooms[0]
+            .bill
+            .entries()
+            .iter()
+            .find(|entry| entry.item != horn)
+            .map(|entry| entry.item);
+        assert!(
+            billed_generated_item.is_some(),
+            "generated horn item should have its own bill entry"
+        );
+        let billed_generated_item =
+            billed_generated_item.expect("generated horn item should still be present on the bill");
+        assert!(
+            world
+                .get_component::<nethack_babel_data::ShopState>(billed_generated_item)
+                .is_some_and(|state| state.unpaid)
+        );
+    }
+
+    #[test]
     fn test_applying_magic_flute_to_adjacent_shopkeeper_riles_shop() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -20974,6 +21141,59 @@ mod tests {
             EngineEvent::Message { key, .. } if key == "shop-usage-fee"
         )));
         assert_eq!(world.dungeon().shop_rooms[0].debit, 100);
+    }
+
+    #[test]
+    fn test_tipping_unpaid_horn_of_plenty_in_shop_empties_charges_and_adds_full_usage_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let horn = spawn_inventory_object_by_name(&mut world, "horn of plenty", 'h');
+        world
+            .ecs_mut()
+            .insert_one(horn, Enchantment { spe: 2 })
+            .expect("horn of plenty should accept charges");
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(horn, 100, 1),
+            "shop bill should accept unpaid horn of plenty"
+        );
+
+        let events = resolve_turn(
+            &mut world,
+            PlayerAction::Tip { item: horn },
+            &mut test_rng(),
+        );
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tool-horn-of-plenty-spills"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(
+            world
+                .get_component::<Enchantment>(horn)
+                .map(|ench| ench.spe),
+            Some(0)
+        );
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 100);
+        assert!(world.dungeon().shop_rooms[0].bill.total() > 100);
     }
 
     #[test]
@@ -27805,6 +28025,7 @@ mod tests {
             StoryTraversalScenario::ShopTinningUsageFee,
             StoryTraversalScenario::ShopSpellbookUsageFee,
             StoryTraversalScenario::ShopMagicFluteUsageFee,
+            StoryTraversalScenario::ShopHornOfPlentyUsageFee,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopChatPriceQuote,
             StoryTraversalScenario::ShopContainerPickup,
@@ -28292,6 +28513,48 @@ mod tests {
                         !shop.surcharge,
                         "{} should keep surcharge off when the shopkeeper stays out of range",
                         scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopHornOfPlentyUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "tool-horn-of-plenty-spills"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(
+                        shop.debit,
+                        20,
+                        "{} should add the horn of plenty usage fee as debit",
+                        scenario.label()
+                    );
+                    assert!(
+                        shop.bill.total() > 100,
+                        "{} should also bill the generated shop-owned item",
+                        scenario.label()
+                    );
+                    let horn = find_player_named_item(&world, player, "horn of plenty")
+                        .expect("horn of plenty should still be carried");
+                    let billed_generated_item = shop
+                        .bill
+                        .entries()
+                        .iter()
+                        .find(|entry| entry.item != horn)
+                        .map(|entry| entry.item);
+                    assert!(
+                        billed_generated_item.is_some(),
+                        "{} should keep the generated horn item marked unpaid",
+                        scenario.label()
+                    );
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_data::ShopState>(
+                                billed_generated_item.expect("generated item should exist"),
+                            )
+                            .is_some_and(|state| state.unpaid)
                     );
                 }
                 StoryTraversalScenario::ShopkeeperSell => {

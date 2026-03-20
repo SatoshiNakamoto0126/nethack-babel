@@ -2022,6 +2022,7 @@ mod tests {
         ShopTinningUsageFee,
         ShopSpellbookUsageFee,
         ShopMagicFluteUsageFee,
+        ShopHornOfPlentyUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         ShopContainerPickup,
@@ -2094,6 +2095,9 @@ mod tests {
                 SaveStoryTraversalScenario::ShopTinningUsageFee => "shop-tinning-usage-fee",
                 SaveStoryTraversalScenario::ShopSpellbookUsageFee => "shop-spellbook-usage-fee",
                 SaveStoryTraversalScenario::ShopMagicFluteUsageFee => "shop-magic-flute-usage-fee",
+                SaveStoryTraversalScenario::ShopHornOfPlentyUsageFee => {
+                    "shop-horn-of-plenty-usage-fee"
+                }
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 SaveStoryTraversalScenario::ShopContainerPickup => "shop-container-pickup",
@@ -3321,6 +3325,60 @@ mod tests {
                 let events = resolve_turn(
                     &mut loaded,
                     PlayerAction::Apply { item: loaded_flute },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopHornOfPlentyUsageFee => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let horn = spawn_inventory_object_by_name(&mut world, "horn of plenty", 'h');
+                world
+                    .ecs_mut()
+                    .insert_one(horn, Enchantment { spe: 2 })
+                    .expect("horn of plenty should accept charges");
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(horn, 100, 1),
+                    "shop bill should accept unpaid horn of plenty"
+                );
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-shop-horn-of-plenty-usage-fee",
+                    &world,
+                    [71u8; 32],
+                );
+                let loaded_horn = loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .and_then(|inv| {
+                        inv.items.iter().copied().find(|item| {
+                            loaded
+                                .get_component::<ObjectCore>(*item)
+                                .is_some_and(|core| {
+                                    core.object_class == ObjectClass::Tool
+                                        && core.inv_letter == Some('h')
+                                })
+                        })
+                    })
+                    .expect("reloaded inventory should preserve the unpaid horn of plenty");
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Apply { item: loaded_horn },
                     &mut rng,
                 );
                 (loaded, events)
@@ -8980,6 +9038,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopTinningUsageFee,
             SaveStoryTraversalScenario::ShopSpellbookUsageFee,
             SaveStoryTraversalScenario::ShopMagicFluteUsageFee,
+            SaveStoryTraversalScenario::ShopHornOfPlentyUsageFee,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopChatPriceQuote,
             SaveStoryTraversalScenario::ShopContainerPickup,
@@ -9353,6 +9412,44 @@ mod tests {
                     assert_eq!(shop.bill.total(), 100);
                     assert_eq!(shop.debit, 25);
                     assert!(!shop.surcharge);
+                }
+                SaveStoryTraversalScenario::ShopHornOfPlentyUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "tool-horn-of-plenty-spills"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(shop.debit, 20);
+                    assert!(shop.bill.total() > 100);
+                    let loaded_horn = world
+                        .get_component::<Inventory>(player)
+                        .and_then(|inv| {
+                            inv.items.iter().copied().find(|item| {
+                                world
+                                    .get_component::<ObjectCore>(*item)
+                                    .is_some_and(|core| {
+                                        core.object_class == ObjectClass::Tool
+                                            && core.inv_letter == Some('h')
+                                    })
+                            })
+                        })
+                        .expect("reloaded horn of plenty should remain in inventory");
+                    let generated_item = shop
+                        .bill
+                        .entries()
+                        .iter()
+                        .find(|entry| entry.item != loaded_horn)
+                        .map(|entry| entry.item)
+                        .expect("generated horn item should stay on the bill");
+                    assert!(
+                        world
+                            .get_component::<nethack_babel_data::ShopState>(generated_item)
+                            .is_some_and(|state| state.unpaid)
+                    );
                 }
                 SaveStoryTraversalScenario::ShopkeeperSell => {
                     let shop = &world.dungeon().shop_rooms[0];

@@ -964,3 +964,4 @@ tip-bag-of-tricks = { $count ->
     [one] Un monstre sort du sac !
    *[other] Des monstres sortent du sac !
 }
+tool-horn-of-plenty-spills = Quelque chose se répand hors de la corne d'abondance !

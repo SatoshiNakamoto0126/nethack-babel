@@ -2808,6 +2808,8 @@ tool-horn-no-charges = 角已经没充能了。
 
 tool-horn-toot = 你吹出了一声骇人而难听的声音。
 
+tool-horn-of-plenty-spills = 丰饶之角里有什么东西洒了出来！
+
 tool-leash-no-pet = 附近没有可拴绳的宠物。
 
 tool-lockpick-breaks = 你的开锁器断掉了！

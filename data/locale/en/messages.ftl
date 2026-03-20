@@ -2943,6 +2943,7 @@ tool-grease-hands = Your hands are too slippery to hold anything!
 tool-grease-slip = Your greased { $item } slips off!
 tool-horn-no-charges = The horn is out of charges.
 tool-horn-toot = You produce a frightful, horrible sound.
+tool-horn-of-plenty-spills = Something spills out of the horn of plenty!
 tool-leash-no-pet = There is no pet nearby to leash.
 tool-lockpick-breaks = Your lockpick breaks!
 tool-magic-lamp-djinni = A djinni emerges from the lamp!

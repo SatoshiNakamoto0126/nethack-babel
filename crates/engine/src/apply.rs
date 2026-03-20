@@ -13,11 +13,13 @@
 use hecs::Entity;
 use rand::Rng;
 
-use nethack_babel_data::{BucStatus, Enchantment, ObjectLocation};
+use nethack_babel_data::{
+    BucStatus, Enchantment, ObjectClass, ObjectDef, ObjectLocation, ShopState,
+};
 
 use crate::action::{Direction, Position};
 use crate::event::EngineEvent;
-use crate::world::{GameWorld, HitPoints, Monster, Name, Positioned, Tame};
+use crate::world::{Attributes, GameWorld, HitPoints, Monster, Name, Positioned, Tame};
 
 // ---------------------------------------------------------------------------
 // Unified dispatch — top-level entry point for #apply
@@ -62,6 +64,7 @@ pub enum ExtToolType {
     Towel,
     Bell,
     BellOfOpening,
+    HornOfPlenty,
     WoodenFlute,
     MagicFlute,
     WoodenHarp,
@@ -92,6 +95,8 @@ pub fn classify_ext_tool(name: &str) -> Option<ExtToolType> {
         Some(ExtToolType::Towel)
     } else if lower == "bell of opening" {
         Some(ExtToolType::BellOfOpening)
+    } else if lower == "horn of plenty" {
+        Some(ExtToolType::HornOfPlenty)
     } else if lower.contains("bell") {
         Some(ExtToolType::Bell)
     } else if lower == "wooden flute" {
@@ -184,6 +189,7 @@ pub fn apply_ext_tool(
         ExtToolType::Bell | ExtToolType::BellOfOpening => {
             apply_bell(world, player, item, tool_type, &buc, rng)
         }
+        ExtToolType::HornOfPlenty => apply_horn_of_plenty(world, player, item, rng),
         ExtToolType::WoodenFlute => apply_instrument(
             world,
             player,
@@ -269,6 +275,247 @@ fn apply_instrument(
     }
 
     events
+}
+
+fn choose_weighted_object_def<'a>(
+    candidates: &[&'a ObjectDef],
+    rng: &mut impl Rng,
+) -> Option<&'a ObjectDef> {
+    if candidates.is_empty() {
+        return None;
+    }
+
+    let total_weight: u32 = candidates
+        .iter()
+        .map(|def| u32::from(def.prob.max(1)))
+        .sum();
+    if total_weight == 0 {
+        return candidates.first().copied();
+    }
+
+    let mut roll = rng.random_range(0..total_weight);
+    for def in candidates {
+        let weight = u32::from(def.prob.max(1));
+        if roll < weight {
+            return Some(*def);
+        }
+        roll -= weight;
+    }
+    candidates.last().copied()
+}
+
+fn choose_horn_of_plenty_object_def<'a>(
+    object_defs: &'a [ObjectDef],
+    rng: &mut impl Rng,
+) -> Option<&'a ObjectDef> {
+    if rng.random_range(0..13) == 0 {
+        let potion_candidates: Vec<&ObjectDef> = object_defs
+            .iter()
+            .filter(|def| {
+                def.class == ObjectClass::Potion
+                    && !def.name.eq_ignore_ascii_case("potion of sickness")
+                    && !def.is_magic
+            })
+            .collect();
+        return choose_weighted_object_def(&potion_candidates, rng);
+    }
+
+    let mut chosen = choose_weighted_object_def(
+        &object_defs
+            .iter()
+            .filter(|def| def.class == ObjectClass::Food)
+            .collect::<Vec<_>>(),
+        rng,
+    )?;
+
+    if chosen.name.eq_ignore_ascii_case("food ration")
+        && rng.random_range(0..7) == 0
+        && let Some(royal_jelly) = object_defs
+            .iter()
+            .find(|def| def.name.eq_ignore_ascii_case("lump of royal jelly"))
+    {
+        chosen = royal_jelly;
+    }
+
+    Some(chosen)
+}
+
+fn maybe_bill_generated_horn_item_in_shop(
+    world: &mut GameWorld,
+    player: Entity,
+    horn: Entity,
+    generated_item: Entity,
+) -> bool {
+    let Some(player_pos) = world.get_component::<Positioned>(player).map(|pos| pos.0) else {
+        return false;
+    };
+    let Some(shop_idx) = world
+        .dungeon()
+        .shop_rooms
+        .iter()
+        .position(|shop| shop.contains(player_pos) && shop.bill.find(horn).is_some())
+    else {
+        return false;
+    };
+
+    let Some(core) = world.get_component::<nethack_babel_data::ObjectCore>(generated_item) else {
+        return false;
+    };
+    let quantity = core.quantity.max(1);
+    let spe = world
+        .get_component::<Enchantment>(generated_item)
+        .map(|ench| ench.spe)
+        .unwrap_or(0);
+    let Some(object_def) = crate::items::object_def_for_core(world.object_catalog(), &core) else {
+        return false;
+    };
+    let charisma = world
+        .get_component::<Attributes>(player)
+        .map(|attributes| attributes.charisma)
+        .unwrap_or(10);
+    let unit_price = crate::shop::get_full_buy_price(
+        object_def.cost as i32,
+        object_def.class,
+        spe,
+        1,
+        charisma,
+        false,
+        false,
+        0,
+        false,
+        false,
+    )
+    .max(1);
+    drop(core);
+
+    if world.dungeon_mut().shop_rooms[shop_idx]
+        .bill
+        .add(generated_item, unit_price, quantity)
+    {
+        let _ = world.ecs_mut().insert_one(
+            generated_item,
+            ShopState {
+                unpaid: true,
+                no_charge: false,
+            },
+        );
+        crate::shop::sync_item_shop_states(world);
+        true
+    } else {
+        false
+    }
+}
+
+pub(crate) fn spawn_horn_of_plenty_item(
+    world: &mut GameWorld,
+    player: Entity,
+    horn: Entity,
+    pickup_to_inventory: bool,
+    rng: &mut impl Rng,
+) -> Option<(Entity, Vec<EngineEvent>)> {
+    let object_defs = world.object_catalog().to_vec();
+    let object_def = choose_horn_of_plenty_object_def(&object_defs, rng)?;
+    let generated_item =
+        crate::items::spawn_item(world, object_def, crate::items::SpawnLocation::Free, None);
+
+    let horn_buc = world.get_component::<BucStatus>(horn).map(|buc| BucStatus {
+        cursed: buc.cursed,
+        blessed: buc.blessed,
+        bknown: buc.bknown,
+    });
+    if let Some(horn_buc) = horn_buc
+        && let Some(mut generated_buc) = world.get_component_mut::<BucStatus>(generated_item)
+    {
+        generated_buc.blessed = horn_buc.blessed;
+        generated_buc.cursed = horn_buc.cursed;
+    }
+
+    let player_pos = world
+        .get_component::<Positioned>(player)
+        .map(|pos| pos.0)
+        .unwrap_or(Position::new(0, 0));
+    let current_level = world.dungeon().current_data_dungeon_level();
+    if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(generated_item) {
+        *loc = ObjectLocation::Floor {
+            x: player_pos.x as i16,
+            y: player_pos.y as i16,
+            level: current_level,
+        };
+    }
+
+    let billed_to_shop =
+        maybe_bill_generated_horn_item_in_shop(world, player, horn, generated_item);
+
+    let mut events = vec![EngineEvent::msg("tool-horn-of-plenty-spills")];
+    if pickup_to_inventory {
+        if billed_to_shop {
+            let mut letter_state = crate::items::LetterState::default();
+            if let Some(letter) = crate::items::assign_inv_letter(world, player, &mut letter_state)
+            {
+                if let Some(mut core) =
+                    world.get_component_mut::<nethack_babel_data::ObjectCore>(generated_item)
+                {
+                    core.inv_letter = Some(letter);
+                }
+                if let Some(mut loc) = world.get_component_mut::<ObjectLocation>(generated_item) {
+                    *loc = ObjectLocation::Inventory;
+                }
+                if let Some(mut inventory) =
+                    world.get_component_mut::<crate::inventory::Inventory>(player)
+                {
+                    inventory.items.push(generated_item);
+                }
+                let quantity = world
+                    .get_component::<nethack_babel_data::ObjectCore>(generated_item)
+                    .map(|core| core.quantity.max(1) as u32)
+                    .unwrap_or(1);
+                events.push(EngineEvent::ItemPickedUp {
+                    actor: player,
+                    item: generated_item,
+                    quantity,
+                });
+            }
+        } else {
+            let mut letter_state = crate::items::LetterState::default();
+            events.extend(crate::items::pickup_item(
+                world,
+                player,
+                generated_item,
+                &mut letter_state,
+                &object_defs,
+            ));
+        }
+    }
+
+    Some((generated_item, events))
+}
+
+pub(crate) fn apply_horn_of_plenty(
+    world: &mut GameWorld,
+    player: Entity,
+    item: Entity,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    let charges = world
+        .get_component::<Enchantment>(item)
+        .map(|ench| ench.spe)
+        .unwrap_or(0);
+    if charges <= 0 {
+        if let Some(mut knowledge) =
+            world.get_component_mut::<nethack_babel_data::KnowledgeState>(item)
+        {
+            knowledge.cknown = true;
+        }
+        return vec![EngineEvent::msg("tool-nothing-happens")];
+    }
+
+    if let Some(mut ench) = world.get_component_mut::<Enchantment>(item) {
+        ench.spe = ench.spe.saturating_sub(1);
+    }
+
+    spawn_horn_of_plenty_item(world, player, item, true, rng)
+        .map(|(_, events)| events)
+        .unwrap_or_else(|| vec![EngineEvent::msg("tool-nothing-happens")])
 }
 
 // ---------------------------------------------------------------------------
