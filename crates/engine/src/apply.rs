@@ -64,6 +64,7 @@ pub enum ExtToolType {
     Towel,
     Bell,
     BellOfOpening,
+    BagOfTricks,
     HornOfPlenty,
     WoodenFlute,
     MagicFlute,
@@ -95,6 +96,8 @@ pub fn classify_ext_tool(name: &str) -> Option<ExtToolType> {
         Some(ExtToolType::Towel)
     } else if lower == "bell of opening" {
         Some(ExtToolType::BellOfOpening)
+    } else if lower == "bag of tricks" {
+        Some(ExtToolType::BagOfTricks)
     } else if lower == "horn of plenty" {
         Some(ExtToolType::HornOfPlenty)
     } else if lower.contains("bell") {
@@ -189,6 +192,7 @@ pub fn apply_ext_tool(
         ExtToolType::Bell | ExtToolType::BellOfOpening => {
             apply_bell(world, player, item, tool_type, &buc, rng)
         }
+        ExtToolType::BagOfTricks => apply_bag_of_tricks(world, player, item, rng),
         ExtToolType::HornOfPlenty => apply_horn_of_plenty(world, player, item, rng),
         ExtToolType::WoodenFlute => apply_instrument(
             world,
@@ -302,6 +306,88 @@ fn choose_weighted_object_def<'a>(
         roll -= weight;
     }
     candidates.last().copied()
+}
+
+fn spawn_bag_of_tricks_monster(
+    world: &mut GameWorld,
+    player: Entity,
+    rng: &mut impl Rng,
+) -> Option<(Entity, Position)> {
+    let player_pos = world.get_component::<Positioned>(player).map(|pos| pos.0)?;
+    let monster_defs = world.monster_catalog().to_vec();
+    let difficulty = world.dungeon().current_depth().max(1) as u32;
+    let monster_id = crate::makemon::rndmonst(&monster_defs, difficulty, rng)?;
+    let monster_def = monster_defs.iter().find(|def| def.id == monster_id)?;
+    let spawn_pos = crate::makemon::enexto(world, player_pos, monster_def)?;
+    let monster = crate::makemon::makemon(
+        world,
+        &monster_defs,
+        Some(monster_id),
+        spawn_pos,
+        crate::makemon::MakeMonFlags::NO_GROUP,
+        rng,
+    )?;
+    Some((monster, spawn_pos))
+}
+
+pub(crate) fn spill_bag_of_tricks(
+    world: &mut GameWorld,
+    player: Entity,
+    item: Entity,
+    charges_to_spend: i32,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    if charges_to_spend <= 0 {
+        if let Some(mut knowledge) =
+            world.get_component_mut::<nethack_babel_data::KnowledgeState>(item)
+        {
+            knowledge.cknown = true;
+        }
+        return vec![EngineEvent::msg("tool-nothing-happens")];
+    }
+
+    let mut spawn_count = 0usize;
+    let mut events = Vec::new();
+
+    for _ in 0..charges_to_spend.max(0) as usize {
+        if let Some(mut ench) = world.get_component_mut::<Enchantment>(item) {
+            ench.spe = ench.spe.saturating_sub(1);
+        }
+
+        let mut create_count = 1usize;
+        if rng.random_range(0..23) == 0 {
+            create_count += rng.random_range(1..=7);
+        }
+
+        for _ in 0..create_count {
+            if let Some((monster, position)) = spawn_bag_of_tricks_monster(world, player, rng) {
+                spawn_count += 1;
+                events.push(EngineEvent::MonsterGenerated {
+                    entity: monster,
+                    position,
+                });
+            }
+        }
+    }
+
+    if spawn_count > 0 {
+        if let Some(mut knowledge) =
+            world.get_component_mut::<nethack_babel_data::KnowledgeState>(item)
+        {
+            knowledge.cknown = true;
+        }
+        events.insert(
+            0,
+            EngineEvent::msg_with(
+                "tip-bag-of-tricks",
+                vec![("count", spawn_count.to_string())],
+            ),
+        );
+    } else {
+        events.push(EngineEvent::msg("tool-nothing-happens"));
+    }
+
+    events
 }
 
 fn choose_horn_of_plenty_object_def<'a>(
@@ -516,6 +602,19 @@ pub(crate) fn apply_horn_of_plenty(
     spawn_horn_of_plenty_item(world, player, item, true, rng)
         .map(|(_, events)| events)
         .unwrap_or_else(|| vec![EngineEvent::msg("tool-nothing-happens")])
+}
+
+pub(crate) fn apply_bag_of_tricks(
+    world: &mut GameWorld,
+    player: Entity,
+    item: Entity,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    let charges = world
+        .get_component::<Enchantment>(item)
+        .map(|ench| ench.spe)
+        .unwrap_or(0);
+    spill_bag_of_tricks(world, player, item, i32::from(charges.min(1)), rng)
 }
 
 // ---------------------------------------------------------------------------

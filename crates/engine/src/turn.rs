@@ -8477,7 +8477,9 @@ fn snapshot_apply_usage_fee(
 ) -> Option<ApplyUsageFeeSnapshot> {
     let kind = match crate::apply::classify_ext_tool_entity(world, item) {
         Some(crate::apply::ExtToolType::CanOfGrease) => ApplyUsageFeeKind::CheapCharged,
-        Some(crate::apply::ExtToolType::HornOfPlenty) => ApplyUsageFeeKind::BagLikeCharged,
+        Some(crate::apply::ExtToolType::BagOfTricks | crate::apply::ExtToolType::HornOfPlenty) => {
+            ApplyUsageFeeKind::BagLikeCharged
+        }
         Some(
             crate::apply::ExtToolType::BellOfOpening
             | crate::apply::ExtToolType::MagicFlute
@@ -9388,17 +9390,6 @@ fn charge_unpaid_tip_usage_in_shop(
     sync_current_level_shopkeeper_state(world);
 }
 
-const TIP_BAG_OF_TRICKS_MONSTERS: [&str; 8] = [
-    "jackal",
-    "newt",
-    "grid bug",
-    "kobold",
-    "goblin",
-    "orc",
-    "giant ant",
-    "coyote",
-];
-
 fn handle_player_tip(
     world: &mut GameWorld,
     player: hecs::Entity,
@@ -9427,41 +9418,8 @@ fn handle_player_tip(
             return vec![EngineEvent::msg("tool-nothing-happens")];
         }
 
-        if let Some(mut ench) = world.get_component_mut::<Enchantment>(item) {
-            ench.spe = 0;
-        }
-        if let Some(mut knowledge) =
-            world.get_component_mut::<nethack_babel_data::KnowledgeState>(item)
-        {
-            knowledge.cknown = true;
-        }
-
-        let mut spawn_count = 0usize;
-        let mut events = Vec::new();
-        for _ in 0..charges_before.max(0) as usize {
-            let monster_spec =
-                TIP_BAG_OF_TRICKS_MONSTERS[rng.random_range(0..TIP_BAG_OF_TRICKS_MONSTERS.len())];
-            if let Some((monster, position)) =
-                spawn_named_monster_near_entity(world, player, monster_spec, rng)
-            {
-                spawn_count += 1;
-                events.push(EngineEvent::MonsterGenerated {
-                    entity: monster,
-                    position,
-                });
-            }
-        }
-        if spawn_count > 0 {
-            events.insert(
-                0,
-                EngineEvent::msg_with(
-                    "tip-bag-of-tricks",
-                    vec![("count", spawn_count.to_string())],
-                ),
-            );
-        } else {
-            events.push(EngineEvent::msg("tool-nothing-happens"));
-        }
+        let mut events =
+            crate::apply::spill_bag_of_tricks(world, player, item, i32::from(charges_before), rng);
         charge_unpaid_tip_usage_in_shop(
             world,
             player,
@@ -10399,6 +10357,7 @@ mod tests {
         ShopTinningUsageFee,
         ShopSpellbookUsageFee,
         ShopMagicFluteUsageFee,
+        ShopBagOfTricksUsageFee,
         ShopHornOfPlentyUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
@@ -10472,6 +10431,7 @@ mod tests {
                 StoryTraversalScenario::ShopTinningUsageFee => "shop-tinning-usage-fee",
                 StoryTraversalScenario::ShopSpellbookUsageFee => "shop-spellbook-usage-fee",
                 StoryTraversalScenario::ShopMagicFluteUsageFee => "shop-magic-flute-usage-fee",
+                StoryTraversalScenario::ShopBagOfTricksUsageFee => "shop-bag-of-tricks-usage-fee",
                 StoryTraversalScenario::ShopHornOfPlentyUsageFee => "shop-horn-of-plenty-usage-fee",
                 StoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 StoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
@@ -11526,6 +11486,39 @@ mod tests {
                 let mut rng = test_rng();
                 let apply_events =
                     resolve_turn(&mut world, PlayerAction::Apply { item: flute }, &mut rng);
+                (world, apply_events)
+            }
+            StoryTraversalScenario::ShopBagOfTricksUsageFee => {
+                let mut world = make_test_world();
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 12);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(crate::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        crate::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let bag = spawn_inventory_object_by_name(&mut world, "bag of tricks", 'b');
+                world
+                    .ecs_mut()
+                    .insert_one(bag, Enchantment { spe: 2 })
+                    .expect("bag of tricks should accept charges");
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(bag, 100, 1),
+                    "shop bill should accept unpaid bag of tricks"
+                );
+
+                let mut rng = test_rng();
+                let apply_events =
+                    resolve_turn(&mut world, PlayerAction::Apply { item: bag }, &mut rng);
                 (world, apply_events)
             }
             StoryTraversalScenario::ShopHornOfPlentyUsageFee => {
@@ -21106,6 +21099,78 @@ mod tests {
     }
 
     #[test]
+    fn test_applying_bag_of_tricks_spawns_monsters_and_uses_one_charge() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let bag = spawn_inventory_object_by_name(&mut world, "bag of tricks", 'b');
+        world
+            .ecs_mut()
+            .insert_one(bag, Enchantment { spe: 2 })
+            .expect("bag of tricks should accept charges");
+
+        let events = resolve_turn(&mut world, PlayerAction::Apply { item: bag }, &mut test_rng());
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tip-bag-of-tricks"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::MonsterGenerated { .. }
+        )));
+        assert_eq!(
+            world.get_component::<Enchantment>(bag).map(|ench| ench.spe),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn test_applying_unpaid_bag_of_tricks_in_shop_adds_usage_debit() {
+        let mut world = make_test_world();
+        install_test_catalogs(&mut world);
+        let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 12);
+        world
+            .ecs_mut()
+            .insert_one(shopkeeper, Peaceful)
+            .expect("shopkeeper should accept peaceful marker");
+        world
+            .dungeon_mut()
+            .shop_rooms
+            .push(crate::shop::ShopRoom::new(
+                Position::new(5, 4),
+                Position::new(7, 6),
+                crate::shop::ShopType::Tool,
+                shopkeeper,
+                "Izchak".to_string(),
+            ));
+        let bag = spawn_inventory_object_by_name(&mut world, "bag of tricks", 'b');
+        world
+            .ecs_mut()
+            .insert_one(bag, Enchantment { spe: 2 })
+            .expect("bag of tricks should accept charges");
+        assert!(
+            world.dungeon_mut().shop_rooms[0].bill.add(bag, 100, 1),
+            "shop bill should accept unpaid bag of tricks"
+        );
+
+        let events = resolve_turn(&mut world, PlayerAction::Apply { item: bag }, &mut test_rng());
+
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "tip-bag-of-tricks"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+        )));
+        assert_eq!(world.dungeon().shop_rooms[0].debit, 20);
+        assert_eq!(
+            world.get_component::<Enchantment>(bag).map(|ench| ench.spe),
+            Some(1)
+        );
+    }
+
+    #[test]
     fn test_tipping_unpaid_bag_of_tricks_in_shop_adds_full_usage_debit() {
         let mut world = make_test_world();
         install_test_catalogs(&mut world);
@@ -28025,6 +28090,7 @@ mod tests {
             StoryTraversalScenario::ShopTinningUsageFee,
             StoryTraversalScenario::ShopSpellbookUsageFee,
             StoryTraversalScenario::ShopMagicFluteUsageFee,
+            StoryTraversalScenario::ShopBagOfTricksUsageFee,
             StoryTraversalScenario::ShopHornOfPlentyUsageFee,
             StoryTraversalScenario::ShopkeeperSell,
             StoryTraversalScenario::ShopChatPriceQuote,
@@ -28512,6 +28578,41 @@ mod tests {
                     assert!(
                         !shop.surcharge,
                         "{} should keep surcharge off when the shopkeeper stays out of range",
+                        scenario.label()
+                    );
+                }
+                StoryTraversalScenario::ShopBagOfTricksUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "tip-bag-of-tricks"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::MonsterGenerated { .. }
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(
+                        shop.bill.total(),
+                        100,
+                        "{} should preserve the billed bag price",
+                        scenario.label()
+                    );
+                    assert_eq!(
+                        shop.debit,
+                        20,
+                        "{} should add the bag of tricks usage fee as debit",
+                        scenario.label()
+                    );
+                    let bag = find_player_named_item(&world, player, "bag of tricks")
+                        .expect("bag of tricks should still be carried");
+                    assert_eq!(
+                        world.get_component::<Enchantment>(bag).map(|ench| ench.spe),
+                        Some(1),
+                        "{} should use exactly one charge",
                         scenario.label()
                     );
                 }
