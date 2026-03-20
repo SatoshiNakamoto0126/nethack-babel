@@ -2021,6 +2021,7 @@ mod tests {
         ShopCameraUsageFee,
         ShopTinningUsageFee,
         ShopSpellbookUsageFee,
+        ShopMagicFluteUsageFee,
         ShopkeeperSell,
         ShopChatPriceQuote,
         ShopContainerPickup,
@@ -2092,6 +2093,7 @@ mod tests {
                 SaveStoryTraversalScenario::ShopCameraUsageFee => "shop-camera-usage-fee",
                 SaveStoryTraversalScenario::ShopTinningUsageFee => "shop-tinning-usage-fee",
                 SaveStoryTraversalScenario::ShopSpellbookUsageFee => "shop-spellbook-usage-fee",
+                SaveStoryTraversalScenario::ShopMagicFluteUsageFee => "shop-magic-flute-usage-fee",
                 SaveStoryTraversalScenario::ShopkeeperSell => "shopkeeper-sell",
                 SaveStoryTraversalScenario::ShopChatPriceQuote => "shop-chat-price-quote",
                 SaveStoryTraversalScenario::ShopContainerPickup => "shop-container-pickup",
@@ -2617,7 +2619,7 @@ mod tests {
             }
             SaveStoryTraversalScenario::ShopkeeperFollow => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
-                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 20);
                 world
                     .ecs_mut()
                     .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
@@ -2683,7 +2685,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopkeeperPayoff => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
                 let _gold = spawn_inventory_gold(&mut world, 150, 'g');
-                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 20);
                 world
                     .ecs_mut()
                     .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
@@ -2731,7 +2733,7 @@ mod tests {
             }
             SaveStoryTraversalScenario::ShopkeeperCredit => {
                 let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
-                let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 20);
                 world
                     .ecs_mut()
                     .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
@@ -3264,6 +3266,61 @@ mod tests {
                     PlayerAction::Read {
                         item: Some(loaded_book),
                     },
+                    &mut rng,
+                );
+                (loaded, events)
+            }
+            SaveStoryTraversalScenario::ShopMagicFluteUsageFee => {
+                let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+                install_test_catalogs(&mut world);
+                let shopkeeper = spawn_full_monster(&mut world, Position::new(7, 5), "Izchak", 20);
+                world
+                    .ecs_mut()
+                    .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                    .expect("shopkeeper should accept peaceful marker");
+                world
+                    .dungeon_mut()
+                    .shop_rooms
+                    .push(nethack_babel_engine::shop::ShopRoom::new(
+                        Position::new(5, 4),
+                        Position::new(7, 6),
+                        nethack_babel_engine::shop::ShopType::Tool,
+                        shopkeeper,
+                        "Izchak".to_string(),
+                    ));
+                let _target = spawn_full_monster(&mut world, Position::new(5, 6), "newt", 8);
+                let flute = spawn_inventory_object_by_name(&mut world, "magic flute", 'f');
+                world
+                    .ecs_mut()
+                    .insert_one(flute, Enchantment { spe: 2 })
+                    .expect("magic flute should accept charges");
+                assert!(
+                    world.dungeon_mut().shop_rooms[0].bill.add(flute, 100, 1),
+                    "shop bill should accept unpaid magic flute"
+                );
+
+                let (mut loaded, loaded_rng) = save_and_reload_world(
+                    "story-matrix-shop-magic-flute-usage-fee",
+                    &world,
+                    [70u8; 32],
+                );
+                let loaded_flute = loaded
+                    .get_component::<Inventory>(loaded.player())
+                    .and_then(|inv| {
+                        inv.items.iter().copied().find(|item| {
+                            loaded
+                                .get_component::<ObjectCore>(*item)
+                                .is_some_and(|core| {
+                                    core.object_class == ObjectClass::Tool
+                                        && core.inv_letter == Some('f')
+                                })
+                        })
+                    })
+                    .expect("reloaded inventory should preserve the unpaid magic flute");
+                let mut rng = Pcg64::from_seed(loaded_rng);
+                let events = resolve_turn(
+                    &mut loaded,
+                    PlayerAction::Apply { item: loaded_flute },
                     &mut rng,
                 );
                 (loaded, events)
@@ -8561,6 +8618,69 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_loaded_unpaid_magic_lamp_normal_use_keeps_fixed_shop_fee() {
+        for seed in 0..128u64 {
+            let mut world = make_stair_world(DungeonBranch::Main, 1, Terrain::Floor);
+            let shopkeeper = spawn_full_monster(&mut world, Position::new(6, 5), "Izchak", 20);
+            world
+                .ecs_mut()
+                .insert_one(shopkeeper, nethack_babel_engine::world::Peaceful)
+                .expect("shopkeeper should accept peaceful marker");
+            world
+                .dungeon_mut()
+                .shop_rooms
+                .push(nethack_babel_engine::shop::ShopRoom::new(
+                    Position::new(5, 4),
+                    Position::new(7, 6),
+                    nethack_babel_engine::shop::ShopType::Tool,
+                    shopkeeper,
+                    "Izchak".to_string(),
+                ));
+            let lamp = spawn_inventory_object_by_name(&mut world, "magic lamp", 'l');
+            assert!(
+                world.dungeon_mut().shop_rooms[0].bill.add(lamp, 60, 1),
+                "shop bill should accept unpaid magic lamp"
+            );
+
+            let (mut loaded, _) =
+                save_and_reload_world("shop-magic-lamp-normal-use", &world, [96u8; 32]);
+            let loaded_lamp = loaded
+                .get_component::<Inventory>(loaded.player())
+                .and_then(|inv| {
+                    inv.items.iter().copied().find(|item| {
+                        loaded
+                            .get_component::<ObjectCore>(*item)
+                            .is_some_and(|core| {
+                                core.object_class == ObjectClass::Tool
+                                    && core.inv_letter == Some('l')
+                            })
+                    })
+                })
+                .expect("reloaded inventory should preserve the unpaid magic lamp");
+
+            let mut rng = Pcg64::seed_from_u64(seed);
+            let events = resolve_turn(
+                &mut loaded,
+                PlayerAction::Apply { item: loaded_lamp },
+                &mut rng,
+            );
+            if !events.iter().any(|event| {
+                matches!(
+                    event,
+                    EngineEvent::Message { key, .. } if key == "tool-lamp-on"
+                )
+            }) {
+                continue;
+            }
+
+            assert_eq!(loaded.dungeon().shop_rooms[0].debit, 10);
+            return;
+        }
+
+        panic!("no seed produced normal magic lamp use after reload");
+    }
+
+    #[test]
     fn round_trip_loaded_restores_explicit_npc_components_on_current_level() {
         let mut world = make_stair_world(DungeonBranch::Quest, 1, Terrain::Floor);
         let player = world.player();
@@ -8859,6 +8979,7 @@ mod tests {
             SaveStoryTraversalScenario::ShopCameraUsageFee,
             SaveStoryTraversalScenario::ShopTinningUsageFee,
             SaveStoryTraversalScenario::ShopSpellbookUsageFee,
+            SaveStoryTraversalScenario::ShopMagicFluteUsageFee,
             SaveStoryTraversalScenario::ShopkeeperSell,
             SaveStoryTraversalScenario::ShopChatPriceQuote,
             SaveStoryTraversalScenario::ShopContainerPickup,
@@ -9214,6 +9335,24 @@ mod tests {
                     )));
                     assert_eq!(shop.bill.total(), 100);
                     assert_eq!(shop.debit, 80);
+                }
+                SaveStoryTraversalScenario::ShopMagicFluteUsageFee => {
+                    let shop = &world.dungeon().shop_rooms[0];
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "play-magic-flute"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "monster-falls-asleep"
+                    )));
+                    assert!(final_events.iter().any(|event| matches!(
+                        event,
+                        EngineEvent::Message { key, .. } if key == "shop-usage-fee"
+                    )));
+                    assert_eq!(shop.bill.total(), 100);
+                    assert_eq!(shop.debit, 25);
+                    assert!(!shop.surcharge);
                 }
                 SaveStoryTraversalScenario::ShopkeeperSell => {
                     let shop = &world.dungeon().shop_rooms[0];

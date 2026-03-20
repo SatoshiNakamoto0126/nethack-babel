@@ -62,6 +62,12 @@ pub enum ExtToolType {
     Towel,
     Bell,
     BellOfOpening,
+    WoodenFlute,
+    MagicFlute,
+    WoodenHarp,
+    MagicHarp,
+    Bugle,
+    LeatherDrum,
     TallowCandle,
     WaxCandle,
     Candelabrum,
@@ -88,6 +94,18 @@ pub fn classify_ext_tool(name: &str) -> Option<ExtToolType> {
         Some(ExtToolType::BellOfOpening)
     } else if lower.contains("bell") {
         Some(ExtToolType::Bell)
+    } else if lower == "wooden flute" {
+        Some(ExtToolType::WoodenFlute)
+    } else if lower == "magic flute" {
+        Some(ExtToolType::MagicFlute)
+    } else if lower == "wooden harp" {
+        Some(ExtToolType::WoodenHarp)
+    } else if lower == "magic harp" {
+        Some(ExtToolType::MagicHarp)
+    } else if lower == "bugle" {
+        Some(ExtToolType::Bugle)
+    } else if lower == "leather drum" {
+        Some(ExtToolType::LeatherDrum)
     } else if lower.contains("tallow candle") {
         Some(ExtToolType::TallowCandle)
     } else if lower.contains("wax candle") {
@@ -166,6 +184,48 @@ pub fn apply_ext_tool(
         ExtToolType::Bell | ExtToolType::BellOfOpening => {
             apply_bell(world, player, item, tool_type, &buc, rng)
         }
+        ExtToolType::WoodenFlute => apply_instrument(
+            world,
+            player,
+            item,
+            crate::music::InstrumentType::WoodenFlute,
+            rng,
+        ),
+        ExtToolType::MagicFlute => apply_instrument(
+            world,
+            player,
+            item,
+            crate::music::InstrumentType::MagicFlute,
+            rng,
+        ),
+        ExtToolType::WoodenHarp => apply_instrument(
+            world,
+            player,
+            item,
+            crate::music::InstrumentType::WoodenHarp,
+            rng,
+        ),
+        ExtToolType::MagicHarp => apply_instrument(
+            world,
+            player,
+            item,
+            crate::music::InstrumentType::MagicHarp,
+            rng,
+        ),
+        ExtToolType::Bugle => apply_instrument(
+            world,
+            player,
+            item,
+            crate::music::InstrumentType::Bugle,
+            rng,
+        ),
+        ExtToolType::LeatherDrum => apply_instrument(
+            world,
+            player,
+            item,
+            crate::music::InstrumentType::LeatherDrum,
+            rng,
+        ),
         ExtToolType::TallowCandle | ExtToolType::WaxCandle => {
             apply_candle(world, player, item, rng)
         }
@@ -185,6 +245,30 @@ pub fn apply_ext_tool(
     };
 
     Some(events)
+}
+
+// ---------------------------------------------------------------------------
+// Instrument bridge
+// ---------------------------------------------------------------------------
+
+fn apply_instrument(
+    world: &mut GameWorld,
+    player: Entity,
+    item: Entity,
+    instrument_type: crate::music::InstrumentType,
+    rng: &mut impl Rng,
+) -> Vec<EngineEvent> {
+    let charges = world
+        .get_component::<Enchantment>(item)
+        .map(|ench| ench.spe);
+    let (events, charge_used) =
+        crate::music::play_instrument(world, player, instrument_type, charges, rng);
+
+    if charge_used && let Some(mut ench) = world.get_component_mut::<Enchantment>(item) {
+        ench.spe -= 1;
+    }
+
+    events
 }
 
 // ---------------------------------------------------------------------------
@@ -1543,6 +1627,27 @@ mod tests {
             Some(ExtToolType::BellOfOpening)
         );
         assert_eq!(classify_ext_tool("bell"), Some(ExtToolType::Bell));
+        assert_eq!(
+            classify_ext_tool("wooden flute"),
+            Some(ExtToolType::WoodenFlute)
+        );
+        assert_eq!(
+            classify_ext_tool("magic flute"),
+            Some(ExtToolType::MagicFlute)
+        );
+        assert_eq!(
+            classify_ext_tool("wooden harp"),
+            Some(ExtToolType::WoodenHarp)
+        );
+        assert_eq!(
+            classify_ext_tool("magic harp"),
+            Some(ExtToolType::MagicHarp)
+        );
+        assert_eq!(classify_ext_tool("bugle"), Some(ExtToolType::Bugle));
+        assert_eq!(
+            classify_ext_tool("leather drum"),
+            Some(ExtToolType::LeatherDrum)
+        );
         assert_eq!(
             classify_ext_tool("tallow candle"),
             Some(ExtToolType::TallowCandle)
